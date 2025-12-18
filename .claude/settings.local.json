@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir:*)",
+      "Bash(start index.html)",
+      "Bash(start \"\" \"C:\\Users\\vlevitsky\\Documents\\Personal Dashboard - Fully Customizable\\index.html\")",
+      "Bash(\"C:\\Users\\vlevitsky\\Documents\\Personal Dashboard - Fully Customizable\\styles.css\")",
+      "Bash(node --check:*)",
+      "Bash(if not exist \"C:\\Users\\vlevitsky\\Documents\\Personal Dashboard - Fully Customizable\\js\\components\" mkdir \"C:\\Users\\vlevitsky\\Documents\\Personal Dashboard - Fully Customizable\\js\\components\")",
+      "mcp__ide__getDiagnostics",
+      "Bash(npx serve -p 3000)",
+      "Bash(timeout:*)",
+      "Bash(move:*)",
+      "Bash(node:*)",
+      "Bash(python:*)",
+      "Bash(mkdir:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "section_0": {
+    "id": "section_0",
+    "type": "links",
+    "title": "Links",
+    "links": [
+      {
+        "key": "link_0",
+        "url": "https://www.google.com",
+        "title": "Google",
+        "icon": "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTIyLjU2IDEyLjI1QzIyLjU2IDExLjQ3IDIyLjQ5IDEwLjcyIDIyLjM2IDEwSDEyVjE0LjI1SDE3Ljk2QzE3LjY2IDE1LjYyIDE2LjkzIDE2Ljg0IDE1Ljg4IDE3LjY4VjIwLjE4SDE5Ljg0QzIxLjUzIDE4LjY0IDIyLjU2IDE1LjY0IDIyLjU2IDEyLjI1WiIgZmlsbD0iIzQyODVGNCIvPgo8cGF0aCBkPSJNMTIgMjNDNS45MzMgMjMgMSAxOC4wNjcgMSAxMkMxIDUuOTMzIDUuOTMzIDEgMTIgMUMxNC4xMjYgMSAxNi4xNjMgMS42NTcgMTcuODI0IDIuNzY0TDE1Ljg4IDUuNjg4QzE0Ljg0NSA0Ljg0IDEzLjQ3IDQuMzMgMTIgNC4zM0M4LjY5MSA0LjMzIDUuOTYgNi45MjEgNS4yNCAxMC4yNUgxLjE4QzEuODUgNS4zMSA2LjQ0IDEuNjcgMTIgMS42N0MxNy41NiAxLjY3IDIyLjE1IDYuMjYgMjIuMTUgMTEuODJDMjIuMTUgMTMuNzYgMjEuNTcgMTUuNTYgMjAuNTYgMTcuMDhMMTcuODI0IDE5LjgyNEMxNi4xNjMgMjAuOTQzIDE0LjEyNiAyMS42IDEyIDIxLjZaIiBmaWxsPSIjRkZCNzAwIi8+CjxwYXRoIGQ9Ik0xMiAyM0M1LjkzMyAyMyAxIDE4LjA2NyAxIDEyQzEgNS45MzMgNS45MzMgMSAxMiAxQzE0LjEyNiAxIDE2LjE2MyAxLjY1NyAxNy44MjQgMi43NjRMMTUuODggNS42ODhDMTQuODQ1IDQuODQgMTMuNDcgNC4zMyAxMiA0LjMzQzguNjkxIDQuMzMgNS45NiA2LjkyMSA1LjI0IDEwLjI1SDEuMThDMS44NSA1LjMxIDYuNDQgMS42NyAxMiAxLjY3QzE3LjU2IDEuNjcgMjIuMTUgNi4yNiAyMi4xNSAxMS44MkMyMi4xNSAxMy43NiAyMS41NyAxNS41NiAyMC41NiAxNy4wOEwxNy44MjQgMTkuODI0QzE2LjE2MyAyMC45NDMgMTQuMTI2IDIxLjYgMTIgMjEuNloiIGZpbGw9IiM0MkE4NDUiLz4KPC9zdmc+",
+        "isDivider": false
+      }
+    ]
+  },
+  "_structure": {
+    "sections": [
+      {
+        "id": "section_0",
+        "type": "links",
+        "title": "Links"
+      }
+    ],
+    "sectionTitles": {
+      "section_0": "Links"
+    },
+    "header": {
+      "title": "Personal Dashboard",
+      "subtitle": "Your Customizable Workspace"
+    }
+  },
+  "_metadata": {
+    "exportDate": "2024-01-01T00:00:00.000Z",
+    "totalSections": 1,
+    "sectionTypes": [
+      {
+        "id": "section_0",
+        "type": "links",
+        "title": "Links"
+      }
+    ],
+    "version": "3.0",
+    "description": "Complete dashboard backup including all sections, cards, separators, and data"
+  }
+}

@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Personal Dashboard</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📊</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css?v=2025-01-15-14-45">
+</head>
+  <body>
+    <header class="app-header card" id="top-header">
+      <div class="header-left">
+        <div class="company-logo-container">
+          <img src="assets/logos/placeholder-logo.svg" alt="Logo" class="company-logo editable" data-type="headerLogo" />
+        </div>
+      </div>
+      <div class="header-right">
+        <div class="profile-photo-container">
+          <img src="assets/logos/placeholder-profile.svg" alt="Profile" class="profile-photo editable" data-type="profilePhoto" />
+        </div>
+        <div class="profile-info">
+          <div class="profile-name editable" data-type="profileName">Your Name</div>
+          <div class="profile-title editable" data-type="profileTitle">Your Title</div>
+        </div>
+      </div>
+      <button id="display-mode-toggle" class="display-mode-toggle" title="Toggle display mode" aria-label="Toggle display mode">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="20" height="20" fill="none" stroke="currentColor" stroke-width="27" stroke-miterlimit="10">
+          <rect x="29.96" y="45.23" width="340.09" height="237.96" rx="21.96" ry="21.96"/>
+          <line x1="29.96" y1="354.77" x2="370.04" y2="354.77"/>
+          <line x1="200" y1="288.6" x2="200" y2="342.77"/>
+        </svg>
+      </button>
+      <button id="quick-access-toggle" class="quick-access-toggle" title="Toggle quick access" aria-label="Toggle quick access">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"></circle>
+          <circle cx="12" cy="12" r="6"></circle>
+          <circle cx="12" cy="12" r="2"></circle>
+        </svg>
+      </button>
+      <button id="time-tracking-toggle" class="time-tracking-toggle" title="Toggle time tracking" aria-label="Toggle time tracking">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="14" r="8"></circle>
+          <line x1="12" y1="6" x2="12" y2="2"></line>
+          <line x1="8" y1="2" x2="16" y2="2"></line>
+          <line x1="12" y1="14" x2="12" y2="10"></line>
+          <line x1="12" y1="14" x2="15" y2="17"></line>
+        </svg>
+      </button>
+    </header>
+
+    <div id="time-tracking-card" class="card time-tracking-card" hidden>
+      <h3>Time Spent on Tasks</h3>
+      <div id="timer-container" class="timer-container">
+        <!-- Timers will be dynamically added here -->
+      </div>
+      <div class="timer-buttons-container" id="timer-buttons-container" hidden>
+        <button id="reset-all-timers" class="reset-timers-btn" title="Reset all timers">Reset All</button>
+        <button id="add-timer-btn" class="add-timer-btn" title="Add timer">+ Add Timer</button>
+      </div>
+    </div>
+
+    <div id="quick-access-card" class="card quick-access-card" hidden>
+      <div class="quick-access-header">
+        <h3>Quick Access</h3>
+        <div class="quick-access-controls">
+          <button id="quick-access-clear" class="quick-access-btn" title="Clear all items" aria-label="Clear all items">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"></path>
+            </svg>
+          </button>
+          <button id="selector-mode-toggle" class="quick-access-btn selector-mode-btn" title="Toggle selector mode" aria-label="Toggle selector mode">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"></circle>
+            </svg>
+          </button>
+          <button id="quick-links-add" class="quick-access-btn" title="Add quick link" aria-label="Add quick link">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+            </svg>
+          </button>
+        </div>
+      </div>
+      <div id="quick-access-content" class="quick-access-content">
+        <!-- Quick access items will be dynamically added here -->
+      </div>
+    </div>
+
+    <main class="app-main">
+      <!-- Sections will be dynamically rendered by JavaScript -->
+    </main>
+
+    <button id="edit-toggle" class="wrench-btn" title="Toggle edit mode" aria-label="Toggle edit mode">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+      </svg>
+    </button>
+
+    <div class="fab-group" id="edit-fab-group" hidden>
+      <button id="edit-accept-global" class="fab fab-accept" title="Confirm changes" aria-label="Confirm changes" type="button" data-checkmark="true"></button>
+      <button id="edit-cancel-global" class="fab fab-cancel" title="Cancel changes" aria-label="Cancel changes">&times;</button>
+    </div>
+
+    <button id="connect-folder" class="fab-left fab-left-up3" title="Connect project folder" aria-label="Connect project folder" hidden>📁</button>
+    <button id="import-links" class="fab-left fab-left-up2" title="Import links from file" aria-label="Import links" hidden>⬆</button>
+    <button id="override-links" class="fab-left fab-left-up" title="Save current links to file" aria-label="Save current links" hidden>
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+        <polyline points="17 21 17 13 7 13 7 21"></polyline>
+        <polyline points="7 3 7 8 15 8"></polyline>
+      </svg>
+    </button>
+
+    <button id="dark-mode-toggle" class="fab-left" title="Toggle dark mode" aria-label="Toggle dark mode" hidden>
+      <svg class="icon-light" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <circle cx="12" cy="12" r="4"></circle>
+        <line x1="12" y1="1" x2="12" y2="3"></line>
+        <line x1="12" y1="21" x2="12" y2="23"></line>
+        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+        <line x1="1" y1="12" x2="3" y2="12"></line>
+        <line x1="21" y1="12" x2="23" y2="12"></line>
+        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+      </svg>
+      <svg class="icon-dark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+      </svg>
+    </button>
+
+    <div id="edit-popover" class="edit-popover" hidden>
+      <form id="edit-form">
+        <label class="field-text">
+          Text
+          <input type="text" id="edit-text" />
+        </label>
+        <label class="field-url">
+          URL
+          <input type="text" id="edit-url" />
+        </label>
+        <div class="field-image" id="edit-image-field" hidden>
+          <div class="image-row">
+            <button type="button" id="choose-from-library" class="btn">Choose Image…</button>
+            <span id="chosen-image-name" class="muted"></span>
+          </div>
+        </div>
+        <div class="edit-actions">
+          <button type="button" id="edit-delete" class="btn-delete" title="Delete" aria-label="Delete" hidden>
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="3 6 5 6 21 6"></polyline>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+            </svg>
+          </button>
+          <button type="submit" class="btn-accept" title="Save" aria-label="Save">
+            &check;
+          </button>
+          <button type="button" id="edit-cancel" class="btn-cancel" title="Cancel" aria-label="Cancel">
+            &times;
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <div id="restore-confirm" class="confirm-popover" hidden>
+      <div class="confirm-text">Would you like to restore the most recent save?</div>
+      <div class="edit-actions">
+        <button type="button" id="restore-accept" class="btn-accept" title="Restore" aria-label="Restore">&check;</button>
+        <button type="button" id="restore-cancel" class="btn-cancel" title="Cancel" aria-label="Cancel">&times;</button>
+      </div>
+    </div>
+
+    <div id="override-confirm" class="confirm-popover" hidden>
+      <div class="confirm-text">Would you like to override all links to the saved ones?</div>
+      <div class="edit-actions">
+        <button type="button" id="override-accept" class="btn-accept" title="Override" aria-label="Override">&check;</button>
+        <button type="button" id="override-cancel" class="btn-cancel" title="Cancel" aria-label="Cancel">&times;</button>
+      </div>
+    </div>
+
+    <div id="calendar-popover" class="calendar-popover" hidden>
+      <div class="calendar-header">
+        <h4>Schedule Reminder</h4>
+        <button type="button" id="calendar-close" class="btn-cancel" title="Close" aria-label="Close">&times;</button>
+      </div>
+      <div class="calendar-body">
+        <div class="calendar-section">
+          <label>Date:</label>
+          <input type="date" id="calendar-date" />
+        </div>
+                    <div class="calendar-section">
+              <label>Repeat:</label>
+              <select id="calendar-repeat">
+                <option value="none" selected>No repeat</option>
+                <option value="weekly">Every # of weeks</option>
+                <option value="monthly">Every month</option>
+              </select>
+            </div>
+            <div class="calendar-section" id="weekly-options" style="display: none;">
+              <label>Weekly option:</label>
+              <select id="calendar-weekly-type">
+                <option value="1">Every 1 week</option>
+                <option value="2">Every 2 weeks</option>
+                <option value="3">Every 3 weeks</option>
+              </select>
+            </div>
+            <div class="calendar-section" id="monthly-options" style="display: none;">
+              <label>Monthly option:</label>
+              <select id="calendar-monthly-type">
+                <option value="sameDay">Same day of month</option>
+                <option value="firstWeekday">First weekday of month</option>
+              </select>
+            </div>
+      </div>
+      <div class="edit-actions">
+        <button type="button" id="calendar-save" class="btn-accept" title="Save" aria-label="Save">&check;</button>
+        <button type="button" id="calendar-cancel" class="btn-cancel" title="Cancel" aria-label="Cancel">&times;</button>
+      </div>
+    </div>
+
+    <div id="toast" class="toast" hidden></div>
+
+    <input type="file" id="import-links-input" accept="application/json" hidden />
+
+    <div id="media-library" class="media-library" hidden>
+      <div class="media-backdrop"></div>
+      <div class="media-dialog">
+        <div class="media-header">
+          <h4>Media Library</h4>
+          <div class="media-actions">
+            <label class="upload-btn">
+              <input type="file" id="media-upload-input" accept="image/*" multiple hidden />
+              <span>Add images…</span>
+            </label>
+            <button type="button" id="media-close" class="btn">Close</button>
+          </div>
+        </div>
+        <div class="media-body">
+          <div id="media-grid" class="media-grid"></div>
+        </div>
+        <div class="media-footer">
+          <button type="button" id="media-delete" class="btn danger" disabled>Delete Selected</button>
+          <div style="flex:1"></div>
+          <button type="button" id="media-select" class="btn primary" disabled>Use Selected</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="interval-popover" class="edit-popover" hidden>
+      <form id="interval-form">
+        <label class="field-text">
+          Target Number
+          <input type="number" id="interval-value" />
+        </label>
+        <label class="field-text">
+          Current Number
+          <input type="number" id="interval-current" />
+        </label>
+        <label class="field-text">
+          Type
+          <select id="interval-type">
+            <option value="limit">Limit</option>
+            <option value="goal">Goal</option>
+          </select>
+        </label>
+        <label class="field-text">
+          Unit
+          <select id="interval-unit">
+            <option value="none">None</option>
+            <option value="dollar">$</option>
+            <option value="percent">%</option>
+          </select>
+        </label>
+        <div class="edit-actions">
+          <button type="button" id="interval-breakdown-btn" class="btn-breakdown" title="View breakdown" aria-label="View breakdown">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18">
+              <rect x="3" y="3" width="7" height="7" fill="currentColor"/>
+              <rect x="3" y="13" width="7" height="7" fill="currentColor"/>
+              <rect x="13" y="3" width="7" height="7" fill="currentColor"/>
+              <rect x="13" y="13" width="7" height="7" fill="currentColor"/>
+            </svg>
+          </button>
+          <div style="flex: 1;"></div>
+          <button type="submit" class="btn-accept" title="Save" aria-label="Save">&check;</button>
+          <button type="button" id="interval-cancel" class="btn-cancel" title="Cancel" aria-label="Cancel">&times;</button>
+        </div>
+      </form>
+    </div>
+
+    <div id="breakdown-modal" class="breakdown-modal" hidden>
+      <div class="breakdown-backdrop"></div>
+      <div class="breakdown-dialog">
+        <div class="breakdown-header">
+          <h4>Number Breakdown</h4>
+          <button type="button" id="breakdown-close" class="btn-cancel" title="Close" aria-label="Close">&times;</button>
+        </div>
+        <div class="breakdown-body">
+          <div class="breakdown-current-section">
+            <label class="breakdown-label">
+              Current Number
+              <div class="breakdown-current-row">
+                <input type="number" id="breakdown-current" />
+                <label class="breakdown-lock-label">
+                  <input type="checkbox" id="breakdown-lock" />
+                  <span class="lock-icon">#</span>
+                  <span class="unlock-icon">Σ</span>
+                </label>
+              </div>
+            </label>
+          </div>
+          <div class="breakdown-summary-section">
+            <h5>Summary</h5>
+            <div id="breakdown-rows" class="breakdown-rows"></div>
+            <button type="button" id="breakdown-add-row" class="btn-add-row">+ Add Row</button>
+          </div>
+        </div>
+        <div class="breakdown-footer">
+          <button type="button" id="breakdown-cancel" class="btn secondary">Cancel</button>
+          <button type="button" id="breakdown-accept" class="btn primary">Accept</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="copy-text-modal" class="copy-text-modal" hidden>
+      <div class="copy-text-backdrop"></div>
+      <div class="copy-text-dialog">
+        <div class="copy-text-header">
+          <h4>Edit Copy Text</h4>
+          <button type="button" id="copy-text-close" class="btn-cancel" title="Close" aria-label="Close">&times;</button>
+        </div>
+        <div class="copy-text-body">
+          <label class="copy-text-label">
+            Text to copy:
+            <textarea id="copy-text-content" rows="6" placeholder="Enter the text you want to copy..."></textarea>
+          </label>
+        </div>
+        <div class="copy-text-footer">
+          <button type="button" id="copy-text-cancel" class="btn secondary">Cancel</button>
+          <button type="button" id="copy-text-accept" class="btn primary">Save</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="card-type-popover" class="card-type-popover" hidden>
+      <div class="card-type-header">
+        <h3>Choose Card Type</h3>
+      </div>
+      <div class="card-type-grid">
+        <div class="card-type-option" data-type="single">
+          <div class="card-type-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+            </svg>
+          </div>
+          <div class="card-type-label">Single Card</div>
+          <div class="card-type-description">Like Content Creation or Ads</div>
+        </div>
+        <div class="card-type-option" data-type="two-col">
+          <div class="card-type-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="7" height="18" rx="1"></rect>
+              <rect x="14" y="3" width="7" height="18" rx="1"></rect>
+            </svg>
+          </div>
+          <div class="card-type-label">Two Columns</div>
+          <div class="card-type-description">Like Daily Tasks and Tools</div>
+        </div>
+        <div class="card-type-option" data-type="reminders">
+          <div class="card-type-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="9"></circle>
+              <polyline points="12 6 12 12 16 14"></polyline>
+            </svg>
+          </div>
+          <div class="card-type-label">Reminders</div>
+          <div class="card-type-description">With timers and intervals</div>
+        </div>
+        <div class="card-type-option" data-type="subtasks">
+          <div class="card-type-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="8" y1="6" x2="21" y2="6"></line>
+              <line x1="8" y1="12" x2="21" y2="12"></line>
+              <line x1="8" y1="18" x2="21" y2="18"></line>
+              <line x1="3" y1="6" x2="3.01" y2="6"></line>
+              <line x1="3" y1="12" x2="3.01" y2="12"></line>
+              <line x1="3" y1="18" x2="3.01" y2="18"></line>
+            </svg>
+          </div>
+          <div class="card-type-label">Subtasks</div>
+          <div class="card-type-description">Like Analytics or Tools</div>
+        </div>
+        <div class="card-type-option" data-type="copyPaste">
+          <div class="card-type-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+            </svg>
+          </div>
+          <div class="card-type-label">Copy-Paste</div>
+          <div class="card-type-description">Quick copy text snippets</div>
+        </div>
+      </div>
+      <div class="card-type-actions">
+        <button type="button" id="card-type-cancel" class="card-type-btn secondary">Cancel</button>
+      </div>
+    </div>
+
+    <div id="image-editor-modal" class="image-editor-modal" hidden>
+      <div class="image-editor-backdrop"></div>
+      <div class="image-editor-dialog">
+        <div class="image-editor-header">
+          <h4>Adjust Profile Photo</h4>
+          <button type="button" id="image-editor-close" class="btn-cancel" title="Close" aria-label="Close">&times;</button>
+        </div>
+        <div class="image-editor-body">
+          <div class="image-editor-preview">
+            <div class="image-editor-frame">
+              <img id="image-editor-img" src="" alt="Preview" draggable="false" />
+            </div>
+          </div>
+          <div class="image-editor-controls">
+            <div class="image-editor-control">
+              <label>Zoom</label>
+              <input type="range" id="image-editor-scale" min="0.5" max="3" step="0.005" value="1" />
+              <span id="image-editor-scale-value">100%</span>
+            </div>
+            <button type="button" id="image-editor-choose" class="btn">Choose Different Image...</button>
+          </div>
+        </div>
+        <div class="image-editor-footer">
+          <button type="button" id="image-editor-cancel" class="btn secondary">Cancel</button>
+          <button type="button" id="image-editor-save" class="btn primary">Save</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ES6 Modules - fully modularized, no app.js dependency -->
+    <script type="module" src="js/main.js"></script>
+  </body>
+  </html>
+
+

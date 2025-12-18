@@ -1,0 +1,323 @@
+{
+  "dailyTasks": {
+    "title": "Daily Tasks",
+    "items": [
+      {
+        "name": "Gmail",
+        "url": "https://mail.google.com",
+        "icon": "📧"
+      },
+      {
+        "name": "Calendar",
+        "url": "https://calendar.google.com",
+        "icon": "📅"
+      },
+      {
+        "name": "Drive",
+        "url": "https://drive.google.com",
+        "icon": "💾"
+      },
+      {
+        "name": "Slack",
+        "url": "https://slack.com",
+        "icon": "💬"
+      }
+    ]
+  },
+  "dailyTools": {
+    "title": "Daily Tools",
+    "items": [
+      {
+        "name": "VS Code",
+        "url": "https://code.visualstudio.com",
+        "icon": "💻"
+      },
+      {
+        "name": "GitHub",
+        "url": "https://github.com",
+        "icon": "🐙"
+      },
+      {
+        "name": "Figma",
+        "url": "https://figma.com",
+        "icon": "🎨"
+      },
+      {
+        "name": "Notion",
+        "url": "https://notion.so",
+        "icon": "📝"
+      }
+    ]
+  },
+  "contentCreation": {
+    "title": "Content Creation",
+    "items": [
+      {
+        "name": "Canva",
+        "url": "https://canva.com",
+        "icon": "🎨"
+      },
+      {
+        "name": "Loom",
+        "url": "https://loom.com",
+        "icon": "🎥"
+      },
+      {
+        "name": "Grammarly",
+        "url": "https://grammarly.com",
+        "icon": "✍️"
+      },
+      {
+        "name": "Unsplash",
+        "url": "https://unsplash.com",
+        "icon": "📸"
+      }
+    ]
+  },
+  "ads": {
+    "title": "Ads",
+    "items": [
+      {
+        "name": "Google Ads",
+        "url": "https://ads.google.com",
+        "icon": "📊"
+      },
+      {
+        "name": "Facebook Ads",
+        "url": "https://business.facebook.com",
+        "icon": "📱"
+      },
+      {
+        "name": "LinkedIn Ads",
+        "url": "https://linkedin.com/campaignmanager",
+        "icon": "💼"
+      },
+      {
+        "name": "Twitter Ads",
+        "url": "https://ads.twitter.com",
+        "icon": "🐦"
+      }
+    ]
+  },
+  "analytics": {
+    "title": "Analytics",
+    "items": [
+      {
+        "name": "Google Analytics",
+        "url": "https://analytics.google.com",
+        "icon": "📈"
+      },
+      {
+        "name": "Mixpanel",
+        "url": "https://mixpanel.com",
+        "icon": "📊"
+      },
+      {
+        "name": "Hotjar",
+        "url": "https://hotjar.com",
+        "icon": "🔥"
+      },
+      {
+        "name": "SEMrush",
+        "url": "https://semrush.com",
+        "icon": "🔍"
+      }
+    ]
+  },
+  "tools": {
+    "title": "Tools",
+    "items": [
+      {
+        "name": "Zapier",
+        "url": "https://zapier.com",
+        "icon": "⚡"
+      },
+      {
+        "name": "Airtable",
+        "url": "https://airtable.com",
+        "icon": "🗃️"
+      },
+      {
+        "name": "Trello",
+        "url": "https://trello.com",
+        "icon": "📋"
+      },
+      {
+        "name": "Asana",
+        "url": "https://asana.com",
+        "icon": "✅"
+      }
+    ]
+  },
+  "_structure": {
+    "sections": [
+      {
+        "id": "dailyTasks",
+        "type": "icon",
+        "title": "Daily Tasks",
+        "items": [
+          {
+            "name": "Gmail",
+            "url": "https://mail.google.com",
+            "icon": "📧"
+          },
+          {
+            "name": "Calendar",
+            "url": "https://calendar.google.com",
+            "icon": "📅"
+          },
+          {
+            "name": "Drive",
+            "url": "https://drive.google.com",
+            "icon": "💾"
+          },
+          {
+            "name": "Slack",
+            "url": "https://slack.com",
+            "icon": "💬"
+          }
+        ]
+      },
+      {
+        "id": "dailyTools",
+        "type": "icon",
+        "title": "Daily Tools",
+        "items": [
+          {
+            "name": "VS Code",
+            "url": "https://code.visualstudio.com",
+            "icon": "💻"
+          },
+          {
+            "name": "GitHub",
+            "url": "https://github.com",
+            "icon": "🐙"
+          },
+          {
+            "name": "Figma",
+            "url": "https://figma.com",
+            "icon": "🎨"
+          },
+          {
+            "name": "Notion",
+            "url": "https://notion.so",
+            "icon": "📝"
+          }
+        ]
+      },
+      {
+        "id": "contentCreation",
+        "type": "icon",
+        "title": "Content Creation",
+        "items": [
+          {
+            "name": "Canva",
+            "url": "https://canva.com",
+            "icon": "🎨"
+          },
+          {
+            "name": "Loom",
+            "url": "https://loom.com",
+            "icon": "🎥"
+          },
+          {
+            "name": "Grammarly",
+            "url": "https://grammarly.com",
+            "icon": "✍️"
+          },
+          {
+            "name": "Unsplash",
+            "url": "https://unsplash.com",
+            "icon": "📸"
+          }
+        ]
+      },
+      {
+        "id": "ads",
+        "type": "icon",
+        "title": "Ads",
+        "items": [
+          {
+            "name": "Google Ads",
+            "url": "https://ads.google.com",
+            "icon": "📊"
+          },
+          {
+            "name": "Facebook Ads",
+            "url": "https://business.facebook.com",
+            "icon": "📱"
+          },
+          {
+            "name": "LinkedIn Ads",
+            "url": "https://linkedin.com/campaignmanager",
+            "icon": "💼"
+          },
+          {
+            "name": "Twitter Ads",
+            "url": "https://ads.twitter.com",
+            "icon": "🐦"
+          }
+        ]
+      },
+      {
+        "id": "analytics",
+        "type": "list",
+        "title": "Analytics",
+        "items": [
+          {
+            "name": "Google Analytics",
+            "url": "https://analytics.google.com",
+            "icon": "📈"
+          },
+          {
+            "name": "Mixpanel",
+            "url": "https://mixpanel.com",
+            "icon": "📊"
+          },
+          {
+            "name": "Hotjar",
+            "url": "https://hotjar.com",
+            "icon": "🔥"
+          },
+          {
+            "name": "SEMrush",
+            "url": "https://semrush.com",
+            "icon": "🔍"
+          }
+        ]
+      },
+      {
+        "id": "tools",
+        "type": "list",
+        "title": "Tools",
+        "items": [
+          {
+            "name": "Zapier",
+            "url": "https://zapier.com",
+            "icon": "⚡"
+          },
+          {
+            "name": "Airtable",
+            "url": "https://airtable.com",
+            "icon": "🗃️"
+          },
+          {
+            "name": "Trello",
+            "url": "https://trello.com",
+            "icon": "📋"
+          },
+          {
+            "name": "Asana",
+            "url": "https://asana.com",
+            "icon": "✅"
+          }
+        ]
+      }
+    ]
+  },
+  "_metadata": {
+    "version": "1.0",
+    "lastUpdated": "2024-01-01T00:00:00.000Z",
+    "createdBy": "user"
+  }
+}
