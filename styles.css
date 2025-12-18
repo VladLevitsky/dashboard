@@ -3149,6 +3149,10 @@ body.stacked-mode .gap-add-btn {
   position: relative;
 }
 
+.image-editor-frame.square-frame {
+  border-radius: 12px;
+}
+
 .image-editor-frame:active {
   cursor: grabbing;
 }

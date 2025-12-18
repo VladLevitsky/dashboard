@@ -27,6 +27,7 @@ export function saveModel() {
     sections: data.sections,
     sectionsStacked: data.sectionsStacked,
     sectionTitles: data.sectionTitles,
+    sectionIcons: data.sectionIcons,
     sectionColors: data.sectionColors,
     subtitleColors: data.subtitleColors,
     header: data.header,
@@ -102,6 +103,10 @@ export async function restoreModel() {
 
     if (saved.sectionTitles) {
       model.sectionTitles = { ...model.sectionTitles, ...saved.sectionTitles };
+    }
+
+    if (saved.sectionIcons) {
+      model.sectionIcons = { ...model.sectionIcons, ...saved.sectionIcons };
     }
 
     if (saved.sectionColors) {
@@ -268,6 +273,9 @@ export function deepMergeModel(target, source) {
   // Handle objects - merge them
   if (source.sectionTitles) {
     target.sectionTitles = { ...(target.sectionTitles || {}), ...source.sectionTitles };
+  }
+  if (source.sectionIcons) {
+    target.sectionIcons = { ...(target.sectionIcons || {}), ...source.sectionIcons };
   }
 
   // Deep merge sectionColors to preserve independent light/dark mode colors

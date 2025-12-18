@@ -21,15 +21,19 @@ let editorState = {
   imageNaturalWidth: 0,
   imageNaturalHeight: 0,
   minScale: 1,
-  frameSize: 180
+  frameSize: 180,
+  editorType: 'profile'  // 'profile' or 'logo'
 };
 
 // --- Open image editor modal
-export function openImageEditor(currentSrc, currentZoom, currentX, currentY, onSave) {
+// type: 'profile' (circle frame) or 'logo' (square frame)
+export function openImageEditor(currentSrc, currentZoom, currentX, currentY, onSave, type = 'profile') {
   const modal = $('#image-editor-modal');
   const img = $('#image-editor-img');
   const scaleSlider = $('#image-editor-scale');
   const scaleValue = $('#image-editor-scale-value');
+  const frame = $('.image-editor-frame');
+  const titleEl = modal.querySelector('.image-editor-header h4');
 
   // Initialize state - x/y are pixel offsets within the editor frame
   editorState.imageSrc = currentSrc || '';
@@ -37,6 +41,16 @@ export function openImageEditor(currentSrc, currentZoom, currentX, currentY, onS
   editorState.x = currentX || 0;  // Pixel offset
   editorState.y = currentY || 0;  // Pixel offset
   editorState.onSave = onSave;
+  editorState.editorType = type;
+
+  // Update modal title and frame shape based on type
+  if (type === 'logo') {
+    titleEl.textContent = 'Adjust Logo';
+    frame.classList.add('square-frame');
+  } else {
+    titleEl.textContent = 'Adjust Profile Photo';
+    frame.classList.remove('square-frame');
+  }
 
   // Show modal first so we can measure
   modal.hidden = false;
@@ -47,16 +61,25 @@ export function openImageEditor(currentSrc, currentZoom, currentX, currentY, onS
     editorState.imageNaturalHeight = img.naturalHeight;
 
     // Calculate minimum scale to cover the frame
-    const frame = $('.image-editor-frame');
     editorState.frameSize = frame.offsetWidth;
 
     const scaleX = editorState.frameSize / img.naturalWidth;
     const scaleY = editorState.frameSize / img.naturalHeight;
-    editorState.minScale = Math.max(scaleX, scaleY);
 
-    // Update slider range (1.0 to 1.5 = 100% to 150%)
-    scaleSlider.min = '1';
-    scaleSlider.max = '1.5';
+    // For logos: use min scale so entire image is visible (fit inside)
+    // For profile photos: use max scale so image covers the frame
+    if (type === 'logo') {
+      editorState.minScale = Math.min(scaleX, scaleY);
+      // Slider range for logos: 1.0 (fit) to 3.0 (zoom in)
+      scaleSlider.min = '1';
+      scaleSlider.max = '3';
+    } else {
+      editorState.minScale = Math.max(scaleX, scaleY);
+      // Slider range for profile: 1.0 to 1.5 (already covering)
+      scaleSlider.min = '1';
+      scaleSlider.max = '1.5';
+    }
+
     scaleSlider.value = editorState.zoomFactor;
     scaleValue.textContent = Math.round(editorState.zoomFactor * 100) + '%';
 
@@ -251,11 +274,19 @@ function handleChooseImage() {
 
       const scaleX = editorState.frameSize / img.naturalWidth;
       const scaleY = editorState.frameSize / img.naturalHeight;
-      editorState.minScale = Math.max(scaleX, scaleY);
 
-      // Update slider (1.0 to 1.5 = 100% to 150%)
-      scaleSlider.min = '1';
-      scaleSlider.max = '1.5';
+      // For logos: use min scale so entire image is visible
+      // For profile photos: use max scale so image covers the frame
+      if (editorState.editorType === 'logo') {
+        editorState.minScale = Math.min(scaleX, scaleY);
+        scaleSlider.min = '1';
+        scaleSlider.max = '3';
+      } else {
+        editorState.minScale = Math.max(scaleX, scaleY);
+        scaleSlider.min = '1';
+        scaleSlider.max = '1.5';
+      }
+
       scaleSlider.value = '1';
       scaleValue.textContent = '100%';
 
@@ -281,8 +312,9 @@ function handleSave() {
 }
 
 // --- Apply image transform to an element (generalized for any frame size)
-// zoom: zoom factor (1.0-1.5), xPercent/yPercent: position as percentage of frame
-function applyImageTransform(imgElement, zoom, xPercent, yPercent, frameWidth, frameHeight) {
+// zoom: zoom factor (1.0-1.5+), xPercent/yPercent: position as percentage of frame
+// fitMode: 'cover' (default, fills frame) or 'fit' (shows entire image)
+function applyImageTransform(imgElement, zoom, xPercent, yPercent, frameWidth, frameHeight, fitMode = 'cover') {
   if (!imgElement) return;
 
   const zoomFactor = zoom || 1;
@@ -294,13 +326,14 @@ function applyImageTransform(imgElement, zoom, xPercent, yPercent, frameWidth, f
     const naturalWidth = imgElement.naturalWidth || frameWidth;
     const naturalHeight = imgElement.naturalHeight || frameHeight;
 
-    // Calculate minScale to cover the frame (same logic as editor)
+    // Calculate base scale depending on fit mode
     const scaleX = frameWidth / naturalWidth;
     const scaleY = frameHeight / naturalHeight;
-    const minScale = Math.max(scaleX, scaleY);
+    // 'cover' = max scale (fills frame), 'fit' = min scale (shows entire image)
+    const baseScale = fitMode === 'fit' ? Math.min(scaleX, scaleY) : Math.max(scaleX, scaleY);
 
-    // Calculate actual scale: minScale * zoomFactor
-    const actualScale = minScale * zoomFactor;
+    // Calculate actual scale: baseScale * zoomFactor
+    const actualScale = baseScale * zoomFactor;
 
     // Calculate scaled dimensions
     const scaledWidth = naturalWidth * actualScale;
@@ -333,12 +366,12 @@ function applyImageTransform(imgElement, zoom, xPercent, yPercent, frameWidth, f
   }
 }
 
-// --- Apply profile photo transform (90x90 square frame)
+// --- Apply profile photo transform (90x90 square frame, cover mode)
 export function applyProfilePhotoTransform(imgElement, zoom, xPercent, yPercent) {
-  applyImageTransform(imgElement, zoom, xPercent, yPercent, 90, 90);
+  applyImageTransform(imgElement, zoom, xPercent, yPercent, 90, 90, 'cover');
 }
 
-// --- Apply logo transform (216x126 rectangular frame)
+// --- Apply logo transform (216x126 rectangular frame, fit mode so entire logo is visible)
 export function applyLogoTransform(imgElement, zoom, xPercent, yPercent) {
-  applyImageTransform(imgElement, zoom, xPercent, yPercent, 216, 126);
+  applyImageTransform(imgElement, zoom, xPercent, yPercent, 216, 126, 'fit');
 }

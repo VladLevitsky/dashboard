@@ -144,6 +144,7 @@ export function extractUrlOverrides() {
     sections: data.sections,
     sectionsStacked: data.sectionsStacked,
     sectionTitles: data.sectionTitles,
+    sectionIcons: data.sectionIcons || {},
     sectionColors: data.sectionColors || {},
     subtitleColors: data.subtitleColors || {},
     header: data.header
@@ -395,6 +396,10 @@ export function applyUrlOverrides(data) {
     if (data._structure.sectionTitles) {
       current.sectionTitles = data._structure.sectionTitles;
     }
+    // Restore section icons (custom icons for list-type sections)
+    if (data._structure.sectionIcons && typeof data._structure.sectionIcons === 'object') {
+      current.sectionIcons = data._structure.sectionIcons;
+    }
     // Restore section colors (independent light/dark mode colors)
     if (data._structure.sectionColors && typeof data._structure.sectionColors === 'object') {
       current.sectionColors = data._structure.sectionColors;
@@ -612,6 +617,7 @@ export function applyUrlOverrides(data) {
       sections: current.sections,
       sectionsStacked: current.sectionsStacked,
       sectionTitles: current.sectionTitles,
+      sectionIcons: current.sectionIcons,
       sectionColors: current.sectionColors,
       subtitleColors: current.subtitleColors,
       header: current.header,

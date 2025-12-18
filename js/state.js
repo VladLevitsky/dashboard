@@ -24,6 +24,7 @@ export const model = {
     quickLinks: []
   },
   sectionTitles: {},
+  sectionIcons: {},  // Custom icons for list-type sections (analytics, tools, etc.)
   header: {
     companyLogoSrc: 'assets/icons/placeholder-logo.svg',
     companyLogoZoom: 1,

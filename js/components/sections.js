@@ -156,7 +156,11 @@ export function createSectionElement(section) {
     const icon = document.createElement('div');
     icon.className = 'section-icon';
     const iconImg = document.createElement('img');
-    if (section.type === 'tools') {
+
+    // Check for custom icon first, then fall back to defaults
+    if (data.sectionIcons && data.sectionIcons[section.id]) {
+      iconImg.src = data.sectionIcons[section.id];
+    } else if (section.type === 'tools') {
       iconImg.src = 'assets/logos/Tools_1.svg';
     } else if (section.type === 'newCard' || section.type === 'newCardAnalytics') {
       iconImg.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzIiIGhlaWdodD0iMzIiIHZpZXdCb3g9IjAgMCAzMiAzMiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIiByeD0iNCIgZmlsbD0iI0YzRjRGNiIvPgo8cGF0aCBkPSJNMTYgOEgxNlYyNEgxNloiIGZpbGw9IiM5Q0EzQUYiLz4KPHBhdGggZD0iTTggMTZIMjRWMThIOFYxNloiIGZpbGw9IiM5Q0EzQUYiLz4KPC9zdmc+';
@@ -166,8 +170,8 @@ export function createSectionElement(section) {
     iconImg.alt = section.title;
     icon.appendChild(iconImg);
 
-    // Make the section icon editable for analytics-style new cards
-    if (section.type === 'newCardAnalytics' && editState.enabled) {
+    // Make the section icon editable for all list-type cards (analytics, tools, newCardAnalytics)
+    if (editState.enabled) {
       icon.classList.add('editable');
       icon.dataset.type = 'sectionIcon';
       icon.dataset.section = section.id;
@@ -178,10 +182,17 @@ export function createSectionElement(section) {
           text: section.title,
           url: PLACEHOLDER_URL,
           allowImage: true,
-          hideText: true
-        }, ({ url, image, accept }) => {
+          hideText: true,
+          hideUrl: true
+        }, ({ url, chosenMedia, accept }) => {
           if (!accept) return;
-          if (image) iconImg.src = image;
+          if (chosenMedia) {
+            // Save the custom icon to sectionIcons
+            const imageSrc = persistImageFromLibraryEntry(chosenMedia);
+            if (!data.sectionIcons) data.sectionIcons = {};
+            data.sectionIcons[section.id] = imageSrc;
+            iconImg.src = imageSrc;
+          }
           markDirtyAndSave();
           renderAllSections();
         });

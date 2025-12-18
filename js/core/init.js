@@ -665,7 +665,8 @@ export function wireUI() {
             data.header.companyLogoYPercent = yPercent;
             markDirtyAndSave();
             renderHeaderAndTitles();
-          }
+          },
+          'logo'  // Type: logo uses square frame and fit-inside zoom
         );
       }
     });
@@ -696,7 +697,8 @@ export function wireUI() {
             data.header.profilePhotoYPercent = yPercent;
             markDirtyAndSave();
             renderHeaderAndTitles();
-          }
+          },
+          'profile'  // Type: profile uses circle frame and cover zoom
         );
       }
     });
