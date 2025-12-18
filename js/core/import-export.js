@@ -9,6 +9,51 @@ import { model, editState, currentData } from '../state.js';
 import { PLACEHOLDER_URL, APP_VERSION, STORAGE_KEY, LINKS_FILE_PATH } from '../constants.js';
 import { saveModel, cleanupOldBackups } from './storage.js';
 
+// --- Helper to convert reminder from internal format to JSON for export
+// Exports in the same format as the internal model (compatible with old app)
+function convertReminderToJson(r) {
+  const json = {
+    key: r.key,
+    title: r.title || '',
+    name: r.title || '',  // Include both for compatibility
+    url: r.url || PLACEHOLDER_URL,
+    type: r.type || 'days',
+    links: r.links || []
+  };
+
+  // Handle interval mode
+  if (r.type === 'interval') {
+    json.interval = r.interval || 0;
+    json.currentNumber = r.currentNumber || 0;
+    json.intervalType = r.intervalType || 'limit';
+    json.intervalUnit = r.intervalUnit || 'none';
+    if (r.breakdown) {
+      json.breakdown = {
+        locked: r.breakdown.locked || false,
+        rows: Array.isArray(r.breakdown.rows) ? r.breakdown.rows.map(row => ({
+          label: row.label || '',
+          value: row.value || 0
+        })) : []
+      };
+    }
+    json.schedule = null;
+  } else {
+    // Handle calendar mode - export the schedule object directly
+    if (r.schedule) {
+      // Create a copy of the schedule and serialize dates
+      const schedCopy = { ...r.schedule };
+      if (schedCopy.date instanceof Date) {
+        schedCopy.date = schedCopy.date.toISOString();
+      }
+      json.schedule = schedCopy;
+    } else {
+      json.schedule = null;
+    }
+  }
+
+  return json;
+}
+
 // --- Extract complete data for export
 export function extractUrlOverrides() {
   const data = currentData();
@@ -77,27 +122,7 @@ export function extractUrlOverrides() {
         obj[section.id] = {};
         Object.entries(data[section.id]).forEach(([subtitle, reminders]) => {
           if (Array.isArray(reminders)) {
-            obj[section.id][subtitle] = reminders.map(r => ({
-              key: r.key,
-              name: r.name || '',
-              mode: r.mode || 'calendar',
-              scheduledDate: r.scheduledDate || null,
-              repeat: r.repeat || 'none',
-              weeklyInterval: r.weeklyInterval || null,
-              monthlyType: r.monthlyType || null,
-              targetNumber: r.targetNumber || null,
-              currentNumber: r.currentNumber || null,
-              intervalType: r.intervalType || 'limit',
-              unit: r.unit || 'none',
-              breakdown: r.breakdown ? {
-                locked: r.breakdown.locked || false,
-                rows: Array.isArray(r.breakdown.rows) ? r.breakdown.rows.map(row => ({
-                  label: row.label || '',
-                  value: row.value || 0
-                })) : []
-              } : null,
-              links: r.links || []
-            }));
+            obj[section.id][subtitle] = reminders.map(r => convertReminderToJson(r));
           }
         });
       }
@@ -109,27 +134,7 @@ export function extractUrlOverrides() {
     obj.reminders = {};
     Object.entries(data.reminders).forEach(([subtitle, reminders]) => {
       if (Array.isArray(reminders)) {
-        obj.reminders[subtitle] = reminders.map(r => ({
-          key: r.key,
-          name: r.name || '',
-          mode: r.mode || 'calendar',
-          scheduledDate: r.scheduledDate || null,
-          repeat: r.repeat || 'none',
-          weeklyInterval: r.weeklyInterval || null,
-          monthlyType: r.monthlyType || null,
-          targetNumber: r.targetNumber || null,
-          currentNumber: r.currentNumber || null,
-          intervalType: r.intervalType || 'limit',
-          unit: r.unit || 'none',
-          breakdown: r.breakdown ? {
-            locked: r.breakdown.locked || false,
-            rows: Array.isArray(r.breakdown.rows) ? r.breakdown.rows.map(row => ({
-              label: row.label || '',
-              value: row.value || 0
-            })) : []
-          } : null,
-          links: r.links || []
-        }));
+        obj.reminders[subtitle] = reminders.map(r => convertReminderToJson(r));
       }
     });
   }
@@ -271,6 +276,103 @@ export async function persistUrlOverridesToFile() {
   return await writeTextFileToProject(LINKS_FILE_PATH, json);
 }
 
+// --- Helper to convert reminder from JSON flat format to internal nested format
+function convertReminderFromJson(r) {
+  if (!r || typeof r !== 'object') {
+    console.warn('Invalid reminder object:', r);
+    return { key: 'invalid', title: 'Invalid', url: PLACEHOLDER_URL, type: 'days', schedule: null, links: [] };
+  }
+
+  // Use title/name if provided, otherwise format the key as display name
+  let displayTitle = r.title || r.name || '';
+  if (!displayTitle && r.key) {
+    // Convert key like "power_bi" to "Power Bi"
+    displayTitle = String(r.key)
+      .replace(/_/g, ' ')
+      .replace(/\b\w/g, c => c.toUpperCase());
+  }
+  // Fallback if still no title
+  if (!displayTitle) {
+    displayTitle = 'Untitled';
+  }
+
+  const reminder = {
+    key: r.key || 'unknown',
+    title: displayTitle,
+    url: r.url || PLACEHOLDER_URL,
+    links: Array.isArray(r.links) ? r.links : []
+  };
+
+  // Convert mode to type and handle interval data
+  // Support both "mode" (new format) and "type" (old app format)
+  const isInterval = r.mode === 'interval' || r.type === 'interval';
+  if (isInterval) {
+    reminder.type = 'interval';
+    // Support both "interval" (old format) and "targetNumber" (new format)
+    reminder.interval = r.interval || r.targetNumber || 0;
+    reminder.currentNumber = r.currentNumber || 0;
+    reminder.intervalType = r.intervalType || 'limit';
+    // Support both "intervalUnit" (old format) and "unit" (new format)
+    reminder.intervalUnit = r.intervalUnit || r.unit || 'none';
+    reminder.breakdown = r.breakdown ? {
+      locked: r.breakdown.locked || false,
+      rows: Array.isArray(r.breakdown.rows) ? r.breakdown.rows.map(row => ({
+        label: row.label || '',
+        value: row.value || 0
+      })) : []
+    } : null;
+    reminder.schedule = null;
+  } else {
+    // Calendar mode
+    reminder.type = 'days';
+    reminder.schedule = null;
+
+    // Check if schedule is already in nested format (from old app export)
+    if (r.schedule && typeof r.schedule === 'object') {
+      // Already in internal format - use directly
+      reminder.schedule = r.schedule;
+      // Ensure date is a Date object if it exists
+      if (reminder.schedule.date && typeof reminder.schedule.date === 'string') {
+        reminder.schedule.date = new Date(reminder.schedule.date);
+      }
+    }
+    // Convert flat date/repeat fields to schedule object
+    else if (r.scheduledDate) {
+      const date = new Date(r.scheduledDate);
+      if (!isNaN(date.getTime())) {
+        const repeat = r.repeat || 'none';
+
+        if (repeat === 'none') {
+          reminder.schedule = {
+            type: 'once',
+            date: date
+          };
+        } else if (repeat === 'weekly') {
+          reminder.schedule = {
+            type: 'weekday',
+            weekday: date.getDay(),
+            weekInterval: parseInt(r.weeklyInterval) || 1
+          };
+        } else if (repeat === 'monthly') {
+          if (r.monthlyType === 'firstWeekday') {
+            reminder.schedule = {
+              type: 'firstWeekdayOfMonth',
+              weekday: date.getDay() || 1
+            };
+          } else {
+            reminder.schedule = {
+              type: 'monthly',
+              dayOfMonth: date.getDate()
+            };
+          }
+        }
+      }
+    }
+  }
+
+  return reminder;
+}
+
 // --- Apply URL overrides from imported JSON
 export function applyUrlOverrides(data) {
   if (!data || typeof data !== 'object') return;
@@ -280,6 +382,31 @@ export function applyUrlOverrides(data) {
   }
   // Always operate on model, not editState.working
   const current = model;
+
+  // IMPORTANT: Apply structure FIRST so new sections are recognized before data import
+  if (data._structure) {
+    if (data._structure.sections && Array.isArray(data._structure.sections)) {
+      current.sections = data._structure.sections;
+    }
+    // Restore sectionsStacked (separate section order for stacked mode)
+    if (data._structure.sectionsStacked && Array.isArray(data._structure.sectionsStacked)) {
+      current.sectionsStacked = data._structure.sectionsStacked;
+    }
+    if (data._structure.sectionTitles) {
+      current.sectionTitles = data._structure.sectionTitles;
+    }
+    // Restore section colors (independent light/dark mode colors)
+    if (data._structure.sectionColors && typeof data._structure.sectionColors === 'object') {
+      current.sectionColors = data._structure.sectionColors;
+    }
+    // Restore subtitle colors (independent light/dark mode colors)
+    if (data._structure.subtitleColors && typeof data._structure.subtitleColors === 'object') {
+      current.subtitleColors = data._structure.subtitleColors;
+    }
+    if (data._structure.header) {
+      current.header = data._structure.header;
+    }
+  }
 
   // Apply URL overrides to standard sections
   const sectionsIcon = ['dailyTasks','dailyTools','contentCreation','ads'];
@@ -421,31 +548,7 @@ export function applyUrlOverrides(data) {
         current[section.id] = {};
         Object.entries(data[section.id]).forEach(([subtitle, reminders]) => {
           if (Array.isArray(reminders)) {
-            current[section.id][subtitle] = reminders.map(r => ({
-              key: r.key,
-              name: r.name || '',
-              mode: r.mode || 'calendar',
-              // Calendar mode fields
-              scheduledDate: r.scheduledDate || null,
-              repeat: r.repeat || 'none',
-              weeklyInterval: r.weeklyInterval || null,
-              monthlyType: r.monthlyType || null,
-              // Interval mode fields
-              targetNumber: r.targetNumber || null,
-              currentNumber: r.currentNumber || null,
-              intervalType: r.intervalType || 'limit',
-              unit: r.unit || 'none',
-              // Breakdown data
-              breakdown: r.breakdown ? {
-                locked: r.breakdown.locked || false,
-                rows: Array.isArray(r.breakdown.rows) ? r.breakdown.rows.map(row => ({
-                  label: row.label || '',
-                  value: row.value || 0
-                })) : []
-              } : null,
-              // Links
-              links: r.links || []
-            }));
+            current[section.id][subtitle] = reminders.map(r => convertReminderFromJson(r));
           }
         });
       }
@@ -457,59 +560,12 @@ export function applyUrlOverrides(data) {
     current.reminders = {};
     Object.entries(data.reminders).forEach(([subtitle, reminders]) => {
       if (Array.isArray(reminders)) {
-        current.reminders[subtitle] = reminders.map(r => ({
-          key: r.key,
-          name: r.name || '',
-          mode: r.mode || 'calendar',
-          // Calendar mode fields
-          scheduledDate: r.scheduledDate || null,
-          repeat: r.repeat || 'none',
-          weeklyInterval: r.weeklyInterval || null,
-          monthlyType: r.monthlyType || null,
-          // Interval mode fields
-          targetNumber: r.targetNumber || null,
-          currentNumber: r.currentNumber || null,
-          intervalType: r.intervalType || 'limit',
-          unit: r.unit || 'none',
-          // Breakdown data
-          breakdown: r.breakdown ? {
-            locked: r.breakdown.locked || false,
-            rows: Array.isArray(r.breakdown.rows) ? r.breakdown.rows.map(row => ({
-              label: row.label || '',
-              value: row.value || 0
-            })) : []
-          } : null,
-          // Links
-          links: r.links || []
-        }));
+        current.reminders[subtitle] = reminders.map(r => convertReminderFromJson(r));
       }
     });
   }
 
-  // Apply structure information if available (includes sections order)
-  if (data._structure) {
-    if (data._structure.sections && Array.isArray(data._structure.sections)) {
-      current.sections = data._structure.sections;
-    }
-    // Restore sectionsStacked (separate section order for stacked mode)
-    if (data._structure.sectionsStacked && Array.isArray(data._structure.sectionsStacked)) {
-      current.sectionsStacked = data._structure.sectionsStacked;
-    }
-    if (data._structure.sectionTitles) {
-      current.sectionTitles = data._structure.sectionTitles;
-    }
-    // Restore section colors (independent light/dark mode colors)
-    if (data._structure.sectionColors && typeof data._structure.sectionColors === 'object') {
-      current.sectionColors = data._structure.sectionColors;
-    }
-    // Restore subtitle colors (independent light/dark mode colors)
-    if (data._structure.subtitleColors && typeof data._structure.subtitleColors === 'object') {
-      current.subtitleColors = data._structure.subtitleColors;
-    }
-    if (data._structure.header) {
-      current.header = data._structure.header;
-    }
-  }
+  // Note: _structure is now applied at the beginning of this function
 
   // Apply UI state and preferences
   if (typeof data.darkMode === 'boolean') {
@@ -575,9 +631,9 @@ export function applyUrlOverrides(data) {
       displayMode: current.displayMode,
     };
 
-    // Add dynamic sections
+    // Add dynamic sections (including independent reminders and copy-paste)
     current.sections.forEach(section => {
-      if ((section.type === 'newCard' || section.type === 'newCardAnalytics' || section.type === 'copyPaste') && current[section.id]) {
+      if ((section.type === 'newCard' || section.type === 'newCardAnalytics' || section.type === 'copyPaste' || section.type === 'reminders') && current[section.id]) {
         payload[section.id] = current[section.id];
       }
     });

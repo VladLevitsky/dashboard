@@ -784,7 +784,9 @@ export function renderRemindersForSection(sectionEl) {
     remindersData = data[sectionId];
   }
 
-  if (!remindersData || typeof remindersData !== 'object') return;
+  if (!remindersData || typeof remindersData !== 'object') {
+    return;
+  }
 
   Object.entries(remindersData).forEach(([subtitle, reminders]) => {
     if (!Array.isArray(reminders)) {

@@ -4,78 +4,22 @@
 import { $, $$, fileToDataURL } from '../utils.js';
 import { MEDIA_STORAGE_KEY, MEDIA_MANIFEST_PATH } from '../constants.js';
 
-// --- Bundled logos from assets/logos folder
-const BUNDLED_LOGOS = [
-  'telcobridges_tblogo_64.png',
-  'atlassian_jira_logo_icon_170511.png',
-  'Confluence-Symbol.png',
-  'pngimg.com - chatgpt_PNG15.png',
-  'Midjourney_logo.svg.png',
-  'WordPress.com-Logo.wine.png',
-  'Gmail_icon_(2020).svg.png',
-  'LinkedIn_logo.svg',
-  'Meta_Platforms_Inc._logo.svg.png',
-  'X_logo_2023_original.svg',
-  'YouTube_full-color_icon_(2017).svg.webp',
-  '10691802.png',
-  'Google_Ads_icon.svg',
-  'google_analytics_icon.png',
-  '4709000.png',
-  'Google_Drive_icon_(2020).svg.png',
-  'Content_creation_divider.svg',
-  'Daily_tasks_1.svg',
-  'Daily_tasks_2.svg',
-  'Daily_tools_1.svg',
-  'Daily_tools_2.svg',
-  'Daily_tools_3.svg',
-  'Daily_tools_4.svg',
-  'Content_creation_1.svg',
-  'Content_creation_2.svg',
-  'Content_creation_3.svg',
-  'Content_creation_4.svg',
-  'Content_creation_5.svg',
-  'Content_creation_6.svg',
-  'Ads_1.svg',
-  'Ads_2.svg',
-  'Ads_3.svg',
-  'Ads_4.svg',
-  'Ads_5.svg',
-  'Ads_divider.svg',
-  'Analytics_1.svg',
-  'Tools_1.svg',
-  'google-tag-manager.svg',
-  'canva-logo.webp',
-  'Salesforce.com_logo.png',
-  'Reports.png',
-  'tiktok-icon-free-png.webp',
-  'opus-clip.webp',
-  'claude-icon-8x.png',
-  'Amazon_Web_Services-Logo.wine.png',
-  'genesys-scaled.webp',
-  'placeholder-logo.svg',
-  'placeholder-profile.svg'
-];
-
-// --- Bundled button icons from assets/icons folder
-const BUNDLED_ICONS = [
-  'Link.svg',
-  'display.svg',
-  'UI_wrench.svg'
-];
-
-// --- Load bundled images from assets folder
-export function loadBundledIcons() {
-  const logos = BUNDLED_LOGOS.map(name => ({
-    id: `bundled:logos/${name}`,
-    name: name,
-    src: `assets/logos/${name}`
-  }));
-  const icons = BUNDLED_ICONS.map(name => ({
-    id: `bundled:icons/${name}`,
-    name: name,
-    src: `assets/icons/${name}`
-  }));
-  return [...logos, ...icons];
+// --- Load bundled logos dynamically from assets/logos/manifest.json
+// To add/remove logos: update the manifest.json file in assets/logos/
+export async function loadBundledLogos() {
+  try {
+    const res = await fetch('assets/logos/manifest.json', { cache: 'no-cache' });
+    if (!res.ok) return [];
+    const files = await res.json();
+    if (!Array.isArray(files)) return [];
+    return files.map(name => ({
+      id: `bundled:${name}`,
+      name: name,
+      src: `assets/logos/${name}`
+    }));
+  } catch {
+    return [];
+  }
 }
 
 // --- Load media library from localStorage
@@ -152,9 +96,10 @@ export function openMediaLibrary(onSelect) {
   const closeBtn = $('#media-close');
   let selectedId = null;
 
-  function renderGrid() {
+  async function renderGrid() {
     const localItems = loadMediaLibrary();
-    const bundledItems = loadBundledIcons();
+    const bundledItems = await loadBundledLogos();
+    const manifestItems = await loadManifestMedia();
     grid.innerHTML = '';
     const renderItems = (items) => items.forEach(item => {
       const div = document.createElement('div');
@@ -171,12 +116,10 @@ export function openMediaLibrary(onSelect) {
       });
       grid.appendChild(div);
     });
-    // render bundled icons first, then manifest, then local (user-added)
-    loadManifestMedia().then(manifestItems => {
-      renderItems(bundledItems);
-      renderItems(manifestItems);
-      renderItems(localItems);
-    });
+    // render bundled logos first, then manifest, then local (user-added)
+    renderItems(bundledItems);
+    renderItems(manifestItems);
+    renderItems(localItems);
   }
 
   function close() {
@@ -202,22 +145,21 @@ export function openMediaLibrary(onSelect) {
   closeBtn.onclick = () => close();
   modal.querySelector('.media-backdrop').onclick = () => close();
 
-  selectBtn.onclick = () => {
+  selectBtn.onclick = async () => {
     if (!selectedId) return;
     const items = loadMediaLibrary();
-    const bundledItems = loadBundledIcons();
-    // Check bundled icons, manifest items, and local items
-    loadManifestMedia().then(manifestItems => {
-      let chosen = items.find(i => i.id === selectedId);
-      if (!chosen) {
-        chosen = manifestItems.find(i => i.id === selectedId);
-      }
-      if (!chosen) {
-        chosen = bundledItems.find(i => i.id === selectedId);
-      }
-      if (chosen) onSelect(chosen);
-      close();
-    });
+    const bundledItems = await loadBundledLogos();
+    const manifestItems = await loadManifestMedia();
+    // Check local items, manifest items, and bundled logos
+    let chosen = items.find(i => i.id === selectedId);
+    if (!chosen) {
+      chosen = manifestItems.find(i => i.id === selectedId);
+    }
+    if (!chosen) {
+      chosen = bundledItems.find(i => i.id === selectedId);
+    }
+    if (chosen) onSelect(chosen);
+    close();
   };
 
   deleteBtn.onclick = () => {

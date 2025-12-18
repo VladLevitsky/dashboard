@@ -25,11 +25,11 @@ export const model = {
   },
   sectionTitles: {},
   header: {
-    companyLogoSrc: 'assets/logos/placeholder-logo.svg',
+    companyLogoSrc: 'assets/icons/placeholder-logo.svg',
     companyLogoZoom: 1,
     companyLogoXPercent: 0,
     companyLogoYPercent: 0,
-    profilePhotoSrc: 'assets/logos/placeholder-profile.svg',
+    profilePhotoSrc: 'assets/icons/placeholder-profile.svg',
     profileName: 'Your Name',
     profileTitle: 'Your Title',
     // Profile photo position/zoom settings

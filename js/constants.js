@@ -33,7 +33,7 @@ export const icons = {
   Content_creation_2: 'assets/logos/Content_creation_2.svg',
   Content_creation_3: 'assets/logos/Content_creation_3.svg',
   Content_creation_4: 'assets/logos/Content_creation_4.svg',
-  Content_creation_divider: 'assets/logos/Content_creation_divider.svg',
+  Content_creation_divider: 'assets/icons/Content_creation_divider.svg',
   Content_creation_5: 'assets/logos/Content_creation_5.svg',
   Content_creation_6: 'assets/logos/Content_creation_6.svg',
 
@@ -42,8 +42,8 @@ export const icons = {
   Ads_2: 'assets/logos/Ads_2.svg',
   Ads_3: 'assets/logos/Ads_3.svg',
   Ads_4: 'assets/logos/Ads_4.svg',
-  Ads_5: 'assets/logos/Ads_5.svg',
-  Ads_divider: 'assets/logos/Ads_divider.svg',
+  Ads_5: 'assets/icons/Ads_5.svg',
+  Ads_divider: 'assets/icons/Ads_divider.svg',
 };
 
 // Link icon SVG for reminder links and list item links
