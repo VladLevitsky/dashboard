@@ -13,6 +13,24 @@ A fully customizable personal work dashboard that centralizes all daily tasks, t
 - **Responsive Design**: Clean, card-based layout with flexible sizing
 - **Zero Backend**: Runs entirely client-side with optional JSON import/export
 
+### Hosting & Deployment
+- **Public Repository**: This application is hosted on GitHub as a public repository and served via GitHub Pages
+- **Static Site**: No server-side processing - all functionality runs in the browser
+
+### Security Considerations
+> **IMPORTANT**: This is a PUBLIC repository. All code changes are visible to anyone.
+
+When making changes to this codebase, **NEVER** include:
+- API keys or secrets
+- Personal credentials or passwords
+- Private URLs or internal endpoints
+- Sensitive personal information
+- Authentication tokens
+- Database connection strings
+- Any data that should not be publicly accessible
+
+User-specific data (links, reminders, settings) is stored in the browser's LocalStorage and is NOT part of the repository. The JSON import/export feature is for user convenience and should only contain non-sensitive configuration data.
+
 ---
 
 ## Core Functionalities
@@ -114,7 +132,31 @@ A fully customizable personal work dashboard that centralizes all daily tasks, t
 - Delete unused images
 - Images stored in browser storage
 
-### 5. Import/Export System
+### 5. Image Editor
+- Adjust profile photo and logo positioning and scaling
+- **Profile Photo Mode**: Circular frame (90x90px) with cover fit (image fills frame)
+  - Zoom range: 100% to 150%
+  - Click and drag to reposition image within frame
+  - Used for header profile photo
+- **Logo Mode**: Rectangular frame (216x126px) with fit mode (entire image visible)
+  - Zoom range: 100% to 300%
+  - Click and drag to reposition image within frame
+  - Used for company/personal logo
+- **Features**:
+  - Real-time preview with zoom slider
+  - Touch support for mobile devices
+  - Choose different image from media library
+  - Position saved as percentage (scales correctly to different frame sizes)
+  - Transform calculations handle aspect ratios automatically
+- **Exported Functions**:
+  - `openImageEditor(currentSrc, currentZoom, currentX, currentY, onSave, type)` - Opens modal for editing
+    - `type`: 'profile' (circle frame, cover fit) or 'logo' (square frame, fit mode)
+    - `onSave`: Callback receives `{ src, zoom, xPercent, yPercent }`
+  - `closeImageEditor()` - Closes the editor modal
+  - `applyProfilePhotoTransform(imgElement, zoom, xPercent, yPercent)` - Applies transform to 90x90 profile photo
+  - `applyLogoTransform(imgElement, zoom, xPercent, yPercent)` - Applies transform to 216x126 logo frame
+
+### 6. Import/Export System
 
 #### Export (Save Icon)
 - Saves current configuration to JSON file
@@ -136,14 +178,14 @@ A fully customizable personal work dashboard that centralizes all daily tasks, t
 }
 ```
 
-### 6. Dark Mode
+### 7. Dark Mode
 - Toggle button in bottom-left (🌙/☀️)
 - Only visible in edit mode
 - Persists across sessions
 - Theme applied via CSS custom properties
 - Affects all UI elements including popovers and modals
 
-### 7. Independent Light/Dark Mode Colors
+### 8. Independent Light/Dark Mode Colors
 - Custom colors can be set independently for light and dark modes
 - Applies to:
   - **Subtasks/List cards**: Click color picker icon next to section title
@@ -154,7 +196,7 @@ A fully customizable personal work dashboard that centralizes all daily tasks, t
 - **Backward Compatible**: Legacy single-color strings automatically supported
 - Switching themes displays the appropriate color for each mode
 
-### 8. Display Mode
+### 9. Display Mode
 - Toggle button in header (monitor icon, left of Quick Access icon)
 - Click to open animated bubble selector with two view options:
   - **Normal Mode**: Single-column centered layout (default)
@@ -169,7 +211,7 @@ A fully customizable personal work dashboard that centralizes all daily tasks, t
   - Both orderings are saved to localStorage and JSON export/import
   - Edit mode renders the current display mode's layout
 
-### 9. Dynamic Card Management
+### 10. Dynamic Card Management
 - **Add Cards**: Green + button between sections (edit mode only)
 - **Delete Cards**: Red × button in top-right corner of each card
 - **Card Type Selection**: Modal with 4 options when adding new card
@@ -274,7 +316,6 @@ Personal Dashboard/
 ├── index.html              # Main HTML structure (~350 lines)
 ├── styles.css              # All styling with CSS variables (~2500 lines)
 ├── CLAUDE.md               # This documentation file
-├── app-reference.js        # Legacy monolithic file (kept for reference only)
 ├── js/                     # ES6 Modules (main codebase)
 │   ├── main.js             # Entry point - imports all modules, exports to window.*
 │   ├── state.js            # Global state (model, editState, dragState, currentData, currentSections)
@@ -290,6 +331,7 @@ Personal Dashboard/
 │   │   ├── timers.js       # Time tracking functionality
 │   │   ├── quick-access.js # Quick access panel and selector mode
 │   │   ├── media-library.js # Image upload and management
+│   │   ├── image-editor.js # Profile photo and logo positioning/scaling editor
 │   │   ├── reminders.js    # Reminder rendering, calendar/interval popovers, breakdown modal
 │   │   ├── cards.js        # Card CRUD, reorder buttons, card type selector
 │   │   └── links.js        # Reminder and list item links modals
@@ -365,6 +407,10 @@ The application uses ES6 modules with a clear separation of concerns:
 - `openListItemLinksModal(item, sectionId)`: Open links editor modal for list items
 - `openColorPicker(sectionId, sectionType)`: Open color picker for section bubbles
 - `openSubtitleColorPicker(sectionId, subtitle)`: Open color picker for subtitle bubbles
+- `openImageEditor(currentSrc, currentZoom, currentX, currentY, onSave, type)`: Open image positioning/scaling editor
+- `closeImageEditor()`: Close image editor modal
+- `applyProfilePhotoTransform(imgElement, zoom, xPercent, yPercent)`: Apply transform to profile photo
+- `applyLogoTransform(imgElement, zoom, xPercent, yPercent)`: Apply transform to logo
 - `onAddCard(afterSectionId)`: Show card type selector
 - `onDeleteCard(sectionId)`: Remove card with confirmation
 
@@ -794,11 +840,11 @@ editState.working = deepClone(model);
 
 ### Technical Debt
 - ~~Consider breaking app.js into modules~~ ✓ Completed - now uses ES6 modules
+- ~~Remove app-reference.js once ES6 migration is fully stable~~ ✓ Completed
 - Implement proper state management library if complexity grows
 - Add TypeScript for better type safety
 - Consider indexedDB for larger data storage
 - Add unit tests for critical functions
-- Remove app-reference.js once ES6 migration is fully stable
 
 ---
 
@@ -853,7 +899,6 @@ editState.working = deepClone(model);
 - **ES6 Module Migration**: Refactored monolithic app.js into 15+ ES6 modules
   - Clear separation: state, core, features, components
   - Improved maintainability and code organization
-  - `app-reference.js` kept for reference only
 - **Independent Display Mode Sections**: Normal and stacked modes now have completely independent section orders
   - `sections` array for normal mode
   - `sectionsStacked` array for stacked mode
@@ -895,7 +940,6 @@ editState.working = deepClone(model);
 - `index.html`: ~350 lines - Main HTML structure
 - `styles.css`: ~2500 lines - All CSS styling
 - `CLAUDE.md`: This documentation
-- `app-reference.js`: ~6700 lines - Legacy monolithic file (reference only)
 - `js/main.js`: ~390 lines - ES6 entry point
 - `js/state.js`: ~210 lines - Global state management
 - `js/constants.js`: ~90 lines - App constants
@@ -908,6 +952,7 @@ editState.working = deepClone(model);
 - `js/features/timers.js`: ~200 lines - Time tracking
 - `js/features/quick-access.js`: ~280 lines - Quick access panel
 - `js/features/media-library.js`: ~200 lines - Media management
+- `js/features/image-editor.js`: ~380 lines - Profile photo and logo positioning/scaling editor
 - `js/features/reminders.js`: ~680 lines - Reminder system
 - `js/features/cards.js`: ~610 lines - Card management
 - `js/features/links.js`: ~490 lines - Links feature

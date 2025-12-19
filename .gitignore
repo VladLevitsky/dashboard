@@ -1,0 +1,16 @@
+# Reference folder - for local screenshots, files, and working context
+# This folder is used for development collaboration but should not be public
+Reference/
+
+# Exported JSON backups (optional - remove if you want to track exports)
+# Personal Dashboard*.json
+
+# OS-generated files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor files
+*.swp
+*.swo
+*~

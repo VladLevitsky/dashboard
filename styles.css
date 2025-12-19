@@ -71,6 +71,11 @@ body {
   height: 126px;
   overflow: hidden;
   position: relative;
+  cursor: default;
+}
+
+/* Only show pointer cursor in edit mode */
+.card.editing .company-logo-container {
   cursor: pointer;
 }
 
@@ -3335,6 +3340,11 @@ body.stacked-mode .gap-add-btn {
   box-shadow: 0 8px 22px rgba(0,0,0,0.18);
   position: relative;
   flex-shrink: 0;
+  cursor: default;
+}
+
+/* Only show pointer cursor in edit mode */
+.card.editing .profile-photo-container {
   cursor: pointer;
 }
 

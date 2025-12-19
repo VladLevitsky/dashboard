@@ -14,7 +14,17 @@
       "Bash(node:*)",
       "Bash(python:*)",
       "Bash(mkdir:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(del \"C:\\\\Users\\\\vlevitsky\\\\Documents\\\\Personal Dashboard - New\\\\app-reference.js\")",
+      "Bash(head:*)",
+      "Bash(git -C \"C:\\\\Users\\\\vlevitsky\\\\Documents\\\\Personal Dashboard - New\" status --short)",
+      "Bash(git -C \"C:\\\\Users\\\\vlevitsky\\\\Documents\\\\Personal Dashboard - New\" diff --cached CLAUDE.md)",
+      "Bash(git -C \"C:\\\\Users\\\\vlevitsky\\\\Documents\\\\Personal Dashboard - New\" diff AUDIT_REPORT.md)",
+      "Bash(git -C \"C:\\\\Users\\\\vlevitsky\\\\Documents\\\\Personal Dashboard - New\" status)",
+      "Bash(git -C \"C:\\\\Users\\\\vlevitsky\\\\Documents\\\\Personal Dashboard - New\" log --oneline --all --decorate -10)",
+      "Bash(git -C \"C:\\\\Users\\\\vlevitsky\\\\Documents\\\\Personal Dashboard - New\" ls-tree -r HEAD --name-only)",
+      "Bash(git -C \"C:\\\\Users\\\\vlevitsky\\\\Documents\\\\Personal Dashboard - New\" restore app-reference.js)",
+      "Bash(git -C \"C:\\\\Users\\\\vlevitsky\\\\Documents\\\\Personal Dashboard - New\" diff --stat)"
     ],
     "deny": [],
     "ask": []
