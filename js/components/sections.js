@@ -1202,15 +1202,20 @@ export function renderCopyPasteForSection(sectionEl, sectionId) {
         <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
       </svg>`;
 
-      copyBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        e.preventDefault();
+      // Copy function - used by both button and bubble click
+      const copyToClipboard = () => {
         const textToCopy = item.copyText || item.text;
         navigator.clipboard.writeText(textToCopy).then(() => {
           if (window.showToast) {
             window.showToast('Copied to clipboard!');
           }
         });
+      };
+
+      copyBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        copyToClipboard();
       });
 
       div.appendChild(textSpan);
@@ -1222,10 +1227,10 @@ export function renderCopyPasteForSection(sectionEl, sectionId) {
           e.preventDefault();
           openEditPopover(div, {
             text: item.text,
-            url: item.copyText || '',
-            urlLabel: 'Copy Text',
+            copyText: item.copyText || '',
+            useCopyText: true,
             allowDelete: true
-          }, ({ text, url, delete: doDelete, accept }) => {
+          }, ({ text, copyText, delete: doDelete, accept }) => {
             if (!accept) return;
             if (doDelete) {
               const idx = items.findIndex(i => i.key === item.key);
@@ -1235,7 +1240,7 @@ export function renderCopyPasteForSection(sectionEl, sectionId) {
               return;
             }
             item.text = text || item.text;
-            item.copyText = url || '';
+            item.copyText = copyText || '';
             markDirtyAndSave();
             renderAllSections();
           });
@@ -1243,6 +1248,13 @@ export function renderCopyPasteForSection(sectionEl, sectionId) {
 
         // Use composite key for copy-paste items (sectionId:subtitle)
         initializeItemDragHandlers(div, item.key, `${sectionId}:${subtitle}`);
+      } else {
+        // View mode: clicking anywhere on bubble copies text
+        div.addEventListener('click', (e) => {
+          if (e.target.closest('.copy-paste-icon')) return; // Let button handler handle it
+          e.preventDefault();
+          copyToClipboard();
+        });
       }
 
       subtitleContainer.appendChild(div);

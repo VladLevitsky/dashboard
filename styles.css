@@ -1057,6 +1057,18 @@ h2, h3 { margin: 0 0 16px; }
 }
 .edit-popover label { display: grid; gap: 6px; font-size: 12px; color: var(--muted); margin-bottom: 10px; }
 .edit-popover input { padding: 10px 12px; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 14px; }
+.edit-popover textarea {
+  padding: 10px 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: inherit;
+  resize: vertical;
+  min-height: 80px;
+  max-height: 200px;
+  width: 100%;
+  box-sizing: border-box;
+}
 .edit-popover input.disabled-sum-mode {
   background: #f3f4f6 !important;
   cursor: not-allowed !important;
@@ -2399,6 +2411,11 @@ section.card[id^="new-card-"].card-size-full {
 [data-theme="dark"] .edit-popover,
 [data-theme="dark"] .calendar-popover {
   border-color: #475569;
+}
+[data-theme="dark"] .edit-popover textarea {
+  background: var(--card);
+  border-color: #475569;
+  color: var(--text);
 }
 [data-theme="dark"] .calendar-section input,
 [data-theme="dark"] .calendar-section select {

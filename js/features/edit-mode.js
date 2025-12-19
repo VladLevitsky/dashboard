@@ -101,9 +101,21 @@ export function openEditPopover(targetEl, values, onDone) {
     if (textInput) { textInput.disabled = false; }
   }
   const urlField = $('.field-url');
-  const hideUrl = values.hideUrl === true;
+  const copyTextField = $('.field-copytext');
+  const copyTextarea = $('#edit-copytext');
+  const useCopyText = values.useCopyText === true;
+  const hideUrl = values.hideUrl === true || useCopyText;
+
+  // Show either URL field or Copy Text textarea
   urlField.hidden = hideUrl;
   urlField.style.display = hideUrl ? 'none' : '';
+
+  if (copyTextField && copyTextarea) {
+    copyTextField.hidden = !useCopyText;
+    copyTextField.style.display = useCopyText ? '' : 'none';
+    copyTextarea.value = useCopyText ? (values.copyText || '') : '';
+  }
+
   $('#edit-image-field').hidden = values.allowImage ? false : true;
   $('#chosen-image-name').textContent = '';
   editState.chosenMedia = null;

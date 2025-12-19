@@ -363,24 +363,50 @@ export function renderHeaderAndTitles() {
   const data = currentData();
   const logoEl = $('.company-logo');
   if (logoEl) {
-    logoEl.src = data.header.companyLogoSrc;
     // Apply logo transform if set
     const logoZoom = data.header.companyLogoZoom || 1;
     const logoXPercent = data.header.companyLogoXPercent || 0;
     const logoYPercent = data.header.companyLogoYPercent || 0;
-    if (window.applyLogoTransform) {
-      window.applyLogoTransform(logoEl, logoZoom, logoXPercent, logoYPercent);
+
+    const applyLogoTransformFn = () => {
+      if (window.applyLogoTransform) {
+        window.applyLogoTransform(logoEl, logoZoom, logoXPercent, logoYPercent);
+      }
+    };
+
+    // Always set onload handler first, then set/refresh src
+    logoEl.onload = applyLogoTransformFn;
+    logoEl.src = data.header.companyLogoSrc;
+
+    // If image is already complete (cached), manually trigger transform
+    if (logoEl.complete && logoEl.naturalWidth) {
+      applyLogoTransformFn();
     }
   }
   const profileEl = $('.profile-photo');
   if (profileEl) {
-    profileEl.src = data.header.profilePhotoSrc;
     // Apply transform if set
     const zoom = data.header.profilePhotoZoom || 1;
     const xPercent = data.header.profilePhotoXPercent || 0;
     const yPercent = data.header.profilePhotoYPercent || 0;
-    if (window.applyProfilePhotoTransform) {
-      window.applyProfilePhotoTransform(profileEl, zoom, xPercent, yPercent);
+
+    // Set up onload handler BEFORE setting src to ensure transform is applied
+    // whether image is cached or needs to load
+    const applyTransform = () => {
+      if (window.applyProfilePhotoTransform) {
+        window.applyProfilePhotoTransform(profileEl, zoom, xPercent, yPercent);
+      }
+    };
+
+    // Always set onload handler first, then set/refresh src
+    // This ensures transform is applied whether image is cached or newly loaded
+    profileEl.onload = applyTransform;
+    profileEl.src = data.header.profilePhotoSrc;
+
+    // If image is already complete (cached), manually trigger transform
+    // since onload may not fire for cached images
+    if (profileEl.complete && profileEl.naturalWidth) {
+      applyTransform();
     }
   }
   const nameEl = $('.profile-name');
@@ -444,7 +470,15 @@ export function wireUI() {
 
   $('#edit-form').addEventListener('submit', (e) => {
     e.preventDefault();
-    const payload = { text: $('#edit-text').value.trim(), url: $('#edit-url').value.trim(), chosenMedia: editState.chosenMedia || null, accept: true };
+    const copyTextarea = $('#edit-copytext');
+    const copyText = copyTextarea ? copyTextarea.value : '';
+    const payload = {
+      text: $('#edit-text').value.trim(),
+      url: $('#edit-url').value.trim(),
+      copyText: copyText,
+      chosenMedia: editState.chosenMedia || null,
+      accept: true
+    };
     if (editState.currentTarget) editState.currentTarget.onDone(payload);
     hideEditPopover();
     // Re-render items that might show new text
