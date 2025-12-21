@@ -120,6 +120,7 @@ export function extractUrlOverrides() {
     sectionIcons: data.sectionIcons || {},
     sectionColors: data.sectionColors || {},
     subtitleColors: data.subtitleColors || {},
+    collapsedSubtitles: data.collapsedSubtitles || {},
     header: data.header
   };
 
@@ -645,6 +646,10 @@ export function applyUrlOverrides(data) {
   if (structure.subtitleColors && typeof structure.subtitleColors === 'object') {
     current.subtitleColors = structure.subtitleColors;
   }
+  // Restore collapsed subtitles state
+  if (structure.collapsedSubtitles && typeof structure.collapsedSubtitles === 'object') {
+    current.collapsedSubtitles = structure.collapsedSubtitles;
+  }
   if (structure.header) {
     current.header = structure.header;
   }
@@ -789,6 +794,7 @@ export function applyUrlOverrides(data) {
       sectionIcons: current.sectionIcons,
       sectionColors: current.sectionColors,
       subtitleColors: current.subtitleColors,
+      collapsedSubtitles: current.collapsedSubtitles,
       header: current.header,
       darkMode: current.darkMode,
       timers: current.timers,

@@ -809,12 +809,37 @@ body {
 
 h2, h3 { margin: 0 0 16px; }
 /* Unify section title styles and increase spacing */
-.card > h2, .card > h3 {
+.card > h2, .card > h3, .card .section-title {
   font-size: 24px;
   font-weight: 700;
   color: var(--text);
-  margin: 0 0 24px; /* 50% more space than previous 16px */
+  margin: 0;
   line-height: 1.2;
+}
+
+/* Section title wrapper for title + optional color picker */
+.section-title-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 24px;
+}
+
+/* Color picker button next to main title (for _default items) */
+.title-color-picker-btn {
+  background: none;
+  border: none;
+  padding: 4px;
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.title-color-picker-btn:hover {
+  opacity: 1;
 }
 
 .two-col {
@@ -3449,6 +3474,32 @@ body.stacked-mode .gap-add-btn {
 
 .unified-subtitle-wrapper:first-child {
   margin-top: 0;
+}
+
+/* Collapse button for subtitle sections */
+.subtitle-collapse-btn {
+  background: none;
+  border: none;
+  padding: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.5;
+  transition: opacity 0.2s, transform 0.2s;
+  color: var(--text);
+}
+
+.subtitle-collapse-btn:hover {
+  opacity: 1;
+}
+
+.subtitle-collapse-btn svg {
+  transition: transform 0.2s ease;
+}
+
+.subtitle-collapse-btn.collapsed svg {
+  transform: rotate(-90deg);
 }
 
 .unified-subtitle {

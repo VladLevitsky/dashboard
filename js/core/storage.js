@@ -251,6 +251,7 @@ export function saveModel() {
     sectionIcons: data.sectionIcons,
     sectionColors: data.sectionColors,
     subtitleColors: data.subtitleColors,
+    collapsedSubtitles: data.collapsedSubtitles,
     header: data.header,
     darkMode: data.darkMode,
     timers: data.timers,
@@ -337,6 +338,10 @@ export async function restoreModel() {
 
     if (saved.subtitleColors) {
       model.subtitleColors = { ...model.subtitleColors, ...saved.subtitleColors };
+    }
+
+    if (saved.collapsedSubtitles) {
+      model.collapsedSubtitles = { ...model.collapsedSubtitles, ...saved.collapsedSubtitles };
     }
 
     if (saved.header) {

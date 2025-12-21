@@ -43,6 +43,7 @@ export const model = {
   sectionIcons: {},  // Custom icons for list-type sections (analytics, tools, etc.)
   sectionColors: {},  // Custom colors for sections (per light/dark mode)
   subtitleColors: {},  // Custom colors for subtitles within sections (per light/dark mode)
+  collapsedSubtitles: {},  // Track collapsed state of subtitles: { "sectionId:subtitle": true }
   header: {
     companyLogoSrc: 'assets/icons/placeholder-logo.svg',
     companyLogoZoom: 1,

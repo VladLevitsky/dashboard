@@ -122,7 +122,51 @@ export function createSectionElement(section) {
     });
   }
 
-  sectionEl.appendChild(titleEl);
+  // Create title wrapper to hold title and optional color picker
+  const titleWrapper = document.createElement('div');
+  titleWrapper.className = 'section-title-wrapper';
+  titleWrapper.appendChild(titleEl);
+
+  // Check if card has items in _default (no subsection)
+  // If so, show color picker for those items next to main title (in edit mode)
+  if (editState.enabled) {
+    const cardData = data[section.id];
+    if (cardData && cardData['_default']) {
+      const defaultItems = cardData['_default'];
+      const hasDefaultItems =
+        (defaultItems.icons && defaultItems.icons.length > 0) ||
+        (defaultItems.reminders && defaultItems.reminders.length > 0) ||
+        (defaultItems.subtasks && defaultItems.subtasks.length > 0) ||
+        (defaultItems.copyPaste && defaultItems.copyPaste.length > 0);
+
+      if (hasDefaultItems) {
+        const colorBtn = document.createElement('button');
+        colorBtn.type = 'button';
+        colorBtn.className = 'title-color-picker-btn';
+        colorBtn.title = 'Change color for items without a subsection';
+        colorBtn.innerHTML = `
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 20 20" fill="none">
+            <circle cx="10" cy="10" r="8" fill="url(#titleGradient-${section.id})" stroke="currentColor" stroke-width="1"/>
+            <defs>
+              <linearGradient id="titleGradient-${section.id}" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" style="stop-color:#ff6b6b;stop-opacity:1" />
+                <stop offset="50%" style="stop-color:#4ecdc4;stop-opacity:1" />
+                <stop offset="100%" style="stop-color:#f1c0e8;stop-opacity:1" />
+              </linearGradient>
+            </defs>
+          </svg>
+        `;
+        colorBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          // Use _default as the subtitle key for color picker
+          openSubtitleColorPicker(section.id, '_default');
+        });
+        titleWrapper.appendChild(colorBtn);
+      }
+    }
+  }
+
+  sectionEl.appendChild(titleWrapper);
 
   // All cards are now unified - they can contain icons, reminders, subtasks, and copy-paste items
   renderUnifiedCard(sectionEl, section.id);
@@ -1330,6 +1374,33 @@ export function renderUnifiedCard(sectionEl, sectionId) {
       const subtitleWrapper = document.createElement('div');
       subtitleWrapper.className = 'unified-subtitle-wrapper';
 
+      // Check if this subtitle is collapsed
+      const collapseKey = `${sectionId}:${subtitle}`;
+      const isCollapsed = data.collapsedSubtitles && data.collapsedSubtitles[collapseKey];
+
+      // Add collapse toggle button
+      const collapseBtn = document.createElement('button');
+      collapseBtn.type = 'button';
+      collapseBtn.className = 'subtitle-collapse-btn' + (isCollapsed ? ' collapsed' : '');
+      collapseBtn.title = isCollapsed ? 'Expand section' : 'Collapse section';
+      collapseBtn.innerHTML = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="6 9 12 15 18 9"></polyline>
+        </svg>
+      `;
+      collapseBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        // Toggle collapse state
+        if (!data.collapsedSubtitles) data.collapsedSubtitles = {};
+        data.collapsedSubtitles[collapseKey] = !data.collapsedSubtitles[collapseKey];
+        // Save immediately (not edit-mode dependent)
+        if (window.saveModel) window.saveModel();
+        // Re-render to reflect change
+        if (window.renderAllSections) window.renderAllSections();
+      });
+      subtitleWrapper.appendChild(collapseBtn);
+
       const subtitleEl = document.createElement('div');
       subtitleEl.className = 'unified-subtitle editable';
       subtitleEl.dataset.type = 'unifiedSubtitle';
@@ -1349,6 +1420,9 @@ export function renderUnifiedCard(sectionEl, sectionId) {
               if (data.subtitleColors) {
                 delete data.subtitleColors[`${sectionId}:${subtitle}`];
               }
+              if (data.collapsedSubtitles) {
+                delete data.collapsedSubtitles[collapseKey];
+              }
               markDirtyAndSave();
               renderAllSections();
               return;
@@ -1359,6 +1433,11 @@ export function renderUnifiedCard(sectionEl, sectionId) {
               if (data.subtitleColors && data.subtitleColors[`${sectionId}:${subtitle}`]) {
                 data.subtitleColors[`${sectionId}:${text}`] = data.subtitleColors[`${sectionId}:${subtitle}`];
                 delete data.subtitleColors[`${sectionId}:${subtitle}`];
+              }
+              // Also rename collapsed state key
+              if (data.collapsedSubtitles && data.collapsedSubtitles[collapseKey]) {
+                data.collapsedSubtitles[`${sectionId}:${text}`] = data.collapsedSubtitles[collapseKey];
+                delete data.collapsedSubtitles[collapseKey];
               }
               markDirtyAndSave();
               renderAllSections();
@@ -1395,16 +1474,30 @@ export function renderUnifiedCard(sectionEl, sectionId) {
       }
 
       container.appendChild(subtitleWrapper);
+
+      // If collapsed, mark content group to be hidden
+      if (isCollapsed) {
+        subtitleWrapper.dataset.collapsed = 'true';
+      }
     }
 
     // Get color for this subtitle (per-subtitle color from subtitleColors)
     const colorKey = `${sectionId}:${subtitle}`;
     const subtitleColor = data.subtitleColors && data.subtitleColors[colorKey];
 
+    // Check if this subtitle is collapsed (for non-_default subtitles)
+    const collapseKey = `${sectionId}:${subtitle}`;
+    const isSubtitleCollapsed = subtitle !== '_default' && data.collapsedSubtitles && data.collapsedSubtitles[collapseKey];
+
     // Create content group for items
     const contentGroup = document.createElement('div');
     contentGroup.className = 'unified-content-group';
     contentGroup.dataset.subtitle = subtitle;
+
+    // Hide content group if subtitle is collapsed
+    if (isSubtitleCollapsed) {
+      contentGroup.style.display = 'none';
+    }
 
     // Render icons (if any) - add button goes in this group for alignment
     const iconsGroup = document.createElement('div');
