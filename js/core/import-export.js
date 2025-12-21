@@ -7,7 +7,7 @@
 
 import { model, editState, currentData } from '../state.js';
 import { PLACEHOLDER_URL, APP_VERSION, STORAGE_KEY, LINKS_FILE_PATH } from '../constants.js';
-import { saveModel, cleanupOldBackups } from './storage.js';
+import { saveModel, cleanupOldBackups, migrateToUnifiedCards } from './storage.js';
 
 // --- Helper to convert reminder from internal format to JSON for export
 // Exports in the same format as the internal model (compatible with old app)
@@ -57,87 +57,60 @@ function convertReminderToJson(r) {
 // --- Extract complete data for export
 export function extractUrlOverrides() {
   const data = currentData();
-  const sectionsIcon = ['dailyTasks','dailyTools','contentCreation','ads'];
-  const sectionsList = ['analytics','tools'];
   const obj = {};
 
-  // Extract COMPLETE data from standard sections
-  sectionsIcon.forEach(sec => {
-    if (data[sec] && Array.isArray(data[sec])) {
-      obj[sec] = data[sec].map(i => ({
-        key: i.key,
-        url: i.url || PLACEHOLDER_URL,
-        title: i.title || '',
-        icon: i.icon || '',
-        isDivider: !!i.isDivider
-      }));
-    }
-  });
-
-  sectionsList.forEach(sec => {
-    if (data[sec] && Array.isArray(data[sec])) {
-      obj[sec] = data[sec].map(i => ({
-        key: i.key,
-        url: i.url || PLACEHOLDER_URL,
-        text: i.text || '',
-        links: i.links || []
-      }));
-    }
-  });
-
-  // Extract from dynamic sections
-  data.sections.forEach(section => {
-    if (data[section.id]) {
-      if (section.type === 'newCard' && Array.isArray(data[section.id])) {
-        obj[section.id] = data[section.id].map(i => ({
-          key: i.key,
-          url: i.url || PLACEHOLDER_URL,
-          title: i.title || '',
-          icon: i.icon || '',
-          isDivider: !!i.isDivider,
-          isFile: !!i.isFile,
-          fileName: i.fileName || '',
-          fileSize: i.fileSize || 0,
-          fileType: i.fileType || ''
-        }));
-      } else if (section.type === 'newCardAnalytics' && Array.isArray(data[section.id])) {
-        obj[section.id] = data[section.id].map(i => ({
+  // Helper function to export unified card data
+  const exportUnifiedCard = (sectionData) => {
+    if (!sectionData || typeof sectionData !== 'object') return null;
+    const exported = {};
+    Object.entries(sectionData).forEach(([subtitle, items]) => {
+      if (!items || typeof items !== 'object') return;
+      exported[subtitle] = {
+        icons: Array.isArray(items.icons) ? items.icons.map(i => {
+          const icon = {
+            key: i.key,
+            icon: i.icon || ''
+          };
+          // Include isDivider for separators
+          if (i.isDivider) {
+            icon.isDivider = true;
+          } else {
+            // Regular icons have url and title
+            icon.url = i.url || PLACEHOLDER_URL;
+            icon.title = i.title || '';
+          }
+          return icon;
+        }) : [],
+        reminders: Array.isArray(items.reminders) ? items.reminders.map(r => convertReminderToJson(r)) : [],
+        subtasks: Array.isArray(items.subtasks) ? items.subtasks.map(i => ({
           key: i.key,
           url: i.url || PLACEHOLDER_URL,
           text: i.text || '',
-          links: i.links || []
-        }));
-      } else if (section.type === 'copyPaste' && typeof data[section.id] === 'object') {
-        obj[section.id] = {};
-        Object.entries(data[section.id]).forEach(([subtitle, items]) => {
-          if (Array.isArray(items)) {
-            obj[section.id][subtitle] = items.map(i => ({
-              key: i.key,
-              text: i.text || '',
-              copyText: i.copyText || ''
-            }));
-          }
-        });
-      } else if (section.type === 'reminders' && typeof data[section.id] === 'object') {
-        obj[section.id] = {};
-        Object.entries(data[section.id]).forEach(([subtitle, reminders]) => {
-          if (Array.isArray(reminders)) {
-            obj[section.id][subtitle] = reminders.map(r => convertReminderToJson(r));
-          }
-        });
+          links: i.links || null
+        })) : [],
+        copyPaste: Array.isArray(items.copyPaste) ? items.copyPaste.map(i => ({
+          key: i.key,
+          text: i.text || '',
+          copyText: i.copyText || ''
+        })) : []
+      };
+    });
+    return exported;
+  };
+
+  // Extract from ALL sections - all are now unified format
+  data.sections.forEach(section => {
+    if (data[section.id]) {
+      // All card types are now unified format: { subtitle: { icons: [], reminders: [], subtasks: [], copyPaste: [] }, ... }
+      const exported = exportUnifiedCard(data[section.id]);
+      if (exported) {
+        obj[section.id] = exported;
       }
     }
   });
 
-  // Handle original reminders
-  if (data.reminders && typeof data.reminders === 'object') {
-    obj.reminders = {};
-    Object.entries(data.reminders).forEach(([subtitle, reminders]) => {
-      if (Array.isArray(reminders)) {
-        obj.reminders[subtitle] = reminders.map(r => convertReminderToJson(r));
-      }
-    });
-  }
+  // Schema version for migration support
+  obj.schemaVersion = data.schemaVersion || 3;
 
   // Structure information
   obj._structure = {
@@ -374,201 +347,396 @@ function convertReminderFromJson(r) {
   return reminder;
 }
 
+// --- Migrate imported JSON data from old format to unified format
+// This transforms both the section types AND the data structure in place
+function migrateImportedData(data, model) {
+  // ALL card types that should become unified
+  const legacyTypes = [
+    'newCard', 'newCardAnalytics', 'copyPaste', 'reminders',
+    'dailyTasks', 'dailyTools', 'contentCreation', 'ads',
+    'analytics', 'tools', 'icon', 'list'
+  ];
+  console.log('[Migration] Starting migration. Legacy types:', legacyTypes);
+  console.log('[Migration] Sections to process:', model.sections?.map(s => ({ id: s.id, type: s.type })));
+
+  // Helper to extract items from various data formats
+  const extractItems = (rawData) => {
+    if (!rawData) return null;
+    // Format 1: Direct array [...]
+    if (Array.isArray(rawData)) return rawData;
+    // Format 2: Object with items array { title: '...', items: [...] }
+    if (rawData.items && Array.isArray(rawData.items)) return rawData.items;
+    // Format 3: Object with subtitles { "Subtitle": [...] }
+    if (typeof rawData === 'object' && !Array.isArray(rawData)) {
+      // Check if it's subtitle format (values are arrays)
+      const firstValue = Object.values(rawData)[0];
+      if (Array.isArray(firstValue)) return rawData; // Return as-is for subtitle processing
+    }
+    return null;
+  };
+
+  // Process sections in model (which was populated from data._structure)
+  if (Array.isArray(model.sections)) {
+    model.sections.forEach(section => {
+      if (legacyTypes.includes(section.type)) {
+        const sectionId = section.id;
+        // Look for data at section.id first, then fall back to section.type
+        let rawData = data[sectionId];
+        let dataKey = sectionId;
+        if (!rawData && data[section.type]) {
+          rawData = data[section.type];
+          dataKey = section.type;
+          console.log(`[Migration] Found data at type key '${section.type}' instead of id '${sectionId}'`);
+        }
+
+        // Extract items from various formats
+        const oldData = extractItems(rawData);
+        console.log(`[Migration] Processing ${section.type} section: ${sectionId}`);
+        console.log(`[Migration] Raw data for ${dataKey}:`, rawData);
+        console.log(`[Migration] Extracted items:`, oldData);
+
+        // Convert the data in the imported JSON to unified format
+        if (oldData) {
+          switch (section.type) {
+            case 'newCard':
+              // Icon-only: array → { "_default": { icons: [...], reminders: [], subtasks: [], copyPaste: [] }}
+              if (Array.isArray(oldData)) {
+                data[sectionId] = {
+                  "_default": {
+                    icons: oldData.map((item, idx) => {
+                      const icon = {
+                        key: item.key || (item.name ? item.name.toLowerCase().replace(/\s+/g, '_') : `icon_${idx}`),
+                        icon: item.icon || ''
+                      };
+                      // Preserve separators (isDivider)
+                      if (item.isDivider) {
+                        icon.isDivider = true;
+                      } else {
+                        icon.url = item.url || PLACEHOLDER_URL;
+                        icon.title = item.title || item.name || '';
+                      }
+                      return icon;
+                    }),
+                    reminders: [],
+                    subtasks: [],
+                    copyPaste: []
+                  }
+                };
+                console.log(`[Migration] Migrated newCard ${sectionId} with ${oldData.length} icons`);
+              }
+              break;
+
+            case 'newCardAnalytics':
+              // Subtask-only: array → { "_default": { icons: [], reminders: [], subtasks: [...], copyPaste: [] }}
+              if (Array.isArray(oldData)) {
+                data[sectionId] = {
+                  "_default": {
+                    icons: [],
+                    reminders: [],
+                    subtasks: oldData.map((item, idx) => ({
+                      key: item.key || (item.name ? item.name.toLowerCase().replace(/\s+/g, '_') : `item_${idx}`),
+                      text: item.text || item.title || item.name || '',
+                      url: item.url || PLACEHOLDER_URL,
+                      links: item.links || null
+                    })),
+                    copyPaste: []
+                  }
+                };
+                console.log(`[Migration] Migrated newCardAnalytics ${sectionId} with ${oldData.length} subtasks`);
+              }
+              break;
+
+            case 'copyPaste':
+              // Copy-paste with subtitles: { "Sub": [items] } → { "Sub": { icons: [], reminders: [], subtasks: [], copyPaste: [...] }}
+              if (typeof oldData === 'object' && !Array.isArray(oldData)) {
+                const migrated = {};
+                Object.entries(oldData).forEach(([subtitle, items]) => {
+                  if (Array.isArray(items)) {
+                    migrated[subtitle] = {
+                      icons: [],
+                      reminders: [],
+                      subtasks: [],
+                      copyPaste: items.map(item => ({
+                        key: item.key,
+                        text: item.text || '',
+                        copyText: item.copyText || ''
+                      }))
+                    };
+                  } else if (items && typeof items === 'object' && items.copyPaste) {
+                    // Already in unified format - keep it
+                    migrated[subtitle] = items;
+                  }
+                });
+                data[sectionId] = migrated;
+                console.log(`[Migration] Migrated copyPaste ${sectionId} with subtitles:`, Object.keys(migrated));
+              }
+              break;
+
+            case 'reminders':
+              // Reminders with subtitles: { "Sub": [reminders] } → { "Sub": { icons: [], reminders: [...], subtasks: [], copyPaste: [] }}
+              if (typeof oldData === 'object' && !Array.isArray(oldData)) {
+                const migrated = {};
+                Object.entries(oldData).forEach(([subtitle, items]) => {
+                  console.log(`[Migration] Processing reminders subtitle "${subtitle}":`, items);
+                  if (Array.isArray(items)) {
+                    migrated[subtitle] = {
+                      icons: [],
+                      reminders: items.map(r => {
+                        // Generate title from key if not present
+                        let title = r.title || r.name || '';
+                        if (!title && r.key) {
+                          title = String(r.key).replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+                        }
+                        return {
+                          key: r.key || `reminder_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+                          title: title || 'Untitled',
+                          url: r.url || PLACEHOLDER_URL,
+                          type: r.type || r.mode || 'days',
+                          schedule: r.schedule || null,
+                          interval: r.interval || r.targetNumber || null,
+                          currentNumber: r.currentNumber || null,
+                          intervalType: r.intervalType || 'goal',
+                          intervalUnit: r.intervalUnit || r.unit || 'none',
+                          breakdown: r.breakdown || null,
+                          links: r.links || null
+                        };
+                      }),
+                      subtasks: [],
+                      copyPaste: []
+                    };
+                    console.log(`[Migration] Migrated ${items.length} reminders for subtitle "${subtitle}"`);
+                  } else if (items && typeof items === 'object' && items.reminders) {
+                    // Already in unified format - keep it
+                    migrated[subtitle] = items;
+                    console.log(`[Migration] Subtitle "${subtitle}" already in unified format`);
+                  }
+                });
+                data[sectionId] = migrated;
+                console.log(`[Migration] Final migrated data for ${sectionId}:`, data[sectionId]);
+              }
+              break;
+
+            case 'dailyTasks':
+            case 'dailyTools':
+            case 'contentCreation':
+            case 'ads':
+            case 'icon':
+              // Icon-based cards: array → { "_default": { icons: [...], reminders: [], subtasks: [], copyPaste: [] }}
+              if (Array.isArray(oldData)) {
+                data[sectionId] = {
+                  "_default": {
+                    icons: oldData.map((item, idx) => {
+                      // Support both old format (key) and JSON format (name)
+                      const icon = {
+                        key: item.key || (item.name ? item.name.toLowerCase().replace(/\s+/g, '_') : `icon_${idx}`),
+                        icon: item.icon || ''
+                      };
+                      // Preserve separators (isDivider)
+                      if (item.isDivider) {
+                        icon.isDivider = true;
+                      } else {
+                        icon.url = item.url || PLACEHOLDER_URL;
+                        icon.title = item.title || item.name || '';
+                      }
+                      return icon;
+                    }),
+                    reminders: [],
+                    subtasks: [],
+                    copyPaste: []
+                  }
+                };
+                console.log(`[Migration] Migrated icon card ${sectionId} with ${oldData.length} icons`);
+              }
+              break;
+
+            case 'analytics':
+            case 'tools':
+            case 'list':
+              // List-based cards: array → { "_default": { icons: [], reminders: [], subtasks: [...], copyPaste: [] }}
+              if (Array.isArray(oldData)) {
+                data[sectionId] = {
+                  "_default": {
+                    icons: [],
+                    reminders: [],
+                    subtasks: oldData.map((item, idx) => ({
+                      // Support both old format (key/text) and JSON format (name)
+                      key: item.key || (item.name ? item.name.toLowerCase().replace(/\s+/g, '_') : `item_${idx}`),
+                      text: item.text || item.title || item.name || '',
+                      url: item.url || PLACEHOLDER_URL,
+                      links: item.links || null
+                    })),
+                    copyPaste: []
+                  }
+                };
+                console.log(`[Migration] Migrated list card ${sectionId} with ${oldData.length} subtasks`);
+              }
+              break;
+          }
+          // If data was at type key (not id key), clean up the old key
+          if (dataKey !== sectionId && data[dataKey]) {
+            delete data[dataKey];
+            console.log(`[Migration] Cleaned up old data key '${dataKey}'`);
+          }
+        } else {
+          console.log(`[Migration] No data found for section ${sectionId}`);
+        }
+
+        // Update section type to 'unified'
+        section.type = 'unified';
+        console.log(`[Migration] Changed section ${sectionId} type to 'unified'`);
+      }
+    });
+  }
+
+  // Also process sectionsStacked if it exists
+  if (Array.isArray(model.sectionsStacked)) {
+    model.sectionsStacked.forEach(section => {
+      if (legacyTypes.includes(section.type)) {
+        section.type = 'unified';
+      }
+    });
+  }
+
+  console.log('[Migration] Migration complete');
+}
+
 // --- Apply URL overrides from imported JSON
 export function applyUrlOverrides(data) {
+  console.log('[Import] applyUrlOverrides called with data:', data);
+  console.log('[Import] Data keys:', Object.keys(data || {}));
+  console.log('[Import] schemaVersion:', data?.schemaVersion);
+  console.log('[Import] _structure:', data?._structure);
+
   if (!data || typeof data !== 'object') return;
   // Don't apply overrides if localStorage has already been restored
   if (window.localStorageRestored) {
+    console.log('[Import] Skipping - localStorage already restored');
     return;
   }
   // Always operate on model, not editState.working
   const current = model;
 
   // IMPORTANT: Apply structure FIRST so new sections are recognized before data import
-  if (data._structure) {
-    if (data._structure.sections && Array.isArray(data._structure.sections)) {
-      current.sections = data._structure.sections;
-    }
-    // Restore sectionsStacked (separate section order for stacked mode)
-    if (data._structure.sectionsStacked && Array.isArray(data._structure.sectionsStacked)) {
-      current.sectionsStacked = data._structure.sectionsStacked;
-    }
-    if (data._structure.sectionTitles) {
-      current.sectionTitles = data._structure.sectionTitles;
-    }
-    // Restore section icons (custom icons for list-type sections)
-    if (data._structure.sectionIcons && typeof data._structure.sectionIcons === 'object') {
-      current.sectionIcons = data._structure.sectionIcons;
-    }
-    // Restore section colors (independent light/dark mode colors)
-    if (data._structure.sectionColors && typeof data._structure.sectionColors === 'object') {
-      current.sectionColors = data._structure.sectionColors;
-    }
-    // Restore subtitle colors (independent light/dark mode colors)
-    if (data._structure.subtitleColors && typeof data._structure.subtitleColors === 'object') {
-      current.subtitleColors = data._structure.subtitleColors;
-    }
-    if (data._structure.header) {
-      current.header = data._structure.header;
-    }
+  // Handle both new format (data._structure) and old format (data.sections directly)
+  const structure = data._structure || data;
+  console.log('[Import] Using structure:', structure);
+  console.log('[Import] Structure sections:', structure?.sections);
+
+  if (structure.sections && Array.isArray(structure.sections)) {
+    current.sections = structure.sections;
+    console.log('[Import] Applied sections to model:', current.sections.map(s => ({ id: s.id, type: s.type })));
+  }
+  // Restore sectionsStacked (separate section order for stacked mode)
+  if (structure.sectionsStacked && Array.isArray(structure.sectionsStacked)) {
+    current.sectionsStacked = structure.sectionsStacked;
+  }
+  if (structure.sectionTitles) {
+    current.sectionTitles = structure.sectionTitles;
+  }
+  // Restore section icons (custom icons for list-type sections)
+  if (structure.sectionIcons && typeof structure.sectionIcons === 'object') {
+    current.sectionIcons = structure.sectionIcons;
+  }
+  // Restore section colors (independent light/dark mode colors)
+  if (structure.sectionColors && typeof structure.sectionColors === 'object') {
+    current.sectionColors = structure.sectionColors;
+  }
+  // Restore subtitle colors (independent light/dark mode colors)
+  if (structure.subtitleColors && typeof structure.subtitleColors === 'object') {
+    current.subtitleColors = structure.subtitleColors;
+  }
+  if (structure.header) {
+    current.header = structure.header;
   }
 
-  // Apply URL overrides to standard sections
-  const sectionsIcon = ['dailyTasks','dailyTools','contentCreation','ads'];
-  const sectionsList = ['analytics','tools'];
+  // IMPORTANT: Run migration on IMPORTED DATA to convert old card types to unified format
+  // This handles imports from older versions with 'reminders', 'newCard', etc.
+  // We need to migrate the imported JSON data structure before applying it
+  const importedVersion = data.schemaVersion || data._structure?.schemaVersion || 1;
+  if (importedVersion < 3) {
+    // Migrate section types and data in the imported JSON
+    migrateImportedData(data, current);
+  }
+  current.schemaVersion = 3;
 
-  sectionsIcon.forEach(sec => {
-    if (data[sec] && Array.isArray(data[sec]) && current[sec]) {
-      data[sec].forEach(override => {
-        const item = current[sec].find(i => i.key === override.key);
-        if (item && override.url) {
-          item.url = override.url;
+  // Apply to ALL sections - all are now unified format
+  // Helper function to import unified card data
+  const importUnifiedCard = (sectionId, sectionData) => {
+    if (!sectionData || typeof sectionData !== 'object') return null;
+
+    const imported = {};
+    Object.entries(sectionData).forEach(([subtitle, items]) => {
+      // FALLBACK: If items is an array (old format), detect and convert on-the-fly
+      if (Array.isArray(items)) {
+        console.log(`[Import] Detected old array format for ${sectionId}/${subtitle}, converting...`);
+        const firstItem = items[0];
+        if (firstItem) {
+          if (firstItem.type === 'days' || firstItem.type === 'interval' || firstItem.schedule !== undefined || (firstItem.title !== undefined && !firstItem.icon)) {
+            // Old reminders format
+            items = { icons: [], reminders: items, subtasks: [], copyPaste: [] };
+          } else if (firstItem.copyText !== undefined) {
+            // Old copy-paste format
+            items = { icons: [], reminders: [], subtasks: [], copyPaste: items };
+          } else if (firstItem.icon !== undefined) {
+            // Old icons format
+            items = { icons: items, reminders: [], subtasks: [], copyPaste: [] };
+          } else if (firstItem.text !== undefined) {
+            // Old subtasks format
+            items = { icons: [], reminders: [], subtasks: items, copyPaste: [] };
+          } else {
+            items = { icons: [], reminders: [], subtasks: [], copyPaste: [] };
+          }
+        } else {
+          items = { icons: [], reminders: [], subtasks: [], copyPaste: [] };
         }
-      });
-    }
-  });
+      }
 
-  sectionsList.forEach(sec => {
-    if (data[sec] && Array.isArray(data[sec]) && current[sec]) {
-      data[sec].forEach(override => {
-        const item = current[sec].find(i => i.key === override.key);
-        if (item && override.url) {
-          item.url = override.url;
-        }
-      });
-    }
-  });
+      if (!items || typeof items !== 'object') return;
 
-  // Apply to standard sections with enhanced data - REPLACE ENTIRE ARRAYS
-  const applySection = (sec) => {
-    if (!data[sec]) return;
-
-    // Handle both old object format and new array format
-    if (Array.isArray(data[sec])) {
-      // New array format - direct replacement
-      current[sec] = data[sec].map(item => ({
-        key: item.key,
-        url: item.url || PLACEHOLDER_URL,
-        title: item.title || '',
-        text: item.text || '',
-        icon: item.icon || '',
-        isDivider: item.isDivider || false,
-        isFile: item.isFile || false,
-        fileName: item.fileName || '',
-        fileSize: item.fileSize || 0,
-        fileType: item.fileType || '',
-        links: item.links || []
-      }));
-    } else if (typeof data[sec] === 'object') {
-      // Old object format - convert to array
-      const items = [];
-      Object.entries(data[sec]).forEach(([key, itemData]) => {
-        items.push({
-          key: key,
-          url: itemData.url || PLACEHOLDER_URL,
-          title: itemData.title || '',
-          text: itemData.text || '',
-          icon: itemData.icon || '',
-          isDivider: itemData.isDivider || false,
-          isFile: itemData.isFile || false,
-          fileName: itemData.fileName || '',
-          fileSize: itemData.fileSize || 0,
-          fileType: itemData.fileType || '',
-          links: itemData.links || []
-        });
-      });
-      current[sec] = items;
-    }
+      imported[subtitle] = {
+        icons: Array.isArray(items.icons) ? items.icons.map(i => {
+          const icon = {
+            key: i.key,
+            icon: i.icon || ''
+          };
+          // Preserve isDivider for separators
+          if (i.isDivider) {
+            icon.isDivider = true;
+          } else {
+            // Regular icons have url and title
+            icon.url = i.url || PLACEHOLDER_URL;
+            icon.title = i.title || '';
+          }
+          return icon;
+        }) : [],
+        reminders: Array.isArray(items.reminders) ? items.reminders.map(r => convertReminderFromJson(r)) : [],
+        subtasks: Array.isArray(items.subtasks) ? items.subtasks.map(i => ({
+          key: i.key,
+          url: i.url || PLACEHOLDER_URL,
+          text: i.text || '',
+          links: i.links || null
+        })) : [],
+        copyPaste: Array.isArray(items.copyPaste) ? items.copyPaste.map(i => ({
+          key: i.key,
+          text: i.text || '',
+          copyText: i.copyText || ''
+        })) : []
+      };
+    });
+    return imported;
   };
 
-  ['dailyTasks','dailyTools','contentCreation','ads','analytics','tools'].forEach(sec => applySection(sec));
-
-  // Apply to ALL dynamic sections (including new independent cards) - REPLACE ENTIRE DATA
+  console.log('[Import] Processing ALL sections as unified:', current.sections.map(s => ({ id: s.id, type: s.type })));
   current.sections.forEach(section => {
-    if (data[section.id]) {
-      if (section.type === 'newCard') {
-        // Regular new cards (icon grid style) - handle both formats
-        if (Array.isArray(data[section.id])) {
-          // New array format
-          current[section.id] = data[section.id].map(item => ({
-            key: item.key,
-            url: item.url || PLACEHOLDER_URL,
-            title: item.title || '',
-            icon: item.icon || '',
-            isDivider: item.isDivider || false
-          }));
-        } else if (typeof data[section.id] === 'object') {
-          // Old object format - convert to array
-          const items = [];
-          Object.entries(data[section.id]).forEach(([key, itemData]) => {
-            items.push({
-              key: key,
-              url: itemData.url || PLACEHOLDER_URL,
-              title: itemData.title || '',
-              icon: itemData.icon || '',
-              isDivider: itemData.isDivider || false
-            });
-          });
-          current[section.id] = items;
-        }
-      } else if (section.type === 'newCardAnalytics') {
-        // Analytics-style new cards (list style) - handle both formats
-        if (Array.isArray(data[section.id])) {
-          // New array format
-          current[section.id] = data[section.id].map(item => ({
-            key: item.key,
-            url: item.url || PLACEHOLDER_URL,
-            text: item.text || '',
-            links: item.links || []
-          }));
-        } else if (typeof data[section.id] === 'object') {
-          // Old object format - convert to array
-          const items = [];
-          Object.entries(data[section.id]).forEach(([key, itemData]) => {
-            items.push({
-              key: key,
-              url: itemData.url || PLACEHOLDER_URL,
-              text: itemData.text || '',
-              links: itemData.links || []
-            });
-          });
-          current[section.id] = items;
-        }
-      } else if (section.type === 'copyPaste') {
-        // Copy-paste cards with subtitle structure
-        if (typeof data[section.id] === 'object' && !Array.isArray(data[section.id])) {
-          current[section.id] = {};
-          Object.entries(data[section.id]).forEach(([subtitle, items]) => {
-            if (Array.isArray(items)) {
-              current[section.id][subtitle] = items.map(item => ({
-                key: item.key,
-                text: item.text || '',
-                copyText: item.copyText || ''
-              }));
-            }
-          });
-        }
-      } else if (section.type === 'reminders' && typeof data[section.id] === 'object') {
-        // Independent reminder sections - REPLACE ENTIRE OBJECT
-        current[section.id] = {};
-        Object.entries(data[section.id]).forEach(([subtitle, reminders]) => {
-          if (Array.isArray(reminders)) {
-            current[section.id][subtitle] = reminders.map(r => convertReminderFromJson(r));
-          }
-        });
+    console.log(`[Import] Section ${section.id}: type=${section.type}, hasData=${!!data[section.id]}`);
+    if (data[section.id] && typeof data[section.id] === 'object' && !Array.isArray(data[section.id])) {
+      const imported = importUnifiedCard(section.id, data[section.id]);
+      if (imported) {
+        current[section.id] = imported;
+        console.log(`[Import] Applied unified data to ${section.id}`);
       }
     }
   });
-
-  // Handle original reminders section with subtitle structure - REPLACE ENTIRE OBJECT
-  if (data.reminders && typeof data.reminders === 'object') {
-    current.reminders = {};
-    Object.entries(data.reminders).forEach(([subtitle, reminders]) => {
-      if (Array.isArray(reminders)) {
-        current.reminders[subtitle] = reminders.map(r => convertReminderFromJson(r));
-      }
-    });
-  }
 
   // Note: _structure is now applied at the beginning of this function
 
@@ -614,6 +782,7 @@ export function applyUrlOverrides(data) {
   if (window.isImporting) {
     // During import, only save to localStorage without triggering JSON file save
     const payload = {
+      schemaVersion: current.schemaVersion || 3,
       sections: current.sections,
       sectionsStacked: current.sectionsStacked,
       sectionTitles: current.sectionTitles,
@@ -622,13 +791,6 @@ export function applyUrlOverrides(data) {
       subtitleColors: current.subtitleColors,
       header: current.header,
       darkMode: current.darkMode,
-      reminders: current.reminders,
-      dailyTasks: current.dailyTasks,
-      dailyTools: current.dailyTools,
-      contentCreation: current.contentCreation,
-      ads: current.ads,
-      analytics: current.analytics,
-      tools: current.tools,
       timers: current.timers,
       timeTrackingExpanded: current.timeTrackingExpanded,
       quickAccessExpanded: current.quickAccessExpanded,
@@ -637,9 +799,9 @@ export function applyUrlOverrides(data) {
       displayMode: current.displayMode,
     };
 
-    // Add dynamic sections (including independent reminders and copy-paste)
+    // Add ALL sections - all are now unified format
     current.sections.forEach(section => {
-      if ((section.type === 'newCard' || section.type === 'newCardAnalytics' || section.type === 'copyPaste' || section.type === 'reminders') && current[section.id]) {
+      if (current[section.id]) {
         payload[section.id] = current[section.id];
       }
     });

@@ -9,6 +9,8 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="styles.css?v=2025-01-15-14-45">
+  <!-- Emoji Picker Element - Web Component -->
+  <script type="module" src="https://cdn.jsdelivr.net/npm/emoji-picker-element@^1/index.js"></script>
 </head>
   <body>
     <header class="app-header card" id="top-header">
@@ -149,7 +151,11 @@
         <div class="field-image" id="edit-image-field" hidden>
           <div class="image-row">
             <button type="button" id="choose-from-library" class="btn">Choose Image…</button>
+            <button type="button" id="choose-emoji" class="btn" title="Choose Emoji">😀</button>
             <span id="chosen-image-name" class="muted"></span>
+          </div>
+          <div id="emoji-picker-container" class="emoji-picker-container" hidden>
+            <emoji-picker></emoji-picker>
           </div>
         </div>
         <div class="edit-actions">
@@ -359,8 +365,8 @@
               <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
             </svg>
           </div>
-          <div class="card-type-label">Single Card</div>
-          <div class="card-type-description">Like Content Creation or Ads</div>
+          <div class="card-type-label">Card</div>
+          <div class="card-type-description">Icons, reminders, subtasks, copy-paste</div>
         </div>
         <div class="card-type-option" data-type="two-col">
           <div class="card-type-icon">
@@ -370,41 +376,7 @@
             </svg>
           </div>
           <div class="card-type-label">Two Columns</div>
-          <div class="card-type-description">Like Daily Tasks and Tools</div>
-        </div>
-        <div class="card-type-option" data-type="reminders">
-          <div class="card-type-icon">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="12" r="9"></circle>
-              <polyline points="12 6 12 12 16 14"></polyline>
-            </svg>
-          </div>
-          <div class="card-type-label">Reminders</div>
-          <div class="card-type-description">With timers and intervals</div>
-        </div>
-        <div class="card-type-option" data-type="subtasks">
-          <div class="card-type-icon">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <line x1="8" y1="6" x2="21" y2="6"></line>
-              <line x1="8" y1="12" x2="21" y2="12"></line>
-              <line x1="8" y1="18" x2="21" y2="18"></line>
-              <line x1="3" y1="6" x2="3.01" y2="6"></line>
-              <line x1="3" y1="12" x2="3.01" y2="12"></line>
-              <line x1="3" y1="18" x2="3.01" y2="18"></line>
-            </svg>
-          </div>
-          <div class="card-type-label">Subtasks</div>
-          <div class="card-type-description">Like Analytics or Tools</div>
-        </div>
-        <div class="card-type-option" data-type="copyPaste">
-          <div class="card-type-icon">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-            </svg>
-          </div>
-          <div class="card-type-label">Copy-Paste</div>
-          <div class="card-type-description">Quick copy text snippets</div>
+          <div class="card-type-description">Side-by-side cards</div>
         </div>
       </div>
       <div class="card-type-actions">

@@ -5,6 +5,226 @@ import { STORAGE_KEY, PLACEHOLDER_URL, APP_VERSION } from '../constants.js';
 import { model, currentData } from '../state.js';
 import { showToast } from '../utils.js';
 
+// --- Migrate legacy card types to unified card structure (schemaVersion 3)
+// This converts:
+//   - newCard (icon-only) → unified with icons in _default
+//   - newCardAnalytics (subtask-only) → unified with subtasks in _default
+//   - copyPaste (subtitle-grouped) → unified preserving subtitles
+//   - reminders (subtitle-grouped) → unified preserving subtitles with reminders
+export function migrateToUnifiedCards(data) {
+  // Skip if already at latest version
+  if (data.schemaVersion >= 3) {
+    return data;
+  }
+
+  // Helper to migrate a section's data
+  const migrateSectionData = (sectionId, sectionType, sectionData) => {
+    if (!sectionData) return null;
+
+    switch (sectionType) {
+      case 'newCard':
+        // Icon-only card: array of {key, icon, url, title, isDivider?}
+        // → { "_default": { icons: [...], reminders: [], subtasks: [], copyPaste: [] }}
+        if (Array.isArray(sectionData)) {
+          return {
+            "_default": {
+              icons: sectionData.map(item => {
+                const icon = {
+                  key: item.key,
+                  icon: item.icon
+                };
+                // Preserve separators (isDivider)
+                if (item.isDivider) {
+                  icon.isDivider = true;
+                } else {
+                  icon.url = item.url;
+                  icon.title = item.title || '';
+                }
+                return icon;
+              }),
+              reminders: [],
+              subtasks: [],
+              copyPaste: []
+            }
+          };
+        }
+        return null;
+
+      case 'newCardAnalytics':
+        // Subtask-only card: array of {key, text, url, links?}
+        // → { "_default": { icons: [], reminders: [], subtasks: [...], copyPaste: [] }}
+        if (Array.isArray(sectionData)) {
+          return {
+            "_default": {
+              icons: [],
+              reminders: [],
+              subtasks: sectionData.map(item => ({
+                key: item.key,
+                text: item.text,
+                url: item.url,
+                links: item.links || null
+              })),
+              copyPaste: []
+            }
+          };
+        }
+        return null;
+
+      case 'copyPaste':
+        // Copy-paste card: { "Subtitle": [{key, text, copyText}], ... }
+        // → { "Subtitle": { icons: [], reminders: [], subtasks: [], copyPaste: [...] }, ... }
+        if (typeof sectionData === 'object' && !Array.isArray(sectionData)) {
+          const migrated = {};
+          Object.entries(sectionData).forEach(([subtitle, items]) => {
+            if (Array.isArray(items)) {
+              migrated[subtitle] = {
+                icons: [],
+                reminders: [],
+                subtasks: [],
+                copyPaste: items.map(item => ({
+                  key: item.key,
+                  text: item.text,
+                  copyText: item.copyText || ''
+                }))
+              };
+            }
+          });
+          return migrated;
+        }
+        return null;
+
+      case 'reminders':
+        // Reminders card: { "Subtitle": [{key, title, url, type, schedule?, ...}], ... }
+        // → { "Subtitle": { icons: [], reminders: [...], subtasks: [], copyPaste: [] }, ... }
+        if (typeof sectionData === 'object' && !Array.isArray(sectionData)) {
+          const migrated = {};
+          Object.entries(sectionData).forEach(([subtitle, items]) => {
+            if (Array.isArray(items)) {
+              migrated[subtitle] = {
+                icons: [],
+                reminders: items.map(item => ({ ...item })), // Keep all reminder properties
+                subtasks: [],
+                copyPaste: []
+              };
+            }
+          });
+          return migrated;
+        }
+        return null;
+
+      // Icon-based cards (dailyTasks, dailyTools, contentCreation, ads)
+      case 'dailyTasks':
+      case 'dailyTools':
+      case 'contentCreation':
+      case 'ads':
+        // Icon array: [{key, icon, url, title?, isDivider?}]
+        // → { "_default": { icons: [...], reminders: [], subtasks: [], copyPaste: [] }}
+        if (Array.isArray(sectionData)) {
+          return {
+            "_default": {
+              icons: sectionData.map(item => {
+                const icon = {
+                  key: item.key,
+                  icon: item.icon
+                };
+                // Preserve separators (isDivider)
+                if (item.isDivider) {
+                  icon.isDivider = true;
+                } else {
+                  icon.url = item.url;
+                  icon.title = item.title || '';
+                }
+                return icon;
+              }),
+              reminders: [],
+              subtasks: [],
+              copyPaste: []
+            }
+          };
+        }
+        return null;
+
+      // List-based cards (analytics, tools)
+      case 'analytics':
+      case 'tools':
+        // List array: [{key, text, url, links?}]
+        // → { "_default": { icons: [], reminders: [], subtasks: [...], copyPaste: [] }}
+        if (Array.isArray(sectionData)) {
+          return {
+            "_default": {
+              icons: [],
+              reminders: [],
+              subtasks: sectionData.map(item => ({
+                key: item.key,
+                text: item.text || item.title || item.key,
+                url: item.url,
+                links: item.links || null
+              })),
+              copyPaste: []
+            }
+          };
+        }
+        return null;
+
+      default:
+        return null;
+    }
+  };
+
+  // ALL legacy card types that should become unified
+  const legacyTypes = [
+    'newCard', 'newCardAnalytics', 'copyPaste', 'reminders',
+    'dailyTasks', 'dailyTools', 'contentCreation', 'ads',
+    'analytics', 'tools'
+  ];
+
+  // Process sections array (normal mode)
+  if (Array.isArray(data.sections)) {
+    data.sections.forEach(section => {
+      if (legacyTypes.includes(section.type)) {
+        // Migrate the section data
+        const migratedData = migrateSectionData(section.id, section.type, data[section.id]);
+        if (migratedData) {
+          data[section.id] = migratedData;
+        }
+        // Update section type to 'unified'
+        section.type = 'unified';
+      }
+    });
+  }
+
+  // Process sectionsStacked array (stacked mode) if it exists
+  if (Array.isArray(data.sectionsStacked)) {
+    data.sectionsStacked.forEach(section => {
+      if (legacyTypes.includes(section.type)) {
+        // Data already migrated above if section.id matches
+        // Just update section type to 'unified'
+        section.type = 'unified';
+      }
+    });
+  }
+
+  // Upgrade existing unified cards from schemaVersion 2 to 3 (add reminders array)
+  if (data.schemaVersion === 2) {
+    if (Array.isArray(data.sections)) {
+      data.sections.forEach(section => {
+        if (section.type === 'unified' && data[section.id]) {
+          Object.values(data[section.id]).forEach(subtitleData => {
+            if (subtitleData && !subtitleData.reminders) {
+              subtitleData.reminders = [];
+            }
+          });
+        }
+      });
+    }
+  }
+
+  // Set schema version
+  data.schemaVersion = 3;
+
+  return data;
+}
+
 // --- Clean up old backup entries to prevent localStorage quota issues
 export function cleanupOldBackups() {
   const keys = Object.keys(localStorage);
@@ -24,6 +244,7 @@ export function saveModel() {
   const data = model;
 
   const payload = {
+    schemaVersion: data.schemaVersion || 3,
     sections: data.sections,
     sectionsStacked: data.sectionsStacked,
     sectionTitles: data.sectionTitles,
@@ -32,13 +253,6 @@ export function saveModel() {
     subtitleColors: data.subtitleColors,
     header: data.header,
     darkMode: data.darkMode,
-    reminders: data.reminders,
-    dailyTasks: data.dailyTasks,
-    dailyTools: data.dailyTools,
-    contentCreation: data.contentCreation,
-    ads: data.ads,
-    analytics: data.analytics,
-    tools: data.tools,
     timers: data.timers,
     timeTrackingExpanded: data.timeTrackingExpanded,
     quickAccessExpanded: data.quickAccessExpanded,
@@ -47,9 +261,9 @@ export function saveModel() {
     displayMode: data.displayMode,
   };
 
-  // Add dynamic sections
+  // Add ALL sections - all are now unified format
   data.sections.forEach(section => {
-    if ((section.type === 'newCard' || section.type === 'newCardAnalytics' || section.type === 'copyPaste') && data[section.id]) {
+    if (data[section.id]) {
       payload[section.id] = data[section.id];
     }
   });
@@ -93,6 +307,14 @@ export async function restoreModel() {
       return;
     }
 
+    // Run migration for legacy card types (schemaVersion < 2)
+    saved = migrateToUnifiedCards(saved);
+
+    // Restore schema version
+    if (saved.schemaVersion) {
+      model.schemaVersion = saved.schemaVersion;
+    }
+
     if (saved.sections) {
       model.sections = saved.sections;
     }
@@ -125,45 +347,8 @@ export async function restoreModel() {
       model.darkMode = saved.darkMode;
     }
 
-    if (saved.reminders) {
-      if (typeof saved.reminders === 'object' && !Array.isArray(saved.reminders)) {
-        model.reminders = saved.reminders;
-        Object.values(model.reminders).forEach(reminderArray => {
-          if (Array.isArray(reminderArray)) {
-            reminderArray.forEach(reminder => {
-              if (!reminder.type) {
-                reminder.type = 'days';
-              }
-              if (reminder.schedule && reminder.schedule.date && typeof reminder.schedule.date === 'string') {
-                reminder.schedule.date = new Date(reminder.schedule.date);
-              }
-            });
-          }
-        });
-      } else if (Array.isArray(saved.reminders)) {
-        model.reminders = { 'General': saved.reminders };
-        model.reminders['General'].forEach(reminder => {
-          if (!reminder.type) {
-            reminder.type = 'days';
-          }
-          if (reminder.schedule && reminder.schedule.date && typeof reminder.schedule.date === 'string') {
-            reminder.schedule.date = new Date(reminder.schedule.date);
-          }
-        });
-      }
-    }
-
-    ['dailyTasks', 'dailyTools', 'contentCreation', 'ads'].forEach(section => {
-      if (saved[section] && Array.isArray(saved[section])) {
-        model[section] = saved[section];
-      }
-    });
-
-    ['analytics', 'tools'].forEach(section => {
-      if (saved[section] && Array.isArray(saved[section])) {
-        model[section] = saved[section];
-      }
-    });
+    // Note: Legacy reminders/dailyTasks/etc. arrays are now migrated to unified format
+    // by migrateToUnifiedCards above, so we restore all section data uniformly
 
     // Restore timers
     if (saved.timers && Array.isArray(saved.timers)) {
@@ -195,25 +380,26 @@ export async function restoreModel() {
       model.displayMode = saved.displayMode;
     }
 
-    // Restore dynamic sections (new cards)
+    // Restore ALL section data (all are now unified format after migration)
     if (saved.sections) {
       saved.sections.forEach(section => {
-        if ((section.type === 'newCard' || section.type === 'newCardAnalytics') && saved[section.id]) {
-          if (Array.isArray(saved[section.id])) {
-            model[section.id] = saved[section.id];
-          }
-        } else if (section.type === 'copyPaste' && saved[section.id]) {
-          if (typeof saved[section.id] === 'object' && !Array.isArray(saved[section.id])) {
-            model[section.id] = saved[section.id];
+        if (saved[section.id] && typeof saved[section.id] === 'object') {
+          model[section.id] = saved[section.id];
+
+          // Fix reminder dates that were serialized as strings
+          if (model[section.id]) {
+            Object.values(model[section.id]).forEach(subtitleData => {
+              if (subtitleData && Array.isArray(subtitleData.reminders)) {
+                subtitleData.reminders.forEach(reminder => {
+                  if (reminder.schedule && reminder.schedule.date && typeof reminder.schedule.date === 'string') {
+                    reminder.schedule.date = new Date(reminder.schedule.date);
+                  }
+                });
+              }
+            });
           }
         }
       });
-    }
-
-    // Security: ensure Ads_5 resets to placeholder URL
-    const ads5 = model.ads.find(i => i.key === 'ads_5');
-    if (ads5) {
-      ads5.url = PLACEHOLDER_URL;
     }
 
     // Set flags
@@ -356,6 +542,9 @@ export function deepMergeModel(target, source) {
   }
 
   // Handle simple properties
+  if (typeof source.schemaVersion !== 'undefined') {
+    target.schemaVersion = source.schemaVersion;
+  }
   if (typeof source.darkMode !== 'undefined') {
     target.darkMode = source.darkMode;
   }
@@ -372,14 +561,15 @@ export function deepMergeModel(target, source) {
     target.displayMode = source.displayMode;
   }
 
-  // Handle dynamic sections (new cards)
-  Object.keys(source).forEach(key => {
-    if (key.startsWith('new-card-')) {
-      if (Array.isArray(source[key])) {
-        target[key] = [...source[key]];
-      } else if (typeof source[key] === 'object' && source[key] !== null) {
-        target[key] = JSON.parse(JSON.stringify(source[key]));
+  // Handle ALL section data (unified format - objects keyed by section ID)
+  // This includes dynamic 'new-card-*' sections AND legacy section IDs like 'dailyTasks', 'analytics', etc.
+  // that have been migrated to unified format (objects, not arrays)
+  if (Array.isArray(source.sections)) {
+    source.sections.forEach(section => {
+      if (source[section.id] && typeof source[section.id] === 'object' && !Array.isArray(source[section.id])) {
+        // Deep copy the unified card data
+        target[section.id] = JSON.parse(JSON.stringify(source[section.id]));
       }
-    }
-  });
+    });
+  }
 }

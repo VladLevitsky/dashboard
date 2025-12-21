@@ -15,19 +15,11 @@ export function openUrl(url) {
 
 // --- Deep clone utility
 export function deepClone(obj) {
-  // Special handling for reminders to ensure proper structure
-  if (obj && typeof obj === 'object' && obj.reminders) {
-    const cloned = JSON.parse(JSON.stringify(obj));
-    // Ensure reminders structure is properly maintained
-    if (cloned.reminders && typeof cloned.reminders === 'object') {
-      Object.keys(cloned.reminders).forEach(subtitle => {
-        if (!Array.isArray(cloned.reminders[subtitle])) {
-          cloned.reminders[subtitle] = [];
-        }
-      });
-    }
-    return cloned;
-  }
+  // Simple deep clone via JSON - no special handling needed
+  // Note: Legacy code that "fixed" reminders structure was removed.
+  // With unified cards (schemaVersion 3), section data like obj["reminders"]
+  // stores { subtitle: { icons: [], reminders: [], subtasks: [], copyPaste: [] }, ... }
+  // The old code incorrectly converted these objects to empty arrays.
   return JSON.parse(JSON.stringify(obj));
 }
 

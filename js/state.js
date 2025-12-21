@@ -4,7 +4,23 @@
 // --- Data Model
 // All text + URLs live in one object to support edit mode.
 // Default state is blank - users add their own content via edit mode
+//
+// UNIFIED CARD STRUCTURE (schemaVersion 3):
+// Cards with type 'unified' store data as:
+//   model[sectionId] = {
+//     "SubtitleName": {
+//       icons: [{ key, icon, url, title }],
+//       reminders: [{ key, title, url, type, schedule?, interval?, currentNumber?, ... }],
+//       subtasks: [{ key, text, url, links? }],
+//       copyPaste: [{ key, text, copyText }]
+//     },
+//     "_default": { ... }  // Used when no subtitles
+//   }
+// Render order: Icons → Reminders → Subtasks → Copy-paste
+//
 export const model = {
+  // Schema version for data migration (3 = unified card with reminders)
+  schemaVersion: 3,
   // Track the order and structure of sections for normal (single-column) mode
   // Empty by default - users add cards via the + button
   sections: [],
@@ -25,6 +41,8 @@ export const model = {
   },
   sectionTitles: {},
   sectionIcons: {},  // Custom icons for list-type sections (analytics, tools, etc.)
+  sectionColors: {},  // Custom colors for sections (per light/dark mode)
+  subtitleColors: {},  // Custom colors for subtitles within sections (per light/dark mode)
   header: {
     companyLogoSrc: 'assets/icons/placeholder-logo.svg',
     companyLogoZoom: 1,
@@ -62,6 +80,7 @@ export const editState = {
   dirty: false,
   projectDirHandle: null,
   chosenMedia: null,
+  chosenEmoji: null,  // Emoji character chosen from emoji picker
   currentCalendarTarget: null,
 };
 

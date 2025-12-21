@@ -96,8 +96,8 @@ export function createSectionElement(section) {
     sectionEl.classList.add('card-size-small');
   }
 
-  // Create title
-  const titleEl = document.createElement(section.type === 'reminders' ? 'h2' : 'h3');
+  // Create title (all cards are now unified, use h3)
+  const titleEl = document.createElement('h3');
   titleEl.className = 'section-title editable';
   titleEl.dataset.section = section.id;
   titleEl.textContent = data.sectionTitles[section.id] || section.title;
@@ -124,111 +124,21 @@ export function createSectionElement(section) {
 
   sectionEl.appendChild(titleEl);
 
-  // Create content based on section type
-  if (section.type === 'reminders') {
-    const remindersList = document.createElement('div');
-    remindersList.id = 'reminders-list';
-    remindersList.className = 'reminders-container';
-    sectionEl.appendChild(remindersList);
-    renderRemindersForSection(sectionEl);
-  } else if (['dailyTasks', 'dailyTools'].includes(section.type)) {
-    const grid = document.createElement('div');
-    grid.className = 'icon-grid';
-    grid.id = `${section.id}-grid`;
-    sectionEl.appendChild(grid);
-    renderIconGridForSection(sectionEl, section.id);
-  } else if (['contentCreation', 'ads'].includes(section.type)) {
-    const row = document.createElement('div');
-    row.className = 'icon-row';
-    row.id = `${section.id}-row`;
-    sectionEl.appendChild(row);
-    renderIconRowForSection(sectionEl, section.id);
-  } else if (section.type === 'newCard') {
-    const grid = document.createElement('div');
-    grid.className = 'icon-grid';
-    grid.id = `${section.id}-grid`;
-    sectionEl.appendChild(grid);
-    renderIconGridForSection(sectionEl, section.id);
-  } else if (['analytics', 'tools', 'newCardAnalytics'].includes(section.type)) {
-    const wrapper = document.createElement('div');
-    wrapper.className = 'analytics-wrapper';
-
-    const icon = document.createElement('div');
-    icon.className = 'section-icon';
-    const iconImg = document.createElement('img');
-
-    // Check for custom icon first, then fall back to defaults
-    if (data.sectionIcons && data.sectionIcons[section.id]) {
-      iconImg.src = data.sectionIcons[section.id];
-    } else if (section.type === 'tools') {
-      iconImg.src = 'assets/logos/Tools_1.svg';
-    } else if (section.type === 'newCard' || section.type === 'newCardAnalytics') {
-      iconImg.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzIiIGhlaWdodD0iMzIiIHZpZXdCb3g9IjAgMCAzMiAzMiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIiByeD0iNCIgZmlsbD0iI0YzRjRGNiIvPgo8cGF0aCBkPSJNMTYgOEgxNlYyNEgxNloiIGZpbGw9IiM5Q0EzQUYiLz4KPHBhdGggZD0iTTggMTZIMjRWMThIOFYxNloiIGZpbGw9IiM5Q0EzQUYiLz4KPC9zdmc+';
-    } else {
-      iconImg.src = 'assets/logos/Analytics_1.svg';
-    }
-    iconImg.alt = section.title;
-    icon.appendChild(iconImg);
-
-    // Make the section icon editable for all list-type cards (analytics, tools, newCardAnalytics)
-    if (editState.enabled) {
-      icon.classList.add('editable');
-      icon.dataset.type = 'sectionIcon';
-      icon.dataset.section = section.id;
-      icon.addEventListener('click', (e) => {
-        if (!editState.enabled) return;
-        e.preventDefault();
-        openEditPopover(icon, {
-          text: section.title,
-          url: PLACEHOLDER_URL,
-          allowImage: true,
-          hideText: true,
-          hideUrl: true
-        }, ({ url, chosenMedia, accept }) => {
-          if (!accept) return;
-          if (chosenMedia) {
-            // Save the custom icon to sectionIcons
-            const imageSrc = persistImageFromLibraryEntry(chosenMedia);
-            if (!data.sectionIcons) data.sectionIcons = {};
-            data.sectionIcons[section.id] = imageSrc;
-            iconImg.src = imageSrc;
-          }
-          markDirtyAndSave();
-          renderAllSections();
-        });
-      });
-    }
-
-    const list = document.createElement('div');
-    list.className = 'list-links';
-    list.id = `${section.id}-list`;
-
-    wrapper.appendChild(icon);
-    wrapper.appendChild(list);
-    sectionEl.appendChild(wrapper);
-    renderListForSection(sectionEl, section.id, section.type === 'tools');
-  } else if (section.type === 'copyPaste') {
-    const wrapper = document.createElement('div');
-    wrapper.className = 'analytics-wrapper';
-
-    const icon = document.createElement('div');
-    icon.className = 'section-icon';
-    const iconImg = document.createElement('img');
-    iconImg.src = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgd2lkdGg9IjY2IiBoZWlnaHQ9IjY2IiBmaWxsPSJub25lIiBzdHJva2U9IiM2YjcyODAiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj4KICA8cmVjdCB4PSI5IiB5PSI5IiB3aWR0aD0iMTMiIGhlaWdodD0iMTMiIHJ4PSIyIiByeT0iMiI+PC9yZWN0PgogIDxwYXRoIGQ9Ik01IDE1SDRhMiAyIDAgMCAxLTItMlY0YTIgMiAwIDAgMSAyLTJoOWEyIDIgMCAwIDEgMiAydjEiPjwvcGF0aD4KPC9zdmc+';
-    iconImg.alt = section.title;
-    icon.appendChild(iconImg);
-
-    const list = document.createElement('div');
-    list.className = 'copy-paste-list';
-    list.id = `${section.id}-list`;
-
-    wrapper.appendChild(icon);
-    wrapper.appendChild(list);
-    sectionEl.appendChild(wrapper);
-    renderCopyPasteForSection(sectionEl, section.id);
-  }
+  // All cards are now unified - they can contain icons, reminders, subtasks, and copy-paste items
+  renderUnifiedCard(sectionEl, section.id);
 
   return sectionEl;
+}
+
+// --- Helper to detect if icon is an emoji (vs URL/path)
+function isEmojiIcon(icon) {
+  if (!icon || typeof icon !== 'string') return false;
+  // If it contains path-like characters, it's not an emoji
+  if (icon.includes('/') || icon.includes('.') || icon.startsWith('http') || icon.startsWith('data:')) {
+    return false;
+  }
+  // Short strings without path characters are likely emojis
+  return icon.length <= 10;
 }
 
 // --- Create icon button
@@ -239,16 +149,24 @@ export function createIconButton(item, section) {
   btn.dataset.key = item.key;
   btn.title = item.title || '';
 
-  const img = document.createElement('img');
-  img.src = item.icon;
-  img.alt = item.key;
-  btn.appendChild(img);
+  // Check if icon is emoji or image URL
+  if (isEmojiIcon(item.icon)) {
+    const emojiSpan = document.createElement('span');
+    emojiSpan.className = 'icon-emoji';
+    emojiSpan.textContent = item.icon;
+    btn.appendChild(emojiSpan);
+  } else {
+    const img = document.createElement('img');
+    img.src = item.icon;
+    img.alt = item.key;
+    btn.appendChild(img);
+  }
 
   btn.addEventListener('click', () => {
     if (!editState.enabled) {
       openUrl(item.url);
     } else {
-      openEditPopover(btn, { hideText: true, url: item.url, allowImage: true, allowDelete: true }, async ({ text, url, chosenMedia, delete: doDelete, accept }) => {
+      openEditPopover(btn, { hideText: true, url: item.url, allowImage: true, allowDelete: true }, async ({ text, url, chosenMedia, chosenEmoji, delete: doDelete, accept }) => {
         if (!accept) return;
         if (doDelete) {
           const collection = currentData()[section];
@@ -259,7 +177,12 @@ export function createIconButton(item, section) {
           return;
         }
         item.url = url || PLACEHOLDER_URL;
-        if (chosenMedia) item.icon = persistImageFromLibraryEntry(chosenMedia);
+        // Emoji takes precedence over image (last choice wins)
+        if (chosenEmoji) {
+          item.icon = chosenEmoji;
+        } else if (chosenMedia) {
+          item.icon = persistImageFromLibraryEntry(chosenMedia);
+        }
         markDirtyAndSave();
         renderAllSections();
       });
@@ -973,7 +896,7 @@ export function renderRemindersForSection(sectionEl) {
         hashtagBtn.addEventListener('click', (e) => {
           e.stopPropagation();
           if (window.openIntervalPopover) {
-            window.openIntervalPopover(rem);
+            window.openIntervalPopover(rem, e);
           }
         });
 
@@ -1299,6 +1222,1063 @@ export function renderCopyPasteForSection(sectionEl, sectionId) {
   }
 }
 
+// --- Render unified card (icons + reminders + subtasks + copy-paste under shared subtitles)
+export function renderUnifiedCard(sectionEl, sectionId) {
+  const data = currentData();
+  const cardData = data[sectionId] || { "_default": { icons: [], reminders: [], subtasks: [], copyPaste: [] } };
+
+  console.log(`[Render] renderUnifiedCard for ${sectionId}:`, cardData);
+
+  // Initialize if empty
+  if (!data[sectionId]) {
+    data[sectionId] = { "_default": { icons: [], reminders: [], subtasks: [], copyPaste: [] } };
+    console.log(`[Render] Initialized empty card data for ${sectionId}`);
+  }
+
+  const container = document.createElement('div');
+  container.className = 'unified-card-content';
+
+  // Get section config for color picker
+  const section = data.sections.find(s => s.id === sectionId);
+
+  Object.entries(cardData).forEach(([subtitle, items]) => {
+    console.log(`[Render] Processing subtitle "${subtitle}" for ${sectionId}:`, items);
+    console.log(`[Render] items type: ${typeof items}, isArray: ${Array.isArray(items)}`);
+
+    // Handle old format where items might be an array (e.g., old reminders format)
+    // Convert to new unified format on-the-fly
+    if (Array.isArray(items)) {
+      console.log(`[Render] Converting old array format for ${sectionId}/${subtitle}`);
+      // Detect what type of items based on properties
+      const firstItem = items[0];
+      if (firstItem) {
+        if (firstItem.type === 'days' || firstItem.type === 'interval' || firstItem.schedule !== undefined || firstItem.mode === 'calendar' || firstItem.mode === 'interval') {
+          // Old reminders format (check both 'type' and 'mode' properties)
+          console.log(`[Render] Detected old reminders format for ${sectionId}/${subtitle}`);
+          cardData[subtitle] = {
+            icons: [],
+            reminders: items.map(r => ({ ...r })),
+            subtasks: [],
+            copyPaste: []
+          };
+        } else if (firstItem.copyText !== undefined) {
+          // Old copy-paste format
+          cardData[subtitle] = {
+            icons: [],
+            reminders: [],
+            subtasks: [],
+            copyPaste: items.map(c => ({ ...c }))
+          };
+        } else if (firstItem.icon !== undefined) {
+          // Old icon format
+          cardData[subtitle] = {
+            icons: items.map(i => ({ ...i })),
+            reminders: [],
+            subtasks: [],
+            copyPaste: []
+          };
+        } else if (firstItem.text !== undefined) {
+          // Old subtask format
+          cardData[subtitle] = {
+            icons: [],
+            reminders: [],
+            subtasks: items.map(s => ({ ...s })),
+            copyPaste: []
+          };
+        } else if (firstItem.title !== undefined || firstItem.name !== undefined) {
+          // Fallback: if item has title/name, assume it's a reminder
+          console.log(`[Render] Fallback: treating items with title/name as reminders for ${sectionId}/${subtitle}`);
+          cardData[subtitle] = {
+            icons: [],
+            reminders: items.map(r => ({ ...r })),
+            subtasks: [],
+            copyPaste: []
+          };
+        } else {
+          // Unknown format, create empty
+          cardData[subtitle] = { icons: [], reminders: [], subtasks: [], copyPaste: [] };
+        }
+      } else {
+        // Empty array
+        cardData[subtitle] = { icons: [], reminders: [], subtasks: [], copyPaste: [] };
+      }
+      items = cardData[subtitle];
+    } else if (items && typeof items === 'object') {
+      // Already correct object format - ensure it has all required arrays
+      console.log(`[Render] Object format detected for ${sectionId}/${subtitle}, ensuring structure`);
+    } else {
+      // Invalid format - create empty structure
+      console.log(`[Render] Invalid format for ${sectionId}/${subtitle}, creating empty structure`);
+      cardData[subtitle] = { icons: [], reminders: [], subtasks: [], copyPaste: [] };
+      items = cardData[subtitle];
+    }
+
+    // Ensure items structure exists and is valid arrays
+    if (!items || typeof items !== 'object') {
+      items = { icons: [], reminders: [], subtasks: [], copyPaste: [] };
+      cardData[subtitle] = items;
+    }
+    if (!Array.isArray(items.icons)) items.icons = [];
+    if (!Array.isArray(items.reminders)) items.reminders = [];
+    if (!Array.isArray(items.subtasks)) items.subtasks = [];
+    if (!Array.isArray(items.copyPaste)) items.copyPaste = [];
+
+    console.log(`[Render] Final items structure for ${sectionId}/${subtitle}: icons=${items.icons.length}, reminders=${items.reminders.length}, subtasks=${items.subtasks.length}, copyPaste=${items.copyPaste.length}`);
+
+    // Render subtitle header (unless "_default" or empty/falsy)
+    if (subtitle && subtitle !== '_default') {
+      const subtitleWrapper = document.createElement('div');
+      subtitleWrapper.className = 'unified-subtitle-wrapper';
+
+      const subtitleEl = document.createElement('div');
+      subtitleEl.className = 'unified-subtitle editable';
+      subtitleEl.dataset.type = 'unifiedSubtitle';
+      subtitleEl.dataset.subtitle = subtitle;
+      subtitleEl.dataset.section = sectionId;
+      subtitleEl.textContent = subtitle;
+
+      if (editState.enabled) {
+        subtitleEl.addEventListener('click', (e) => {
+          e.preventDefault();
+          openEditPopover(subtitleEl, { text: subtitle, hideUrl: true, allowDelete: true }, ({ text, delete: doDelete, accept }) => {
+            if (!accept) return;
+            const cardData = currentData()[sectionId];
+
+            if (doDelete) {
+              delete cardData[subtitle];
+              if (data.subtitleColors) {
+                delete data.subtitleColors[`${sectionId}:${subtitle}`];
+              }
+              markDirtyAndSave();
+              renderAllSections();
+              return;
+            }
+            if (text && text !== subtitle) {
+              cardData[text] = cardData[subtitle];
+              delete cardData[subtitle];
+              if (data.subtitleColors && data.subtitleColors[`${sectionId}:${subtitle}`]) {
+                data.subtitleColors[`${sectionId}:${text}`] = data.subtitleColors[`${sectionId}:${subtitle}`];
+                delete data.subtitleColors[`${sectionId}:${subtitle}`];
+              }
+              markDirtyAndSave();
+              renderAllSections();
+            }
+          });
+        });
+      }
+
+      subtitleWrapper.appendChild(subtitleEl);
+
+      // Add per-subtitle color picker in edit mode
+      if (editState.enabled) {
+        const colorBtn = document.createElement('button');
+        colorBtn.type = 'button';
+        colorBtn.className = 'subtitle-color-picker-btn';
+        colorBtn.title = 'Change section color';
+        colorBtn.innerHTML = `
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 20 20" fill="none">
+            <circle cx="10" cy="10" r="8" fill="url(#subtitleGradient-${sectionId}-${subtitle.replace(/\s+/g, '-')})" stroke="currentColor" stroke-width="1"/>
+            <defs>
+              <linearGradient id="subtitleGradient-${sectionId}-${subtitle.replace(/\s+/g, '-')}" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" style="stop-color:#ff6b6b;stop-opacity:1" />
+                <stop offset="50%" style="stop-color:#4ecdc4;stop-opacity:1" />
+                <stop offset="100%" style="stop-color:#f1c0e8;stop-opacity:1" />
+              </linearGradient>
+            </defs>
+          </svg>
+        `;
+        colorBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          openSubtitleColorPicker(sectionId, subtitle);
+        });
+        subtitleWrapper.appendChild(colorBtn);
+      }
+
+      container.appendChild(subtitleWrapper);
+    }
+
+    // Get color for this subtitle (per-subtitle color from subtitleColors)
+    const colorKey = `${sectionId}:${subtitle}`;
+    const subtitleColor = data.subtitleColors && data.subtitleColors[colorKey];
+
+    // Create content group for items
+    const contentGroup = document.createElement('div');
+    contentGroup.className = 'unified-content-group';
+    contentGroup.dataset.subtitle = subtitle;
+
+    // Render icons (if any) - add button goes in this group for alignment
+    const iconsGroup = document.createElement('div');
+    iconsGroup.className = 'unified-icons-group';
+
+    items.icons.forEach(icon => {
+      if (icon.isDivider) {
+        // Render separator
+        const separatorEl = createUnifiedSeparator(icon, sectionId, subtitle);
+        iconsGroup.appendChild(separatorEl);
+      } else {
+        // Render regular icon
+        const btn = createUnifiedIconButton(icon, sectionId, subtitle, subtitleColor);
+        iconsGroup.appendChild(btn);
+      }
+    });
+
+    // Add item button goes in icons group for proper alignment
+    if (editState.enabled) {
+      const addTile = document.createElement('button');
+      addTile.type = 'button';
+      addTile.className = 'unified-add-tile';
+      addTile.textContent = '+';
+      addTile.title = 'Add item';
+      addTile.dataset.subtitle = subtitle;
+      addTile.addEventListener('click', (e) => {
+        e.preventDefault();
+        openUnifiedAddItemPopover(sectionId, subtitle, e);
+      });
+      iconsGroup.appendChild(addTile);
+    }
+
+    // Only add icons group if it has content
+    if (iconsGroup.children.length > 0) {
+      contentGroup.appendChild(iconsGroup);
+      // Initialize drag handlers for icons
+      if (editState.enabled) {
+        initializeContainerDragHandlers(iconsGroup, `${sectionId}:${subtitle}:icons`);
+      }
+    }
+
+    // Render reminders (if any, or always in edit mode for consistency)
+    const remindersArray = Array.isArray(items.reminders) ? items.reminders : [];
+    console.log(`[Render] Reminders for ${sectionId}/${subtitle}:`, remindersArray, `(length: ${remindersArray.length})`);
+    if (remindersArray.length > 0 || editState.enabled) {
+      console.log(`[Render] Rendering ${remindersArray.length} reminders for ${sectionId}/${subtitle}`);
+      const remindersGroup = document.createElement('div');
+      remindersGroup.className = 'unified-reminders-group';
+
+      remindersArray.forEach(rem => {
+        console.log(`[Render] Creating reminder item:`, rem);
+        const div = createUnifiedReminderItem(rem, sectionId, subtitle, subtitleColor);
+        remindersGroup.appendChild(div);
+      });
+
+      contentGroup.appendChild(remindersGroup);
+      // Initialize drag handlers for reminders
+      if (editState.enabled) {
+        initializeContainerDragHandlers(remindersGroup, `${sectionId}:${subtitle}:reminders`);
+      }
+    } else {
+      console.log(`[Render] No reminders to render for ${sectionId}/${subtitle}`);
+    }
+
+    // Render subtasks (if any)
+    if (items.subtasks.length > 0 || editState.enabled) {
+      const subtasksGroup = document.createElement('div');
+      subtasksGroup.className = 'unified-subtasks-group';
+
+      items.subtasks.forEach(subtask => {
+        const div = createUnifiedSubtaskItem(subtask, sectionId, subtitle, subtitleColor);
+        subtasksGroup.appendChild(div);
+      });
+
+      contentGroup.appendChild(subtasksGroup);
+      // Initialize drag handlers for subtasks
+      if (editState.enabled) {
+        initializeContainerDragHandlers(subtasksGroup, `${sectionId}:${subtitle}:subtasks`);
+      }
+    }
+
+    // Render copy-paste items (if any)
+    if (items.copyPaste.length > 0 || editState.enabled) {
+      const copyPasteGroup = document.createElement('div');
+      copyPasteGroup.className = 'unified-copypaste-group';
+
+      items.copyPaste.forEach(cpItem => {
+        const div = createUnifiedCopyPasteItem(cpItem, sectionId, subtitle, subtitleColor);
+        copyPasteGroup.appendChild(div);
+      });
+
+      contentGroup.appendChild(copyPasteGroup);
+      // Initialize drag handlers for copy-paste items
+      if (editState.enabled) {
+        initializeContainerDragHandlers(copyPasteGroup, `${sectionId}:${subtitle}:copyPaste`);
+      }
+    }
+
+    container.appendChild(contentGroup);
+  });
+
+  // Add subtitle button in edit mode
+  if (editState.enabled) {
+    const addSubtitleTile = document.createElement('div');
+    addSubtitleTile.className = 'unified-add-subtitle';
+    addSubtitleTile.textContent = '+ Add Section';
+    addSubtitleTile.title = 'Add new section';
+    addSubtitleTile.addEventListener('click', (e) => {
+      e.preventDefault();
+      onAddUnifiedSubtitle(sectionId);
+    });
+    container.appendChild(addSubtitleTile);
+  }
+
+  sectionEl.appendChild(container);
+}
+
+// --- Create icon button for unified card
+function createUnifiedIconButton(item, sectionId, subtitle, subtitleColor) {
+  const data = currentData();
+  const btn = document.createElement('button');
+  btn.className = 'icon-button editable';
+  btn.dataset.type = 'unifiedIcon';
+  btn.dataset.section = sectionId;
+  btn.dataset.subtitle = subtitle;
+  btn.dataset.key = item.key;
+  btn.title = item.title || '';
+
+  // Check if icon is emoji or image URL
+  if (isEmojiIcon(item.icon)) {
+    const emojiSpan = document.createElement('span');
+    emojiSpan.className = 'icon-emoji';
+    emojiSpan.textContent = item.icon;
+    btn.appendChild(emojiSpan);
+  } else {
+    const img = document.createElement('img');
+    img.src = item.icon;
+    img.alt = item.key;
+    btn.appendChild(img);
+  }
+
+  btn.addEventListener('click', () => {
+    if (!editState.enabled) {
+      openUrl(item.url);
+    } else {
+      openEditPopover(btn, { hideText: true, url: item.url, allowImage: true, allowDelete: true }, async ({ url, chosenMedia, chosenEmoji, delete: doDelete, accept }) => {
+        if (!accept) return;
+        const cardData = currentData()[sectionId];
+        const subtitleData = cardData[subtitle];
+
+        if (doDelete) {
+          const idx = subtitleData.icons.findIndex(i => i.key === item.key);
+          if (idx !== -1) subtitleData.icons.splice(idx, 1);
+          markDirtyAndSave();
+          renderAllSections();
+          return;
+        }
+        item.url = url || PLACEHOLDER_URL;
+        // Emoji takes precedence over image (last choice wins)
+        if (chosenEmoji) {
+          item.icon = chosenEmoji;
+        } else if (chosenMedia) {
+          item.icon = persistImageFromLibraryEntry(chosenMedia);
+        }
+        markDirtyAndSave();
+        renderAllSections();
+      });
+    }
+  });
+
+  if (editState.enabled) {
+    initializeItemDragHandlers(btn, item.key, `${sectionId}:${subtitle}:icons`);
+  }
+
+  return btn;
+}
+
+// --- Create separator for unified card
+function createUnifiedSeparator(item, sectionId, subtitle) {
+  const separatorEl = document.createElement('img');
+  separatorEl.src = item.icon;
+  separatorEl.alt = 'divider';
+  separatorEl.className = 'icon-separator icon-separator--wide';
+  separatorEl.dataset.key = item.key;
+
+  if (editState.enabled) {
+    separatorEl.classList.add('editable');
+    separatorEl.dataset.type = 'unifiedSeparator';
+    separatorEl.dataset.section = sectionId;
+    separatorEl.dataset.subtitle = subtitle;
+    separatorEl.style.cursor = 'pointer';
+    separatorEl.title = 'Click to delete separator';
+
+    separatorEl.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      openEditPopover(separatorEl, {
+        hideText: true,
+        hideUrl: true,
+        allowImage: false,
+        allowDelete: true,
+        isSeparator: true
+      }, async ({ delete: doDelete, accept }) => {
+        if (!accept) return;
+        if (doDelete) {
+          const data = currentData();
+          const cardData = data[sectionId];
+          const subtitleData = cardData[subtitle];
+          const idx = subtitleData.icons.findIndex(i => i.key === item.key);
+          if (idx !== -1) subtitleData.icons.splice(idx, 1);
+          markDirtyAndSave();
+          renderAllSections();
+          return;
+        }
+        markDirtyAndSave();
+      });
+    });
+
+    // Make separator draggable
+    initializeItemDragHandlers(separatorEl, item.key, `${sectionId}:${subtitle}:icons`);
+  }
+
+  return separatorEl;
+}
+
+// --- Create subtask item for unified card
+function createUnifiedSubtaskItem(item, sectionId, subtitle, subtitleColor) {
+  const data = currentData();
+  const div = document.createElement('div');
+  div.className = 'unified-subtask-item editable';
+  div.dataset.type = 'unifiedSubtask';
+  div.dataset.section = sectionId;
+  div.dataset.subtitle = subtitle;
+  div.dataset.key = item.key;
+
+  // Apply custom color if set
+  if (subtitleColor) {
+    const defaultColorLight = '#f7fafc';
+    const defaultColorDark = '#334155';
+    const effectiveColor = getColorForCurrentMode(subtitleColor, defaultColorLight, defaultColorDark);
+    div.style.background = effectiveColor;
+    div.style.borderColor = darkenColor(effectiveColor);
+  }
+
+  const a = document.createElement('a');
+  a.href = item.url;
+  a.target = '_blank';
+  a.rel = 'noopener noreferrer';
+  a.textContent = item.text;
+
+  if (editState.enabled) {
+    const contentWrapper = document.createElement('div');
+    contentWrapper.className = 'unified-subtask-content';
+    contentWrapper.appendChild(a);
+
+    const linksBtn = document.createElement('button');
+    linksBtn.type = 'button';
+    linksBtn.className = 'list-item-links-btn';
+    linksBtn.innerHTML = LINK_ICON_SVG;
+    linksBtn.title = 'Manage links';
+    linksBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      if (window.openListItemLinksModal) {
+        window.openListItemLinksModal(item, sectionId);
+      }
+    });
+
+    div.appendChild(contentWrapper);
+    div.appendChild(linksBtn);
+  } else {
+    a.style.pointerEvents = 'none';
+    div.style.cursor = 'pointer';
+    div.dataset.url = item.url;
+
+    const leftContainer = document.createElement('div');
+    leftContainer.className = 'unified-subtask-left';
+    leftContainer.appendChild(a);
+
+    if (item.links && item.links.length > 0) {
+      const linksToggleBtn = document.createElement('button');
+      linksToggleBtn.type = 'button';
+      linksToggleBtn.className = 'list-item-links-toggle';
+      linksToggleBtn.innerHTML = LINK_ICON_SVG;
+      linksToggleBtn.title = `${item.links.length} link${item.links.length > 1 ? 's' : ''}`;
+      linksToggleBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        if (window.toggleListItemLinks) {
+          window.toggleListItemLinks(item, sectionId, linksToggleBtn);
+        }
+      });
+      leftContainer.appendChild(linksToggleBtn);
+    }
+
+    div.appendChild(leftContainer);
+  }
+
+  div.addEventListener('click', (e) => {
+    if (!editState.enabled) {
+      if (e.target.closest('.list-item-links-toggle')) return;
+      e.preventDefault();
+      const url = div.dataset.url;
+      if (url && url !== PLACEHOLDER_URL) {
+        window.open(url, '_blank', 'noopener,noreferrer');
+      }
+      return;
+    }
+    if (e.target.closest('.list-item-links-btn')) return;
+    e.preventDefault();
+    openEditPopover(div, { text: item.text, url: item.url, allowDelete: true }, ({ text, url, delete: doDelete, accept }) => {
+      if (!accept) return;
+      const cardData = currentData()[sectionId];
+      const subtitleData = cardData[subtitle];
+
+      if (doDelete) {
+        const idx = subtitleData.subtasks.findIndex(i => i.key === item.key);
+        if (idx !== -1) subtitleData.subtasks.splice(idx, 1);
+        markDirtyAndSave();
+        renderAllSections();
+        return;
+      }
+      item.text = text || item.text;
+      item.url = url || PLACEHOLDER_URL;
+      markDirtyAndSave();
+      renderAllSections();
+    });
+  });
+
+  if (editState.enabled) {
+    initializeItemDragHandlers(div, item.key, `${sectionId}:${subtitle}:subtasks`);
+  }
+
+  return div;
+}
+
+// --- Create reminder item for unified card
+function createUnifiedReminderItem(rem, sectionId, subtitle, subtitleColor) {
+  const data = currentData();
+  const div = document.createElement('div');
+  div.className = 'unified-reminder-item editable';
+  div.dataset.type = 'unifiedReminder';
+  div.dataset.section = sectionId;
+  div.dataset.subtitle = subtitle;
+  div.dataset.key = rem.key;
+
+  // Apply custom color if set
+  if (subtitleColor) {
+    const defaultColorLight = '#f7fafc';
+    const defaultColorDark = '#334155';
+    const effectiveColor = getColorForCurrentMode(subtitleColor, defaultColorLight, defaultColorDark);
+    div.style.background = effectiveColor;
+    div.style.borderColor = darkenColor(effectiveColor);
+    div.dataset.customColor = JSON.stringify(subtitleColor);
+  }
+
+  // Left side: title and links
+  const leftContainer = document.createElement('div');
+  leftContainer.className = 'unified-reminder-left';
+
+  const a = document.createElement('a');
+  a.href = rem.url || PLACEHOLDER_URL;
+  a.target = '_blank';
+  a.rel = 'noopener noreferrer';
+  a.className = 'reminder-title';
+  a.textContent = rem.title || 'Untitled';
+  leftContainer.appendChild(a);
+
+  // Links toggle button in view mode
+  if (!editState.enabled && rem.links && rem.links.length > 0) {
+    const linksToggleBtn = document.createElement('button');
+    linksToggleBtn.type = 'button';
+    linksToggleBtn.className = 'reminder-links-toggle';
+    linksToggleBtn.innerHTML = LINK_ICON_SVG;
+    linksToggleBtn.title = `${rem.links.length} link${rem.links.length > 1 ? 's' : ''}`;
+    linksToggleBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      if (window.toggleReminderLinks) {
+        window.toggleReminderLinks(rem.key, subtitle, sectionId, linksToggleBtn);
+      }
+    });
+    leftContainer.appendChild(linksToggleBtn);
+  }
+
+  div.appendChild(leftContainer);
+
+  // Badge (days left or interval progress)
+  // Only show badge if there's something to display (or in edit mode for reference)
+  let showBadge = false;
+  const badge = document.createElement('span');
+  badge.className = 'days-badge';
+
+  if (rem.type === 'interval') {
+    if (window.calculateIntervalProgress && window.formatIntervalNumber && window.getIntervalColorClass) {
+      const progress = window.calculateIntervalProgress(rem);
+      const formattedNumber = window.formatIntervalNumber(progress.progress, rem.intervalUnit || 'none');
+      const typeText = (rem.intervalType || 'limit') === 'goal' ? 'Before goal' : 'Before limit';
+      badge.textContent = `${typeText}: ${formattedNumber}`;
+      badge.classList.add(window.getIntervalColorClass(progress.percentage, rem.intervalType || 'limit'));
+      showBadge = true;
+    }
+  } else {
+    if (rem.schedule && window.getNextOccurrence && window.daysUntil && window.classForDaysLeft) {
+      try {
+        const nextDate = window.getNextOccurrence(rem.schedule);
+        const days = window.daysUntil(nextDate);
+        if (days === 0) {
+          badge.textContent = 'Today';
+        } else if (days < 0) {
+          badge.textContent = `Overdue by ${Math.abs(days)} day${Math.abs(days) !== 1 ? 's' : ''}`;
+        } else {
+          badge.textContent = `${days} day${days !== 1 ? 's' : ''} left`;
+        }
+        badge.classList.add(window.classForDaysLeft(days));
+        showBadge = true;
+      } catch (e) {
+        badge.textContent = 'Schedule error';
+        badge.classList.add('badge-red');
+        showBadge = true;
+      }
+    }
+  }
+
+  // Only append badge if there's content to show (hide empty badges in view mode)
+  if (showBadge) {
+    div.appendChild(badge);
+  }
+
+  // Edit mode: add calendar/interval/links buttons
+  if (editState.enabled) {
+    const editBtns = document.createElement('div');
+    editBtns.className = 'unified-reminder-edit-btns';
+
+    // Calendar button
+    const calBtn = document.createElement('button');
+    calBtn.type = 'button';
+    calBtn.className = 'calendar-btn';
+    calBtn.title = 'Set schedule';
+    calBtn.innerHTML = `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+      <rect x="3" y="4" width="18" height="18" rx="2"></rect>
+      <line x1="16" y1="2" x2="16" y2="6"></line>
+      <line x1="8" y1="2" x2="8" y2="6"></line>
+      <line x1="3" y1="10" x2="21" y2="10"></line>
+    </svg>`;
+    calBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      if (window.openCalendarPopover) {
+        window.openCalendarPopover(rem, subtitle, sectionId);
+      }
+    });
+    editBtns.appendChild(calBtn);
+
+    // Interval button
+    const hashBtn = document.createElement('button');
+    hashBtn.type = 'button';
+    hashBtn.className = 'hashtag-btn';
+    hashBtn.title = 'Set interval';
+    hashBtn.textContent = '#';
+    hashBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      if (window.openIntervalPopover) {
+        window.openIntervalPopover(rem, e);
+      }
+    });
+    editBtns.appendChild(hashBtn);
+
+    // Links button
+    const linksBtn = document.createElement('button');
+    linksBtn.type = 'button';
+    linksBtn.className = 'links-btn';
+    linksBtn.title = 'Manage links';
+    linksBtn.innerHTML = LINK_ICON_SVG;
+    linksBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      if (window.openReminderLinksModal) {
+        window.openReminderLinksModal(rem, subtitle, sectionId);
+      }
+    });
+    editBtns.appendChild(linksBtn);
+
+    div.appendChild(editBtns);
+
+    // Make title editable
+    a.style.pointerEvents = 'auto';
+    a.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+    });
+  } else {
+    a.style.pointerEvents = 'none';
+    div.style.cursor = 'pointer';
+    div.dataset.url = rem.url || PLACEHOLDER_URL;
+  }
+
+  // Click handler for editing (edit mode) or opening URL (view mode)
+  div.addEventListener('click', (e) => {
+    if (e.target.closest('.calendar-btn') || e.target.closest('.hashtag-btn') ||
+        e.target.closest('.links-btn') || e.target.closest('.reminder-links-toggle')) {
+      return;
+    }
+
+    if (editState.enabled) {
+      e.preventDefault();
+      openEditPopover(div, { text: rem.title, url: rem.url, allowDelete: true }, ({ text, url, delete: doDelete, accept }) => {
+        if (!accept) return;
+        const cardData = currentData()[sectionId];
+        const subtitleData = cardData[subtitle];
+
+        if (doDelete) {
+          const idx = subtitleData.reminders.findIndex(r => r.key === rem.key);
+          if (idx !== -1) subtitleData.reminders.splice(idx, 1);
+          markDirtyAndSave();
+          renderAllSections();
+          return;
+        }
+        rem.title = text || rem.title;
+        rem.url = url || PLACEHOLDER_URL;
+        markDirtyAndSave();
+        renderAllSections();
+      });
+    } else {
+      e.preventDefault();
+      const url = div.dataset.url;
+      if (url && url !== PLACEHOLDER_URL) {
+        window.open(url, '_blank', 'noopener,noreferrer');
+      }
+    }
+  });
+
+  if (editState.enabled) {
+    initializeItemDragHandlers(div, rem.key, `${sectionId}:${subtitle}:reminders`);
+  }
+
+  return div;
+}
+
+// --- Create copy-paste item for unified card
+function createUnifiedCopyPasteItem(item, sectionId, subtitle, subtitleColor) {
+  const data = currentData();
+  const div = document.createElement('div');
+  div.className = 'unified-copypaste-item editable';
+  div.dataset.type = 'unifiedCopyPaste';
+  div.dataset.section = sectionId;
+  div.dataset.subtitle = subtitle;
+  div.dataset.key = item.key;
+
+  // Apply custom color if set
+  if (subtitleColor) {
+    const defaultColorLight = '#f7fafc';
+    const defaultColorDark = '#334155';
+    const effectiveColor = getColorForCurrentMode(subtitleColor, defaultColorLight, defaultColorDark);
+    div.style.background = effectiveColor;
+    div.style.borderColor = darkenColor(effectiveColor);
+  }
+
+  const textSpan = document.createElement('span');
+  textSpan.className = 'unified-copypaste-text';
+  textSpan.textContent = item.text;
+
+  const copyBtn = document.createElement('button');
+  copyBtn.type = 'button';
+  copyBtn.className = 'copy-paste-icon';
+  copyBtn.title = 'Copy to clipboard';
+  copyBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+  </svg>`;
+
+  // Copy function
+  const copyToClipboard = () => {
+    const textToCopy = item.copyText || item.text;
+    navigator.clipboard.writeText(textToCopy).then(() => {
+      if (window.showToast) {
+        window.showToast('Copied to clipboard!');
+      }
+    });
+  };
+
+  copyBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    copyToClipboard();
+  });
+
+  div.appendChild(textSpan);
+  div.appendChild(copyBtn);
+
+  if (editState.enabled) {
+    div.addEventListener('click', (e) => {
+      if (e.target.closest('.copy-paste-icon')) return;
+      e.preventDefault();
+      openEditPopover(div, {
+        text: item.text,
+        copyText: item.copyText || '',
+        useCopyText: true,
+        allowDelete: true
+      }, ({ text, copyText, delete: doDelete, accept }) => {
+        if (!accept) return;
+        const cardData = currentData()[sectionId];
+        const subtitleData = cardData[subtitle];
+
+        if (doDelete) {
+          const idx = subtitleData.copyPaste.findIndex(i => i.key === item.key);
+          if (idx !== -1) subtitleData.copyPaste.splice(idx, 1);
+          markDirtyAndSave();
+          renderAllSections();
+          return;
+        }
+        item.text = text || item.text;
+        item.copyText = copyText || '';
+        markDirtyAndSave();
+        renderAllSections();
+      });
+    });
+
+    initializeItemDragHandlers(div, item.key, `${sectionId}:${subtitle}:copyPaste`);
+  } else {
+    // View mode: clicking anywhere on bubble copies text
+    div.addEventListener('click', (e) => {
+      if (e.target.closest('.copy-paste-icon')) return;
+      e.preventDefault();
+      copyToClipboard();
+    });
+  }
+
+  return div;
+}
+
+// --- Open add item popover for unified cards (shows Icon, Subtask, Copy-Paste options)
+export function openUnifiedAddItemPopover(sectionId, subtitle, event) {
+  const clickX = event ? event.clientX : window.innerWidth / 2;
+  const clickY = event ? event.clientY : window.innerHeight / 2;
+
+  const popover = document.createElement('div');
+  popover.className = 'edit-popover unified-add-popover';
+  popover.style.cssText = `
+    position: fixed;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+    padding: 12px;
+    border: 1px solid #e5e7eb;
+    z-index: 1000;
+    width: fit-content;
+    visibility: hidden;
+  `;
+
+  // Dark mode support
+  if (document.body.getAttribute('data-theme') === 'dark') {
+    popover.style.background = '#1e293b';
+    popover.style.borderColor = '#475569';
+  }
+
+  popover.innerHTML = `
+    <div style="display: flex; flex-direction: column; gap: 8px;">
+      <div style="font-size: 12px; color: #6b7280; margin-bottom: 4px;">Add item type:</div>
+      <div style="display: flex; gap: 8px; align-items: center;">
+        <button id="add-icon-btn" title="Add Icon" style="width: 48px; height: 48px; border: 1px solid #e5e7eb; border-radius: 6px; background: #f8fafc; cursor: pointer; display: flex; align-items: center; justify-content: center;">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+            <circle cx="8.5" cy="8.5" r="1.5"></circle>
+            <polyline points="21 15 16 10 5 21"></polyline>
+          </svg>
+        </button>
+        <button id="add-separator-btn" title="Add Separator" style="width: 48px; height: 48px; border: 1px solid #e5e7eb; border-radius: 6px; background: #f8fafc; cursor: pointer; display: flex; align-items: center; justify-content: center;">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+        </button>
+        <button id="add-subtask-btn" title="Add Subtask" style="width: 48px; height: 48px; border: 1px solid #e5e7eb; border-radius: 6px; background: #f8fafc; cursor: pointer; display: flex; align-items: center; justify-content: center;">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="8" y1="6" x2="21" y2="6"></line>
+            <line x1="8" y1="12" x2="21" y2="12"></line>
+            <line x1="8" y1="18" x2="21" y2="18"></line>
+            <line x1="3" y1="6" x2="3.01" y2="6"></line>
+            <line x1="3" y1="12" x2="3.01" y2="12"></line>
+            <line x1="3" y1="18" x2="3.01" y2="18"></line>
+          </svg>
+        </button>
+        <button id="add-reminder-btn" title="Add Reminder" style="width: 48px; height: 48px; border: 1px solid #e5e7eb; border-radius: 6px; background: #f8fafc; cursor: pointer; display: flex; align-items: center; justify-content: center;">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"></circle>
+            <polyline points="12 6 12 12 16 14"></polyline>
+          </svg>
+        </button>
+        <button id="add-copypaste-btn" title="Add Copy-Paste" style="width: 48px; height: 48px; border: 1px solid #e5e7eb; border-radius: 6px; background: #f8fafc; cursor: pointer; display: flex; align-items: center; justify-content: center;">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+          </svg>
+        </button>
+        <button id="cancel-btn" style="width: 32px; height: 32px; border: none; border-radius: 50%; background: #fee2e2; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: bold; color: #7f1d1d;">✕</button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(popover);
+
+  // Viewport-aware positioning: measure popover size and adjust position
+  const rect = popover.getBoundingClientRect();
+  const padding = 16; // Minimum distance from viewport edges
+  let finalX = clickX;
+  let finalY = clickY;
+
+  // Adjust horizontal position if would overflow
+  if (clickX - rect.width / 2 < padding) {
+    finalX = padding + rect.width / 2;
+  } else if (clickX + rect.width / 2 > window.innerWidth - padding) {
+    finalX = window.innerWidth - padding - rect.width / 2;
+  }
+
+  // Adjust vertical position if would overflow
+  if (clickY - rect.height / 2 < padding) {
+    finalY = padding + rect.height / 2;
+  } else if (clickY + rect.height / 2 > window.innerHeight - padding) {
+    finalY = window.innerHeight - padding - rect.height / 2;
+  }
+
+  popover.style.left = `${finalX}px`;
+  popover.style.top = `${finalY}px`;
+  popover.style.transform = 'translate(-50%, -50%)';
+  popover.style.visibility = 'visible';
+
+  popover.querySelector('#add-icon-btn').addEventListener('click', (e) => {
+    e.preventDefault();
+    document.body.removeChild(popover);
+    onAddUnifiedItem(sectionId, subtitle, 'icon');
+  });
+
+  popover.querySelector('#add-separator-btn').addEventListener('click', (e) => {
+    e.preventDefault();
+    document.body.removeChild(popover);
+    onAddUnifiedItem(sectionId, subtitle, 'separator');
+  });
+
+  popover.querySelector('#add-subtask-btn').addEventListener('click', (e) => {
+    e.preventDefault();
+    document.body.removeChild(popover);
+    onAddUnifiedItem(sectionId, subtitle, 'subtask');
+  });
+
+  popover.querySelector('#add-reminder-btn').addEventListener('click', (e) => {
+    e.preventDefault();
+    document.body.removeChild(popover);
+    onAddUnifiedItem(sectionId, subtitle, 'reminder');
+  });
+
+  popover.querySelector('#add-copypaste-btn').addEventListener('click', (e) => {
+    e.preventDefault();
+    document.body.removeChild(popover);
+    onAddUnifiedItem(sectionId, subtitle, 'copyPaste');
+  });
+
+  popover.querySelector('#cancel-btn').addEventListener('click', (e) => {
+    e.preventDefault();
+    document.body.removeChild(popover);
+  });
+
+  // Close on outside click
+  const closeOnOutside = (e) => {
+    if (!popover.contains(e.target)) {
+      if (document.body.contains(popover)) {
+        document.body.removeChild(popover);
+      }
+      document.removeEventListener('click', closeOnOutside);
+    }
+  };
+  setTimeout(() => document.addEventListener('click', closeOnOutside), 0);
+}
+
+// --- Add item to unified card
+export function onAddUnifiedItem(sectionId, subtitle, itemType) {
+  const data = currentData();
+  const cardData = data[sectionId];
+
+  if (!cardData || !cardData[subtitle]) return;
+
+  const subtitleData = cardData[subtitle];
+
+  switch (itemType) {
+    case 'icon':
+      const iconKey = generateKey('icon', subtitleData.icons);
+      subtitleData.icons.push({
+        key: iconKey,
+        icon: 'assets/logos/Tools_1.svg',
+        url: PLACEHOLDER_URL,
+        title: ''
+      });
+      break;
+
+    case 'separator':
+      const separatorKey = generateKey('sep', subtitleData.icons);
+      subtitleData.icons.push({
+        key: separatorKey,
+        icon: icons.Content_creation_divider || 'assets/icons/Content_creation_divider.svg',
+        isDivider: true
+      });
+      break;
+
+    case 'subtask':
+      const subtaskKey = generateKey('subtask', subtitleData.subtasks);
+      subtitleData.subtasks.push({
+        key: subtaskKey,
+        text: 'New Item',
+        url: PLACEHOLDER_URL,
+        links: null
+      });
+      break;
+
+    case 'reminder':
+      if (!subtitleData.reminders) subtitleData.reminders = [];
+      const reminderKey = generateKey('reminder', subtitleData.reminders);
+      subtitleData.reminders.push({
+        key: reminderKey,
+        title: 'New Reminder',
+        url: PLACEHOLDER_URL,
+        type: 'days',
+        schedule: null,
+        repeat: 'none',
+        weeklyInterval: 1,
+        monthlyType: 'sameDay',
+        targetNumber: null,
+        currentNumber: null,
+        intervalType: 'goal',
+        unit: 'none',
+        breakdown: null,
+        links: null
+      });
+      break;
+
+    case 'copyPaste':
+      const copyKey = generateKey('copy', subtitleData.copyPaste);
+      subtitleData.copyPaste.push({
+        key: copyKey,
+        text: 'New Item',
+        copyText: ''
+      });
+      break;
+  }
+
+  markDirtyAndSave();
+  renderAllSections();
+}
+
+// --- Add subtitle to unified card
+export function onAddUnifiedSubtitle(sectionId) {
+  const data = currentData();
+  const cardData = data[sectionId];
+
+  if (!cardData) return;
+
+  // Generate unique subtitle name
+  let subtitleNum = 1;
+  let newSubtitle = 'New Section';
+  while (cardData[newSubtitle]) {
+    subtitleNum++;
+    newSubtitle = `New Section ${subtitleNum}`;
+  }
+
+  cardData[newSubtitle] = {
+    icons: [],
+    reminders: [],
+    subtasks: [],
+    copyPaste: []
+  };
+
+  markDirtyAndSave();
+  renderAllSections();
+}
+
 // --- Add card buttons between sections
 export function addCardButtons() {
   const data = currentData();
@@ -1320,32 +2300,8 @@ export function addCardButtons() {
       // Check if this card is part of a two-column pair
       const isTwoColumnPair = section.twoColumnPair;
 
-      // Add color picker button for list-type cards (regardless of two-column pair status)
-      if (['analytics', 'tools', 'newCardAnalytics'].includes(section.type)) {
-        const colorPickerBtn = document.createElement('button');
-        colorPickerBtn.type = 'button';
-        colorPickerBtn.className = 'color-picker-btn';
-        colorPickerBtn.title = 'Change bubble color';
-        colorPickerBtn.innerHTML = `
-          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20" fill="none">
-            <circle cx="10" cy="10" r="9" fill="url(#colorGradient-${section.id})" stroke="currentColor" stroke-width="1"/>
-            <defs>
-              <linearGradient id="colorGradient-${section.id}" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" style="stop-color:#ff6b6b;stop-opacity:1" />
-                <stop offset="25%" style="stop-color:#4ecdc4;stop-opacity:1" />
-                <stop offset="50%" style="stop-color:#ffe66d;stop-opacity:1" />
-                <stop offset="75%" style="stop-color:#a8dadc;stop-opacity:1" />
-                <stop offset="100%" style="stop-color:#f1c0e8;stop-opacity:1" />
-              </linearGradient>
-            </defs>
-          </svg>
-        `;
-        colorPickerBtn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          openColorPicker(section.id, section.type);
-        });
-        sectionEl.appendChild(colorPickerBtn);
-      }
+      // Note: Card-level color picker removed - all cards now use per-subtitle color pickers
+      // which are rendered inline with each subtitle in renderUnifiedCard()
 
       if (isTwoColumnPair) {
         // For two-column paired cards: add swap button instead of individual up/down buttons

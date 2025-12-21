@@ -150,9 +150,13 @@ export function saveLinksModal() {
 // --- Toggle reminder links in view mode
 export function toggleReminderLinks(reminderKey, subtitle, sectionId, buttonEl) {
   const data = currentData();
-  const remindersData = sectionId === 'reminders' ? data.reminders : data[sectionId];
-  const reminders = remindersData[subtitle];
-  const reminder = reminders.find(r => r.key === reminderKey);
+  const cardData = data[sectionId];
+  if (!cardData || !cardData[subtitle]) return;
+
+  // Unified card structure: cardData[subtitle].reminders is the array
+  const subtitleData = cardData[subtitle];
+  const remindersArray = subtitleData.reminders || [];
+  const reminder = remindersArray.find(r => r.key === reminderKey);
 
   if (!reminder || !reminder.links || reminder.links.length === 0) return;
 
@@ -172,7 +176,9 @@ export function toggleReminderLinks(reminderKey, subtitle, sectionId, buttonEl) 
     }, 250);
     buttonEl._linksContainer = null;
   } else {
-    const reminderItem = buttonEl.closest('.reminder-item');
+    // Support both legacy .reminder-item and unified .unified-reminder-item classes
+    const reminderItem = buttonEl.closest('.reminder-item') || buttonEl.closest('.unified-reminder-item');
+    if (!reminderItem) return;
     const computedStyle = window.getComputedStyle(reminderItem);
     const parentBgColor = computedStyle.backgroundColor;
     const lighterColor = lightenColorBy20Percent(parentBgColor);
@@ -202,11 +208,42 @@ export function toggleReminderLinks(reminderKey, subtitle, sectionId, buttonEl) 
     buttonEl._linksContainer = linksContainer;
 
     const buttonRect = buttonEl.getBoundingClientRect();
-    linksContainer.style.left = `${buttonRect.right + 20}px`;
-    linksContainer.style.top = `${buttonRect.top + buttonRect.height / 2}px`;
-    linksContainer.style.transform = 'translateY(-50%)';
+    // Get scroll offsets for absolute positioning
+    const scrollX = window.scrollX || window.pageXOffset;
+    const scrollY = window.scrollY || window.pageYOffset;
 
+    // Calculate position with viewport awareness
+    const margin = 20;
+    let leftPos = buttonRect.right + margin + scrollX;
+    let topPos = buttonRect.top + buttonRect.height / 2 + scrollY;
+
+    // Measure container width after adding to DOM
     requestAnimationFrame(() => {
+      const containerWidth = linksContainer.offsetWidth || 150;
+      const containerHeight = linksContainer.offsetHeight || 100;
+
+      // Check if it would overflow the right edge of viewport
+      if (buttonRect.right + margin + containerWidth > window.innerWidth) {
+        // Position to the left of the button instead
+        leftPos = buttonRect.left - containerWidth - margin + scrollX;
+        // Make sure it doesn't go off the left edge
+        if (leftPos < scrollX + margin) {
+          leftPos = scrollX + margin;
+        }
+      }
+
+      // Check vertical overflow
+      const halfHeight = containerHeight / 2;
+      if (topPos - halfHeight < scrollY + margin) {
+        topPos = scrollY + margin + halfHeight;
+      } else if (topPos + halfHeight > scrollY + window.innerHeight - margin) {
+        topPos = scrollY + window.innerHeight - margin - halfHeight;
+      }
+
+      linksContainer.style.left = `${leftPos}px`;
+      linksContainer.style.top = `${topPos}px`;
+      linksContainer.style.transform = 'translateY(-50%)';
+
       linksContainer.classList.add('open');
     });
   }
@@ -393,7 +430,9 @@ export function toggleListItemLinks(item, sectionId, buttonEl) {
     }, 250);
     buttonEl._linksContainer = null;
   } else {
-    const listItem = buttonEl.closest('.list-item');
+    // Support both legacy .list-item and unified .unified-subtask-item classes
+    const listItem = buttonEl.closest('.list-item') || buttonEl.closest('.unified-subtask-item');
+    if (!listItem) return;
     const computedStyle = window.getComputedStyle(listItem);
     const parentBgColor = computedStyle.backgroundColor;
     const lighterColor = lightenColorBy20Percent(parentBgColor);
@@ -423,11 +462,42 @@ export function toggleListItemLinks(item, sectionId, buttonEl) {
     buttonEl._linksContainer = linksContainer;
 
     const buttonRect = buttonEl.getBoundingClientRect();
-    linksContainer.style.left = `${buttonRect.right + 20}px`;
-    linksContainer.style.top = `${buttonRect.top + buttonRect.height / 2}px`;
-    linksContainer.style.transform = 'translateY(-50%)';
+    // Get scroll offsets for absolute positioning
+    const scrollX = window.scrollX || window.pageXOffset;
+    const scrollY = window.scrollY || window.pageYOffset;
 
+    // Calculate position with viewport awareness
+    const margin = 20;
+    let leftPos = buttonRect.right + margin + scrollX;
+    let topPos = buttonRect.top + buttonRect.height / 2 + scrollY;
+
+    // Measure container width after adding to DOM
     requestAnimationFrame(() => {
+      const containerWidth = linksContainer.offsetWidth || 150;
+      const containerHeight = linksContainer.offsetHeight || 100;
+
+      // Check if it would overflow the right edge of viewport
+      if (buttonRect.right + margin + containerWidth > window.innerWidth) {
+        // Position to the left of the button instead
+        leftPos = buttonRect.left - containerWidth - margin + scrollX;
+        // Make sure it doesn't go off the left edge
+        if (leftPos < scrollX + margin) {
+          leftPos = scrollX + margin;
+        }
+      }
+
+      // Check vertical overflow
+      const halfHeight = containerHeight / 2;
+      if (topPos - halfHeight < scrollY + margin) {
+        topPos = scrollY + margin + halfHeight;
+      } else if (topPos + halfHeight > scrollY + window.innerHeight - margin) {
+        topPos = scrollY + window.innerHeight - margin - halfHeight;
+      }
+
+      linksContainer.style.left = `${leftPos}px`;
+      linksContainer.style.top = `${topPos}px`;
+      linksContainer.style.transform = 'translateY(-50%)';
+
       linksContainer.classList.add('open');
     });
   }

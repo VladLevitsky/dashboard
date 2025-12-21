@@ -509,22 +509,29 @@ export function createCardByType(type, targetIndex) {
 
   switch (type) {
     case 'single':
+      // Create unified card that can hold icons, reminders, subtasks, and copy-paste items
       newSection = {
         id: generateSectionId(),
-        type: 'newCard',
-        title: generateUniqueCardTitle('New Card'),
-        structure: 'regular'
+        type: 'unified',
+        title: generateUniqueCardTitle('New Card')
       };
-      data[newSection.id] = [];
+      // Initialize with unified structure (_default contains icons, reminders, subtasks, copyPaste)
+      data[newSection.id] = {
+        '_default': {
+          icons: [],
+          reminders: [],
+          subtasks: [],
+          copyPaste: []
+        }
+      };
       break;
 
     case 'two-col':
-      // Create first section for two-column layout
+      // Create first section for two-column layout (unified card)
       const section1 = {
         id: generateSectionId(),
-        type: 'newCard',
+        type: 'unified',
         title: generateUniqueCardTitle('New Card'),
-        structure: 'regular',
         twoColumnPair: true,
         pairIndex: 0
       };
@@ -533,20 +540,33 @@ export function createCardByType(type, targetIndex) {
       sections.splice(actualTargetIndex, 0, section1);
       // Also add to the other sections array (for when switching modes)
       ensureSectionInBothArrays(section1);
-      data[section1.id] = [];
+      data[section1.id] = {
+        '_default': {
+          icons: [],
+          reminders: [],
+          subtasks: [],
+          copyPaste: []
+        }
+      };
       data.sectionTitles[section1.id] = section1.title;
 
-      // Now create second section with a unique ID
+      // Now create second section with a unique ID (unified card)
       const section2 = {
         id: generateSectionId(),
-        type: 'newCard',
+        type: 'unified',
         title: 'New Card 2',
-        structure: 'regular',
         twoColumnPair: true,
         pairIndex: 1
       };
 
-      data[section2.id] = [];
+      data[section2.id] = {
+        '_default': {
+          icons: [],
+          reminders: [],
+          subtasks: [],
+          copyPaste: []
+        }
+      };
       data.sectionTitles[section2.id] = section2.title;
 
       // Insert second section after the first in current display mode's sections array
@@ -556,54 +576,6 @@ export function createCardByType(type, targetIndex) {
 
       if (window.renderAllSections) window.renderAllSections();
       return;
-
-    case 'reminders':
-      newSection = {
-        id: generateSectionId(),
-        type: 'reminders',
-        title: generateUniqueCardTitle('Reminders')
-      };
-      // Initialize with one subtitle and one item
-      const reminderId = newSection.id;
-      const initialReminders = [];
-      data[reminderId] = {
-        'General': [{
-          key: generateKey('reminder', initialReminders),
-          title: 'New Reminder',
-          url: PLACEHOLDER_URL,
-          schedule: null,
-          type: 'days'
-        }]
-      };
-      break;
-
-    case 'subtasks':
-      newSection = {
-        id: generateSectionId(),
-        type: 'newCardAnalytics',
-        title: generateUniqueCardTitle('New Subtasks'),
-        structure: 'analytics-style'
-      };
-      // Initialize with empty array for subtasks
-      data[newSection.id] = [];
-      break;
-
-    case 'copyPaste':
-      newSection = {
-        id: generateSectionId('copy-paste'),
-        type: 'copyPaste',
-        title: generateUniqueCardTitle('Copy-Paste'),
-        structure: 'copy-paste'
-      };
-      // Initialize with subtitle structure like reminders
-      data[newSection.id] = {
-        'General': [{
-          key: generateKey('copy', []),
-          text: 'New Item',
-          copyText: ''
-        }]
-      };
-      break;
   }
 
   // Insert the new section into current display mode's sections array

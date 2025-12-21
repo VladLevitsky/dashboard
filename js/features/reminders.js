@@ -236,6 +236,10 @@ export function openCalendarPopover(reminder, event) {
     const popoverHeight = 350; // Approximate height
     const margin = 10;
 
+    // Get scroll offsets for absolute positioning
+    const scrollX = window.scrollX || window.pageXOffset;
+    const scrollY = window.scrollY || window.pageYOffset;
+
     let left = event.clientX;
     let top = event.clientY;
 
@@ -255,8 +259,9 @@ export function openCalendarPopover(reminder, event) {
       top = margin;
     }
 
-    pop.style.left = `${left}px`;
-    pop.style.top = `${top}px`;
+    // Add scroll offset for absolute positioning
+    pop.style.left = `${left + scrollX}px`;
+    pop.style.top = `${top + scrollY}px`;
     pop.style.bottom = 'auto';
   }
 
@@ -372,7 +377,7 @@ export function openCalendarPopover(reminder, event) {
 }
 
 // --- Open interval popover
-export function openIntervalPopover(reminder) {
+export function openIntervalPopover(reminder, event) {
   currentBreakdownReminder = reminder;
 
   const popover = $('#interval-popover');
@@ -381,6 +386,41 @@ export function openIntervalPopover(reminder) {
   const currentInput = $('#interval-current');
   const typeSelect = $('#interval-type');
   const unitSelect = $('#interval-unit');
+
+  // Position the popover near the cursor and within the viewport
+  if (event) {
+    const popoverWidth = 320;
+    const popoverHeight = 300; // Approximate height
+    const margin = 10;
+
+    // Get scroll offsets for absolute positioning
+    const scrollX = window.scrollX || window.pageXOffset;
+    const scrollY = window.scrollY || window.pageYOffset;
+
+    let left = event.clientX;
+    let top = event.clientY;
+
+    // Adjust horizontal position to stay within viewport
+    if (left + popoverWidth + margin > window.innerWidth) {
+      left = window.innerWidth - popoverWidth - margin;
+    }
+    if (left < margin) {
+      left = margin;
+    }
+
+    // Adjust vertical position to stay within viewport
+    if (top + popoverHeight + margin > window.innerHeight) {
+      top = window.innerHeight - popoverHeight - margin;
+    }
+    if (top < margin) {
+      top = margin;
+    }
+
+    // Add scroll offset for absolute positioning
+    popover.style.left = `${left + scrollX}px`;
+    popover.style.top = `${top + scrollY}px`;
+    popover.style.bottom = 'auto';
+  }
 
   intervalInput.value = reminder.interval ? Math.round(reminder.interval) : '';
   currentInput.value = reminder.currentNumber ? Math.round(reminder.currentNumber) : '';

@@ -477,6 +477,7 @@ export function wireUI() {
       url: $('#edit-url').value.trim(),
       copyText: copyText,
       chosenMedia: editState.chosenMedia || null,
+      chosenEmoji: editState.chosenEmoji || null,
       accept: true
     };
     if (editState.currentTarget) editState.currentTarget.onDone(payload);
@@ -762,11 +763,32 @@ export function wireUI() {
 
   // Hook up "Choose Image..." to open media library
   $('#choose-from-library').addEventListener('click', () => {
+    // Hide emoji picker if open
+    $('#emoji-picker-container').hidden = true;
     openMediaLibrary((chosen) => {
       editState.chosenMedia = chosen;
+      editState.chosenEmoji = null;  // Clear emoji when image is chosen
       $('#chosen-image-name').textContent = chosen.name;
     });
   });
+
+  // Hook up "Choose Emoji" button to toggle emoji picker
+  $('#choose-emoji').addEventListener('click', () => {
+    const container = $('#emoji-picker-container');
+    container.hidden = !container.hidden;
+  });
+
+  // Handle emoji selection from emoji picker
+  const emojiPicker = document.querySelector('emoji-picker');
+  if (emojiPicker) {
+    emojiPicker.addEventListener('emoji-click', (event) => {
+      const emoji = event.detail.unicode;
+      editState.chosenEmoji = emoji;
+      editState.chosenMedia = null;  // Clear image when emoji is chosen
+      $('#chosen-image-name').textContent = `Emoji: ${emoji}`;
+      $('#emoji-picker-container').hidden = true;
+    });
+  }
 
   // Breakdown modal event listeners
   $('#breakdown-add-row').addEventListener('click', () => {

@@ -507,11 +507,13 @@ export function initializeContainerDragHandlers(container, sectionKey) {
   if (container.dataset.dragInitialized) return;
   container.dataset.dragInitialized = 'true';
 
-  const isIconContainer = container.classList.contains('icon-grid') || container.classList.contains('icon-row');
+  const isIconContainer = container.classList.contains('icon-grid') ||
+                          container.classList.contains('icon-row') ||
+                          container.classList.contains('unified-icons-group');
 
   // Determine gap size based on container type
   let gapSize = 12;
-  if (container.classList.contains('icon-grid')) {
+  if (container.classList.contains('icon-grid') || container.classList.contains('unified-icons-group')) {
     gapSize = 16;
   } else if (container.classList.contains('icon-row')) {
     gapSize = 24;
@@ -532,11 +534,11 @@ export function initializeContainerDragHandlers(container, sectionKey) {
     const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
     const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
 
-    // Get all draggable items in this container
+    // Get all draggable items in this container (including separators for proper positioning)
     const items = Array.from(container.querySelectorAll('[data-key]')).filter(item =>
       !item.classList.contains('add-tile') &&
-      !item.classList.contains('item-dragging') &&
-      !item.classList.contains('icon-separator')
+      !item.classList.contains('unified-add-tile') &&
+      !item.classList.contains('item-dragging')
     );
 
     if (items.length === 0) {
@@ -670,11 +672,26 @@ export function initializeContainerDragHandlers(container, sectionKey) {
 
     const data = currentData();
 
-    // Handle composite keys for copy-paste items
+    // Handle composite keys for unified card items
+    // Format: sectionId:subtitle:itemType (e.g., "myCard:General:icons")
+    // Or legacy format: sectionId:subtitle (for old copy-paste)
+    // Or simple format: sectionId (for legacy cards)
     let collection;
-    if (sectionKey.includes(':')) {
-      const [sectionId, subtitle] = sectionKey.split(':');
-      collection = data[sectionId]?.[subtitle];
+    const parts = sectionKey.split(':');
+    if (parts.length === 3) {
+      // Unified card format: sectionId:subtitle:itemType
+      const [sectionId, subtitle, itemType] = parts;
+      collection = data[sectionId]?.[subtitle]?.[itemType];
+    } else if (parts.length === 2) {
+      // Legacy copy-paste format: sectionId:subtitle
+      const [sectionId, subtitle] = parts;
+      const subtitleData = data[sectionId]?.[subtitle];
+      // Check if it's unified format (has itemType arrays) or legacy (direct array)
+      if (subtitleData && Array.isArray(subtitleData)) {
+        collection = subtitleData;
+      } else if (subtitleData && subtitleData.copyPaste) {
+        collection = subtitleData.copyPaste;
+      }
     } else {
       collection = data[sectionKey];
     }
@@ -902,8 +919,9 @@ export function removeDragHandlers() {
     card.classList.remove('dragging');
   });
 
-  // Remove items draggability
-  const items = document.querySelectorAll('.icon-button, .list-item, .reminder-item');
+  // Remove items draggability (including unified card items)
+  // Note: unified icons use .icon-button class, same as legacy icons
+  const items = document.querySelectorAll('.icon-button, .list-item, .reminder-item, .unified-subtask-item, .unified-reminder-item, .unified-copypaste-item');
   items.forEach(item => {
     item.draggable = false;
     item.style.cursor = '';

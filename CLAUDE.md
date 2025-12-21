@@ -46,38 +46,35 @@ User-specific data (links, reminders, settings) is stored in the browser's Local
 
 ### 2. Card Types
 
-#### Single Card
-- Standard card layout for icon grids or content
-- Examples: Content Creation, Ads sections
-- 4-column icon grid by default
-- Dynamic sizing: small, medium, large, full
+#### Unified Card (Primary)
+- **New in v3.0**: Single card type that can contain icons, reminders, subtasks, and copy-paste items
+- All item types can coexist under shared subtitles
+- **Item Types**:
+  - **Icons**: Clickable image buttons with URLs (displayed as horizontal row)
+  - **Reminders**: Time-based or interval-based tracking items with badges
+  - **Subtasks**: Text links with optional multiple links (displayed as 2-column grid)
+  - **Copy-Paste**: Text snippets that copy to clipboard on click (displayed as 2-column grid)
+- **Render Order**: Within each subtitle: Icons → Reminders → Subtasks → Copy-paste
+- **Add Item Popup**: Click + button to see Icon, Reminder, Subtask, Copy-Paste options
+- **Subtitles**: Optional grouping mechanism; cards can have no subtitles (_default) or multiple
+- **Color Customization**: Each subtitle can have independent light/dark mode colors
 
 #### Two-Column Layout
-- Special container for side-by-side cards
+- Special container for side-by-side unified cards
 - Examples: Daily Tasks + Daily Tools
 - Each card maintains independent content
 - Shared container handles spacing
 
-#### Reminders Card
-- Specialized for time-based and interval-based tracking
-- **Features**:
-  - Calendar scheduling with repeat options (weekly, monthly)
-  - Interval tracking with current/target numbers
-  - Color-coded status badges (green/yellow/orange/red)
-  - Subtitle organization for grouping reminders
-  - Breakdown system for detailed number tracking
-
-#### Subtasks/List Card
-- Vertical list layout with icons and labels
-- Examples: Analytics, Tools sections
-- Rounded pill-shaped items
-- Different background colors for visual distinction (yellow for Analytics, green for Tools)
-- **Links Feature**: Add multiple links to any list item
-  - **Edit Mode**: Click link icon (chain) next to item to open links modal
-  - **View Mode**: If item has links, link icon appears next to text
-  - Links appear as animated bubbles (same as reminder links)
+#### Legacy Card Types (auto-migrated)
+- **newCard**: Icon-only cards → auto-migrate to unified
+- **newCardAnalytics**: Subtask-only cards → auto-migrate to unified
+- **copyPaste**: Copy-paste-only cards → auto-migrate to unified
+- **reminders**: Standalone reminder cards → auto-migrate to unified
+- Migration happens automatically on app load (schemaVersion check)
 
 ### 3. Reminder System
+
+> **Note**: As of v3.0, reminders are an item type within unified cards, not a separate card type. Add reminders to any card using the + button popup.
 
 #### Calendar Mode
 - Click 📅 icon to schedule
@@ -226,12 +223,13 @@ User-specific data (links, reminders, settings) is stored in the browser's Local
 #### Main Model
 ```javascript
 const model = {
+  schemaVersion: 3,  // For data migration (3 = unified card with reminders)
   darkMode: boolean,
   displayMode: 'normal' | 'stacked',
   sections: [
     {
       id: string,
-      type: 'icon' | 'list' | 'reminders' | 'newCard',
+      type: 'unified',  // Primary type in v3.0+ (all cards are unified)
       title: string,
       twoColumnPair?: boolean,
       pairIndex?: 0 | 1
@@ -239,30 +237,33 @@ const model = {
   ],
   // Separate section order for stacked mode (initialized from sections on first use)
   sectionsStacked: null | Section[],
-  reminders: {
-    [subtitleKey]: [
-      {
-        name: string,
-        mode: 'calendar' | 'interval',
+
+  // UNIFIED CARD DATA (schemaVersion 3):
+  // Cards with type 'unified' store data as:
+  [sectionId]: {
+    "SubtitleName": {
+      icons: [{ key: string, icon: string, url: string, title: string }],
+      reminders: [{
+        key: string,
+        title: string,
+        url: string,
+        type: 'days' | 'interval',
         // Calendar fields
-        scheduledDate?: Date,
-        repeat?: 'none' | 'weekly' | 'monthly',
-        weeklyInterval?: 1 | 2 | 3,
-        monthlyType?: 'sameDay' | 'firstWeekday',
+        schedule?: { type, date?, weekday?, weekInterval?, dayOfMonth? },
         // Interval fields
-        targetNumber?: number,
+        interval?: number,
         currentNumber?: number,
         intervalType?: 'goal' | 'limit',
-        unit?: 'none' | 'dollar' | 'percent',
-        breakdown?: {
-          locked: boolean,
-          rows: [{ label: string, value: number }]
-        },
-        // Links (optional)
+        intervalUnit?: 'none' | 'dollar' | 'percent',
+        breakdown?: { locked: boolean, rows: [{ label, value }] },
         links?: [{ title: string, url: string }]
-      }
-    ]
+      }],
+      subtasks: [{ key: string, text: string, url: string, links?: [] }],
+      copyPaste: [{ key: string, text: string, copyText: string }]
+    },
+    "_default": { ... }  // Used when no subtitles
   },
+
   // Section colors (mode-specific)
   sectionColors: {
     [sectionId]: {
@@ -270,24 +271,12 @@ const model = {
       dark: string | null    // e.g., '#3d2a1a'
     }
   },
-  // Subtitle colors for reminders and copy-paste cards (mode-specific)
+  // Subtitle colors for unified cards (mode-specific)
   subtitleColors: {
     [sectionId:subtitleName]: {
       light: string | null,
       dark: string | null
     }
-  },
-  [sectionId]: {
-    title: string,
-    items: [
-      {
-        name: string,
-        url: string,
-        icon: string,
-        // Links (optional) - for subtasks/list cards
-        links?: [{ title: string, url: string }]
-      }
-    ]
   }
 }
 ```
@@ -877,25 +866,62 @@ editState.working = deepClone(model);
 
 ## Version History
 
-### Current Version: 2.0
+### Current Version: 3.0
+- **Reminders in Unified Cards**: Reminders are now an item type within unified cards
+  - Icons, reminders, subtasks, and copy-paste items can all coexist in the same card
+  - Items organized under shared subtitles with render order: Icons → Reminders → Subtasks → Copy-paste
+  - Single "Add Item" popup with Icon, Reminder, Subtask, Copy-Paste options
+- **Schema Version 3**: Automatic migration from legacy card types including standalone reminders cards
+  - `migrateToUnifiedCards()` converts newCard, newCardAnalytics, copyPaste, and reminders to unified
+  - Migration runs automatically on app load
+- **Simplified Card Type Selector**: Only 2 options: Card (unified), Two Columns
 - **ES6 Module Architecture**: Fully modularized codebase (~15 modules)
 - Full customization system
 - Dark mode support
 - Interval breakdown feature
 - Media library
 - Import/export functionality
-- Four card types
-- Calendar and interval reminders
+- Calendar and interval reminders (now as items within cards)
 - Minimalist icon design
 - **Reminder Links**: Add multiple links to any reminder with animated expand/collapse
 - **List Item Links**: Add multiple links to any subtask/list item with animated expand/collapse
 - **Independent Light/Dark Colors**: Set different custom colors for each theme mode
-- **Subtitle Color Pickers**: Customize colors for Reminders and Copy-Paste subtitles
+- **Subtitle Color Pickers**: Customize colors for unified card subtitles
 - **Display Mode Toggle**: Switch between normal and stacked (two-column) layouts
 - **Independent Display Mode Ordering**: Each display mode maintains its own card order
 - **Drag-and-Drop Card Reordering**: Full drag-drop support for cards and items
 
-### Recent Updates (v2.0)
+### Recent Updates (v3.0)
+- **Reminders as Unified Item Type**:
+  - `createUnifiedReminderItem()` function renders reminders within unified cards
+  - Reminder items support calendar mode, interval mode, breakdowns, and links
+  - Color-coded badges (green/yellow/orange/red) based on schedule or progress
+  - Click to edit title/URL, use calendar/interval buttons to configure tracking
+- **Data Migration Update**:
+  - `migrateToUnifiedCards()` extended to convert standalone reminders cards
+  - Upgrade path from schemaVersion 2 to 3 (adds reminders array to existing unified cards)
+- **Updated Card Type Selector**:
+  - Removed "Reminders" card type option
+  - Only 2 card types remain: Card (unified) and Two Columns
+- **Updated Add Item Popup**:
+  - 4 options: Icon, Reminder, Subtask, Copy-Paste
+
+### Previous Updates (v2.1)
+- **Unified Card System**:
+  - New `renderUnifiedCard()` function in sections.js
+  - Helper functions: `createUnifiedIconButton()`, `createUnifiedSubtaskItem()`, `createUnifiedCopyPasteItem()`
+  - `openUnifiedAddItemPopover()` for adding items by type
+  - `onAddUnifiedItem()` and `onAddUnifiedSubtitle()` for item management
+- **Data Migration**:
+  - `migrateToUnifiedCards()` in storage.js converts legacy card types
+  - schemaVersion tracking for migration control
+  - Backward-compatible import/export
+- **Updated Card Type Selector**:
+  - Removed "Subtasks" and "Copy-Paste" options
+  - Renamed "Single Card" to "Card" with unified description
+- **CSS**: New unified card styles (~250 lines) including dark mode support
+
+### Previous Updates (v2.0)
 - **ES6 Module Migration**: Refactored monolithic app.js into 15+ ES6 modules
   - Clear separation: state, core, features, components
   - Improved maintainability and code organization

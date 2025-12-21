@@ -921,6 +921,16 @@ h2, h3 { margin: 0 0 16px; }
   box-shadow: 0 6px 16px rgba(0,0,0,0.1);
 }
 .icon-button img { width: 48px; height: 48px; object-fit: contain; }
+.icon-button .icon-emoji {
+  font-size: 40px;
+  line-height: 1;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+}
 
 .section-icon img { width: 66px; height: 66px; }
 
@@ -932,7 +942,7 @@ h2, h3 { margin: 0 0 16px; }
   align-items: start;
 }
 
-.list-links { display: grid; gap: 12px; padding-right: 16px; }
+.list-links { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; padding: 8px; }
 .list-item {
   background: #fff4e5; border: 1px solid #fde7c7; border-radius: 999px; padding: 12px 16px 12px 29px; font-weight: 600;
   position: relative;
@@ -1056,7 +1066,7 @@ h2, h3 { margin: 0 0 16px; }
 
 /* Edit popover */
 .edit-popover {
-  position: fixed; width: 320px; background: var(--card);
+  position: absolute; width: 320px; background: var(--card);
   border-radius: 12px; box-shadow: var(--shadow); padding: 14px; border: 1px solid #e5e7eb;
   z-index: 1000;
 }
@@ -1096,6 +1106,46 @@ h2, h3 { margin: 0 0 16px; }
 .btn-breakdown:hover { background: #bfdbfe; transform: scale(1.05); }
 .btn-breakdown svg { width: 18px; height: 18px; }
 
+/* Emoji picker container in edit popover */
+.emoji-picker-container {
+  margin-top: 10px;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.emoji-picker-container emoji-picker {
+  width: 100%;
+  --num-columns: 8;
+  --emoji-size: 1.3rem;
+  --background: var(--card);
+  --border-color: #e5e7eb;
+  --indicator-color: var(--brand);
+  --input-border-color: #e5e7eb;
+  --input-font-color: var(--text);
+  --input-placeholder-color: var(--muted);
+  --outline-color: var(--brand);
+  --category-font-color: var(--muted);
+  --button-active-background: #e5e7eb;
+  --button-hover-background: #f3f4f6;
+}
+[data-theme="dark"] .emoji-picker-container emoji-picker {
+  --background: #1e293b;
+  --border-color: #475569;
+  --input-border-color: #475569;
+  --button-active-background: #374151;
+  --button-hover-background: #334155;
+}
+/* Image row with emoji button */
+.image-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+#choose-emoji {
+  font-size: 18px;
+  padding: 6px 10px;
+  min-width: auto;
+}
+
 /* Simple confirm popover for restore */
 .confirm-popover {
   position: fixed; left: 20px; bottom: 84px; width: 320px; background: var(--card);
@@ -1105,7 +1155,7 @@ h2, h3 { margin: 0 0 16px; }
 
 /* Calendar popover for reminder scheduling */
 .calendar-popover {
-  position: fixed; width: 320px; background: var(--card);
+  position: absolute; width: 320px; background: var(--card);
   border-radius: 12px; box-shadow: var(--shadow); border: 1px solid #e5e7eb;
   z-index: 1000;
 }
@@ -1698,14 +1748,31 @@ section.card[id^="new-card-"].card-size-full {
   padding: 28.8px 40.32px 48.384px 40.32px;
 }
 
-/* Inline add tiles in edit mode (for icons only) */
+/* Inline add tiles in edit mode (for icons only) - Circular with blue accent */
 .icon-add-tile {
-  width: 84px; height: 84px; display: inline-flex; align-items: center; justify-content: center;
-  border-radius: 12px; background: #eef2ff; border: 1.4px solid #c7d2fe; color: #3730a3; font-weight: 800; cursor: pointer;
+  width: 48px;
+  height: 48px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #eef2ff;
+  border: 1px solid #c7d2fe;
+  color: #6366f1;
+  font-size: 24px;
+  font-weight: 400;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+  box-shadow: 0 2px 8px rgba(99,102,241,0.1);
 }
 .icon-row .icon-add-tile { margin-left: 0; }
-.icon-grid .icon-add-tile { width: 84px; height: 84px; }
-.icon-add-tile:hover { background: #e0e7ff; }
+.icon-grid .icon-add-tile { width: 48px; height: 48px; }
+.icon-add-tile:hover {
+  transform: scale(1.05);
+  background: #e0e7ff;
+  box-shadow: 0 4px 12px rgba(99,102,241,0.15);
+  color: #4f46e5;
+}
 
 /* Reminder add tile styling */
 .reminder-item.add-tile {
@@ -2074,7 +2141,7 @@ section.card[id^="new-card-"].card-size-full {
 /* Copy-paste card styles */
 .copy-paste-list {
   display: block;
-  padding-right: 16px;
+  padding: 8px;
 }
 
 
@@ -2361,15 +2428,24 @@ section.card[id^="new-card-"].card-size-full {
 }
 
 /* Dark mode styling for add tiles */
-[data-theme="dark"] .add-tile,
-[data-theme="dark"] .icon-add-tile {
+[data-theme="dark"] .add-tile {
   background: #374151 !important;
   border-color: #4b5563 !important;
   color: #cbd5e1 !important;
 }
-[data-theme="dark"] .add-tile:hover,
-[data-theme="dark"] .icon-add-tile:hover {
+[data-theme="dark"] .add-tile:hover {
   background: #4b5563 !important;
+}
+[data-theme="dark"] .icon-add-tile {
+  background: #312e81;
+  border-color: #4338ca;
+  color: #a5b4fc;
+  box-shadow: 0 2px 8px rgba(99,102,241,0.2);
+}
+[data-theme="dark"] .icon-add-tile:hover {
+  background: #3730a3;
+  box-shadow: 0 4px 12px rgba(99,102,241,0.3);
+  color: #c7d2fe;
 }
 [data-theme="dark"] .reminder-item.add-tile {
   background: #374151 !important;
@@ -2733,9 +2809,9 @@ section.card.collapsed .section-icon {
   position: relative;
 }
 
-/* Expanded links container - positioned fixed to escape card overflow */
+/* Expanded links container - positioned absolute to scroll with content */
 .reminder-links-expanded {
-  position: fixed;
+  position: absolute;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -3352,5 +3428,366 @@ body.stacked-mode .gap-add-btn {
   position: absolute;
   box-shadow: none;
   border-radius: 0;
+}
+
+/* ==================== UNIFIED CARD STYLES ==================== */
+
+.unified-card-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 8px;
+}
+
+.unified-subtitle-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+  margin-top: 12px;
+}
+
+.unified-subtitle-wrapper:first-child {
+  margin-top: 0;
+}
+
+.unified-subtitle {
+  font-size: 21px;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
+  color: #1f2937;
+  padding: 0;
+  background: transparent;
+  border-radius: 0;
+  cursor: default;
+}
+
+[data-theme="dark"] .unified-subtitle {
+  background: transparent;
+  color: #e2e8f0;
+}
+
+.card.editing .unified-subtitle {
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.card.editing .unified-subtitle:hover {
+  background: #f1f5f9;
+}
+
+[data-theme="dark"] .card.editing .unified-subtitle:hover {
+  background: #334155;
+}
+
+.unified-content-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Unified Icons Group - horizontal row */
+.unified-icons-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+/* Unified Subtasks Group */
+.unified-subtasks-group {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.unified-subtask-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #f7fafc;
+  border: 1px solid #edf2f7;
+  border-radius: 999px;
+  padding: 12px 16px 12px 20px;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  gap: 12px;
+}
+
+.unified-subtask-item:hover {
+  transform: scale(1.03);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+[data-theme="dark"] .unified-subtask-item {
+  background: #334155;
+  border-color: #475569;
+}
+
+[data-theme="dark"] .unified-subtask-item:hover {
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+.unified-subtask-item a {
+  color: var(--text);
+  text-decoration: none;
+  font-weight: 600;
+  font-size: inherit;
+  flex: 1;
+}
+
+.unified-subtask-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.unified-subtask-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+/* Unified Reminders Group */
+.unified-reminders-group {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+.unified-reminder-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #f7fafc;
+  border: 1px solid #edf2f7;
+  border-radius: 999px;
+  padding: 12px 16px 12px 20px;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  gap: 12px;
+}
+
+.unified-reminder-item:hover {
+  transform: scale(1.03);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+[data-theme="dark"] .unified-reminder-item {
+  background: #334155;
+  border-color: #475569;
+}
+
+[data-theme="dark"] .unified-reminder-item:hover {
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+.unified-reminder-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.unified-reminder-left a.reminder-title {
+  color: var(--text);
+  text-decoration: none;
+  font-weight: 600;
+  font-size: inherit;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.unified-reminder-item .days-badge {
+  min-width: 92px;
+  text-align: center;
+  font-weight: 400;
+  padding: 6px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.unified-reminder-edit-btns {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.unified-reminder-edit-btns button {
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: rgba(0,0,0,0.05);
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  transition: background 0.2s, color 0.2s;
+}
+
+.unified-reminder-edit-btns button:hover {
+  background: rgba(0,0,0,0.1);
+  color: var(--brand);
+}
+
+[data-theme="dark"] .unified-reminder-edit-btns button {
+  background: rgba(255,255,255,0.1);
+}
+
+[data-theme="dark"] .unified-reminder-edit-btns button:hover {
+  background: rgba(255,255,255,0.2);
+}
+
+/* Unified Copy-Paste Group */
+.unified-copypaste-group {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.unified-copypaste-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #f7fafc;
+  border: 1px solid #edf2f7;
+  border-radius: 999px;
+  padding: 12px 16px 12px 20px;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  gap: 12px;
+}
+
+.unified-copypaste-item:hover {
+  transform: scale(1.03);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+[data-theme="dark"] .unified-copypaste-item {
+  background: #334155;
+  border-color: #475569;
+}
+
+[data-theme="dark"] .unified-copypaste-item:hover {
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+.unified-copypaste-text {
+  flex: 1;
+  font-weight: 600;
+  font-size: inherit;
+  color: var(--text);
+}
+
+/* Add Item Tile - Circular with blue accent */
+.unified-add-tile {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  background: #eef2ff;
+  border: 1px solid #c7d2fe;
+  border-radius: 50%;
+  color: #6366f1;
+  font-size: 24px;
+  font-weight: 400;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+  box-shadow: 0 2px 8px rgba(99,102,241,0.1);
+}
+
+.unified-add-tile:hover {
+  transform: scale(1.05);
+  background: #e0e7ff;
+  box-shadow: 0 4px 12px rgba(99,102,241,0.15);
+  color: #4f46e5;
+}
+
+[data-theme="dark"] .unified-add-tile {
+  background: #312e81;
+  border-color: #4338ca;
+  color: #a5b4fc;
+  box-shadow: 0 2px 8px rgba(99,102,241,0.2);
+}
+
+[data-theme="dark"] .unified-add-tile:hover {
+  background: #3730a3;
+  box-shadow: 0 4px 12px rgba(99,102,241,0.3);
+  color: #c7d2fe;
+}
+
+/* Add Subtitle Button */
+.unified-add-subtitle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 16px;
+  margin-top: 12px;
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  border-radius: 20px;
+  color: #6b7280;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s, transform 0.2s;
+  width: fit-content;
+}
+
+.unified-add-subtitle:hover {
+  background: #f1f5f9;
+  border-color: #d1d5db;
+  transform: scale(1.02);
+}
+
+[data-theme="dark"] .unified-add-subtitle {
+  background: #334155;
+  border-color: #475569;
+  color: #94a3b8;
+}
+
+[data-theme="dark"] .unified-add-subtitle:hover {
+  background: #3d4f66;
+  border-color: #64748b;
+}
+
+/* Unified Add Item Popover */
+.unified-add-popover {
+  min-width: auto;
+}
+
+.unified-add-popover button:hover {
+  background: #e2e8f0 !important;
+  border-color: #cbd5e1 !important;
+}
+
+[data-theme="dark"] .unified-add-popover button:hover {
+  background: #475569 !important;
+  border-color: #6b7280 !important;
+}
+
+/* Color picker button for unified subtitles */
+.unified-subtitle-wrapper .subtitle-color-picker-btn {
+  background: none;
+  border: none;
+  padding: 4px;
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+
+.unified-subtitle-wrapper .subtitle-color-picker-btn:hover {
+  opacity: 1;
 }
 

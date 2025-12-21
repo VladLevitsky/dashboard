@@ -11,14 +11,10 @@ export function toggleEditMode() {
     editState.enabled = true;
     editState.working = deepClone(model);
 
-    // Ensure reminders structure is properly maintained in working data
-    if (editState.working.reminders && typeof editState.working.reminders === 'object') {
-      Object.keys(editState.working.reminders).forEach(subtitle => {
-        if (!Array.isArray(editState.working.reminders[subtitle])) {
-          editState.working.reminders[subtitle] = [];
-        }
-      });
-    }
+    // Note: Legacy code to "ensure reminders structure" was removed here.
+    // With unified cards (schemaVersion 3), section data like model["reminders"]
+    // stores { subtitle: { icons: [], reminders: [], subtasks: [], copyPaste: [] }, ... }
+    // The old code incorrectly converted these objects to empty arrays.
 
     editState.dirty = false;
   } else {
@@ -119,6 +115,10 @@ export function openEditPopover(targetEl, values, onDone) {
   $('#edit-image-field').hidden = values.allowImage ? false : true;
   $('#chosen-image-name').textContent = '';
   editState.chosenMedia = null;
+  editState.chosenEmoji = null;
+  // Hide emoji picker when opening popover
+  const emojiContainer = $('#emoji-picker-container');
+  if (emojiContainer) emojiContainer.hidden = true;
 
   // Delete button shows if allowed
   const delBtn = $('#edit-delete');
@@ -136,6 +136,10 @@ export function openEditPopover(targetEl, values, onDone) {
   const popHeight = pop.offsetHeight || 260;
   const margin = 12;
 
+  // Get scroll offsets for absolute positioning
+  const scrollX = window.scrollX || window.pageXOffset;
+  const scrollY = window.scrollY || window.pageYOffset;
+
   // Horizontal positioning: check if element is on the right side of the screen
   const spaceOnRight = window.innerWidth - rect.right;
   const spaceOnLeft = rect.left;
@@ -144,26 +148,37 @@ export function openEditPopover(targetEl, values, onDone) {
   pop.style.left = '';
   pop.style.right = '';
 
+  let leftPos;
   if (spaceOnRight >= popWidth + margin) {
-    pop.style.left = `${rect.right + margin}px`;
+    leftPos = rect.right + margin + scrollX;
+    pop.style.left = `${leftPos}px`;
   } else if (spaceOnLeft >= popWidth + margin) {
-    pop.style.left = `${rect.left - popWidth - margin}px`;
+    leftPos = rect.left - popWidth - margin + scrollX;
+    pop.style.left = `${leftPos}px`;
   } else {
-    pop.style.right = `${Math.max(20, margin)}px`;
+    // Fallback: position from right edge of document
+    leftPos = Math.max(margin, window.innerWidth - popWidth - margin) + scrollX;
+    pop.style.left = `${leftPos}px`;
   }
 
   // Decide whether to show below or above based on available space
   const spaceBelow = window.innerHeight - rect.bottom - margin;
   const spaceAbove = rect.top - margin;
+  let topPos;
+
+  pop.style.bottom = 'auto';  // Always use top for absolute positioning
+
   if (spaceBelow >= popHeight || spaceBelow >= spaceAbove) {
-    pop.style.bottom = 'auto';
-    const top = Math.min(window.innerHeight - popHeight - margin, rect.bottom + margin);
-    pop.style.top = `${Math.max(margin, top)}px`;
+    // Position below or centered vertically
+    topPos = Math.min(window.innerHeight - popHeight - margin, rect.bottom + margin);
+    topPos = Math.max(margin, topPos) + scrollY;
   } else {
-    pop.style.top = 'auto';
-    const bottom = Math.max(84, window.innerHeight - rect.top + margin);
-    pop.style.bottom = `${bottom}px`;
+    // Position above the element
+    topPos = rect.top - popHeight - margin + scrollY;
+    topPos = Math.max(margin + scrollY, topPos);
   }
+  pop.style.top = `${topPos}px`;
+
   editState.currentTarget = { targetEl, onDone, config: values };
 }
 
@@ -255,8 +270,16 @@ export function openColorPicker(sectionId, sectionType) {
     data.sectionColors = {};
   }
 
-  const defaultColorLight = sectionType === 'tools' ? '#e6fff3' : '#fff4e5';
-  const defaultColorDark = sectionType === 'tools' ? '#1e3a3a' : '#334155';
+  // Default colors based on section type
+  let defaultColorLight = '#fff4e5'; // Default yellow
+  let defaultColorDark = '#334155';
+  if (sectionType === 'tools') {
+    defaultColorLight = '#e6fff3'; // Green
+    defaultColorDark = '#1e3a3a';
+  } else if (sectionType === 'unified') {
+    defaultColorLight = '#f7fafc'; // Neutral grey (matches reminder items)
+    defaultColorDark = '#334155';
+  }
   const currentColor = getColorForCurrentMode(data.sectionColors[sectionId], defaultColorLight, defaultColorDark);
   const modeLabel = model.darkMode ? 'Dark Mode' : 'Light Mode';
 
