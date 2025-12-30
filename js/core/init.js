@@ -12,7 +12,8 @@ import {
   toggleDarkMode,
   refreshEditingClasses,
   markDirtyAndSave,
-  openEditPopover
+  openEditPopover,
+  wireNotepadEvents
 } from '../features/edit-mode.js';
 import {
   handleDragOver,
@@ -77,6 +78,7 @@ export async function init() {
   if (window.renderHeaderAndTitles) window.renderHeaderAndTitles();
   if (window.renderAllSections) window.renderAllSections();
   wireUI();
+  wireNotepadEvents();
   ensureSectionPlusButtons();
   refreshEditingClasses();
 

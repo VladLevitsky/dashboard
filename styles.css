@@ -1004,13 +1004,18 @@ h2, h3 { margin: 0 0 16px; }
 
 .wrench-btn {
   position: fixed; right: 20px; bottom: 20px; width: 62px; height: 62px;
-  border: none; border-radius: 50%; background: var(--card); box-shadow: var(--shadow);
+  border: none; border-radius: 50%; background: #ffffff; box-shadow: var(--shadow);
   display: grid; place-items: center; cursor: pointer;
   transition: all 0.2s ease;
+  z-index: 9999;
 }
 .wrench-btn:hover { transform: scale(1.05); }
 .wrench-btn svg { width: 22px; height: 22px; color: var(--text); }
 .wrench-btn.active { outline: 3px solid #60a5fa; }
+
+[data-theme="dark"] .wrench-btn {
+  background: #1e293b;
+}
 
 /* Floating action group for global accept/cancel */
 .fab-group {
@@ -1405,7 +1410,7 @@ h2, h3 { margin: 0 0 16px; }
   align-items: center;
   justify-content: center;
   box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-  z-index: 10;
+  z-index: 20;
 }
 .card.editing .card-delete-btn {
   display: flex;
@@ -3142,6 +3147,17 @@ section.card.collapsed .section-icon {
 /* ==================== */
 /* Stacked Display Mode */
 /* ==================== */
+
+/*
+ * Design Principles for Stacked Mode:
+ * 1. Icons 2x normal size (88px) for visibility
+ * 2. Titles 1.2x bigger (19px) - consistent across ALL cards
+ * 3. Bubble text 1.5x bigger (18px)
+ * 4. Responsive bubbles: 2 columns when wide (>=1400px), single column when narrow
+ * 5. Cards grow taller to fit content (no fixed heights)
+ * 6. Uniform notepad icon across all cards
+ */
+
 body.stacked-mode .app-main {
   max-width: 100%;
   padding: 0 16px 40px 16px;
@@ -3149,6 +3165,7 @@ body.stacked-mode .app-main {
   column-gap: 16px;
 }
 
+/* Base card styling in stacked mode */
 body.stacked-mode .app-main > .card {
   margin: 0 0 16px 0;
   width: 100%;
@@ -3157,22 +3174,317 @@ body.stacked-mode .app-main > .card {
   display: inline-block;
 }
 
-/* Two-column containers stay side-by-side in stacked mode */
-/* Width should equal a single card (one column width) */
+body.stacked-mode .card {
+  padding: 20px 18px 24px 18px;
+  overflow: visible;
+}
+
+/* ===== CONSISTENT TITLES - 1.2x bigger (19px) for ALL cards ===== */
+body.stacked-mode .card .section-title,
+body.stacked-mode .card > h2,
+body.stacked-mode .card > h3,
+body.stacked-mode .two-col .card .section-title,
+body.stacked-mode .two-col .card > h2,
+body.stacked-mode .two-col .card > h3 {
+  font-size: 19px !important;
+  font-weight: 600;
+}
+
+body.stacked-mode .card .section-title-wrapper,
+body.stacked-mode .two-col .card .section-title-wrapper {
+  margin-bottom: 14px;
+  gap: 10px;
+}
+
+/* ===== UNIFORM NOTEPAD ICON - Same across all cards ===== */
+body.stacked-mode .card .card-notepad-btn,
+body.stacked-mode .two-col .card .card-notepad-btn {
+  top: 12px;
+  right: 12px;
+  width: 28px;
+  height: 28px;
+}
+
+body.stacked-mode .card .card-notepad-btn svg,
+body.stacked-mode .two-col .card .card-notepad-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+body.stacked-mode .card.editing .card-notepad-btn,
+body.stacked-mode .two-col .card.editing .card-notepad-btn {
+  right: 42px;
+}
+
+body.stacked-mode .card .card-notepad-btn.has-note::after,
+body.stacked-mode .two-col .card .card-notepad-btn.has-note::after {
+  width: 6px;
+  height: 6px;
+  top: 3px;
+  right: 3px;
+}
+
+/* ===== UNIFORM DELETE BUTTON ===== */
+body.stacked-mode .card .card-delete-btn,
+body.stacked-mode .two-col .card .card-delete-btn {
+  top: 10px;
+  right: 10px;
+  width: 24px;
+  height: 24px;
+  font-size: 16px;
+  z-index: 20;
+}
+
+/* ===== ICONS - 2x bigger (88px) for visibility ===== */
+body.stacked-mode .card .icon-button,
+body.stacked-mode .two-col .card .icon-button {
+  width: 88px;
+  height: 88px;
+  min-width: 88px;
+  min-height: 88px;
+  padding: 12px;
+  flex-shrink: 0;
+}
+
+body.stacked-mode .card .icon-button img,
+body.stacked-mode .two-col .card .icon-button img {
+  width: 48px;
+  height: 48px;
+}
+
+body.stacked-mode .card .icon-emoji,
+body.stacked-mode .two-col .card .icon-emoji {
+  font-size: 40px;
+}
+
+/* Icons grid - wrap to fit available space */
+body.stacked-mode .card .unified-icons-group,
+body.stacked-mode .two-col .card .unified-icons-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-start;
+}
+
+/* ===== BUBBLES (Reminders, Subtasks, Copy-paste) ===== */
+/* Single column layout - bubbles stay single-line height */
+
+body.stacked-mode .card .unified-reminders-group,
+body.stacked-mode .card .unified-subtasks-group,
+body.stacked-mode .card .unified-copypaste-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow: visible;
+}
+
+body.stacked-mode .card .unified-reminder-item,
+body.stacked-mode .card .unified-subtask-item,
+body.stacked-mode .card .unified-copypaste-item {
+  padding: 10px 12px;
+  font-size: 16px;
+  min-height: 40px;
+  max-height: 40px;
+  width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+body.stacked-mode .card .reminder-title,
+body.stacked-mode .card .unified-subtask-item a,
+body.stacked-mode .card .unified-copypaste-text {
+  font-size: 16px;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
+}
+
+body.stacked-mode .card .days-badge {
+  font-size: 12px;
+  padding: 3px 7px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* Two-col cards - same styling */
+body.stacked-mode .two-col .card .unified-reminders-group,
+body.stacked-mode .two-col .card .unified-subtasks-group,
+body.stacked-mode .two-col .card .unified-copypaste-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow: visible;
+}
+
+body.stacked-mode .two-col .card .unified-reminder-item,
+body.stacked-mode .two-col .card .unified-subtask-item,
+body.stacked-mode .two-col .card .unified-copypaste-item {
+  padding: 8px 10px;
+  font-size: 14px;
+  min-height: 36px;
+  max-height: 36px;
+}
+
+body.stacked-mode .two-col .card .reminder-title,
+body.stacked-mode .two-col .card .unified-subtask-item a,
+body.stacked-mode .two-col .card .unified-copypaste-text {
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
+}
+
+body.stacked-mode .two-col .card .days-badge {
+  font-size: 11px;
+  padding: 2px 6px;
+}
+
+/* ===== SUBTITLES - Consistent sizing ===== */
+body.stacked-mode .card .unified-subtitle,
+body.stacked-mode .two-col .card .unified-subtitle {
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+body.stacked-mode .card .unified-subtitle-wrapper,
+body.stacked-mode .two-col .card .unified-subtitle-wrapper {
+  margin-bottom: 12px;
+}
+
+/* ===== CONTENT GROUPS ===== */
+body.stacked-mode .card .unified-content-group,
+body.stacked-mode .two-col .card .unified-content-group {
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+/* Bubbles always single column in stacked mode to prevent overflow */
+
+/* ===== ADD TILES ===== */
+body.stacked-mode .card .unified-add-item,
+body.stacked-mode .card .add-tile,
+body.stacked-mode .card .unified-add-subtitle,
+body.stacked-mode .two-col .card .unified-add-item,
+body.stacked-mode .two-col .card .add-tile,
+body.stacked-mode .two-col .card .unified-add-subtitle {
+  padding: 6px 10px;
+  font-size: 11px;
+}
+
+/* ===== EDIT BUTTONS - Minimum touch target ===== */
+body.stacked-mode .card .unified-reminder-edit-btns button,
+body.stacked-mode .two-col .card .unified-reminder-edit-btns button {
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  min-height: 24px;
+}
+
+body.stacked-mode .card .unified-reminder-edit-btns svg,
+body.stacked-mode .two-col .card .unified-reminder-edit-btns svg {
+  width: 14px;
+  height: 14px;
+}
+
+body.stacked-mode .card .hashtag-btn,
+body.stacked-mode .two-col .card .hashtag-btn {
+  font-size: 11px;
+}
+
+body.stacked-mode .card .calendar-btn,
+body.stacked-mode .two-col .card .calendar-btn {
+  width: 24px;
+  height: 24px;
+}
+
+body.stacked-mode .card .calendar-btn svg,
+body.stacked-mode .two-col .card .calendar-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* Links buttons */
+body.stacked-mode .card .reminder-links-toggle,
+body.stacked-mode .card .list-item-links-toggle,
+body.stacked-mode .card .links-btn,
+body.stacked-mode .card .list-item-links-btn,
+body.stacked-mode .two-col .card .reminder-links-toggle,
+body.stacked-mode .two-col .card .list-item-links-toggle,
+body.stacked-mode .two-col .card .links-btn,
+body.stacked-mode .two-col .card .list-item-links-btn {
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
+  min-height: 20px;
+}
+
+body.stacked-mode .card .reminder-links-toggle svg,
+body.stacked-mode .card .list-item-links-toggle svg,
+body.stacked-mode .card .links-btn svg,
+body.stacked-mode .card .list-item-links-btn svg,
+body.stacked-mode .two-col .card .reminder-links-toggle svg,
+body.stacked-mode .two-col .card .list-item-links-toggle svg,
+body.stacked-mode .two-col .card .links-btn svg,
+body.stacked-mode .two-col .card .list-item-links-btn svg {
+  width: 12px;
+  height: 12px;
+}
+
+/* Color picker buttons */
+body.stacked-mode .card .title-color-picker-btn,
+body.stacked-mode .card .subtitle-color-picker-btn,
+body.stacked-mode .two-col .card .title-color-picker-btn,
+body.stacked-mode .two-col .card .subtitle-color-picker-btn {
+  padding: 2px;
+}
+
+body.stacked-mode .card .title-color-picker-btn svg,
+body.stacked-mode .card .subtitle-color-picker-btn svg,
+body.stacked-mode .two-col .card .title-color-picker-btn svg,
+body.stacked-mode .two-col .card .subtitle-color-picker-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* Copy-paste icon */
+body.stacked-mode .card .copy-paste-icon svg,
+body.stacked-mode .two-col .card .copy-paste-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* ===== TWO-COLUMN CONTAINERS ===== */
 body.stacked-mode .app-main > .two-col {
   margin: 0 0 16px 0;
   width: 100%;
   break-inside: avoid;
   display: inline-grid;
   grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  gap: 8px;
 }
 
-/* Cards inside two-col maintain their side-by-side layout */
 body.stacked-mode .two-col .card {
   margin: 0 !important;
   width: 100% !important;
   max-width: none !important;
+  padding: 14px 10px 16px 10px;
+}
+
+/* ===== HEADER - Keep original sizing ===== */
+body.stacked-mode .app-header.card {
+  padding: 28.8px 40.32px 48.384px 40.32px;
+}
+
+body.stacked-mode .app-header .section-title,
+body.stacked-mode .app-header h2,
+body.stacked-mode .app-header h3 {
+  font-size: 24px !important;
 }
 
 /* Time tracking and quick access cards match content width in stacked mode */
@@ -3840,5 +4152,184 @@ body.stacked-mode .gap-add-btn {
 
 .unified-subtitle-wrapper .subtitle-color-picker-btn:hover {
   opacity: 1;
+}
+
+/* ========== Card Notepad Feature ========== */
+
+/* Notepad button in card header */
+.card-notepad-btn {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 28px;
+  height: 28px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.4;
+  transition: opacity 0.2s, background 0.2s;
+  z-index: 5;
+}
+
+.card-notepad-btn:hover {
+  opacity: 0.8;
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.card-notepad-btn svg {
+  width: 18px;
+  height: 18px;
+  color: var(--muted);
+}
+
+/* Notepad button has content indicator */
+.card-notepad-btn.has-note {
+  opacity: 0.7;
+}
+
+.card-notepad-btn.has-note::after {
+  content: '';
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 6px;
+  height: 6px;
+  background: var(--brand);
+  border-radius: 50%;
+}
+
+/* Adjust delete button position when notepad button exists */
+.card.editing .card-notepad-btn {
+  right: 48px;
+}
+
+/* Notepad popover */
+.notepad-popover {
+  position: absolute;
+  z-index: 1000;
+  background: var(--card);
+  border-radius: 12px;
+  box-shadow: var(--shadow), 0 4px 20px rgba(0, 0, 0, 0.15);
+  padding: 16px;
+  width: 320px;
+  max-width: calc(100vw - 24px);
+}
+
+.notepad-popover-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.notepad-popover-header h4 {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0;
+}
+
+.notepad-popover-close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  color: var(--muted);
+  opacity: 0.7;
+  transition: opacity 0.2s;
+}
+
+.notepad-popover-close:hover {
+  opacity: 1;
+}
+
+.notepad-textarea {
+  width: 100%;
+  min-height: 150px;
+  padding: 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: inherit;
+  line-height: 1.5;
+  resize: vertical;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.notepad-textarea:focus {
+  outline: none;
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px rgba(44, 123, 229, 0.1);
+}
+
+.notepad-popover-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.notepad-popover-actions button {
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s, opacity 0.2s;
+}
+
+.notepad-save-btn {
+  background: var(--brand);
+  color: white;
+  border: none;
+}
+
+.notepad-save-btn:hover {
+  opacity: 0.9;
+}
+
+.notepad-cancel-btn {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid #e5e7eb;
+}
+
+.notepad-cancel-btn:hover {
+  background: var(--bg);
+}
+
+/* Dark mode notepad styles */
+[data-theme="dark"] .card-notepad-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+[data-theme="dark"] .notepad-popover {
+  background: var(--card);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+}
+
+[data-theme="dark"] .notepad-textarea {
+  background: #1e293b;
+  border-color: #475569;
+  color: var(--text);
+}
+
+[data-theme="dark"] .notepad-textarea:focus {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+}
+
+[data-theme="dark"] .notepad-cancel-btn {
+  border-color: #475569;
+  color: #94a3b8;
+}
+
+[data-theme="dark"] .notepad-cancel-btn:hover {
+  background: #334155;
 }
 

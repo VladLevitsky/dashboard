@@ -21,7 +21,12 @@ import {
   confirmGlobalEdit,
   cancelGlobalEdit,
   openColorPicker,
-  openSubtitleColorPicker
+  openSubtitleColorPicker,
+  openNotepad,
+  closeNotepad,
+  saveNote,
+  updateNotepadButtonIndicator,
+  wireNotepadEvents
 } from './features/edit-mode.js';
 
 import {
@@ -404,4 +409,11 @@ window.openImageEditor = openImageEditor;
 window.closeImageEditor = closeImageEditor;
 window.applyProfilePhotoTransform = applyProfilePhotoTransform;
 window.applyLogoTransform = applyLogoTransform;
+
+// Notepad
+window.openNotepad = openNotepad;
+window.closeNotepad = closeNotepad;
+window.saveNote = saveNote;
+window.updateNotepadButtonIndicator = updateNotepadButtonIndicator;
+window.wireNotepadEvents = wireNotepadEvents;
 

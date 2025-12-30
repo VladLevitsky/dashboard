@@ -79,7 +79,8 @@ export function hideIntervalPopover() {
 }
 
 // --- Open Edit Popover
-export function openEditPopover(targetEl, values, onDone) {
+// cursorPos is optional: { x: clientX, y: clientY } - if provided, positions near cursor
+export function openEditPopover(targetEl, values, onDone, cursorPos) {
   const pop = $('#edit-popover');
   const rect = targetEl.getBoundingClientRect();
   $('#edit-text').value = values.text || '';
@@ -140,43 +141,69 @@ export function openEditPopover(targetEl, values, onDone) {
   const scrollX = window.scrollX || window.pageXOffset;
   const scrollY = window.scrollY || window.pageYOffset;
 
-  // Horizontal positioning: check if element is on the right side of the screen
-  const spaceOnRight = window.innerWidth - rect.right;
-  const spaceOnLeft = rect.left;
-
-  // Reset both left and right before setting new position
+  // Reset positioning
   pop.style.left = '';
   pop.style.right = '';
+  pop.style.bottom = 'auto';
 
-  let leftPos;
-  if (spaceOnRight >= popWidth + margin) {
-    leftPos = rect.right + margin + scrollX;
-    pop.style.left = `${leftPos}px`;
-  } else if (spaceOnLeft >= popWidth + margin) {
-    leftPos = rect.left - popWidth - margin + scrollX;
-    pop.style.left = `${leftPos}px`;
+  let leftPos, topPos;
+
+  if (cursorPos) {
+    // Position near cursor, respecting viewport boundaries
+    const cursorX = cursorPos.x;
+    const cursorY = cursorPos.y;
+
+    // Horizontal: try to position to the right of cursor, then left, then clamp
+    const spaceOnRight = window.innerWidth - cursorX;
+    const spaceOnLeft = cursorX;
+
+    if (spaceOnRight >= popWidth + margin) {
+      leftPos = cursorX + margin + scrollX;
+    } else if (spaceOnLeft >= popWidth + margin) {
+      leftPos = cursorX - popWidth - margin + scrollX;
+    } else {
+      // Clamp to viewport
+      leftPos = Math.max(margin, Math.min(window.innerWidth - popWidth - margin, cursorX - popWidth / 2)) + scrollX;
+    }
+
+    // Vertical: try to position below cursor, then above, then clamp
+    const spaceBelow = window.innerHeight - cursorY;
+    const spaceAbove = cursorY;
+
+    if (spaceBelow >= popHeight + margin) {
+      topPos = cursorY + margin + scrollY;
+    } else if (spaceAbove >= popHeight + margin) {
+      topPos = cursorY - popHeight - margin + scrollY;
+    } else {
+      // Clamp to viewport
+      topPos = Math.max(margin, Math.min(window.innerHeight - popHeight - margin, cursorY - popHeight / 2)) + scrollY;
+    }
   } else {
-    // Fallback: position from right edge of document
-    leftPos = Math.max(margin, window.innerWidth - popWidth - margin) + scrollX;
-    pop.style.left = `${leftPos}px`;
+    // Fallback: position relative to element (original behavior)
+    const spaceOnRight = window.innerWidth - rect.right;
+    const spaceOnLeft = rect.left;
+
+    if (spaceOnRight >= popWidth + margin) {
+      leftPos = rect.right + margin + scrollX;
+    } else if (spaceOnLeft >= popWidth + margin) {
+      leftPos = rect.left - popWidth - margin + scrollX;
+    } else {
+      leftPos = Math.max(margin, window.innerWidth - popWidth - margin) + scrollX;
+    }
+
+    const spaceBelow = window.innerHeight - rect.bottom - margin;
+    const spaceAbove = rect.top - margin;
+
+    if (spaceBelow >= popHeight || spaceBelow >= spaceAbove) {
+      topPos = Math.min(window.innerHeight - popHeight - margin, rect.bottom + margin);
+      topPos = Math.max(margin, topPos) + scrollY;
+    } else {
+      topPos = rect.top - popHeight - margin + scrollY;
+      topPos = Math.max(margin + scrollY, topPos);
+    }
   }
 
-  // Decide whether to show below or above based on available space
-  const spaceBelow = window.innerHeight - rect.bottom - margin;
-  const spaceAbove = rect.top - margin;
-  let topPos;
-
-  pop.style.bottom = 'auto';  // Always use top for absolute positioning
-
-  if (spaceBelow >= popHeight || spaceBelow >= spaceAbove) {
-    // Position below or centered vertically
-    topPos = Math.min(window.innerHeight - popHeight - margin, rect.bottom + margin);
-    topPos = Math.max(margin, topPos) + scrollY;
-  } else {
-    // Position above the element
-    topPos = rect.top - popHeight - margin + scrollY;
-    topPos = Math.max(margin + scrollY, topPos);
-  }
+  pop.style.left = `${leftPos}px`;
   pop.style.top = `${topPos}px`;
 
   editState.currentTarget = { targetEl, onDone, config: values };
@@ -429,6 +456,167 @@ export function openSubtitleColorPicker(sectionId, subtitle) {
   modal.addEventListener('click', (e) => {
     if (e.target === modal) {
       document.body.removeChild(modal);
+    }
+  });
+}
+
+// ========== Notepad Feature ==========
+
+// Track current notepad state
+let currentNotepadSectionId = null;
+
+// --- Open Notepad Popover
+export function openNotepad(sectionId, cursorPos) {
+  const pop = $('#notepad-popover');
+  if (!pop) return;
+
+  currentNotepadSectionId = sectionId;
+
+  // Get current note content - always from model directly (not working copy)
+  const noteText = model.cardNotes?.[sectionId] || '';
+  $('#notepad-textarea').value = noteText;
+
+  // Make visible to measure size
+  pop.hidden = false;
+  const popWidth = pop.offsetWidth || 320;
+  const popHeight = pop.offsetHeight || 260;
+  const margin = 12;
+
+  // Get scroll offsets for absolute positioning
+  const scrollX = window.scrollX || window.pageXOffset;
+  const scrollY = window.scrollY || window.pageYOffset;
+
+  let leftPos, topPos;
+
+  if (cursorPos) {
+    const cursorX = cursorPos.x;
+    const cursorY = cursorPos.y;
+
+    // Horizontal: try right of cursor, then left, then clamp
+    const spaceOnRight = window.innerWidth - cursorX;
+    const spaceOnLeft = cursorX;
+
+    if (spaceOnRight >= popWidth + margin) {
+      leftPos = cursorX + margin + scrollX;
+    } else if (spaceOnLeft >= popWidth + margin) {
+      leftPos = cursorX - popWidth - margin + scrollX;
+    } else {
+      leftPos = Math.max(margin, Math.min(window.innerWidth - popWidth - margin, cursorX - popWidth / 2)) + scrollX;
+    }
+
+    // Vertical: try below cursor, then above, then clamp
+    const spaceBelow = window.innerHeight - cursorY;
+    const spaceAbove = cursorY;
+
+    if (spaceBelow >= popHeight + margin) {
+      topPos = cursorY + margin + scrollY;
+    } else if (spaceAbove >= popHeight + margin) {
+      topPos = cursorY - popHeight - margin + scrollY;
+    } else {
+      topPos = Math.max(margin, Math.min(window.innerHeight - popHeight - margin, cursorY - popHeight / 2)) + scrollY;
+    }
+  } else {
+    // Fallback: center on screen
+    leftPos = (window.innerWidth - popWidth) / 2 + scrollX;
+    topPos = (window.innerHeight - popHeight) / 2 + scrollY;
+  }
+
+  pop.style.left = `${leftPos}px`;
+  pop.style.top = `${topPos}px`;
+
+  // Focus the textarea
+  setTimeout(() => {
+    $('#notepad-textarea').focus();
+  }, 50);
+}
+
+// --- Close Notepad Popover
+export function closeNotepad() {
+  const pop = $('#notepad-popover');
+  if (pop) {
+    pop.hidden = true;
+  }
+  currentNotepadSectionId = null;
+}
+
+// --- Save Note
+export function saveNote() {
+  if (!currentNotepadSectionId) return;
+
+  const noteText = $('#notepad-textarea').value.trim();
+
+  // Initialize cardNotes if needed
+  if (!model.cardNotes) {
+    model.cardNotes = {};
+  }
+
+  // Save or remove the note
+  if (noteText) {
+    model.cardNotes[currentNotepadSectionId] = noteText;
+  } else {
+    delete model.cardNotes[currentNotepadSectionId];
+  }
+
+  // Also update working copy if in edit mode
+  if (editState.working) {
+    if (!editState.working.cardNotes) {
+      editState.working.cardNotes = {};
+    }
+    if (noteText) {
+      editState.working.cardNotes[currentNotepadSectionId] = noteText;
+    } else {
+      delete editState.working.cardNotes[currentNotepadSectionId];
+    }
+  }
+
+  // Save to localStorage
+  saveModel();
+
+  // Update the notepad button indicator
+  updateNotepadButtonIndicator(currentNotepadSectionId);
+
+  closeNotepad();
+  showToast('Note saved');
+}
+
+// --- Update notepad button indicator (show dot if has note)
+export function updateNotepadButtonIndicator(sectionId) {
+  const card = document.getElementById(sectionId);
+  if (!card) return;
+
+  const notepadBtn = card.querySelector('.card-notepad-btn');
+  if (!notepadBtn) return;
+
+  const hasNote = model.cardNotes?.[sectionId]?.trim();
+  notepadBtn.classList.toggle('has-note', !!hasNote);
+}
+
+// --- Wire up notepad event listeners (called from init)
+export function wireNotepadEvents() {
+  const closeBtn = $('#notepad-close');
+  const cancelBtn = $('#notepad-cancel');
+  const saveBtn = $('#notepad-save');
+
+  if (closeBtn) {
+    closeBtn.addEventListener('click', closeNotepad);
+  }
+  if (cancelBtn) {
+    cancelBtn.addEventListener('click', closeNotepad);
+  }
+  if (saveBtn) {
+    saveBtn.addEventListener('click', saveNote);
+  }
+
+  // Close on click outside
+  document.addEventListener('click', (e) => {
+    const pop = $('#notepad-popover');
+    if (!pop || pop.hidden) return;
+
+    const isInsidePopover = e.target.closest('#notepad-popover');
+    const isNotepadButton = e.target.closest('.card-notepad-btn');
+
+    if (!isInsidePopover && !isNotepadButton) {
+      closeNotepad();
     }
   });
 }

@@ -168,6 +168,34 @@ export function createSectionElement(section) {
 
   sectionEl.appendChild(titleWrapper);
 
+  // Add notepad button (visible in both edit mode and view mode)
+  const notepadBtn = document.createElement('button');
+  notepadBtn.type = 'button';
+  notepadBtn.className = 'card-notepad-btn';
+  notepadBtn.title = 'Card notes';
+  notepadBtn.innerHTML = `
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
+      <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
+      <line x1="8" y1="10" x2="16" y2="10"></line>
+      <line x1="8" y1="14" x2="16" y2="14"></line>
+      <line x1="8" y1="18" x2="12" y2="18"></line>
+    </svg>
+  `;
+
+  // Check if this card has a note and add indicator class
+  if (data.cardNotes?.[section.id]?.trim()) {
+    notepadBtn.classList.add('has-note');
+  }
+
+  notepadBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (window.openNotepad) {
+      window.openNotepad(section.id, { x: e.clientX, y: e.clientY });
+    }
+  });
+  sectionEl.appendChild(notepadBtn);
+
   // All cards are now unified - they can contain icons, reminders, subtasks, and copy-paste items
   renderUnifiedCard(sectionEl, section.id);
 
@@ -1639,7 +1667,7 @@ function createUnifiedIconButton(item, sectionId, subtitle, subtitleColor) {
     btn.appendChild(img);
   }
 
-  btn.addEventListener('click', () => {
+  btn.addEventListener('click', (e) => {
     if (!editState.enabled) {
       openUrl(item.url);
     } else {
@@ -1664,7 +1692,7 @@ function createUnifiedIconButton(item, sectionId, subtitle, subtitleColor) {
         }
         markDirtyAndSave();
         renderAllSections();
-      });
+      }, { x: e.clientX, y: e.clientY });
     }
   });
 
@@ -1824,7 +1852,7 @@ function createUnifiedSubtaskItem(item, sectionId, subtitle, subtitleColor) {
       item.url = url || PLACEHOLDER_URL;
       markDirtyAndSave();
       renderAllSections();
-    });
+    }, { x: e.clientX, y: e.clientY });
   });
 
   if (editState.enabled) {
@@ -1976,19 +2004,36 @@ function createUnifiedReminderItem(rem, sectionId, subtitle, subtitleColor) {
     linksBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       e.preventDefault();
-      if (window.openReminderLinksModal) {
-        window.openReminderLinksModal(rem, subtitle, sectionId);
+      if (window.openLinksModal) {
+        window.openLinksModal(rem);
       }
     });
     editBtns.appendChild(linksBtn);
 
     div.appendChild(editBtns);
 
-    // Make title editable
+    // Make title editable - directly open edit popover when title is clicked
     a.style.pointerEvents = 'auto';
     a.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
+      openEditPopover(div, { text: rem.title, url: rem.url, allowDelete: true }, ({ text, url, delete: doDelete, accept }) => {
+        if (!accept) return;
+        const cardData = currentData()[sectionId];
+        const subtitleData = cardData[subtitle];
+
+        if (doDelete) {
+          const idx = subtitleData.reminders.findIndex(r => r.key === rem.key);
+          if (idx !== -1) subtitleData.reminders.splice(idx, 1);
+          markDirtyAndSave();
+          renderAllSections();
+          return;
+        }
+        rem.title = text || rem.title;
+        rem.url = url || PLACEHOLDER_URL;
+        markDirtyAndSave();
+        renderAllSections();
+      }, { x: e.clientX, y: e.clientY });
     });
   } else {
     a.style.pointerEvents = 'none';
@@ -2021,7 +2066,7 @@ function createUnifiedReminderItem(rem, sectionId, subtitle, subtitleColor) {
         rem.url = url || PLACEHOLDER_URL;
         markDirtyAndSave();
         renderAllSections();
-      });
+      }, { x: e.clientX, y: e.clientY });
     } else {
       e.preventDefault();
       const url = div.dataset.url;
@@ -2114,7 +2159,7 @@ function createUnifiedCopyPasteItem(item, sectionId, subtitle, subtitleColor) {
         item.copyText = copyText || '';
         markDirtyAndSave();
         renderAllSections();
-      });
+      }, { x: e.clientX, y: e.clientY });
     });
 
     initializeItemDragHandlers(div, item.key, `${sectionId}:${subtitle}:copyPaste`);

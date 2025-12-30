@@ -44,6 +44,7 @@ export const model = {
   sectionColors: {},  // Custom colors for sections (per light/dark mode)
   subtitleColors: {},  // Custom colors for subtitles within sections (per light/dark mode)
   collapsedSubtitles: {},  // Track collapsed state of subtitles: { "sectionId:subtitle": true }
+  cardNotes: {},  // Notes for each card: { "sectionId": "note text" }
   header: {
     companyLogoSrc: 'assets/icons/placeholder-logo.svg',
     companyLogoZoom: 1,

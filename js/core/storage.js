@@ -252,6 +252,7 @@ export function saveModel() {
     sectionColors: data.sectionColors,
     subtitleColors: data.subtitleColors,
     collapsedSubtitles: data.collapsedSubtitles,
+    cardNotes: data.cardNotes,
     header: data.header,
     darkMode: data.darkMode,
     timers: data.timers,
@@ -342,6 +343,10 @@ export async function restoreModel() {
 
     if (saved.collapsedSubtitles) {
       model.collapsedSubtitles = { ...model.collapsedSubtitles, ...saved.collapsedSubtitles };
+    }
+
+    if (saved.cardNotes) {
+      model.cardNotes = { ...model.cardNotes, ...saved.cardNotes };
     }
 
     if (saved.header) {
@@ -538,6 +543,9 @@ export function deepMergeModel(target, source) {
   }
   if (source.header) {
     target.header = { ...target.header, ...source.header };
+  }
+  if (source.cardNotes) {
+    target.cardNotes = { ...(target.cardNotes || {}), ...source.cardNotes };
   }
   if (source.reminders) {
     target.reminders = JSON.parse(JSON.stringify(source.reminders));
