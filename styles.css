@@ -1257,7 +1257,7 @@ h2, h3 { margin: 0 0 16px; }
   box-shadow: 0 4px 12px rgba(0,0,0,0.15);
   z-index: 10;
   transition: all 0.2s ease;
-  margin: 20px auto;
+  margin: -10px auto 30px auto; /* Negative top margin counteracts card's 40px bottom margin for centering */
 }
 
 
@@ -1397,11 +1397,10 @@ h2, h3 { margin: 0 0 16px; }
   position: absolute;
   top: 16px;
   right: 16px;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  background: #fee2e2;
-  color: #7f1d1d;
+  width: 28px;
+  height: 28px;
+  background: transparent;
+  color: var(--danger);
   border: none;
   cursor: pointer;
   font-size: 18px;
@@ -1409,22 +1408,23 @@ h2, h3 { margin: 0 0 16px; }
   display: none;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  opacity: 0.6;
   z-index: 20;
+  transition: opacity 0.2s, transform 0.2s;
 }
 .card.editing .card-delete-btn {
   display: flex;
 }
 .card-delete-btn:hover {
-  background: #fecaca;
-  transform: scale(1.1);
+  opacity: 1;
+  transform: scale(1.15);
 }
 
 /* Card reorder buttons */
 .card-reorder-buttons {
   position: absolute;
   top: 16px;
-  right: 56px; /* 16px (margin) + 32px (delete btn width) + 8px (gap) */
+  right: 52px; /* 16px (margin) + 28px (delete btn width) + 8px (gap) */
   display: none;
   flex-direction: row;
   gap: 4px;
@@ -3213,7 +3213,7 @@ body.stacked-mode .two-col .card .card-notepad-btn svg {
 
 body.stacked-mode .card.editing .card-notepad-btn,
 body.stacked-mode .two-col .card.editing .card-notepad-btn {
-  right: 42px;
+  display: none;
 }
 
 body.stacked-mode .card .card-notepad-btn.has-note::after,
@@ -3233,6 +3233,25 @@ body.stacked-mode .two-col .card .card-delete-btn {
   height: 24px;
   font-size: 16px;
   z-index: 20;
+}
+
+/* ===== UNIFORM REORDER BUTTONS - aligned with delete button ===== */
+body.stacked-mode .card .card-reorder-buttons,
+body.stacked-mode .two-col .card .card-reorder-buttons {
+  top: 10px;
+  right: 42px; /* 10px (margin) + 24px (delete btn width) + 8px (gap) */
+}
+
+body.stacked-mode .card .card-reorder-btn,
+body.stacked-mode .two-col .card .card-reorder-btn {
+  width: 24px;
+  height: 24px;
+}
+
+body.stacked-mode .card .card-reorder-btn svg,
+body.stacked-mode .two-col .card .card-reorder-btn svg {
+  width: 12px;
+  height: 12px;
 }
 
 /* ===== ICONS - 2x bigger (88px) for visibility ===== */
@@ -4202,9 +4221,9 @@ body.stacked-mode .gap-add-btn {
   border-radius: 50%;
 }
 
-/* Adjust delete button position when notepad button exists */
+/* Hide notepad button in edit mode */
 .card.editing .card-notepad-btn {
-  right: 48px;
+  display: none;
 }
 
 /* Notepad popover */

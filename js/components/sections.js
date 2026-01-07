@@ -168,7 +168,7 @@ export function createSectionElement(section) {
 
   sectionEl.appendChild(titleWrapper);
 
-  // Add notepad button (visible in both edit mode and view mode)
+  // Add notepad button (hidden in edit mode via CSS)
   const notepadBtn = document.createElement('button');
   notepadBtn.type = 'button';
   notepadBtn.className = 'card-notepad-btn';
