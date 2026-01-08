@@ -3329,6 +3329,22 @@ body.stacked-mode .card .days-badge {
   flex-shrink: 0;
 }
 
+/* Wide screen stacked mode - switch to two columns for subtasks/reminders/copy-paste */
+@media (min-width: 1400px) {
+  body.stacked-mode .card .unified-subtasks-group,
+  body.stacked-mode .card .unified-copypaste-group {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+
+  body.stacked-mode .card .unified-reminders-group {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+}
+
 /* Two-col cards - same styling */
 body.stacked-mode .two-col .card .unified-reminders-group,
 body.stacked-mode .two-col .card .unified-subtasks-group,
