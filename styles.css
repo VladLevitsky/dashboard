@@ -2856,7 +2856,7 @@ body[data-style="glass"] .card::after {
   right: -50px;
   bottom: -50px;
   background: radial-gradient(
-    circle 250px at calc(var(--mouse-x) + 50px) calc(var(--mouse-y) + 50px),
+    circle 200px at calc(var(--mouse-x) + 50px) calc(var(--mouse-y) + 50px),
     rgba(0, 0, 0, 0.049) 0%,
     rgba(0, 0, 0, 0.023) 30%,
     rgba(0, 0, 0, 0.009) 60%,
@@ -2864,13 +2864,13 @@ body[data-style="glass"] .card::after {
   );
   pointer-events: none;
   z-index: 1;
-  filter: blur(24px);
+  filter: blur(29px);
 }
 
 /* Dark mode - slightly more visible shadow */
 body[data-theme="dark"][data-style="glass"] .card::after {
   background: radial-gradient(
-    circle 250px at calc(var(--mouse-x) + 50px) calc(var(--mouse-y) + 50px),
+    circle 200px at calc(var(--mouse-x) + 50px) calc(var(--mouse-y) + 50px),
     rgba(0, 0, 0, 0.076) 0%,
     rgba(0, 0, 0, 0.038) 30%,
     rgba(0, 0, 0, 0.013) 60%,
