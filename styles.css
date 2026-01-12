@@ -64,7 +64,10 @@ body {
 }
 
 /* Header (top section) has no outer gaps above or on sides, only 40px bottom gap */
-.app-header.card { margin: 0 0 40px 0; }
+.app-header.card {
+  margin: 0 0 40px 0;
+  border-radius: 0;
+}
 /* Company logo with transform support */
 .company-logo-container {
   width: 216px;
@@ -2168,6 +2171,125 @@ section.card[id^="new-card-"].card-size-full {
   background: #2d4a70;
 }
 
+/* Appearance Modal */
+.appearance-modal { position: fixed; inset: 0; display: none; z-index: 2000; }
+.appearance-modal[hidden] { display: none; }
+.appearance-modal:not([hidden]) { display: flex; align-items: center; justify-content: center; }
+.appearance-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,0.4); }
+.appearance-dialog {
+  position: relative;
+  width: 340px;
+  background: var(--card);
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+  border: 1px solid #e5e7eb;
+  z-index: 1;
+}
+.appearance-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 20px; border-bottom: 1px solid #e5e7eb;
+}
+.appearance-header h4 { margin: 0; font-size: 18px; font-weight: 600; }
+.appearance-body { padding: 20px; }
+.appearance-section { margin-bottom: 20px; }
+.appearance-section:last-child { margin-bottom: 0; }
+.appearance-label { font-size: 13px; font-weight: 500; color: var(--muted); margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+.appearance-toggle-row { display: flex; gap: 10px; }
+.appearance-option {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 12px;
+  background: #f8fafc;
+  border: 2px solid #e5e7eb;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+}
+.appearance-option:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+.appearance-option.active {
+  background: #eef2ff;
+  border-color: var(--brand);
+  color: var(--brand);
+}
+.appearance-option svg {
+  width: 28px;
+  height: 28px;
+}
+.appearance-select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  background: #f8fafc;
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.appearance-select:hover {
+  border-color: #cbd5e1;
+}
+.appearance-select:focus {
+  outline: none;
+  border-color: var(--brand);
+}
+[data-theme="dark"] .appearance-select {
+  background: #334155;
+  border-color: #475569;
+}
+[data-theme="dark"] .appearance-select:hover {
+  border-color: #64748b;
+}
+
+.appearance-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 16px 20px;
+  border-top: 1px solid #e5e7eb;
+}
+.appearance-btn {
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: none;
+}
+.appearance-btn.secondary {
+  background: #f1f5f9;
+  color: var(--text);
+}
+.appearance-btn.secondary:hover {
+  background: #e2e8f0;
+}
+.appearance-btn.primary {
+  background: var(--brand);
+  color: white;
+}
+.appearance-btn.primary:hover {
+  background: #2563eb;
+}
+[data-theme="dark"] .appearance-dialog { border-color: #475569; }
+[data-theme="dark"] .appearance-header { border-color: #475569; }
+[data-theme="dark"] .appearance-actions { border-color: #475569; }
+[data-theme="dark"] .appearance-option { background: #334155; border-color: #475569; }
+[data-theme="dark"] .appearance-option:hover { background: #3d4f65; border-color: #64748b; }
+[data-theme="dark"] .appearance-option.active { background: #1e3a5f; border-color: var(--brand); }
+[data-theme="dark"] .appearance-btn.secondary { background: #334155; color: var(--text); }
+[data-theme="dark"] .appearance-btn.secondary:hover { background: #475569; }
+
 /* Copy-paste card styles */
 .copy-paste-list {
   display: block;
@@ -2531,6 +2653,247 @@ section.card[id^="new-card-"].card-size-full {
 [data-theme="dark"] .calendar-section input,
 [data-theme="dark"] .calendar-section select {
   border-color: #475569;
+}
+
+/* ========================================
+   GLASS MODE STYLES (Glassmorphism)
+   ======================================== */
+
+/* Glass mode - Body background (Classic theme - grey shades, default) */
+body[data-style="glass"],
+body[data-style="glass"][data-glass-theme="classic"] {
+  background: linear-gradient(135deg, #e2e8f0 0%, #cbd5e1 50%, #94a3b8 100%);
+  background-attachment: fixed;
+}
+
+body[data-theme="dark"][data-style="glass"],
+body[data-theme="dark"][data-style="glass"][data-glass-theme="classic"] {
+  background: linear-gradient(135deg, #1e293b 0%, #334155 50%, #475569 100%);
+  background-attachment: fixed;
+}
+
+/* Glass mode - Sunset theme */
+body[data-style="glass"][data-glass-theme="sunset"] {
+  background: linear-gradient(135deg, #ffeb99 0%, #f9be82 30%, #e4a87a 50%, #cbaed4 75%, #c19fcc 100%);
+  background-attachment: fixed;
+}
+
+body[data-theme="dark"][data-style="glass"][data-glass-theme="sunset"] {
+  background: linear-gradient(135deg, #4a2d1c 0%, #6b4028 30%, #7d4c34 50%, #553a5e 75%, #4a3555 100%);
+  background-attachment: fixed;
+}
+
+/* Sunset theme - More blur on cards for dreamy effect */
+body[data-style="glass"][data-glass-theme="sunset"] .card,
+body[data-style="glass"][data-glass-theme="sunset"] .app-header.card {
+  background: rgba(255, 255, 255, 0.5) !important;
+  backdrop-filter: blur(40px) !important;
+  -webkit-backdrop-filter: blur(40px) !important;
+}
+
+body[data-theme="dark"][data-style="glass"][data-glass-theme="sunset"] .card,
+body[data-theme="dark"][data-style="glass"][data-glass-theme="sunset"] .app-header.card {
+  background: rgba(30, 41, 59, 0.5) !important;
+  backdrop-filter: blur(40px) !important;
+  -webkit-backdrop-filter: blur(40px) !important;
+}
+
+/* Glass mode - Light theme cards */
+body[data-style="glass"] .card,
+body[data-style="glass"] .app-header.card {
+  background: rgba(255, 255, 255, 0.7) !important;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.3) !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+}
+
+body[data-style="glass"] .unified-icon-btn,
+body[data-style="glass"] .icon-btn,
+body[data-style="glass"] .icon-button {
+  background: rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+}
+
+body[data-style="glass"] .unified-icon-btn:hover,
+body[data-style="glass"] .icon-btn:hover,
+body[data-style="glass"] .icon-button:hover {
+  background: rgba(255, 255, 255, 0.7);
+}
+
+body[data-style="glass"] .unified-reminder-item,
+body[data-style="glass"] .reminder-item {
+  background: rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+}
+
+body[data-style="glass"] .unified-reminder-item:hover,
+body[data-style="glass"] .reminder-item:hover {
+  background: rgba(255, 255, 255, 0.7);
+}
+
+body[data-style="glass"] .unified-subtask-item,
+body[data-style="glass"] .list-item {
+  background: rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+}
+
+body[data-style="glass"] .unified-subtask-item:hover,
+body[data-style="glass"] .list-item:hover {
+  background: rgba(255, 255, 255, 0.7);
+}
+
+body[data-style="glass"] .unified-copypaste-item,
+body[data-style="glass"] .copy-paste-item {
+  background: rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+}
+
+body[data-style="glass"] .unified-copypaste-item:hover,
+body[data-style="glass"] .copy-paste-item:hover {
+  background: rgba(255, 255, 255, 0.7);
+}
+
+/* Glass mode - Add tiles */
+body[data-style="glass"] .add-tile {
+  background: rgba(255, 255, 255, 0.35);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 2px dashed rgba(255, 255, 255, 0.5);
+}
+
+/* Glass mode - Dark theme cards */
+body[data-theme="dark"][data-style="glass"] .card,
+body[data-theme="dark"][data-style="glass"] .app-header.card {
+  background: rgba(30, 41, 59, 0.7) !important;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(71, 85, 105, 0.3) !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+body[data-theme="dark"][data-style="glass"] .unified-icon-btn,
+body[data-theme="dark"][data-style="glass"] .icon-btn,
+body[data-theme="dark"][data-style="glass"] .icon-button {
+  background: rgba(51, 65, 85, 0.6);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(71, 85, 105, 0.4);
+}
+
+body[data-theme="dark"][data-style="glass"] .unified-icon-btn:hover,
+body[data-theme="dark"][data-style="glass"] .icon-btn:hover,
+body[data-theme="dark"][data-style="glass"] .icon-button:hover {
+  background: rgba(51, 65, 85, 0.75);
+}
+
+body[data-theme="dark"][data-style="glass"] .unified-reminder-item,
+body[data-theme="dark"][data-style="glass"] .reminder-item {
+  background: rgba(51, 65, 85, 0.6);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(71, 85, 105, 0.4);
+}
+
+body[data-theme="dark"][data-style="glass"] .unified-reminder-item:hover,
+body[data-theme="dark"][data-style="glass"] .reminder-item:hover {
+  background: rgba(51, 65, 85, 0.75);
+}
+
+body[data-theme="dark"][data-style="glass"] .unified-subtask-item,
+body[data-theme="dark"][data-style="glass"] .list-item {
+  background: rgba(51, 65, 85, 0.6);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(71, 85, 105, 0.4);
+}
+
+body[data-theme="dark"][data-style="glass"] .unified-subtask-item:hover,
+body[data-theme="dark"][data-style="glass"] .list-item:hover {
+  background: rgba(51, 65, 85, 0.75);
+}
+
+body[data-theme="dark"][data-style="glass"] .unified-copypaste-item,
+body[data-theme="dark"][data-style="glass"] .copy-paste-item {
+  background: rgba(51, 65, 85, 0.6);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(71, 85, 105, 0.4);
+}
+
+body[data-theme="dark"][data-style="glass"] .unified-copypaste-item:hover,
+body[data-theme="dark"][data-style="glass"] .copy-paste-item:hover {
+  background: rgba(51, 65, 85, 0.75);
+}
+
+/* Glass mode - Dark add tiles */
+body[data-theme="dark"][data-style="glass"] .add-tile {
+  background: rgba(55, 65, 81, 0.4);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 2px dashed rgba(75, 85, 99, 0.5);
+}
+
+/* Glass mode - Mouse shadow effect on cards */
+body[data-style="glass"] .card {
+  --mouse-x: -1000px;
+  --mouse-y: -1000px;
+}
+
+body[data-style="glass"] .card::after {
+  content: '';
+  position: absolute;
+  top: -50px;
+  left: -50px;
+  right: -50px;
+  bottom: -50px;
+  background: radial-gradient(
+    circle 250px at calc(var(--mouse-x) + 50px) calc(var(--mouse-y) + 50px),
+    rgba(0, 0, 0, 0.049) 0%,
+    rgba(0, 0, 0, 0.023) 30%,
+    rgba(0, 0, 0, 0.009) 60%,
+    transparent 100%
+  );
+  pointer-events: none;
+  z-index: 1;
+  filter: blur(24px);
+}
+
+/* Dark mode - slightly more visible shadow */
+body[data-theme="dark"][data-style="glass"] .card::after {
+  background: radial-gradient(
+    circle 250px at calc(var(--mouse-x) + 50px) calc(var(--mouse-y) + 50px),
+    rgba(0, 0, 0, 0.076) 0%,
+    rgba(0, 0, 0, 0.038) 30%,
+    rgba(0, 0, 0, 0.013) 60%,
+    transparent 100%
+  );
+}
+
+
+/* Glass mode - Popovers and modals */
+body[data-style="glass"] .edit-popover,
+body[data-style="glass"] .calendar-popover,
+body[data-style="glass"] .interval-popover {
+  background: rgba(255, 255, 255, 0.9) !important;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+body[data-theme="dark"][data-style="glass"] .edit-popover,
+body[data-theme="dark"][data-style="glass"] .calendar-popover,
+body[data-theme="dark"][data-style="glass"] .interval-popover {
+  background: rgba(30, 41, 59, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
 }
 
 /* ========================================

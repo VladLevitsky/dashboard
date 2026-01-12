@@ -29,7 +29,7 @@ export function toggleEditMode() {
   $('#edit-toggle').classList.toggle('active', editState.enabled);
   if (window.refreshEditingClasses) window.refreshEditingClasses();
   $('#edit-fab-group').hidden = !editState.enabled;
-  $('#dark-mode-toggle').hidden = !editState.enabled;
+  $('#appearance-toggle').hidden = !editState.enabled;
 
   $('#override-links').hidden = !editState.enabled;
   $('#import-links').hidden = !editState.enabled;
@@ -213,15 +213,29 @@ export function openEditPopover(targetEl, values, onDone, cursorPos) {
 export function applyDarkMode() {
   const isDark = model.darkMode;
   document.body.setAttribute('data-theme', isDark ? 'dark' : 'light');
-  const btn = $('#dark-mode-toggle');
-  if (btn) {
-    btn.classList.toggle('active', isDark);
+}
+
+// --- Apply Glass Mode
+export function applyGlassMode() {
+  const isGlass = model.glassMode;
+  document.body.setAttribute('data-style', isGlass ? 'glass' : 'solid');
+
+  // Show/hide glass theme section in modal
+  const glassThemeSection = $('#glass-theme-section');
+  if (glassThemeSection) {
+    glassThemeSection.hidden = !isGlass;
   }
 }
 
-// --- Toggle Dark Mode
-export function toggleDarkMode() {
-  model.darkMode = !model.darkMode;
+// --- Apply Glass Theme
+export function applyGlassTheme() {
+  const theme = model.glassTheme || 'classic';
+  document.body.setAttribute('data-glass-theme', theme);
+}
+
+// --- Set Dark Mode (used by appearance modal)
+export function setDarkMode(isDark) {
+  model.darkMode = isDark;
   // Also update working copy if in edit mode
   if (editState.working) {
     editState.working.darkMode = model.darkMode;
@@ -243,6 +257,237 @@ export function toggleDarkMode() {
   // Update timer displays immediately to reflect new theme
   if (window.timerInterval && model.timeTrackingExpanded) {
     if (window.updateTimerDisplay) window.updateTimerDisplay();
+  }
+
+  // Update appearance modal buttons
+  updateAppearanceModalButtons();
+}
+
+// --- Set Glass Mode (used by appearance modal)
+export function setGlassMode(isGlass) {
+  model.glassMode = isGlass;
+  // Also update working copy if in edit mode
+  if (editState.working) {
+    editState.working.glassMode = model.glassMode;
+  }
+  applyGlassMode();
+
+  // Re-render sections to update glass mode transparency styles
+  if (window.renderAllSections) {
+    window.renderAllSections();
+  }
+
+  // Re-add card buttons if in edit mode (after re-render)
+  if (editState.enabled) {
+    if (window.addCardButtons) window.addCardButtons();
+    if (window.refreshEditingClasses) window.refreshEditingClasses();
+  }
+
+  // Update appearance modal buttons
+  updateAppearanceModalButtons();
+}
+
+// --- Set Glass Theme (used by appearance modal)
+export function setGlassTheme(theme) {
+  model.glassTheme = theme;
+  // Also update working copy if in edit mode
+  if (editState.working) {
+    editState.working.glassTheme = model.glassTheme;
+  }
+  applyGlassTheme();
+
+  // Update the dropdown
+  const select = $('#glass-theme-select');
+  if (select) {
+    select.value = theme;
+  }
+}
+
+// --- Toggle Dark Mode (legacy function, kept for compatibility)
+export function toggleDarkMode() {
+  setDarkMode(!model.darkMode);
+}
+
+// --- Appearance Modal State (stores original values for cancel)
+let appearanceOriginalState = null;
+
+// --- Open Appearance Modal
+export function openAppearanceModal() {
+  const modal = $('#appearance-modal');
+  if (modal) {
+    // Store original state for cancel
+    appearanceOriginalState = {
+      darkMode: model.darkMode,
+      glassMode: model.glassMode,
+      glassTheme: model.glassTheme
+    };
+    modal.hidden = false;
+    updateAppearanceModalButtons();
+
+    // Show/hide glass theme section based on current glass mode
+    const glassThemeSection = $('#glass-theme-section');
+    if (glassThemeSection) {
+      glassThemeSection.hidden = !model.glassMode;
+    }
+  }
+}
+
+// --- Close Appearance Modal (just hides, doesn't save or revert)
+export function closeAppearanceModal() {
+  const modal = $('#appearance-modal');
+  if (modal) {
+    modal.hidden = true;
+  }
+  appearanceOriginalState = null;
+}
+
+// --- Accept Appearance Changes (save and close)
+export function acceptAppearanceChanges() {
+  // Changes are already applied to model, just save and close
+  saveModel();
+  closeAppearanceModal();
+  showToast('Appearance saved');
+}
+
+// --- Cancel Appearance Changes (revert and close)
+export function cancelAppearanceChanges() {
+  if (appearanceOriginalState) {
+    // Revert to original state
+    model.darkMode = appearanceOriginalState.darkMode;
+    model.glassMode = appearanceOriginalState.glassMode;
+    model.glassTheme = appearanceOriginalState.glassTheme;
+
+    // Also update working copy if in edit mode
+    if (editState.working) {
+      editState.working.darkMode = model.darkMode;
+      editState.working.glassMode = model.glassMode;
+      editState.working.glassTheme = model.glassTheme;
+    }
+
+    // Apply the reverted states
+    applyDarkMode();
+    applyGlassMode();
+    applyGlassTheme();
+
+    // Re-render if dark mode changed
+    if (window.renderAllSections) {
+      window.renderAllSections();
+    }
+    if (editState.enabled) {
+      if (window.addCardButtons) window.addCardButtons();
+      if (window.refreshEditingClasses) window.refreshEditingClasses();
+    }
+  }
+  closeAppearanceModal();
+}
+
+// --- Update appearance modal button states
+function updateAppearanceModalButtons() {
+  const modal = $('#appearance-modal');
+  if (!modal || modal.hidden) return;
+
+  // Update theme buttons
+  modal.querySelectorAll('.appearance-option[data-theme]').forEach(btn => {
+    const isLight = btn.dataset.theme === 'light';
+    const isActive = isLight ? !model.darkMode : model.darkMode;
+    btn.classList.toggle('active', isActive);
+  });
+
+  // Update style buttons
+  modal.querySelectorAll('.appearance-option[data-style]').forEach(btn => {
+    const isSolid = btn.dataset.style === 'solid';
+    const isActive = isSolid ? !model.glassMode : model.glassMode;
+    btn.classList.toggle('active', isActive);
+  });
+
+  // Update glass theme dropdown visibility and value
+  const glassThemeSection = $('#glass-theme-section');
+  const glassThemeSelect = $('#glass-theme-select');
+  if (glassThemeSection) {
+    glassThemeSection.hidden = !model.glassMode;
+  }
+  if (glassThemeSelect) {
+    glassThemeSelect.value = model.glassTheme || 'classic';
+  }
+}
+
+// --- Wire Appearance Modal Events (called from init)
+export function wireAppearanceModalEvents() {
+  const modal = $('#appearance-modal');
+  if (!modal) return;
+
+  // Close button (X) acts as cancel
+  const closeBtn = $('#appearance-close');
+  if (closeBtn) {
+    closeBtn.addEventListener('click', cancelAppearanceChanges);
+  }
+
+  // Backdrop click acts as cancel
+  const backdrop = modal.querySelector('.appearance-backdrop');
+  if (backdrop) {
+    backdrop.addEventListener('click', cancelAppearanceChanges);
+  }
+
+  // Cancel button
+  const cancelBtn = $('#appearance-cancel');
+  if (cancelBtn) {
+    cancelBtn.addEventListener('click', cancelAppearanceChanges);
+  }
+
+  // Accept button
+  const acceptBtn = $('#appearance-accept');
+  if (acceptBtn) {
+    acceptBtn.addEventListener('click', acceptAppearanceChanges);
+  }
+
+  // Theme option buttons (apply immediately for preview)
+  modal.querySelectorAll('.appearance-option[data-theme]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const isDark = btn.dataset.theme === 'dark';
+      // Apply immediately but don't save yet
+      model.darkMode = isDark;
+      if (editState.working) {
+        editState.working.darkMode = isDark;
+      }
+      applyDarkMode();
+      updateAppearanceModalButtons();
+
+      // Re-render sections for theme colors
+      if (window.renderAllSections) {
+        window.renderAllSections();
+      }
+      if (editState.enabled) {
+        if (window.addCardButtons) window.addCardButtons();
+        if (window.refreshEditingClasses) window.refreshEditingClasses();
+      }
+    });
+  });
+
+  // Style option buttons (apply immediately for preview)
+  modal.querySelectorAll('.appearance-option[data-style]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const isGlass = btn.dataset.style === 'glass';
+      // Apply immediately but don't save yet
+      model.glassMode = isGlass;
+      if (editState.working) {
+        editState.working.glassMode = isGlass;
+      }
+      applyGlassMode();
+      updateAppearanceModalButtons();
+    });
+  });
+
+  // Glass theme dropdown (apply immediately for preview)
+  const glassThemeSelect = $('#glass-theme-select');
+  if (glassThemeSelect) {
+    glassThemeSelect.addEventListener('change', () => {
+      const theme = glassThemeSelect.value;
+      model.glassTheme = theme;
+      if (editState.working) {
+        editState.working.glassTheme = theme;
+      }
+      applyGlassTheme();
+    });
   }
 }
 

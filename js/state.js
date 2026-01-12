@@ -59,6 +59,8 @@ export const model = {
     profilePhotoYPercent: 0,
   },
   darkMode: false,
+  glassMode: false,  // 'glass' style (glassmorphism) vs 'solid' style
+  glassTheme: 'classic',  // 'classic' (grey) or 'sunset' (orange/purple gradient)
   reminders: {},
 
   dailyTasks: [],

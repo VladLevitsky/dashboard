@@ -4,7 +4,7 @@
 // Import core modules
 import { model, editState, dragState, currentData, currentSections, ensureSectionInBothArrays, removeSectionFromBothArrays } from './state.js';
 import { PLACEHOLDER_URL, icons, LINK_ICON_SVG, TIMER_UPDATE_INTERVAL_MS, ANIMATION_DELAY_MS, CARD_HIDE_DELAY_MS, APP_VERSION, STORAGE_KEY, MEDIA_STORAGE_KEY, LINKS_FILE_PATH, MEDIA_MANIFEST_PATH } from './constants.js';
-import { $, $$, openUrl, deepClone, generateKey, showToast, getColorForCurrentMode, setColorForCurrentMode, lightenAndDesaturateColor, darkenColor, convertToDarkModeColor, lightenColorBy20Percent, getSectionDataKey, generateSectionId, generateUniqueCardTitle, fileToDataURL, copyToClipboard } from './utils.js';
+import { $, $$, openUrl, deepClone, generateKey, showToast, getColorForCurrentMode, setColorForCurrentMode, lightenAndDesaturateColor, darkenColor, convertToDarkModeColor, lightenColorBy20Percent, colorToGlassRgba, isGlassModeActive, getSectionDataKey, generateSectionId, generateUniqueCardTitle, fileToDataURL, copyToClipboard } from './utils.js';
 import { saveModel, restoreModel, exportBackupFile, deepMergeModel, cleanupOldBackups } from './core/storage.js';
 
 // Import feature modules
@@ -15,7 +15,17 @@ import {
   hideIntervalPopover,
   openEditPopover,
   applyDarkMode,
+  applyGlassMode,
+  applyGlassTheme,
   toggleDarkMode,
+  setDarkMode,
+  setGlassMode,
+  setGlassTheme,
+  openAppearanceModal,
+  closeAppearanceModal,
+  acceptAppearanceChanges,
+  cancelAppearanceChanges,
+  wireAppearanceModalEvents,
   refreshEditingClasses,
   markDirtyAndSave,
   confirmGlobalEdit,
@@ -229,6 +239,8 @@ window.lightenAndDesaturateColor = lightenAndDesaturateColor;
 window.darkenColor = darkenColor;
 window.convertToDarkModeColor = convertToDarkModeColor;
 window.lightenColorBy20Percent = lightenColorBy20Percent;
+window.colorToGlassRgba = colorToGlassRgba;
+window.isGlassModeActive = isGlassModeActive;
 window.getSectionDataKey = getSectionDataKey;
 window.generateSectionId = generateSectionId;
 window.generateUniqueCardTitle = generateUniqueCardTitle;
@@ -249,7 +261,17 @@ window.hideCalendarPopover = hideCalendarPopover;
 window.hideIntervalPopover = hideIntervalPopover;
 window.openEditPopover = openEditPopover;
 window.applyDarkMode = applyDarkMode;
+window.applyGlassMode = applyGlassMode;
+window.applyGlassTheme = applyGlassTheme;
 window.toggleDarkMode = toggleDarkMode;
+window.setDarkMode = setDarkMode;
+window.setGlassTheme = setGlassTheme;
+window.setGlassMode = setGlassMode;
+window.openAppearanceModal = openAppearanceModal;
+window.closeAppearanceModal = closeAppearanceModal;
+window.acceptAppearanceChanges = acceptAppearanceChanges;
+window.cancelAppearanceChanges = cancelAppearanceChanges;
+window.wireAppearanceModalEvents = wireAppearanceModalEvents;
 window.refreshEditingClasses = refreshEditingClasses;
 window.markDirtyAndSave = markDirtyAndSave;
 window.confirmGlobalEdit = confirmGlobalEdit;

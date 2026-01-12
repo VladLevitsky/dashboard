@@ -255,6 +255,8 @@ export function saveModel() {
     cardNotes: data.cardNotes,
     header: data.header,
     darkMode: data.darkMode,
+    glassMode: data.glassMode,
+    glassTheme: data.glassTheme,
     timers: data.timers,
     timeTrackingExpanded: data.timeTrackingExpanded,
     quickAccessExpanded: data.quickAccessExpanded,
@@ -355,6 +357,14 @@ export async function restoreModel() {
 
     if (typeof saved.darkMode === 'boolean') {
       model.darkMode = saved.darkMode;
+    }
+
+    if (typeof saved.glassMode === 'boolean') {
+      model.glassMode = saved.glassMode;
+    }
+
+    if (saved.glassTheme) {
+      model.glassTheme = saved.glassTheme;
     }
 
     // Note: Legacy reminders/dailyTasks/etc. arrays are now migrated to unified format
@@ -560,6 +570,12 @@ export function deepMergeModel(target, source) {
   }
   if (typeof source.darkMode !== 'undefined') {
     target.darkMode = source.darkMode;
+  }
+  if (typeof source.glassMode !== 'undefined') {
+    target.glassMode = source.glassMode;
+  }
+  if (typeof source.glassTheme !== 'undefined') {
+    target.glassTheme = source.glassTheme;
   }
   if (typeof source.timeTrackingExpanded !== 'undefined') {
     target.timeTrackingExpanded = source.timeTrackingExpanded;

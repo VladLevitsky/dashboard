@@ -126,6 +126,8 @@ export function extractUrlOverrides() {
 
   // UI state
   obj.darkMode = data.darkMode || false;
+  obj.glassMode = data.glassMode || false;
+  obj.glassTheme = data.glassTheme || 'classic';
   obj.timeTrackingExpanded = data.timeTrackingExpanded || false;
   obj.quickAccessExpanded = data.quickAccessExpanded || false;
   obj.selectorModeActive = data.selectorModeActive || false;
@@ -749,6 +751,12 @@ export function applyUrlOverrides(data) {
   if (typeof data.darkMode === 'boolean') {
     current.darkMode = data.darkMode;
   }
+  if (typeof data.glassMode === 'boolean') {
+    current.glassMode = data.glassMode;
+  }
+  if (data.glassTheme) {
+    current.glassTheme = data.glassTheme;
+  }
   if (typeof data.timeTrackingExpanded === 'boolean') {
     current.timeTrackingExpanded = data.timeTrackingExpanded;
   }
@@ -797,6 +805,8 @@ export function applyUrlOverrides(data) {
       collapsedSubtitles: current.collapsedSubtitles,
       header: current.header,
       darkMode: current.darkMode,
+      glassMode: current.glassMode,
+      glassTheme: current.glassTheme,
       timers: current.timers,
       timeTrackingExpanded: current.timeTrackingExpanded,
       quickAccessExpanded: current.quickAccessExpanded,

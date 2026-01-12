@@ -266,6 +266,45 @@ export function lightenColorBy20Percent(color) {
   return color;
 }
 
+// Convert a color to semi-transparent rgba for glass mode
+// Returns rgba string with specified opacity (default 0.45)
+export function colorToGlassRgba(color, opacity = 0.45) {
+  if (!color) return null;
+
+  // Handle rgb/rgba format
+  if (color.startsWith('rgb')) {
+    const matches = color.match(/\d+\.?\d*/g);
+    if (matches && matches.length >= 3) {
+      const r = parseInt(matches[0]);
+      const g = parseInt(matches[1]);
+      const b = parseInt(matches[2]);
+      return `rgba(${r}, ${g}, ${b}, ${opacity})`;
+    }
+  }
+
+  // Handle hex format
+  if (color.startsWith('#')) {
+    let hex = color.slice(1);
+    if (hex.length === 3) {
+      hex = hex.split('').map(c => c + c).join('');
+    }
+
+    const r = parseInt(hex.substr(0, 2), 16);
+    const g = parseInt(hex.substr(2, 2), 16);
+    const b = parseInt(hex.substr(4, 2), 16);
+
+    return `rgba(${r}, ${g}, ${b}, ${opacity})`;
+  }
+
+  // Return original if format not recognized
+  return color;
+}
+
+// Check if glass mode is currently active
+export function isGlassModeActive() {
+  return window.model && window.model.glassMode === true;
+}
+
 // --- Section data key mapping
 export function getSectionDataKey(sectionType) {
   const mapping = {

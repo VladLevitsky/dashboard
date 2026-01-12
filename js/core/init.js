@@ -9,7 +9,11 @@ import {
   toggleEditMode,
   hideEditPopover,
   applyDarkMode,
+  applyGlassMode,
+  applyGlassTheme,
   toggleDarkMode,
+  openAppearanceModal,
+  wireAppearanceModalEvents,
   refreshEditingClasses,
   markDirtyAndSave,
   openEditPopover,
@@ -68,17 +72,62 @@ let cardsCollapsed = false;
 let currentCopyTextItem = null;
 let currentCopyTextSection = null;
 
+// ===== GLASS MODE SHADOW EFFECT =====
+
+// Track the last hovered card to reset mouse position when leaving
+let lastHoveredCard = null;
+
+// Initialize mouse tracking for glass mode shadow effect (cards only)
+function initGlassGlowEffect() {
+  document.addEventListener('mousemove', (e) => {
+    if (!model.glassMode) return;
+
+    const card = e.target.closest('.card');
+
+    // Reset previous card if we moved to a different one
+    if (lastHoveredCard && lastHoveredCard !== card) {
+      lastHoveredCard.style.setProperty('--mouse-x', '-1000px');
+      lastHoveredCard.style.setProperty('--mouse-y', '-1000px');
+    }
+
+    // Update card shadow position
+    if (card) {
+      const rect = card.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      card.style.setProperty('--mouse-x', `${x}px`);
+      card.style.setProperty('--mouse-y', `${y}px`);
+      lastHoveredCard = card;
+    } else {
+      lastHoveredCard = null;
+    }
+  });
+
+  // Reset shadow when mouse leaves the window
+  document.addEventListener('mouseleave', () => {
+    if (lastHoveredCard) {
+      lastHoveredCard.style.setProperty('--mouse-x', '-1000px');
+      lastHoveredCard.style.setProperty('--mouse-y', '-1000px');
+      lastHoveredCard = null;
+    }
+  });
+}
+
 // ===== INITIALIZATION =====
 
 export async function init() {
   await restoreModel();
 
   applyDarkMode();
+  applyGlassMode();
+  applyGlassTheme();
   applyDisplayMode();
+  initGlassGlowEffect();
   if (window.renderHeaderAndTitles) window.renderHeaderAndTitles();
   if (window.renderAllSections) window.renderAllSections();
   wireUI();
   wireNotepadEvents();
+  wireAppearanceModalEvents();
   ensureSectionPlusButtons();
   refreshEditingClasses();
 
@@ -425,7 +474,7 @@ export function renderHeaderAndTitles() {
 
 export function wireUI() {
   $('#edit-toggle').addEventListener('click', toggleEditMode);
-  $('#dark-mode-toggle').addEventListener('click', toggleDarkMode);
+  $('#appearance-toggle').addEventListener('click', openAppearanceModal);
 
   // Time tracking event handlers
   $('#time-tracking-toggle').addEventListener('click', toggleTimeTracking);

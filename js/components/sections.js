@@ -2,7 +2,7 @@
 // Handles all section rendering (icons, lists, reminders, copy-paste)
 
 import { editState, currentData, currentSections } from '../state.js';
-import { $, $$, openUrl, generateKey, getSectionDataKey, getColorForCurrentMode, darkenColor, lightenAndDesaturateColor } from '../utils.js';
+import { $, $$, openUrl, generateKey, getSectionDataKey, getColorForCurrentMode, darkenColor, lightenAndDesaturateColor, colorToGlassRgba, isGlassModeActive } from '../utils.js';
 import { PLACEHOLDER_URL, icons, LINK_ICON_SVG } from '../constants.js';
 import { markDirtyAndSave, openEditPopover, openSubtitleColorPicker } from '../features/edit-mode.js';
 import { initializeDragHandlers, initializeItemDragHandlers, initializeContainerDragHandlers, initializeReminderDragHandlers, handleDragOver, handleDrop } from '../features/drag-drop.js';
@@ -655,8 +655,16 @@ export function renderListForSection(sectionEl, sectionId, isTools) {
       const defaultColorLight = isTools ? '#e6fff3' : '#fff4e5';
       const defaultColorDark = isTools ? '#1e3a3a' : '#334155';
       const effectiveColor = getColorForCurrentMode(data.sectionColors[sectionId], defaultColorLight, defaultColorDark);
-      div.style.background = effectiveColor;
-      div.style.borderColor = darkenColor(effectiveColor);
+      // Apply glass mode transparency if active
+      if (isGlassModeActive()) {
+        div.style.background = colorToGlassRgba(effectiveColor, 0.55);
+        div.style.backdropFilter = 'blur(8px)';
+        div.style.webkitBackdropFilter = 'blur(8px)';
+        div.style.borderColor = colorToGlassRgba(darkenColor(effectiveColor), 0.5);
+      } else {
+        div.style.background = effectiveColor;
+        div.style.borderColor = darkenColor(effectiveColor);
+      }
     }
 
     const a = document.createElement('a');
@@ -761,8 +769,16 @@ export function renderListForSection(sectionEl, sectionId, isTools) {
       const defaultColorDark = isTools ? '#1e3a3a' : '#334155';
       const baseColor = getColorForCurrentMode(data.sectionColors[sectionId], defaultColorLight, defaultColorDark);
       const lighterColor = lightenAndDesaturateColor(baseColor);
-      add.style.background = lighterColor;
-      add.style.borderColor = darkenColor(lighterColor);
+      // Apply glass mode transparency if active
+      if (isGlassModeActive()) {
+        add.style.background = colorToGlassRgba(lighterColor, 0.35);
+        add.style.backdropFilter = 'blur(8px)';
+        add.style.webkitBackdropFilter = 'blur(8px)';
+        add.style.borderColor = colorToGlassRgba(darkenColor(lighterColor), 0.5);
+      } else {
+        add.style.background = lighterColor;
+        add.style.borderColor = darkenColor(lighterColor);
+      }
     }
 
     add.addEventListener('click', (e) => {
@@ -891,8 +907,16 @@ export function renderRemindersForSection(sectionEl) {
         const defaultColorLight = '#f7fafc';
         const defaultColorDark = '#334155';
         const effectiveColor = getColorForCurrentMode(subtitleColor, defaultColorLight, defaultColorDark);
-        div.style.background = effectiveColor;
-        div.style.borderColor = darkenColor(effectiveColor);
+        // Apply glass mode transparency if active
+        if (isGlassModeActive()) {
+          div.style.background = colorToGlassRgba(effectiveColor, 0.55);
+          div.style.backdropFilter = 'blur(8px)';
+          div.style.webkitBackdropFilter = 'blur(8px)';
+          div.style.borderColor = colorToGlassRgba(darkenColor(effectiveColor), 0.5);
+        } else {
+          div.style.background = effectiveColor;
+          div.style.borderColor = darkenColor(effectiveColor);
+        }
         div.dataset.customColor = JSON.stringify(subtitleColor);
       }
 
@@ -1180,8 +1204,16 @@ export function renderCopyPasteForSection(sectionEl, sectionId) {
         const defaultColorLight = '#f7fafc';
         const defaultColorDark = '#334155';
         const effectiveColor = getColorForCurrentMode(subtitleColor, defaultColorLight, defaultColorDark);
-        div.style.background = effectiveColor;
-        div.style.borderColor = darkenColor(effectiveColor);
+        // Apply glass mode transparency if active
+        if (isGlassModeActive()) {
+          div.style.background = colorToGlassRgba(effectiveColor, 0.55);
+          div.style.backdropFilter = 'blur(8px)';
+          div.style.webkitBackdropFilter = 'blur(8px)';
+          div.style.borderColor = colorToGlassRgba(darkenColor(effectiveColor), 0.5);
+        } else {
+          div.style.background = effectiveColor;
+          div.style.borderColor = darkenColor(effectiveColor);
+        }
       }
 
       const textSpan = document.createElement('span');
@@ -1766,8 +1798,16 @@ function createUnifiedSubtaskItem(item, sectionId, subtitle, subtitleColor) {
     const defaultColorLight = '#f7fafc';
     const defaultColorDark = '#334155';
     const effectiveColor = getColorForCurrentMode(subtitleColor, defaultColorLight, defaultColorDark);
-    div.style.background = effectiveColor;
-    div.style.borderColor = darkenColor(effectiveColor);
+    // Apply glass mode transparency if active
+    if (isGlassModeActive()) {
+      div.style.background = colorToGlassRgba(effectiveColor, 0.55);
+      div.style.backdropFilter = 'blur(8px)';
+      div.style.webkitBackdropFilter = 'blur(8px)';
+      div.style.borderColor = colorToGlassRgba(darkenColor(effectiveColor), 0.5);
+    } else {
+      div.style.background = effectiveColor;
+      div.style.borderColor = darkenColor(effectiveColor);
+    }
   }
 
   const a = document.createElement('a');
@@ -1877,8 +1917,16 @@ function createUnifiedReminderItem(rem, sectionId, subtitle, subtitleColor) {
     const defaultColorLight = '#f7fafc';
     const defaultColorDark = '#334155';
     const effectiveColor = getColorForCurrentMode(subtitleColor, defaultColorLight, defaultColorDark);
-    div.style.background = effectiveColor;
-    div.style.borderColor = darkenColor(effectiveColor);
+    // Apply glass mode transparency if active
+    if (isGlassModeActive()) {
+      div.style.background = colorToGlassRgba(effectiveColor, 0.55);
+      div.style.backdropFilter = 'blur(8px)';
+      div.style.webkitBackdropFilter = 'blur(8px)';
+      div.style.borderColor = colorToGlassRgba(darkenColor(effectiveColor), 0.5);
+    } else {
+      div.style.background = effectiveColor;
+      div.style.borderColor = darkenColor(effectiveColor);
+    }
     div.dataset.customColor = JSON.stringify(subtitleColor);
   }
 
@@ -2098,8 +2146,16 @@ function createUnifiedCopyPasteItem(item, sectionId, subtitle, subtitleColor) {
     const defaultColorLight = '#f7fafc';
     const defaultColorDark = '#334155';
     const effectiveColor = getColorForCurrentMode(subtitleColor, defaultColorLight, defaultColorDark);
-    div.style.background = effectiveColor;
-    div.style.borderColor = darkenColor(effectiveColor);
+    // Apply glass mode transparency if active
+    if (isGlassModeActive()) {
+      div.style.background = colorToGlassRgba(effectiveColor, 0.55);
+      div.style.backdropFilter = 'blur(8px)';
+      div.style.webkitBackdropFilter = 'blur(8px)';
+      div.style.borderColor = colorToGlassRgba(darkenColor(effectiveColor), 0.5);
+    } else {
+      div.style.background = effectiveColor;
+      div.style.borderColor = darkenColor(effectiveColor);
+    }
   }
 
   const textSpan = document.createElement('span');
