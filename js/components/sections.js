@@ -1975,7 +1975,7 @@ function createUnifiedReminderItem(rem, sectionId, subtitle, subtitleColor) {
       e.stopPropagation();
       e.preventDefault();
       if (window.openCalendarPopover) {
-        window.openCalendarPopover(rem, subtitle, sectionId);
+        window.openCalendarPopover(rem, e);
       }
     });
     editBtns.appendChild(calBtn);
