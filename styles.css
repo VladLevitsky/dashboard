@@ -1185,9 +1185,9 @@ h2, h3 { margin: 0 0 16px; }
 
 /* Calendar popover for reminder scheduling */
 .calendar-popover {
-  position: absolute; width: 320px; background: var(--card);
+  position: fixed; width: 320px; background: var(--card);
   border-radius: 12px; box-shadow: var(--shadow); border: 1px solid #e5e7eb;
-  z-index: 1000;
+  z-index: 1000; max-height: calc(100vh - 20px); overflow-y: auto;
 }
 .calendar-header {
   display: flex; align-items: center; justify-content: space-between;

@@ -230,15 +230,11 @@ export function openCalendarPopover(reminder, event) {
   const weeklyTypeSelect = $('#calendar-weekly-type');
   const weeklyOptions = $('#weekly-options');
 
-  // Position the popover near the cursor and within the viewport
+  // Position the popover near the cursor and within the viewport (fixed positioning)
   if (event) {
     const popoverWidth = 320;
-    const popoverHeight = 350; // Approximate height
+    const popoverHeight = 380; // Approximate max height
     const margin = 10;
-
-    // Get scroll offsets for absolute positioning
-    const scrollX = window.scrollX || window.pageXOffset;
-    const scrollY = window.scrollY || window.pageYOffset;
 
     let left = event.clientX;
     let top = event.clientY;
@@ -259,9 +255,9 @@ export function openCalendarPopover(reminder, event) {
       top = margin;
     }
 
-    // Add scroll offset for absolute positioning
-    pop.style.left = `${left + scrollX}px`;
-    pop.style.top = `${top + scrollY}px`;
+    // Fixed positioning - relative to viewport, no scroll offset needed
+    pop.style.left = `${left}px`;
+    pop.style.top = `${top}px`;
     pop.style.bottom = 'auto';
   }
 
