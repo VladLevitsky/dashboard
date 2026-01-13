@@ -2,7 +2,7 @@
 // Handles reminder and list item tasks modals and toggles
 // Tasks are color-coded items (red/yellow/green) that can be reordered and color-changed in view mode
 
-import { currentData } from '../state.js';
+import { currentData, currentSections } from '../state.js';
 import { $, showToast } from '../utils.js';
 import { markDirtyAndSave } from './edit-mode.js';
 import { saveModel } from '../core/storage.js';
@@ -1032,4 +1032,141 @@ export function closeAllListItemTasks() {
     }
     btn._tasksContainer = null;
   });
+}
+
+// ============================================================
+// TASKS SUMMARY MODAL (Header summary view)
+// ============================================================
+
+// --- Open tasks summary modal
+export function openTasksSummaryModal() {
+  const modal = $('#tasks-summary-modal');
+  const content = $('#tasks-summary-content');
+  if (!modal || !content) return;
+
+  content.innerHTML = '';
+  const data = currentData();
+  const sections = currentSections();
+  let hasAnyTasks = false;
+
+  sections.forEach(section => {
+    if (section.type !== 'unified') return;
+    const cardData = data[section.id];
+    if (!cardData) return;
+
+    for (const [subtitle, subtitleData] of Object.entries(cardData)) {
+      if (!subtitleData) continue;
+
+      // Check reminders
+      if (subtitleData.reminders) {
+        subtitleData.reminders.forEach(rem => {
+          if (rem.tasks && rem.tasks.length > 0) {
+            hasAnyTasks = true;
+            renderTaskSummaryGroup(content, rem.title || rem.key, rem.tasks, 'reminder', rem.key, section.id);
+          }
+        });
+      }
+
+      // Check subtasks
+      if (subtitleData.subtasks) {
+        subtitleData.subtasks.forEach(item => {
+          if (item.tasks && item.tasks.length > 0) {
+            hasAnyTasks = true;
+            renderTaskSummaryGroup(content, item.text || item.key, item.tasks, 'subtask', item.key, section.id);
+          }
+        });
+      }
+    }
+  });
+
+  if (!hasAnyTasks) {
+    content.innerHTML = '<div class="tasks-summary-empty">No tasks found</div>';
+  }
+
+  modal.hidden = false;
+}
+
+// --- Render a task group in the summary modal
+function renderTaskSummaryGroup(container, title, tasks, itemType, itemKey, sectionId) {
+  const groupDiv = document.createElement('div');
+  groupDiv.className = 'tasks-summary-group';
+
+  const titleDiv = document.createElement('div');
+  titleDiv.className = 'tasks-summary-group-title';
+  titleDiv.textContent = title;
+  groupDiv.appendChild(titleDiv);
+
+  const bubblesDiv = document.createElement('div');
+  bubblesDiv.className = 'tasks-summary-bubbles';
+
+  tasks.forEach((task, index) => {
+    const bubble = document.createElement('div');
+    bubble.className = `tasks-summary-bubble task-bubble-${task.color}`;
+    bubble.textContent = task.title || 'Task';
+    bubble.dataset.index = index;
+    bubble.dataset.itemType = itemType;
+    bubble.dataset.itemKey = itemKey;
+    bubble.dataset.sectionId = sectionId;
+
+    // Click to cycle color
+    bubble.addEventListener('click', () => {
+      cycleTaskColorInSummary(bubble, itemType, itemKey, sectionId, index);
+    });
+
+    bubblesDiv.appendChild(bubble);
+  });
+
+  groupDiv.appendChild(bubblesDiv);
+  container.appendChild(groupDiv);
+}
+
+// --- Cycle task color from summary modal
+function cycleTaskColorInSummary(bubbleEl, itemType, itemKey, sectionId, taskIndex) {
+  const data = currentData();
+  const cardData = data[sectionId];
+  if (!cardData) return;
+
+  let actualItem = null;
+
+  // Find the item (reminder or subtask)
+  for (const [subtitle, subtitleData] of Object.entries(cardData)) {
+    if (!subtitleData) continue;
+
+    if (itemType === 'reminder' && subtitleData.reminders) {
+      const found = subtitleData.reminders.find(r => r.key === itemKey);
+      if (found) {
+        actualItem = found;
+        break;
+      }
+    } else if (itemType === 'subtask' && subtitleData.subtasks) {
+      const found = subtitleData.subtasks.find(s => s.key === itemKey);
+      if (found) {
+        actualItem = found;
+        break;
+      }
+    }
+  }
+
+  if (!actualItem || !actualItem.tasks || !actualItem.tasks[taskIndex]) return;
+
+  const actualTask = actualItem.tasks[taskIndex];
+  const currentColorIndex = COLOR_CYCLE.indexOf(actualTask.color);
+  const nextIndex = (currentColorIndex + 1) % COLOR_CYCLE.length;
+  const newColor = COLOR_CYCLE[nextIndex];
+
+  actualTask.color = newColor;
+
+  // Update bubble class in summary modal
+  bubbleEl.className = `tasks-summary-bubble task-bubble-${newColor}`;
+
+  // Save the change
+  saveModel();
+}
+
+// --- Close tasks summary modal
+export function closeTasksSummaryModal() {
+  const modal = $('#tasks-summary-modal');
+  if (modal) {
+    modal.hidden = true;
+  }
 }

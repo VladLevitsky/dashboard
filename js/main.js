@@ -210,7 +210,9 @@ import {
   cancelListItemTasksModal,
   saveListItemTasksModal,
   toggleListItemTasks,
-  closeAllListItemTasks
+  closeAllListItemTasks,
+  openTasksSummaryModal,
+  closeTasksSummaryModal
 } from './features/tasks.js';
 
 import {
@@ -459,6 +461,8 @@ window.cancelListItemTasksModal = cancelListItemTasksModal;
 window.saveListItemTasksModal = saveListItemTasksModal;
 window.toggleListItemTasks = toggleListItemTasks;
 window.closeAllListItemTasks = closeAllListItemTasks;
+window.openTasksSummaryModal = openTasksSummaryModal;
+window.closeTasksSummaryModal = closeTasksSummaryModal;
 
 // Image Editor
 window.openImageEditor = openImageEditor;

@@ -24,7 +24,8 @@
       "Bash(git -C \"C:\\\\Users\\\\vlevitsky\\\\Documents\\\\Personal Dashboard - New\" log --oneline --all --decorate -10)",
       "Bash(git -C \"C:\\\\Users\\\\vlevitsky\\\\Documents\\\\Personal Dashboard - New\" ls-tree -r HEAD --name-only)",
       "Bash(git -C \"C:\\\\Users\\\\vlevitsky\\\\Documents\\\\Personal Dashboard - New\" restore app-reference.js)",
-      "Bash(git -C \"C:\\\\Users\\\\vlevitsky\\\\Documents\\\\Personal Dashboard - New\" diff --stat)"
+      "Bash(git -C \"C:\\\\Users\\\\vlevitsky\\\\Documents\\\\Personal Dashboard - New\" diff --stat)",
+      "Bash(echo:*)"
     ],
     "deny": [],
     "ask": []

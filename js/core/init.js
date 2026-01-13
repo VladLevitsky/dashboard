@@ -57,7 +57,9 @@ import {
 } from '../features/links.js';
 import {
   closeAllReminderTasks,
-  closeAllListItemTasks
+  closeAllListItemTasks,
+  openTasksSummaryModal,
+  closeTasksSummaryModal
 } from '../features/tasks.js';
 import {
   renderBreakdownRows,
@@ -500,6 +502,23 @@ export function wireUI() {
 
   // Display mode toggle
   $('#display-mode-toggle').addEventListener('click', openDisplayModeModal);
+
+  // Tasks summary toggle
+  const tasksSummaryToggle = $('#tasks-summary-toggle');
+  if (tasksSummaryToggle) {
+    tasksSummaryToggle.addEventListener('click', openTasksSummaryModal);
+  }
+
+  // Tasks summary modal close handlers
+  const tasksSummaryClose = $('#tasks-summary-close');
+  if (tasksSummaryClose) {
+    tasksSummaryClose.addEventListener('click', closeTasksSummaryModal);
+  }
+
+  const tasksSummaryBackdrop = document.querySelector('.tasks-summary-backdrop');
+  if (tasksSummaryBackdrop) {
+    tasksSummaryBackdrop.addEventListener('click', closeTasksSummaryModal);
+  }
 
   // Quick access event handlers
   $('#quick-access-toggle').addEventListener('click', toggleQuickAccess);
