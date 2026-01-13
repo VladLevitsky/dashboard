@@ -3,7 +3,7 @@
 
 // Import core modules
 import { model, editState, dragState, currentData, currentSections, ensureSectionInBothArrays, removeSectionFromBothArrays } from './state.js';
-import { PLACEHOLDER_URL, icons, LINK_ICON_SVG, TIMER_UPDATE_INTERVAL_MS, ANIMATION_DELAY_MS, CARD_HIDE_DELAY_MS, APP_VERSION, STORAGE_KEY, MEDIA_STORAGE_KEY, LINKS_FILE_PATH, MEDIA_MANIFEST_PATH } from './constants.js';
+import { PLACEHOLDER_URL, icons, LINK_ICON_SVG, TASKS_ICON_SVG, TIMER_UPDATE_INTERVAL_MS, ANIMATION_DELAY_MS, CARD_HIDE_DELAY_MS, APP_VERSION, STORAGE_KEY, MEDIA_STORAGE_KEY, LINKS_FILE_PATH, MEDIA_MANIFEST_PATH } from './constants.js';
 import { $, $$, openUrl, deepClone, generateKey, showToast, getColorForCurrentMode, setColorForCurrentMode, lightenAndDesaturateColor, darkenColor, convertToDarkModeColor, lightenColorBy20Percent, colorToGlassRgba, isGlassModeActive, getSectionDataKey, generateSectionId, generateUniqueCardTitle, fileToDataURL, copyToClipboard } from './utils.js';
 import { saveModel, restoreModel, exportBackupFile, deepMergeModel, cleanupOldBackups } from './core/storage.js';
 
@@ -197,6 +197,23 @@ import {
 } from './features/links.js';
 
 import {
+  openTasksModal,
+  renderTaskRows,
+  addTaskRow,
+  cancelTasksModal,
+  saveTasksModal,
+  toggleReminderTasks,
+  closeAllReminderTasks,
+  openListItemTasksModal,
+  renderListItemTaskRows,
+  addListItemTaskRow,
+  cancelListItemTasksModal,
+  saveListItemTasksModal,
+  toggleListItemTasks,
+  closeAllListItemTasks
+} from './features/tasks.js';
+
+import {
   openImageEditor,
   closeImageEditor,
   applyProfilePhotoTransform,
@@ -217,6 +234,7 @@ window.removeSectionFromBothArrays = removeSectionFromBothArrays;
 window.PLACEHOLDER_URL = PLACEHOLDER_URL;
 window.icons = icons;
 window.LINK_ICON_SVG = LINK_ICON_SVG;
+window.TASKS_ICON_SVG = TASKS_ICON_SVG;
 window.TIMER_UPDATE_INTERVAL_MS = TIMER_UPDATE_INTERVAL_MS;
 window.ANIMATION_DELAY_MS = ANIMATION_DELAY_MS;
 window.CARD_HIDE_DELAY_MS = CARD_HIDE_DELAY_MS;
@@ -425,6 +443,22 @@ window.cancelListItemLinksModal = cancelListItemLinksModal;
 window.saveListItemLinksModal = saveListItemLinksModal;
 window.toggleListItemLinks = toggleListItemLinks;
 window.closeAllListItemLinks = closeAllListItemLinks;
+
+// Tasks
+window.openTasksModal = openTasksModal;
+window.renderTaskRows = renderTaskRows;
+window.addTaskRow = addTaskRow;
+window.cancelTasksModal = cancelTasksModal;
+window.saveTasksModal = saveTasksModal;
+window.toggleReminderTasks = toggleReminderTasks;
+window.closeAllReminderTasks = closeAllReminderTasks;
+window.openListItemTasksModal = openListItemTasksModal;
+window.renderListItemTaskRows = renderListItemTaskRows;
+window.addListItemTaskRow = addListItemTaskRow;
+window.cancelListItemTasksModal = cancelListItemTasksModal;
+window.saveListItemTasksModal = saveListItemTasksModal;
+window.toggleListItemTasks = toggleListItemTasks;
+window.closeAllListItemTasks = closeAllListItemTasks;
 
 // Image Editor
 window.openImageEditor = openImageEditor;

@@ -3,7 +3,7 @@
 
 import { editState, currentData, currentSections } from '../state.js';
 import { $, $$, openUrl, generateKey, getSectionDataKey, getColorForCurrentMode, darkenColor, lightenAndDesaturateColor, colorToGlassRgba, isGlassModeActive } from '../utils.js';
-import { PLACEHOLDER_URL, icons, LINK_ICON_SVG } from '../constants.js';
+import { PLACEHOLDER_URL, icons, LINK_ICON_SVG, TASKS_ICON_SVG } from '../constants.js';
 import { markDirtyAndSave, openEditPopover, openSubtitleColorPicker } from '../features/edit-mode.js';
 import { initializeDragHandlers, initializeItemDragHandlers, initializeContainerDragHandlers, initializeReminderDragHandlers, handleDragOver, handleDrop } from '../features/drag-drop.js';
 import { createCardDeleteButton, createCardReorderButtons, createTwoColReorderButtons } from '../features/cards.js';
@@ -1834,8 +1834,22 @@ function createUnifiedSubtaskItem(item, sectionId, subtitle, subtitleColor) {
       }
     });
 
+    const tasksBtn = document.createElement('button');
+    tasksBtn.type = 'button';
+    tasksBtn.className = 'list-item-tasks-btn';
+    tasksBtn.innerHTML = TASKS_ICON_SVG;
+    tasksBtn.title = 'Manage tasks';
+    tasksBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      if (window.openListItemTasksModal) {
+        window.openListItemTasksModal(item, sectionId);
+      }
+    });
+
     div.appendChild(contentWrapper);
     div.appendChild(linksBtn);
+    div.appendChild(tasksBtn);
   } else {
     a.style.pointerEvents = 'none';
     div.style.cursor = 'pointer';
@@ -1861,12 +1875,28 @@ function createUnifiedSubtaskItem(item, sectionId, subtitle, subtitleColor) {
       leftContainer.appendChild(linksToggleBtn);
     }
 
+    if (item.tasks && item.tasks.length > 0) {
+      const tasksToggleBtn = document.createElement('button');
+      tasksToggleBtn.type = 'button';
+      tasksToggleBtn.className = 'list-item-tasks-toggle';
+      tasksToggleBtn.innerHTML = TASKS_ICON_SVG;
+      tasksToggleBtn.title = `${item.tasks.length} task${item.tasks.length > 1 ? 's' : ''}`;
+      tasksToggleBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        if (window.toggleListItemTasks) {
+          window.toggleListItemTasks(item, sectionId, tasksToggleBtn);
+        }
+      });
+      leftContainer.appendChild(tasksToggleBtn);
+    }
+
     div.appendChild(leftContainer);
   }
 
   div.addEventListener('click', (e) => {
     if (!editState.enabled) {
-      if (e.target.closest('.list-item-links-toggle')) return;
+      if (e.target.closest('.list-item-links-toggle') || e.target.closest('.list-item-tasks-toggle')) return;
       e.preventDefault();
       const url = div.dataset.url;
       if (url && url !== PLACEHOLDER_URL) {
@@ -1874,7 +1904,7 @@ function createUnifiedSubtaskItem(item, sectionId, subtitle, subtitleColor) {
       }
       return;
     }
-    if (e.target.closest('.list-item-links-btn')) return;
+    if (e.target.closest('.list-item-links-btn') || e.target.closest('.list-item-tasks-btn')) return;
     e.preventDefault();
     openEditPopover(div, { text: item.text, url: item.url, allowDelete: true }, ({ text, url, delete: doDelete, accept }) => {
       if (!accept) return;
@@ -1957,6 +1987,23 @@ function createUnifiedReminderItem(rem, sectionId, subtitle, subtitleColor) {
       }
     });
     leftContainer.appendChild(linksToggleBtn);
+  }
+
+  // Tasks toggle button in view mode
+  if (!editState.enabled && rem.tasks && rem.tasks.length > 0) {
+    const tasksToggleBtn = document.createElement('button');
+    tasksToggleBtn.type = 'button';
+    tasksToggleBtn.className = 'reminder-tasks-toggle';
+    tasksToggleBtn.innerHTML = TASKS_ICON_SVG;
+    tasksToggleBtn.title = `${rem.tasks.length} task${rem.tasks.length > 1 ? 's' : ''}`;
+    tasksToggleBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      if (window.toggleReminderTasks) {
+        window.toggleReminderTasks(rem.key, subtitle, sectionId, tasksToggleBtn);
+      }
+    });
+    leftContainer.appendChild(tasksToggleBtn);
   }
 
   div.appendChild(leftContainer);
@@ -2058,6 +2105,21 @@ function createUnifiedReminderItem(rem, sectionId, subtitle, subtitleColor) {
     });
     editBtns.appendChild(linksBtn);
 
+    // Tasks button
+    const tasksBtn = document.createElement('button');
+    tasksBtn.type = 'button';
+    tasksBtn.className = 'tasks-btn';
+    tasksBtn.title = 'Manage tasks';
+    tasksBtn.innerHTML = TASKS_ICON_SVG;
+    tasksBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      if (window.openTasksModal) {
+        window.openTasksModal(rem);
+      }
+    });
+    editBtns.appendChild(tasksBtn);
+
     div.appendChild(editBtns);
 
     // Make title editable - directly open edit popover when title is clicked
@@ -2092,7 +2154,8 @@ function createUnifiedReminderItem(rem, sectionId, subtitle, subtitleColor) {
   // Click handler for editing (edit mode) or opening URL (view mode)
   div.addEventListener('click', (e) => {
     if (e.target.closest('.calendar-btn') || e.target.closest('.hashtag-btn') ||
-        e.target.closest('.links-btn') || e.target.closest('.reminder-links-toggle')) {
+        e.target.closest('.links-btn') || e.target.closest('.reminder-links-toggle') ||
+        e.target.closest('.tasks-btn') || e.target.closest('.reminder-tasks-toggle')) {
       return;
     }
 

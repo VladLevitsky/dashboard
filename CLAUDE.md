@@ -122,6 +122,21 @@ User-specific data (links, reminders, settings) is stored in the browser's Local
   - Click any bubble to open URL in new tab
   - Click outside to close expanded links
 
+#### Tasks System
+- Add color-coded tasks (red/yellow/green) to any reminder or subtask
+- **Edit Mode**: Click tasks icon (workflow icon) to open tasks modal
+  - Add tasks with title and color (red, yellow, or green)
+  - Select color using three colored circle buttons
+  - Reorder or delete tasks as needed
+- **View Mode**: If tasks exist, tasks icon appears next to title
+  - Click icon to expand/collapse task bubbles
+  - Tasks appear as pill-shaped bubbles with their assigned color
+  - **Animation**: Bubbles fly in with staggered timing, fade out simultaneously
+  - **Interactive**: Click any bubble to cycle its color (red → yellow → green → red)
+  - **Drag to Reorder**: Drag bubbles up/down to reorder tasks
+  - Changes persist immediately (no need to enter edit mode)
+  - Click outside to close expanded tasks
+
 ### 4. Media Library
 - Store and manage images for customization
 - Upload multiple images at once
@@ -256,9 +271,10 @@ const model = {
         intervalType?: 'goal' | 'limit',
         intervalUnit?: 'none' | 'dollar' | 'percent',
         breakdown?: { locked: boolean, rows: [{ label, value }] },
-        links?: [{ title: string, url: string }]
+        links?: [{ title: string, url: string }],
+        tasks?: [{ title: string, color: 'red' | 'yellow' | 'green' }]
       }],
-      subtasks: [{ key: string, text: string, url: string, links?: [] }],
+      subtasks: [{ key: string, text: string, url: string, links?: [], tasks?: [] }],
       copyPaste: [{ key: string, text: string, copyText: string }]
     },
     "_default": { ... }  // Used when no subtitles
@@ -323,7 +339,8 @@ Personal Dashboard/
 │   │   ├── image-editor.js # Profile photo and logo positioning/scaling editor
 │   │   ├── reminders.js    # Reminder rendering, calendar/interval popovers, breakdown modal
 │   │   ├── cards.js        # Card CRUD, reorder buttons, card type selector
-│   │   └── links.js        # Reminder and list item links modals
+│   │   ├── links.js        # Reminder and list item links modals
+│   │   └── tasks.js        # Reminder and list item tasks (color-coded items)
 │   └── components/
 │       └── sections.js     # Section rendering (icons, lists, reminders, copy-paste)
 ├── data/
@@ -394,6 +411,8 @@ The application uses ES6 modules with a clear separation of concerns:
 - `openBreakdownModal(reminder)`: Open breakdown editor
 - `openLinksModal(reminder, subtitle, sectionId)`: Open links editor modal for reminders
 - `openListItemLinksModal(item, sectionId)`: Open links editor modal for list items
+- `openTasksModal(reminder)`: Open tasks editor modal for reminders
+- `openListItemTasksModal(item, sectionId)`: Open tasks editor modal for list items
 - `openColorPicker(sectionId, sectionType)`: Open color picker for section bubbles
 - `openSubtitleColorPicker(sectionId, subtitle)`: Open color picker for subtitle bubbles
 - `openImageEditor(currentSrc, currentZoom, currentX, currentY, onSave, type)`: Open image positioning/scaling editor
@@ -420,6 +439,10 @@ The application uses ES6 modules with a clear separation of concerns:
 - `toggleReminderLinks(reminderKey, subtitle, sectionId, buttonEl)`: Toggle reminder link bubbles display
 - `toggleListItemLinks(item, sectionId, buttonEl)`: Toggle list item link bubbles display
 - `closeAllReminderLinks()`: Close all open reminder link bubble containers
+- `toggleReminderTasks(reminderKey, subtitle, sectionId, buttonEl)`: Toggle reminder task bubbles display
+- `toggleListItemTasks(item, sectionId, buttonEl)`: Toggle list item task bubbles display
+- `closeAllReminderTasks()`: Close all open reminder task bubble containers
+- `closeAllListItemTasks()`: Close all open list item task bubble containers
 - `closeAllListItemLinks()`: Close all open list item link bubble containers
 - `lightenColorBy20Percent(color)`: Lighten RGB color for link bubbles
 
@@ -890,6 +913,9 @@ editState.working = deepClone(model);
 - **Display Mode Toggle**: Switch between normal and stacked (two-column) layouts
 - **Independent Display Mode Ordering**: Each display mode maintains its own card order
 - **Drag-and-Drop Card Reordering**: Full drag-drop support for cards and items
+- **Tasks Feature**: Add color-coded tasks (red/yellow/green) to reminders and subtasks
+  - Interactive view mode: click to cycle color, drag to reorder
+  - Changes persist immediately without needing edit mode
 
 ### Recent Updates (v3.0)
 - **Reminders as Unified Item Type**:
@@ -982,6 +1008,7 @@ editState.working = deepClone(model);
 - `js/features/reminders.js`: ~680 lines - Reminder system
 - `js/features/cards.js`: ~610 lines - Card management
 - `js/features/links.js`: ~490 lines - Links feature
+- `js/features/tasks.js`: ~550 lines - Tasks feature (color-coded items)
 - `js/components/sections.js`: ~1100 lines - Section rendering
 - `data/user_links.json`: Example data structure
 
@@ -1023,6 +1050,13 @@ editState.working = deepClone(model);
 - `.list-item-links-btn` - Edit mode link button (list items)
 - `.reminder-links-expanded` - Expanded links container
 - `.reminder-link-bubble` - Individual link pill
+- `.reminder-tasks-toggle` - View mode tasks button (reminders)
+- `.list-item-tasks-toggle` - View mode tasks button (list items)
+- `.tasks-btn` - Edit mode tasks button (reminders)
+- `.list-item-tasks-btn` - Edit mode tasks button (list items)
+- `.reminder-tasks-expanded` - Expanded tasks container
+- `.reminder-task-bubble` - Individual task pill (color-coded)
+- `.task-bubble-red/yellow/green` - Task bubble color variants
 - `.color-picker-modal` - Color picker overlay
 
 ### Important IDs
@@ -1035,6 +1069,8 @@ editState.working = deepClone(model);
 - `#card-type-popover` - Card type selector
 - `#reminder-links-modal` - Links editor modal (reminders)
 - `#list-item-links-modal` - Links editor modal (list items)
+- `#reminder-tasks-modal` - Tasks editor modal (reminders)
+- `#list-item-tasks-modal` - Tasks editor modal (list items)
 
 ### Storage Keys
 - `personal_dashboard_model_v2` - Main data

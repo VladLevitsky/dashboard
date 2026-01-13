@@ -56,6 +56,10 @@ import {
   closeAllListItemLinks
 } from '../features/links.js';
 import {
+  closeAllReminderTasks,
+  closeAllListItemTasks
+} from '../features/tasks.js';
+import {
   renderBreakdownRows,
   updateBreakdownSum,
   cancelBreakdownModal,
@@ -369,6 +373,19 @@ export function setupCardCollapseExpand() {
       }
     }
 
+    // Check if there are any open task containers (reminder or list item tasks)
+    const openTaskContainers = document.querySelectorAll('.reminder-tasks-expanded');
+    if (openTaskContainers.length > 0) {
+      // If click is inside a task container or on a task toggle button, let it handle itself
+      const isInsideTasks = e.target.closest('.reminder-tasks-expanded, .reminder-tasks-toggle, .list-item-tasks-toggle');
+      if (!isInsideTasks) {
+        // Close all open task containers and prevent card collapse
+        closeAllReminderTasks();
+        closeAllListItemTasks();
+        return;
+      }
+    }
+
     const clickedCard = e.target.closest('.card');
     if (!clickedCard) return;
 
@@ -507,6 +524,16 @@ export function wireUI() {
     }
     if (!clickedOnListItemToggle && !clickedOnBubble) {
       closeAllListItemLinks();
+    }
+    // Close reminder and list item task bubbles when clicking outside
+    const clickedOnReminderTasksToggle = e.target.closest('.reminder-tasks-toggle');
+    const clickedOnListItemTasksToggle = e.target.closest('.list-item-tasks-toggle');
+    const clickedOnTaskBubble = e.target.closest('.reminder-task-bubble');
+    if (!clickedOnReminderTasksToggle && !clickedOnTaskBubble) {
+      closeAllReminderTasks();
+    }
+    if (!clickedOnListItemTasksToggle && !clickedOnTaskBubble) {
+      closeAllListItemTasks();
     }
     // Close display mode bubbles when clicking outside
     const clickedOnDisplayToggle = e.target.closest('#display-mode-toggle');

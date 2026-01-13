@@ -3425,6 +3425,497 @@ section.card.collapsed .section-icon {
 }
 
 /* ==================== */
+/* Tasks Feature Styling */
+/* ==================== */
+
+/* Tasks button in edit mode (next to links button) */
+.tasks-btn {
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  transition: all 0.2s ease;
+}
+
+.tasks-btn:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--brand);
+}
+
+.tasks-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+[data-theme="dark"] .tasks-btn {
+  color: #94a3b8;
+}
+[data-theme="dark"] .tasks-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #60a5fa;
+}
+
+/* List item tasks button */
+.list-item-tasks-btn {
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.list-item-tasks-btn:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--brand);
+}
+
+.list-item-tasks-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+[data-theme="dark"] .list-item-tasks-btn {
+  color: #94a3b8;
+}
+[data-theme="dark"] .list-item-tasks-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #60a5fa;
+}
+
+/* Tasks toggle button in view mode (next to title) */
+.reminder-tasks-toggle,
+.list-item-tasks-toggle {
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--brand);
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.reminder-tasks-toggle:hover,
+.list-item-tasks-toggle:hover {
+  transform: scale(1.1);
+}
+
+.reminder-tasks-toggle svg,
+.list-item-tasks-toggle svg {
+  width: 14px;
+  height: 14px;
+}
+
+[data-theme="dark"] .reminder-tasks-toggle,
+[data-theme="dark"] .list-item-tasks-toggle {
+  color: #cbd5e1;
+}
+[data-theme="dark"] .reminder-tasks-toggle:hover,
+[data-theme="dark"] .list-item-tasks-toggle:hover {
+  color: #f1f5f9;
+}
+
+/* Expanded tasks container */
+.reminder-tasks-expanded {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  z-index: 10000;
+  pointer-events: none;
+}
+
+.reminder-tasks-expanded.open {
+  pointer-events: auto;
+}
+
+.reminder-tasks-expanded.open .reminder-task-bubble {
+  animation: linkBubbleIn 0.3s ease forwards;
+}
+
+.reminder-tasks-expanded.closing .reminder-task-bubble {
+  animation: linkBubbleOut 0.25s ease forwards;
+}
+
+/* Individual task bubble - color-coded */
+.reminder-task-bubble {
+  display: inline-block;
+  padding: 8px 16px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  user-select: none;
+  transition: filter 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
+  opacity: 0;
+  transform: translateX(-20px) scale(0.5);
+  white-space: nowrap;
+  max-width: fit-content;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+
+.reminder-task-bubble:hover {
+  filter: brightness(0.95);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
+}
+
+.reminder-task-bubble:active {
+  transform: scale(0.95);
+}
+
+/* Task bubble color variants - Light mode (vibrant colors) */
+.task-bubble-red {
+  background: #fecaca;
+  border: 2px solid #f87171;
+  color: #991b1b;
+}
+
+.task-bubble-yellow {
+  background: #fde68a;
+  border: 2px solid #fbbf24;
+  color: #92400e;
+}
+
+.task-bubble-green {
+  background: #a7f3d0;
+  border: 2px solid #34d399;
+  color: #065f46;
+}
+
+/* Task bubble color variants - Dark mode (vibrant muted colors) */
+[data-theme="dark"] .task-bubble-red {
+  background: #7f1d1d;
+  border-color: #f87171;
+  color: #fecaca;
+}
+
+[data-theme="dark"] .task-bubble-yellow {
+  background: #78350f;
+  border-color: #fbbf24;
+  color: #fef08a;
+}
+
+[data-theme="dark"] .task-bubble-green {
+  background: #064e3b;
+  border-color: #34d399;
+  color: #a7f3d0;
+}
+
+[data-theme="dark"] .reminder-task-bubble {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+[data-theme="dark"] .reminder-task-bubble:hover {
+  filter: brightness(1.1);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5);
+}
+
+/* Drag styling for task bubbles */
+.reminder-task-bubble.dragging {
+  opacity: 0.5 !important;
+  cursor: grabbing;
+}
+
+/* Task drop indicator (blue line) */
+.task-drop-indicator {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--brand);
+  border-radius: 2px;
+  box-shadow: 0 0 8px rgba(44, 123, 229, 0.5);
+  pointer-events: none;
+  z-index: 10001;
+}
+
+[data-theme="dark"] .task-drop-indicator {
+  background: var(--brand);
+  box-shadow: 0 0 10px rgba(59, 130, 246, 0.6);
+}
+
+/* Tasks Modal Styling (reuses links modal structure) */
+.reminder-tasks-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.reminder-tasks-modal[hidden] {
+  display: none;
+}
+
+.reminder-tasks-dialog {
+  background: var(--card);
+  border-radius: 16px;
+  padding: 28px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  max-width: 550px;
+  width: 90%;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.reminder-tasks-dialog h3 {
+  margin: 0 0 20px;
+  font-size: 20px;
+  color: var(--text);
+}
+
+.reminder-tasks-content {
+  flex: 1;
+  overflow-y: auto;
+  margin-bottom: 20px;
+}
+
+.reminder-tasks-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.reminder-tasks-list {
+  position: relative;
+  padding-top: 4px;
+}
+
+.reminder-task-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  gap: 12px;
+  align-items: center;
+  cursor: grab;
+  background: var(--card);
+  padding: 4px;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  transition: opacity 0.15s ease;
+}
+
+.reminder-task-row:active {
+  cursor: grabbing;
+}
+
+.reminder-task-row.dragging {
+  opacity: 0.4;
+}
+
+/* Drag handle for task rows */
+.task-row-drag-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  cursor: grab;
+  padding: 4px;
+  border-radius: 4px;
+}
+
+.task-row-drag-handle:hover {
+  color: var(--text);
+  background: var(--bg);
+}
+
+.task-row-drag-handle:active {
+  cursor: grabbing;
+}
+
+/* Drop indicator line */
+.task-row-drop-indicator {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--brand);
+  border-radius: 2px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.1s ease;
+  z-index: 10;
+}
+
+.task-row-drop-indicator.visible {
+  opacity: 1;
+}
+
+.reminder-task-row .task-title-input {
+  padding: 10px 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 14px;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.reminder-task-row .task-title-input:focus {
+  outline: none;
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px rgba(44, 123, 229, 0.1);
+}
+
+[data-theme="dark"] .reminder-task-row .task-title-input {
+  background: #334155;
+  border-color: #475569;
+}
+
+[data-theme="dark"] .reminder-task-row .task-title-input:focus {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+}
+
+/* Color selector buttons */
+.task-color-selector {
+  display: flex;
+  gap: 6px;
+}
+
+.task-color-btn {
+  width: 28px;
+  height: 28px;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.task-color-btn:hover {
+  transform: scale(1.1);
+}
+
+.task-color-btn.active {
+  box-shadow: 0 0 0 3px var(--brand);
+  transform: scale(1.1);
+}
+
+[data-theme="dark"] .task-color-btn.active {
+  box-shadow: 0 0 0 3px var(--brand);
+}
+
+/* Color buttons match view mode bubble colors */
+.task-color-btn.red {
+  background: #fecaca;
+  border-color: #f87171;
+}
+
+.task-color-btn.yellow {
+  background: #fde68a;
+  border-color: #fbbf24;
+}
+
+.task-color-btn.green {
+  background: #a7f3d0;
+  border-color: #34d399;
+}
+
+[data-theme="dark"] .task-color-btn.red {
+  background: #7f1d1d;
+  border-color: #f87171;
+}
+
+[data-theme="dark"] .task-color-btn.yellow {
+  background: #78350f;
+  border-color: #fbbf24;
+}
+
+[data-theme="dark"] .task-color-btn.green {
+  background: #064e3b;
+  border-color: #34d399;
+}
+
+.btn-delete-task {
+  width: 36px;
+  height: 36px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  transition: all 0.2s ease;
+}
+
+.btn-delete-task:hover {
+  background: #fee2e2;
+  color: var(--danger);
+}
+
+[data-theme="dark"] .btn-delete-task:hover {
+  background: rgba(239, 68, 68, 0.2);
+}
+
+.btn-add-task {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 12px;
+  border: 2px dashed #c7d2fe;
+  background: #eef2ff;
+  color: #3730a3;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-add-task:hover {
+  background: #e0e7ff;
+  border-color: #a5b4fc;
+}
+
+[data-theme="dark"] .btn-add-task {
+  background: #374151;
+  border-color: #4b5563;
+  color: #cbd5e1;
+}
+
+[data-theme="dark"] .btn-add-task:hover {
+  background: #4b5563;
+}
+
+.reminder-tasks-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+/* ==================== */
 /* Display Mode Bubbles */
 /* ==================== */
 .display-mode-bubbles {

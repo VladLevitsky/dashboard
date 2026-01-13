@@ -53,3 +53,12 @@ export const LINK_ICON_SVG = `
     <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
   </svg>
 `;
+
+// Tasks icon SVG for reminder tasks and list item tasks (workflow/process icon)
+export const TASKS_ICON_SVG = `
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M6.2 5.1h12.9c1 0 1.8.6 1.8 1.4v4.1c0 .8-.8 1.4-1.8 1.4H4.7c-1 0-1.8.6-1.8 1.4v4.1c0 .8.8 1.4 1.8 1.4h13.1"/>
+    <circle cx="19.4" cy="18.9" r="1.6"/>
+    <circle cx="4.6" cy="5.1" r="1.6"/>
+  </svg>
+`;
