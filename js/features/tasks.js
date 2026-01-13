@@ -1100,6 +1100,9 @@ function renderTaskSummaryGroup(container, title, tasks, itemType, itemKey, sect
   bubblesDiv.className = 'tasks-summary-bubbles';
 
   tasks.forEach((task, index) => {
+    const rowDiv = document.createElement('div');
+    rowDiv.className = 'tasks-summary-row';
+
     const bubble = document.createElement('div');
     bubble.className = `tasks-summary-bubble task-bubble-${task.color}`;
     bubble.textContent = task.title || 'Task';
@@ -1109,15 +1112,66 @@ function renderTaskSummaryGroup(container, title, tasks, itemType, itemKey, sect
     bubble.dataset.sectionId = sectionId;
 
     // Click to cycle color
-    bubble.addEventListener('click', () => {
+    bubble.addEventListener('click', (e) => {
+      e.stopPropagation();
+      e.preventDefault();
       cycleTaskColorInSummary(bubble, itemType, itemKey, sectionId, index);
     });
 
-    bubblesDiv.appendChild(bubble);
+    // Arrow button to navigate to source
+    const arrowBtn = document.createElement('button');
+    arrowBtn.type = 'button';
+    arrowBtn.className = 'tasks-summary-goto-btn';
+    arrowBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M5 12h14M12 5l7 7-7 7"/>
+    </svg>`;
+    arrowBtn.title = 'Go to item';
+    arrowBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      navigateToTaskSource(itemType, itemKey, sectionId);
+    });
+
+    rowDiv.appendChild(bubble);
+    rowDiv.appendChild(arrowBtn);
+    bubblesDiv.appendChild(rowDiv);
   });
 
   groupDiv.appendChild(bubblesDiv);
   container.appendChild(groupDiv);
+}
+
+// --- Navigate to the source reminder/subtask
+function navigateToTaskSource(itemType, itemKey, sectionId) {
+  // Close the modal first
+  closeTasksSummaryModal();
+
+  // Find the element on the page
+  setTimeout(() => {
+    let targetElement = null;
+
+    if (itemType === 'reminder') {
+      // Look for reminder item with this key (unified or legacy)
+      targetElement = document.querySelector(`.unified-reminder-item[data-key="${itemKey}"]`);
+      if (!targetElement) {
+        targetElement = document.querySelector(`.reminder-item[data-key="${itemKey}"]`);
+      }
+    } else if (itemType === 'subtask') {
+      // Look for subtask item with this key
+      targetElement = document.querySelector(`.unified-subtask-item[data-key="${itemKey}"]`);
+    }
+
+    if (targetElement) {
+      // Scroll to the element
+      targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+      // Add a brief highlight effect
+      targetElement.classList.add('task-highlight');
+      setTimeout(() => {
+        targetElement.classList.remove('task-highlight');
+      }, 2000);
+    }
+  }, 100);
 }
 
 // --- Cycle task color from summary modal

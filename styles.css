@@ -1976,9 +1976,13 @@ section.card[id^="new-card-"].card-size-full {
 .list-item-left-container {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
   flex: 1;
   min-width: 0;
+}
+
+.list-item-left-container > a {
+  margin-right: 4px;
 }
 
 /* List item links toggle button in view mode */
@@ -3159,9 +3163,13 @@ section.card.collapsed .section-icon {
 .reminder-left-container {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
   flex: 1;
   min-width: 0;
+}
+
+.reminder-left-container > a {
+  margin-right: 4px;
 }
 
 /* Links toggle button in view mode (next to title) */
@@ -4817,8 +4825,12 @@ body.stacked-mode .gap-add-btn {
 .unified-subtask-left {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
   flex: 1;
+}
+
+.unified-subtask-left > a {
+  margin-right: 4px;
 }
 
 /* Unified Reminders Group */
@@ -4863,9 +4875,13 @@ body.stacked-mode .gap-add-btn {
 .unified-reminder-left {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
   flex: 1;
   min-width: 0;
+}
+
+.unified-reminder-left > a {
+  margin-right: 4px;
 }
 
 .unified-reminder-left a.reminder-title {
@@ -5381,6 +5397,50 @@ body.stacked-mode .gap-add-btn {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.tasks-summary-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tasks-summary-goto-btn {
+  width: 24px;
+  height: 24px;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.5;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.tasks-summary-goto-btn:hover {
+  color: var(--brand);
+  opacity: 1;
+  transform: translateX(2px);
+}
+
+/* Highlight effect when navigating to a task source */
+.task-highlight {
+  animation: taskHighlightPulse 2s ease-out;
+}
+
+@keyframes taskHighlightPulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(44, 123, 229, 0.6);
+  }
+  20% {
+    box-shadow: 0 0 0 8px rgba(44, 123, 229, 0.4);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(44, 123, 229, 0);
+  }
 }
 
 .tasks-summary-bubble {
