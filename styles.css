@@ -2920,8 +2920,8 @@ section.card.collapsed {
   overflow: visible !important;
 }
 
-section.card.collapsed[id] > *:not(h2):not(h3),
-section.card.collapsed > *:not(h2):not(h3) {
+section.card.collapsed[id] > *:not(h2):not(h3):not(.section-title-wrapper),
+section.card.collapsed > *:not(h2):not(h3):not(.section-title-wrapper) {
   display: none !important;
   height: 0 !important;
   margin: 0 !important;
@@ -2932,7 +2932,9 @@ section.card.collapsed > *:not(h2):not(h3) {
 section.card.collapsed[id] > h2,
 section.card.collapsed[id] > h3,
 section.card.collapsed > h2,
-section.card.collapsed > h3 {
+section.card.collapsed > h3,
+section.card.collapsed .section-title-wrapper,
+section.card.collapsed .section-title-wrapper h3 {
   margin: 0 !important;
   padding: 0 !important;
   line-height: 1 !important;
@@ -2941,6 +2943,11 @@ section.card.collapsed > h3 {
   display: block !important;
   vertical-align: top !important;
   cursor: pointer;
+}
+
+/* Hide extra elements inside section-title-wrapper when collapsed */
+section.card.collapsed .section-title-wrapper > *:not(h3):not(.section-title) {
+  display: none !important;
 }
 
 /* Two-column container collapsed state */
