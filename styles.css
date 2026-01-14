@@ -2255,6 +2255,54 @@ section.card[id^="new-card-"].card-size-full {
   border-color: #64748b;
 }
 
+/* Toggle Switch for Appearance Modal */
+.appearance-toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 48px;
+  height: 26px;
+  cursor: pointer;
+}
+.appearance-toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.appearance-toggle-slider {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #cbd5e1;
+  border-radius: 26px;
+  transition: 0.3s;
+}
+.appearance-toggle-slider::before {
+  position: absolute;
+  content: "";
+  height: 20px;
+  width: 20px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  border-radius: 50%;
+  transition: 0.3s;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+.appearance-toggle-switch input:checked + .appearance-toggle-slider {
+  background-color: var(--brand);
+}
+.appearance-toggle-switch input:checked + .appearance-toggle-slider::before {
+  transform: translateX(22px);
+}
+[data-theme="dark"] .appearance-toggle-slider {
+  background-color: #475569;
+}
+[data-theme="dark"] .appearance-toggle-slider::before {
+  background-color: #e2e8f0;
+}
+
 .appearance-actions {
   display: flex;
   justify-content: flex-end;
@@ -2852,7 +2900,7 @@ body[data-style="glass"] .card {
   --mouse-y: -1000px;
 }
 
-body[data-style="glass"] .card::after {
+body[data-style="glass"][data-cursor-shadow="on"] .card::after {
   content: '';
   position: absolute;
   top: -60px;
@@ -2885,7 +2933,7 @@ body[data-style="glass"] .card::after {
 }
 
 /* Dark mode - slightly more visible shadow */
-body[data-theme="dark"][data-style="glass"] .card::after {
+body[data-theme="dark"][data-style="glass"][data-cursor-shadow="on"] .card::after {
   background:
     /* Main soft elliptical shadow - elongated oval */
     radial-gradient(

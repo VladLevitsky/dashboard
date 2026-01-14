@@ -61,6 +61,7 @@ export const model = {
   darkMode: false,
   glassMode: false,  // 'glass' style (glassmorphism) vs 'solid' style
   glassTheme: 'classic',  // 'classic' (grey) or 'sunset' (orange/purple gradient)
+  glassCursorShadow: true,  // Whether to show cursor shadow effect in glass mode
   reminders: {},
 
   dailyTasks: [],

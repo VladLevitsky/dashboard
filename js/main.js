@@ -17,6 +17,7 @@ import {
   applyDarkMode,
   applyGlassMode,
   applyGlassTheme,
+  applyCursorShadow,
   toggleDarkMode,
   setDarkMode,
   setGlassMode,
@@ -283,6 +284,7 @@ window.openEditPopover = openEditPopover;
 window.applyDarkMode = applyDarkMode;
 window.applyGlassMode = applyGlassMode;
 window.applyGlassTheme = applyGlassTheme;
+window.applyCursorShadow = applyCursorShadow;
 window.toggleDarkMode = toggleDarkMode;
 window.setDarkMode = setDarkMode;
 window.setGlassTheme = setGlassTheme;

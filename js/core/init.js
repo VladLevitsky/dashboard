@@ -11,6 +11,7 @@ import {
   applyDarkMode,
   applyGlassMode,
   applyGlassTheme,
+  applyCursorShadow,
   toggleDarkMode,
   openAppearanceModal,
   wireAppearanceModalEvents,
@@ -86,7 +87,7 @@ let lastHoveredCard = null;
 // Initialize mouse tracking for glass mode shadow effect (cards only)
 function initGlassGlowEffect() {
   document.addEventListener('mousemove', (e) => {
-    if (!model.glassMode) return;
+    if (!model.glassMode || model.glassCursorShadow === false) return;
 
     const card = e.target.closest('.card');
 
@@ -127,6 +128,7 @@ export async function init() {
   applyDarkMode();
   applyGlassMode();
   applyGlassTheme();
+  applyCursorShadow();
   applyDisplayMode();
   initGlassGlowEffect();
   if (window.renderHeaderAndTitles) window.renderHeaderAndTitles();

@@ -257,6 +257,7 @@ export function saveModel() {
     darkMode: data.darkMode,
     glassMode: data.glassMode,
     glassTheme: data.glassTheme,
+    glassCursorShadow: data.glassCursorShadow,
     timers: data.timers,
     timeTrackingExpanded: data.timeTrackingExpanded,
     quickAccessExpanded: data.quickAccessExpanded,
@@ -365,6 +366,10 @@ export async function restoreModel() {
 
     if (saved.glassTheme) {
       model.glassTheme = saved.glassTheme;
+    }
+
+    if (typeof saved.glassCursorShadow === 'boolean') {
+      model.glassCursorShadow = saved.glassCursorShadow;
     }
 
     // Note: Legacy reminders/dailyTasks/etc. arrays are now migrated to unified format

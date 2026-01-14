@@ -240,6 +240,9 @@ User-specific data (links, reminders, settings) is stored in the browser's Local
 const model = {
   schemaVersion: 3,  // For data migration (3 = unified card with reminders)
   darkMode: boolean,
+  glassMode: boolean,  // Glass style (glassmorphism) vs solid style
+  glassTheme: 'classic' | 'sunset',  // Glass background gradient theme
+  glassCursorShadow: boolean,  // Whether to show cursor shadow effect in glass mode
   displayMode: 'normal' | 'stacked',
   sections: [
     {

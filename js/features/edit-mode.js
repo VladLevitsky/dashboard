@@ -225,12 +225,24 @@ export function applyGlassMode() {
   if (glassThemeSection) {
     glassThemeSection.hidden = !isGlass;
   }
+
+  // Show/hide cursor shadow section in modal
+  const cursorShadowSection = $('#cursor-shadow-section');
+  if (cursorShadowSection) {
+    cursorShadowSection.hidden = !isGlass;
+  }
 }
 
 // --- Apply Glass Theme
 export function applyGlassTheme() {
   const theme = model.glassTheme || 'classic';
   document.body.setAttribute('data-glass-theme', theme);
+}
+
+// --- Apply Cursor Shadow setting
+export function applyCursorShadow() {
+  const enabled = model.glassCursorShadow !== false;
+  document.body.setAttribute('data-cursor-shadow', enabled ? 'on' : 'off');
 }
 
 // --- Set Dark Mode (used by appearance modal)
@@ -319,15 +331,20 @@ export function openAppearanceModal() {
     appearanceOriginalState = {
       darkMode: model.darkMode,
       glassMode: model.glassMode,
-      glassTheme: model.glassTheme
+      glassTheme: model.glassTheme,
+      glassCursorShadow: model.glassCursorShadow
     };
     modal.hidden = false;
     updateAppearanceModalButtons();
 
-    // Show/hide glass theme section based on current glass mode
+    // Show/hide glass-specific sections based on current glass mode
     const glassThemeSection = $('#glass-theme-section');
     if (glassThemeSection) {
       glassThemeSection.hidden = !model.glassMode;
+    }
+    const cursorShadowSection = $('#cursor-shadow-section');
+    if (cursorShadowSection) {
+      cursorShadowSection.hidden = !model.glassMode;
     }
   }
 }
@@ -356,18 +373,21 @@ export function cancelAppearanceChanges() {
     model.darkMode = appearanceOriginalState.darkMode;
     model.glassMode = appearanceOriginalState.glassMode;
     model.glassTheme = appearanceOriginalState.glassTheme;
+    model.glassCursorShadow = appearanceOriginalState.glassCursorShadow;
 
     // Also update working copy if in edit mode
     if (editState.working) {
       editState.working.darkMode = model.darkMode;
       editState.working.glassMode = model.glassMode;
       editState.working.glassTheme = model.glassTheme;
+      editState.working.glassCursorShadow = model.glassCursorShadow;
     }
 
     // Apply the reverted states
     applyDarkMode();
     applyGlassMode();
     applyGlassTheme();
+    applyCursorShadow();
 
     // Re-render if dark mode changed
     if (window.renderAllSections) {
@@ -408,6 +428,16 @@ function updateAppearanceModalButtons() {
   }
   if (glassThemeSelect) {
     glassThemeSelect.value = model.glassTheme || 'classic';
+  }
+
+  // Update cursor shadow toggle visibility and state
+  const cursorShadowSection = $('#cursor-shadow-section');
+  const cursorShadowToggle = $('#cursor-shadow-toggle');
+  if (cursorShadowSection) {
+    cursorShadowSection.hidden = !model.glassMode;
+  }
+  if (cursorShadowToggle) {
+    cursorShadowToggle.checked = model.glassCursorShadow !== false;
   }
 }
 
@@ -487,6 +517,19 @@ export function wireAppearanceModalEvents() {
         editState.working.glassTheme = theme;
       }
       applyGlassTheme();
+    });
+  }
+
+  // Cursor shadow toggle (apply immediately for preview)
+  const cursorShadowToggle = $('#cursor-shadow-toggle');
+  if (cursorShadowToggle) {
+    cursorShadowToggle.addEventListener('change', () => {
+      const enabled = cursorShadowToggle.checked;
+      model.glassCursorShadow = enabled;
+      if (editState.working) {
+        editState.working.glassCursorShadow = enabled;
+      }
+      applyCursorShadow();
     });
   }
 }
