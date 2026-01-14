@@ -293,7 +293,7 @@ export function toggleReminderTasks(reminderKey, subtitle, sectionId, buttonEl) 
       // Click to cycle color
       taskBubble.addEventListener('click', (e) => {
         e.stopPropagation();
-        cycleTaskColor(task, taskBubble, reminder, sectionId);
+        cycleTaskColor(task, taskBubble, reminder, sectionId, subtitle);
       });
 
       // Drag to reorder
@@ -355,7 +355,7 @@ export function toggleReminderTasks(reminderKey, subtitle, sectionId, buttonEl) 
         }
 
         if (fromIndex !== toIndex && toIndex !== null) {
-          reorderTasks(reminder, fromIndex, toIndex, sectionId, buttonEl);
+          reorderTasks(reminder, fromIndex, toIndex, sectionId, buttonEl, subtitle);
         }
       });
 
@@ -414,7 +414,7 @@ export function toggleReminderTasks(reminderKey, subtitle, sectionId, buttonEl) 
 }
 
 // --- Cycle task color (red -> yellow -> green -> red)
-function cycleTaskColor(task, bubbleEl, reminder, sectionId) {
+function cycleTaskColor(task, bubbleEl, reminder, sectionId, subtitle) {
   // Get task index from the bubble element
   const taskIndex = parseInt(bubbleEl.dataset.index, 10);
 
@@ -423,13 +423,21 @@ function cycleTaskColor(task, bubbleEl, reminder, sectionId) {
   const cardData = data[sectionId];
   if (!cardData) return;
 
+  // Use subtitle directly if provided, otherwise fall back to searching all subtitles
   let actualReminder = null;
-  for (const [subtitle, subtitleData] of Object.entries(cardData)) {
-    if (subtitleData && subtitleData.reminders) {
-      const foundReminder = subtitleData.reminders.find(r => r.key === reminder.key);
-      if (foundReminder) {
-        actualReminder = foundReminder;
-        break;
+  if (subtitle && cardData[subtitle] && cardData[subtitle].reminders) {
+    actualReminder = cardData[subtitle].reminders.find(r => r.key === reminder.key);
+  }
+
+  // Fallback: search all subtitles if not found with direct subtitle access
+  if (!actualReminder) {
+    for (const [sub, subtitleData] of Object.entries(cardData)) {
+      if (subtitleData && subtitleData.reminders) {
+        const foundReminder = subtitleData.reminders.find(r => r.key === reminder.key);
+        if (foundReminder) {
+          actualReminder = foundReminder;
+          break;
+        }
       }
     }
   }
@@ -451,19 +459,27 @@ function cycleTaskColor(task, bubbleEl, reminder, sectionId) {
 }
 
 // --- Reorder tasks
-function reorderTasks(reminder, fromIndex, toIndex, sectionId, buttonEl) {
+function reorderTasks(reminder, fromIndex, toIndex, sectionId, buttonEl, subtitle) {
   // Look up fresh reminder from currentData() to ensure we modify the actual model
   const data = currentData();
   const cardData = data[sectionId];
   if (!cardData) return;
 
+  // Use subtitle directly if provided, otherwise fall back to searching all subtitles
   let actualReminder = null;
-  for (const [subtitle, subtitleData] of Object.entries(cardData)) {
-    if (subtitleData && subtitleData.reminders) {
-      const foundRem = subtitleData.reminders.find(r => r.key === reminder.key);
-      if (foundRem) {
-        actualReminder = foundRem;
-        break;
+  if (subtitle && cardData[subtitle] && cardData[subtitle].reminders) {
+    actualReminder = cardData[subtitle].reminders.find(r => r.key === reminder.key);
+  }
+
+  // Fallback: search all subtitles if not found with direct subtitle access
+  if (!actualReminder) {
+    for (const [sub, subtitleData] of Object.entries(cardData)) {
+      if (subtitleData && subtitleData.reminders) {
+        const foundRem = subtitleData.reminders.find(r => r.key === reminder.key);
+        if (foundRem) {
+          actualReminder = foundRem;
+          break;
+        }
       }
     }
   }
