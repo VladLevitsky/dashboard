@@ -2855,31 +2855,53 @@ body[data-style="glass"] .card {
 body[data-style="glass"] .card::after {
   content: '';
   position: absolute;
-  top: -50px;
-  left: -50px;
-  right: -50px;
-  bottom: -50px;
-  background: radial-gradient(
-    circle 200px at calc(var(--mouse-x) + 50px) calc(var(--mouse-y) + 50px),
-    rgba(0, 0, 0, 0.039) 0%,
-    rgba(0, 0, 0, 0.018) 30%,
-    rgba(0, 0, 0, 0.007) 60%,
-    transparent 100%
-  );
+  top: -60px;
+  left: -60px;
+  right: -60px;
+  bottom: -60px;
+  /* Layered shadows for organic glass-like effect - offset to bottom-right */
+  /* Rotated -35deg so oval runs from bottom-left to top-right */
+  background:
+    /* Main soft elliptical shadow - elongated oval */
+    radial-gradient(
+      ellipse 99px 72px at calc(var(--mouse-x) + 92px) calc(var(--mouse-y) + 99px),
+      rgba(0, 0, 0, 0.03) 0%,
+      rgba(0, 0, 0, 0.016) 40%,
+      rgba(0, 0, 0, 0.005) 70%,
+      transparent 100%
+    ),
+    /* Secondary diffused layer - more elongated */
+    radial-gradient(
+      ellipse 134px 85px at calc(var(--mouse-x) + 106px) calc(var(--mouse-y) + 120px),
+      rgba(0, 0, 0, 0.013) 0%,
+      rgba(0, 0, 0, 0.005) 55%,
+      transparent 100%
+    );
   pointer-events: none;
   z-index: 1;
-  filter: blur(29px);
+  filter: blur(17px);
+  transform: rotate(35deg);
+  transform-origin: calc(var(--mouse-x) + 80px) calc(var(--mouse-y) + 80px);
 }
 
 /* Dark mode - slightly more visible shadow */
 body[data-theme="dark"][data-style="glass"] .card::after {
-  background: radial-gradient(
-    circle 200px at calc(var(--mouse-x) + 50px) calc(var(--mouse-y) + 50px),
-    rgba(0, 0, 0, 0.061) 0%,
-    rgba(0, 0, 0, 0.030) 30%,
-    rgba(0, 0, 0, 0.010) 60%,
-    transparent 100%
-  );
+  background:
+    /* Main soft elliptical shadow - elongated oval */
+    radial-gradient(
+      ellipse 99px 72px at calc(var(--mouse-x) + 92px) calc(var(--mouse-y) + 99px),
+      rgba(0, 0, 0, 0.04) 0%,
+      rgba(0, 0, 0, 0.023) 40%,
+      rgba(0, 0, 0, 0.008) 70%,
+      transparent 100%
+    ),
+    /* Secondary diffused layer - more elongated */
+    radial-gradient(
+      ellipse 134px 85px at calc(var(--mouse-x) + 106px) calc(var(--mouse-y) + 120px),
+      rgba(0, 0, 0, 0.02) 0%,
+      rgba(0, 0, 0, 0.008) 55%,
+      transparent 100%
+    );
 }
 
 
