@@ -1078,7 +1078,7 @@ export function openTasksSummaryModal() {
         subtitleData.reminders.forEach(rem => {
           if (rem.tasks && rem.tasks.length > 0) {
             hasAnyTasks = true;
-            renderTaskSummaryGroup(content, rem.title || rem.key, rem.tasks, 'reminder', rem.key, section.id);
+            renderTaskSummaryGroup(content, rem.title || rem.key, rem.tasks, 'reminder', rem.key, section.id, subtitle);
           }
         });
       }
@@ -1088,7 +1088,7 @@ export function openTasksSummaryModal() {
         subtitleData.subtasks.forEach(item => {
           if (item.tasks && item.tasks.length > 0) {
             hasAnyTasks = true;
-            renderTaskSummaryGroup(content, item.text || item.key, item.tasks, 'subtask', item.key, section.id);
+            renderTaskSummaryGroup(content, item.text || item.key, item.tasks, 'subtask', item.key, section.id, subtitle);
           }
         });
       }
@@ -1103,7 +1103,7 @@ export function openTasksSummaryModal() {
 }
 
 // --- Render a task group in the summary modal
-function renderTaskSummaryGroup(container, title, tasks, itemType, itemKey, sectionId) {
+function renderTaskSummaryGroup(container, title, tasks, itemType, itemKey, sectionId, subtitle) {
   const groupDiv = document.createElement('div');
   groupDiv.className = 'tasks-summary-group';
 
@@ -1131,7 +1131,7 @@ function renderTaskSummaryGroup(container, title, tasks, itemType, itemKey, sect
     bubble.addEventListener('click', (e) => {
       e.stopPropagation();
       e.preventDefault();
-      cycleTaskColorInSummary(bubble, itemType, itemKey, sectionId, index);
+      cycleTaskColorInSummary(bubble, itemType, itemKey, sectionId, index, subtitle);
     });
 
     // Arrow button to navigate to source
@@ -1191,28 +1191,40 @@ function navigateToTaskSource(itemType, itemKey, sectionId) {
 }
 
 // --- Cycle task color from summary modal
-function cycleTaskColorInSummary(bubbleEl, itemType, itemKey, sectionId, taskIndex) {
+function cycleTaskColorInSummary(bubbleEl, itemType, itemKey, sectionId, taskIndex, subtitle) {
   const data = currentData();
   const cardData = data[sectionId];
   if (!cardData) return;
 
   let actualItem = null;
 
-  // Find the item (reminder or subtask)
-  for (const [subtitle, subtitleData] of Object.entries(cardData)) {
-    if (!subtitleData) continue;
-
+  // Use subtitle directly if provided
+  if (subtitle && cardData[subtitle]) {
+    const subtitleData = cardData[subtitle];
     if (itemType === 'reminder' && subtitleData.reminders) {
-      const found = subtitleData.reminders.find(r => r.key === itemKey);
-      if (found) {
-        actualItem = found;
-        break;
-      }
+      actualItem = subtitleData.reminders.find(r => r.key === itemKey);
     } else if (itemType === 'subtask' && subtitleData.subtasks) {
-      const found = subtitleData.subtasks.find(s => s.key === itemKey);
-      if (found) {
-        actualItem = found;
-        break;
+      actualItem = subtitleData.subtasks.find(s => s.key === itemKey);
+    }
+  }
+
+  // Fallback: search all subtitles if not found with direct subtitle access
+  if (!actualItem) {
+    for (const [sub, subtitleData] of Object.entries(cardData)) {
+      if (!subtitleData) continue;
+
+      if (itemType === 'reminder' && subtitleData.reminders) {
+        const found = subtitleData.reminders.find(r => r.key === itemKey);
+        if (found) {
+          actualItem = found;
+          break;
+        }
+      } else if (itemType === 'subtask' && subtitleData.subtasks) {
+        const found = subtitleData.subtasks.find(s => s.key === itemKey);
+        if (found) {
+          actualItem = found;
+          break;
+        }
       }
     }
   }
