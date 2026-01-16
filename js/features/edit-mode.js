@@ -1,7 +1,7 @@
 // Personal Dashboard - Edit Mode Module
 // Handles edit state toggling, popovers, and edit-related UI
 
-import { model, editState, currentData } from '../state.js';
+import { model, editState, currentData, currentSections } from '../state.js';
 import { $, deepClone, showToast, getColorForCurrentMode, setColorForCurrentMode } from '../utils.js';
 import { saveModel } from '../core/storage.js';
 
@@ -64,6 +64,9 @@ export function toggleEditMode() {
 export function hideEditPopover() {
   $('#edit-popover').hidden = true;
   editState.currentTarget = null;
+  currentMoveContext = null;
+  const moveSelector = $('#move-card-selector');
+  if (moveSelector) moveSelector.hidden = true;
 }
 
 // --- Hide Calendar Popover
@@ -78,8 +81,12 @@ export function hideIntervalPopover() {
   if (pop) pop.hidden = true;
 }
 
+// --- Move context for edit popover (stores source info for moving items)
+let currentMoveContext = null;
+
 // --- Open Edit Popover
 // cursorPos is optional: { x: clientX, y: clientY } - if provided, positions near cursor
+// values.moveContext is optional: { sectionId, subtitle, itemType, itemKey } - if provided, enables move button
 export function openEditPopover(targetEl, values, onDone, cursorPos) {
   const pop = $('#edit-popover');
   const rect = targetEl.getBoundingClientRect();
@@ -130,6 +137,13 @@ export function openEditPopover(targetEl, values, onDone, cursorPos) {
     editState.currentTarget.onDone({ delete: true, accept: true });
     hideEditPopover();
   };
+
+  // Move button shows if moveContext is provided
+  const moveBtn = $('#edit-move');
+  const moveSelector = $('#move-card-selector');
+  currentMoveContext = values.moveContext || null;
+  moveBtn.hidden = !currentMoveContext;
+  if (moveSelector) moveSelector.hidden = true; // Always start with selector hidden
 
   // Make visible to measure height, then position
   pop.hidden = false;
@@ -746,6 +760,125 @@ export function openSubtitleColorPicker(sectionId, subtitle) {
       document.body.removeChild(modal);
     }
   });
+}
+
+// ========== Move Item Feature ==========
+
+// --- Toggle Move Card Selector
+export function toggleMoveCardSelector() {
+  const selector = $('#move-card-selector');
+  if (!selector || !currentMoveContext) return;
+
+  const isVisible = !selector.hidden;
+  if (isVisible) {
+    selector.hidden = true;
+  } else {
+    populateMoveCardList();
+    selector.hidden = false;
+  }
+}
+
+// --- Populate Move Card List
+function populateMoveCardList() {
+  const list = $('#move-card-list');
+  if (!list || !currentMoveContext) return;
+
+  list.innerHTML = '';
+
+  const sections = currentSections() || [];
+  const sourceSectionId = currentMoveContext.sectionId;
+
+  // Get all available cards (excluding the source card)
+  sections.forEach(section => {
+    // Skip the source card
+    if (section.id === sourceSectionId) return;
+    // Skip non-unified cards (two-col containers don't store items)
+    if (section.type !== 'unified') return;
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'move-card-option';
+    btn.textContent = section.title || section.id;
+    btn.addEventListener('click', () => {
+      handleMoveToCard(section.id);
+    });
+    list.appendChild(btn);
+  });
+
+  // If no valid targets, show a message
+  if (list.children.length === 0) {
+    const msg = document.createElement('div');
+    msg.className = 'move-card-option';
+    msg.style.color = 'var(--muted)';
+    msg.style.cursor = 'default';
+    msg.textContent = 'No other cards available';
+    list.appendChild(msg);
+  }
+}
+
+// --- Handle Move To Card
+function handleMoveToCard(targetSectionId) {
+  if (!currentMoveContext) return;
+
+  const { sectionId: sourceSectionId, subtitle: sourceSubtitle, itemType, itemKey } = currentMoveContext;
+  const data = currentData();
+
+  // Get source collection
+  const sourceData = data[sourceSectionId];
+  if (!sourceData || !sourceData[sourceSubtitle]) {
+    showToast('Source not found');
+    return;
+  }
+
+  const sourceCollection = sourceData[sourceSubtitle][itemType];
+  if (!Array.isArray(sourceCollection)) {
+    showToast('Invalid source collection');
+    return;
+  }
+
+  // Find and remove the item from source
+  const itemIndex = sourceCollection.findIndex(item => item.key === itemKey);
+  if (itemIndex === -1) {
+    showToast('Item not found');
+    return;
+  }
+
+  const [movedItem] = sourceCollection.splice(itemIndex, 1);
+
+  // Ensure target card has data structure
+  if (!data[targetSectionId]) {
+    data[targetSectionId] = {};
+  }
+  if (!data[targetSectionId]['_default']) {
+    data[targetSectionId]['_default'] = {};
+  }
+  if (!Array.isArray(data[targetSectionId]['_default'][itemType])) {
+    data[targetSectionId]['_default'][itemType] = [];
+  }
+
+  // Add item to end of target's _default subtitle
+  data[targetSectionId]['_default'][itemType].push(movedItem);
+
+  // Save and re-render
+  markDirtyAndSave();
+  hideEditPopover();
+
+  if (window.renderAllSections) window.renderAllSections();
+  if (editState.enabled && window.addCardButtons) window.addCardButtons();
+
+  showToast('Item moved');
+}
+
+// --- Wire Move Button Events (called from init)
+export function wireMoveButtonEvents() {
+  const moveBtn = $('#edit-move');
+  if (moveBtn) {
+    moveBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      toggleMoveCardSelector();
+    });
+  }
 }
 
 // ========== Notepad Feature ==========

@@ -130,6 +130,7 @@ export function extractUrlOverrides() {
   obj.darkMode = data.darkMode || false;
   obj.glassMode = data.glassMode || false;
   obj.glassTheme = data.glassTheme || 'classic';
+  obj.glassCursorShadow = data.glassCursorShadow !== false; // Default to true
   obj.timeTrackingExpanded = data.timeTrackingExpanded || false;
   obj.quickAccessExpanded = data.quickAccessExpanded || false;
   obj.selectorModeActive = data.selectorModeActive || false;
@@ -766,6 +767,9 @@ export function applyUrlOverrides(data) {
   }
   if (data.glassTheme) {
     current.glassTheme = data.glassTheme;
+  }
+  if (typeof data.glassCursorShadow === 'boolean') {
+    current.glassCursorShadow = data.glassCursorShadow;
   }
   if (typeof data.timeTrackingExpanded === 'boolean') {
     current.timeTrackingExpanded = data.timeTrackingExpanded;

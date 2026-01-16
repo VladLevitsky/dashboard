@@ -557,6 +557,9 @@ export function deepMergeModel(target, source) {
       }
     });
   }
+  if (source.collapsedSubtitles) {
+    target.collapsedSubtitles = { ...(target.collapsedSubtitles || {}), ...source.collapsedSubtitles };
+  }
   if (source.header) {
     target.header = { ...target.header, ...source.header };
   }
@@ -585,6 +588,9 @@ export function deepMergeModel(target, source) {
   }
   if (typeof source.glassTheme !== 'undefined') {
     target.glassTheme = source.glassTheme;
+  }
+  if (typeof source.glassCursorShadow !== 'undefined') {
+    target.glassCursorShadow = source.glassCursorShadow;
   }
   if (typeof source.timeTrackingExpanded !== 'undefined') {
     target.timeTrackingExpanded = source.timeTrackingExpanded;

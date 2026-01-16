@@ -25,7 +25,10 @@
       "Bash(git -C \"C:\\\\Users\\\\vlevitsky\\\\Documents\\\\Personal Dashboard - New\" ls-tree -r HEAD --name-only)",
       "Bash(git -C \"C:\\\\Users\\\\vlevitsky\\\\Documents\\\\Personal Dashboard - New\" restore app-reference.js)",
       "Bash(git -C \"C:\\\\Users\\\\vlevitsky\\\\Documents\\\\Personal Dashboard - New\" diff --stat)",
-      "Bash(echo:*)"
+      "Bash(echo:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)"
     ],
     "deny": [],
     "ask": []

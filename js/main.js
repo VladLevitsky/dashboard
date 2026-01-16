@@ -37,7 +37,8 @@ import {
   closeNotepad,
   saveNote,
   updateNotepadButtonIndicator,
-  wireNotepadEvents
+  wireNotepadEvents,
+  wireMoveButtonEvents
 } from './features/edit-mode.js';
 
 import {
@@ -482,4 +483,5 @@ window.closeNotepad = closeNotepad;
 window.saveNote = saveNote;
 window.updateNotepadButtonIndicator = updateNotepadButtonIndicator;
 window.wireNotepadEvents = wireNotepadEvents;
+window.wireMoveButtonEvents = wireMoveButtonEvents;
 

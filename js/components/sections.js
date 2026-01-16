@@ -1725,7 +1725,13 @@ function createUnifiedIconButton(item, sectionId, subtitle, subtitleColor) {
     if (!editState.enabled) {
       openUrl(item.url);
     } else {
-      openEditPopover(btn, { hideText: true, url: item.url, allowImage: true, allowDelete: true }, async ({ url, chosenMedia, chosenEmoji, delete: doDelete, accept }) => {
+      openEditPopover(btn, {
+        hideText: true,
+        url: item.url,
+        allowImage: true,
+        allowDelete: true,
+        moveContext: { sectionId, subtitle, itemType: 'icons', itemKey: item.key }
+      }, async ({ url, chosenMedia, chosenEmoji, delete: doDelete, accept }) => {
         if (!accept) return;
         const cardData = currentData()[sectionId];
         const subtitleData = cardData[subtitle];
@@ -1928,7 +1934,12 @@ function createUnifiedSubtaskItem(item, sectionId, subtitle, subtitleColor) {
     }
     if (e.target.closest('.list-item-links-btn') || e.target.closest('.list-item-tasks-btn')) return;
     e.preventDefault();
-    openEditPopover(div, { text: item.text, url: item.url, allowDelete: true }, ({ text, url, delete: doDelete, accept }) => {
+    openEditPopover(div, {
+      text: item.text,
+      url: item.url,
+      allowDelete: true,
+      moveContext: { sectionId, subtitle, itemType: 'subtasks', itemKey: item.key }
+    }, ({ text, url, delete: doDelete, accept }) => {
       if (!accept) return;
       const cardData = currentData()[sectionId];
       const subtitleData = cardData[subtitle];
@@ -2149,7 +2160,12 @@ function createUnifiedReminderItem(rem, sectionId, subtitle, subtitleColor) {
     a.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
-      openEditPopover(div, { text: rem.title, url: rem.url, allowDelete: true }, ({ text, url, delete: doDelete, accept }) => {
+      openEditPopover(div, {
+        text: rem.title,
+        url: rem.url,
+        allowDelete: true,
+        moveContext: { sectionId, subtitle, itemType: 'reminders', itemKey: rem.key }
+      }, ({ text, url, delete: doDelete, accept }) => {
         if (!accept) return;
         const cardData = currentData()[sectionId];
         const subtitleData = cardData[subtitle];
@@ -2183,7 +2199,12 @@ function createUnifiedReminderItem(rem, sectionId, subtitle, subtitleColor) {
 
     if (editState.enabled) {
       e.preventDefault();
-      openEditPopover(div, { text: rem.title, url: rem.url, allowDelete: true }, ({ text, url, delete: doDelete, accept }) => {
+      openEditPopover(div, {
+        text: rem.title,
+        url: rem.url,
+        allowDelete: true,
+        moveContext: { sectionId, subtitle, itemType: 'reminders', itemKey: rem.key }
+      }, ({ text, url, delete: doDelete, accept }) => {
         if (!accept) return;
         const cardData = currentData()[sectionId];
         const subtitleData = cardData[subtitle];
@@ -2283,7 +2304,8 @@ function createUnifiedCopyPasteItem(item, sectionId, subtitle, subtitleColor) {
         text: item.text,
         copyText: item.copyText || '',
         useCopyText: true,
-        allowDelete: true
+        allowDelete: true,
+        moveContext: { sectionId, subtitle, itemType: 'copyPaste', itemKey: item.key }
       }, ({ text, copyText, delete: doDelete, accept }) => {
         if (!accept) return;
         const cardData = currentData()[sectionId];

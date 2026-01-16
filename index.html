@@ -157,18 +157,29 @@
           </div>
         </div>
         <div class="edit-actions">
+          <button type="button" id="edit-move" class="btn-move" title="Move to another card" aria-label="Move to another card" hidden>
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M5 12h14"></path>
+              <path d="M12 5l7 7-7 7"></path>
+            </svg>
+          </button>
           <button type="button" id="edit-delete" class="btn-delete" title="Delete" aria-label="Delete" hidden>
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="3 6 5 6 21 6"></polyline>
               <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
             </svg>
           </button>
+          <div class="edit-actions-spacer"></div>
           <button type="submit" class="btn-accept" title="Save" aria-label="Save">
             &check;
           </button>
           <button type="button" id="edit-cancel" class="btn-cancel" title="Cancel" aria-label="Cancel">
             &times;
           </button>
+        </div>
+        <div id="move-card-selector" class="move-card-selector" hidden>
+          <div class="move-card-selector-title">Move to:</div>
+          <div id="move-card-list" class="move-card-list"></div>
         </div>
       </form>
     </div>

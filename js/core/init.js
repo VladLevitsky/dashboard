@@ -18,7 +18,8 @@ import {
   refreshEditingClasses,
   markDirtyAndSave,
   openEditPopover,
-  wireNotepadEvents
+  wireNotepadEvents,
+  wireMoveButtonEvents
 } from '../features/edit-mode.js';
 import {
   handleDragOver,
@@ -135,6 +136,7 @@ export async function init() {
   if (window.renderAllSections) window.renderAllSections();
   wireUI();
   wireNotepadEvents();
+  wireMoveButtonEvents();
   wireAppearanceModalEvents();
   ensureSectionPlusButtons();
   refreshEditingClasses();

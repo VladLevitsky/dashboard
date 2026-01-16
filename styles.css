@@ -877,6 +877,17 @@ h2, h3 { margin: 0 0 16px; }
   position: relative !important;
 }
 
+/* Two-column cards: force single-column layout for items inside (they're already half-width) */
+.two-col .card .unified-subtasks-group,
+.two-col .card .unified-copypaste-group,
+.two-col .card .unified-reminders-group,
+.two-col .card .reminder-subtitle-container,
+.two-col .card .reminder-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 /* Main reminders container - no grid layout, just holds subtitle groups */
 .reminders-container { 
   display: block; 
@@ -1104,6 +1115,7 @@ h2, h3 { margin: 0 0 16px; }
   border-radius: 12px; box-shadow: var(--shadow); padding: 14px; border: 1px solid #e5e7eb;
   z-index: 1000;
 }
+.edit-popover form { position: relative; }
 .edit-popover label { display: grid; gap: 6px; font-size: 12px; color: var(--muted); margin-bottom: 10px; }
 .edit-popover input { padding: 10px 12px; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 14px; }
 .edit-popover textarea {
@@ -1139,6 +1151,88 @@ h2, h3 { margin: 0 0 16px; }
 }
 .btn-breakdown:hover { background: #bfdbfe; transform: scale(1.05); }
 .btn-breakdown svg { width: 18px; height: 18px; }
+
+/* Move button */
+.btn-move {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  background: #e0e7ff;
+  color: #4338ca;
+  display: grid;
+  place-items: center;
+  transition: all 0.2s ease;
+}
+.btn-move:hover { background: #c7d2fe; transform: scale(1.05); }
+.btn-move svg { width: 16px; height: 16px; }
+[data-theme="dark"] .btn-move {
+  background: #3730a3;
+  color: #c7d2fe;
+}
+[data-theme="dark"] .btn-move:hover {
+  background: #4338ca;
+}
+
+/* Edit actions spacer - pushes accept/cancel to the right */
+.edit-actions-spacer {
+  flex: 1;
+}
+
+/* Move card selector dropdown */
+.move-card-selector {
+  position: absolute;
+  bottom: 52px;
+  left: 0;
+  right: 0;
+  background: var(--card);
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.1);
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 10;
+}
+[data-theme="dark"] .move-card-selector {
+  border-color: #475569;
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.3);
+}
+.move-card-selector-title {
+  padding: 10px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  border-bottom: 1px solid #e5e7eb;
+  position: sticky;
+  top: 0;
+  background: var(--card);
+}
+[data-theme="dark"] .move-card-selector-title {
+  border-color: #475569;
+}
+.move-card-list {
+  padding: 4px;
+}
+.move-card-option {
+  display: block;
+  width: 100%;
+  padding: 10px 12px;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--text);
+  transition: background 0.15s ease;
+}
+.move-card-option:hover {
+  background: #f3f4f6;
+}
+[data-theme="dark"] .move-card-option:hover {
+  background: #334155;
+}
 
 /* Emoji picker container in edit popover */
 .emoji-picker-container {
