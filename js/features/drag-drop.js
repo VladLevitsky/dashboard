@@ -511,6 +511,11 @@ export function initializeContainerDragHandlers(container, sectionKey) {
                           container.classList.contains('icon-row') ||
                           container.classList.contains('unified-icons-group');
 
+  // Check if container is a 2-column grid (subtasks, reminders, copy-paste)
+  const isGridContainer = container.classList.contains('unified-subtasks-group') ||
+                          container.classList.contains('unified-reminders-group') ||
+                          container.classList.contains('unified-copypaste-group');
+
   // Determine gap size based on container type
   let gapSize = 12;
   if (container.classList.contains('icon-grid') || container.classList.contains('unified-icons-group')) {
@@ -607,8 +612,37 @@ export function initializeContainerDragHandlers(container, sectionKey) {
           dropPosition = 'after';
         }
       }
+    } else if (isGridContainer) {
+      // 2-column grid: use column-based detection to avoid picking items from wrong row
+      // Determine which column the mouse is in based on container midpoint (more forgiving than item bounds)
+      const containerRect = container.getBoundingClientRect();
+      const containerMidX = containerRect.left + containerRect.width / 2;
+      const mouseInLeftHalf = mouseX < containerMidX;
+
+      // Filter items to those in the same column based on their center position
+      const columnItems = items.filter(item => {
+        const rect = item.getBoundingClientRect();
+        const itemCenterX = rect.left + rect.width / 2;
+        const itemInLeftHalf = itemCenterX < containerMidX;
+        return itemInLeftHalf === mouseInLeftHalf;
+      });
+
+      const searchItems = columnItems.length > 0 ? columnItems : items;
+
+      // Find closest item vertically within the column
+      searchItems.forEach(item => {
+        const rect = item.getBoundingClientRect();
+        const itemCenterY = rect.top + rect.height / 2;
+        const distance = Math.abs(mouseY - itemCenterY);
+
+        if (distance < closestDistance) {
+          closestDistance = distance;
+          closestItem = item;
+          dropPosition = mouseY < itemCenterY ? 'before' : 'after';
+        }
+      });
     } else {
-      // Vertical list
+      // Vertical list (single column)
       items.forEach(item => {
         const rect = item.getBoundingClientRect();
         const itemCenterY = rect.top + rect.height / 2;
@@ -639,6 +673,7 @@ export function initializeContainerDragHandlers(container, sectionKey) {
       dragState.itemDropIndicator.dataset.position = dropPosition;
 
       if (isIconContainer) {
+        // Vertical indicator for icon grids
         if (dropPosition === 'before') {
           dragState.itemDropIndicator.style.left = `${rect.left + scrollLeft - halfGap - 1.5}px`;
         } else {
@@ -648,7 +683,20 @@ export function initializeContainerDragHandlers(container, sectionKey) {
         dragState.itemDropIndicator.style.width = '3px';
         dragState.itemDropIndicator.style.height = `${rect.height}px`;
         dragState.itemDropIndicator.className = 'item-drop-indicator vertical';
+      } else if (isGridContainer) {
+        // Horizontal indicator for 2-column grids (subtasks, reminders, copy-paste)
+        // Shows above/below the target item to indicate array insertion point
+        dragState.itemDropIndicator.style.left = `${rect.left + scrollLeft}px`;
+        if (dropPosition === 'before') {
+          dragState.itemDropIndicator.style.top = `${rect.top + scrollTop - halfGap - 1.5}px`;
+        } else {
+          dragState.itemDropIndicator.style.top = `${rect.bottom + scrollTop + halfGap - 1.5}px`;
+        }
+        dragState.itemDropIndicator.style.width = `${rect.width}px`;
+        dragState.itemDropIndicator.style.height = '3px';
+        dragState.itemDropIndicator.className = 'item-drop-indicator horizontal';
       } else {
+        // Horizontal indicator for single-column lists
         dragState.itemDropIndicator.style.left = `${rect.left + scrollLeft}px`;
         if (dropPosition === 'before') {
           dragState.itemDropIndicator.style.top = `${rect.top + scrollTop - halfGap - 1.5}px`;
@@ -664,11 +712,12 @@ export function initializeContainerDragHandlers(container, sectionKey) {
 
   // Drop - reorder the item
   container.addEventListener('drop', (e) => {
+    if (!dragState.draggedItemKey || !dragState.draggedItemSection) return;
+    // Only handle same-section drops; let cross-card drops bubble to card handler
+    if (dragState.draggedItemSection !== sectionKey) return;
+
     e.preventDefault();
     e.stopPropagation();
-
-    if (!dragState.draggedItemKey || !dragState.draggedItemSection) return;
-    if (dragState.draggedItemSection !== sectionKey) return;
 
     const data = currentData();
 
@@ -698,10 +747,84 @@ export function initializeContainerDragHandlers(container, sectionKey) {
 
     if (!Array.isArray(collection)) return;
 
-    const targetKey = dragState.itemDropIndicator?.dataset.targetKey;
-    const position = dragState.itemDropIndicator?.dataset.position;
+    // Calculate target directly from drop position instead of relying on indicator
+    const mouseX = e.clientX;
+    const mouseY = e.clientY;
 
-    if (!targetKey) return;
+    const items = Array.from(container.querySelectorAll('[data-key]')).filter(item =>
+      !item.classList.contains('add-tile') &&
+      !item.classList.contains('unified-add-tile') &&
+      !item.classList.contains('item-dragging')
+    );
+
+    if (items.length === 0) return;
+
+    // Find closest item and determine position
+    let closestItem = null;
+    let closestDistance = Infinity;
+    let dropPosition = 'after';
+
+    if (isGridContainer) {
+      // 2-column grid: use column-based detection to avoid picking items from wrong row
+      // Determine which column the mouse is in based on container midpoint (more forgiving than item bounds)
+      const containerRect = container.getBoundingClientRect();
+      const containerMidX = containerRect.left + containerRect.width / 2;
+      const mouseInLeftHalf = mouseX < containerMidX;
+
+      // Filter items to those in the same column based on their center position
+      const columnItems = items.filter(item => {
+        const rect = item.getBoundingClientRect();
+        const itemCenterX = rect.left + rect.width / 2;
+        const itemInLeftHalf = itemCenterX < containerMidX;
+        return itemInLeftHalf === mouseInLeftHalf;
+      });
+
+      const searchItems = columnItems.length > 0 ? columnItems : items;
+
+      // Find closest item vertically within the column
+      searchItems.forEach(item => {
+        const rect = item.getBoundingClientRect();
+        const itemCenterY = rect.top + rect.height / 2;
+        const distance = Math.abs(mouseY - itemCenterY);
+
+        if (distance < closestDistance) {
+          closestDistance = distance;
+          closestItem = item;
+          dropPosition = mouseY < itemCenterY ? 'before' : 'after';
+        }
+      });
+    } else {
+      items.forEach(item => {
+        const rect = item.getBoundingClientRect();
+        const itemCenterX = rect.left + rect.width / 2;
+        const itemCenterY = rect.top + rect.height / 2;
+
+        // For icon containers, use weighted distance
+        // For others, use Y distance
+        let distance;
+        if (isIconContainer) {
+          distance = Math.abs(mouseX - itemCenterX) + Math.abs(mouseY - itemCenterY) * 0.5;
+        } else {
+          distance = Math.abs(mouseY - itemCenterY);
+        }
+
+        if (distance < closestDistance) {
+          closestDistance = distance;
+          closestItem = item;
+          // Determine before/after based on container type
+          if (isIconContainer) {
+            dropPosition = mouseX < itemCenterX ? 'before' : 'after';
+          } else {
+            dropPosition = mouseY < itemCenterY ? 'before' : 'after';
+          }
+        }
+      });
+    }
+
+    if (!closestItem) return;
+
+    const targetKey = closestItem.dataset.key;
+    let position = dropPosition;
 
     const draggedIndex = collection.findIndex(item => item.key === dragState.draggedItemKey);
     const targetIndex = collection.findIndex(item => item.key === targetKey);
@@ -715,12 +838,22 @@ export function initializeContainerDragHandlers(container, sectionKey) {
       finalIndex = targetIndex + 1;
     }
 
-    if (finalIndex === draggedIndex || finalIndex === draggedIndex + 1) return;
+    // Skip if effectively no change
+    // For 2-column grids: finalIndex === draggedIndex + 1 IS a change when draggedIndex is even
+    // (same-row column swap from left to right)
+    const isSameRowColumnSwap = isGridContainer && (draggedIndex % 2 === 0) && (finalIndex === draggedIndex + 1);
+
+    if (finalIndex === draggedIndex) return;
+    if (finalIndex === draggedIndex + 1 && !isSameRowColumnSwap) return;
 
     const [draggedItem] = collection.splice(draggedIndex, 1);
 
     let newIndex;
-    if (draggedIndex < finalIndex) {
+    if (isSameRowColumnSwap) {
+      // For same-row column swap, insert at finalIndex (don't subtract 1)
+      // This places the item in the right column after the shifted item
+      newIndex = finalIndex;
+    } else if (draggedIndex < finalIndex) {
       newIndex = finalIndex - 1;
     } else {
       newIndex = finalIndex;
@@ -848,15 +981,16 @@ export function initializeReminderDragHandlers(element, itemKey, subtitle, secti
 
   // Drop
   element.addEventListener('drop', (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-
     if (!dragState.draggedItemKey || !dragState.draggedItemSection) return;
 
     const draggedSectionSubtitle = dragState.draggedItemSection;
     const currentSectionSubtitle = `${sectionId}:${subtitle}`;
 
+    // Only handle same-section drops; let cross-card drops bubble to card handler
     if (draggedSectionSubtitle !== currentSectionSubtitle) return;
+
+    e.preventDefault();
+    e.stopPropagation();
 
     const data = currentData();
 
@@ -917,6 +1051,8 @@ export function removeDragHandlers() {
     card.draggable = false;
     card.style.cursor = '';
     card.classList.remove('dragging');
+    // Clear drop zone initialization flag so it can be re-initialized
+    delete card.dataset.dropZoneInitialized;
   });
 
   // Remove items draggability (including unified card items)
@@ -939,4 +1075,102 @@ export function removeDragHandlers() {
     dragState.itemDropIndicator.parentElement.removeChild(dragState.itemDropIndicator);
     dragState.itemDropIndicator = null;
   }
+
+  // Remove drop-target class from all cards
+  document.querySelectorAll('.card.drop-target').forEach(card => {
+    card.classList.remove('drop-target');
+  });
+}
+
+// --- Initialize card as a drop zone for cross-card item moves
+export function initializeCardDropZone(cardElement, targetSectionId) {
+  if (!cardElement || !editState.enabled) return;
+
+  // Prevent duplicate initialization
+  if (cardElement.dataset.dropZoneInitialized) return;
+  cardElement.dataset.dropZoneInitialized = 'true';
+
+  // Dragover - highlight card if dragging item from different card
+  cardElement.addEventListener('dragover', (e) => {
+    // Only handle item drags, not card drags
+    if (!dragState.draggedItemKey || !dragState.draggedItemSection) return;
+
+    // Parse source section from dragged item
+    const [sourceSectionId] = dragState.draggedItemSection.split(':');
+
+    // Only highlight if cross-card drag
+    if (sourceSectionId !== targetSectionId) {
+      e.preventDefault();
+      cardElement.classList.add('drop-target');
+    }
+  });
+
+  // Dragleave - remove highlight
+  cardElement.addEventListener('dragleave', (e) => {
+    // Only remove if actually leaving the card (not entering a child)
+    if (!cardElement.contains(e.relatedTarget)) {
+      cardElement.classList.remove('drop-target');
+    }
+  });
+
+  // Drop - move item to this card
+  cardElement.addEventListener('drop', (e) => {
+    cardElement.classList.remove('drop-target');
+
+    // Only handle item drags
+    if (!dragState.draggedItemKey || !dragState.draggedItemSection) return;
+
+    const [sourceSectionId, sourceSubtitle, sourceType] = dragState.draggedItemSection.split(':');
+
+    // Only handle cross-card drops
+    if (sourceSectionId === targetSectionId) return;
+
+    // Validate we have all required parts
+    if (!sourceSubtitle || !sourceType) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    const data = currentData();
+
+    // Get source collection and find item
+    const sourceCollection = data[sourceSectionId]?.[sourceSubtitle]?.[sourceType];
+    if (!Array.isArray(sourceCollection)) return;
+
+    const draggedIndex = sourceCollection.findIndex(item => item.key === dragState.draggedItemKey);
+    if (draggedIndex === -1) return;
+
+    const [draggedItem] = sourceCollection.splice(draggedIndex, 1);
+
+    // Ensure target has _default subtitle with item type array
+    if (!data[targetSectionId]) data[targetSectionId] = {};
+    if (!data[targetSectionId]['_default']) {
+      data[targetSectionId]['_default'] = {
+        icons: [],
+        reminders: [],
+        subtasks: [],
+        copyPaste: []
+      };
+    }
+    if (!data[targetSectionId]['_default'][sourceType]) {
+      data[targetSectionId]['_default'][sourceType] = [];
+    }
+
+    // Add to end of target collection
+    data[targetSectionId]['_default'][sourceType].push(draggedItem);
+
+    // Clear drag state
+    dragState.draggedItemKey = null;
+    dragState.draggedItemSection = null;
+
+    // Persist and re-render
+    markDirtyAndSave();
+    if (window.renderAllSections) window.renderAllSections();
+    if (editState.enabled) {
+      if (window.ensureSectionPlusButtons) window.ensureSectionPlusButtons();
+      refreshEditingClasses();
+    }
+
+    showToast('Item moved to card');
+  });
 }
