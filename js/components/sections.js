@@ -1,11 +1,12 @@
 // Personal Dashboard - Sections Component
 // Handles all section rendering (icons, lists, reminders, copy-paste)
 
-import { editState, currentData, currentSections } from '../state.js';
+import { editState, model, currentData, currentSections } from '../state.js';
 import { $, $$, openUrl, generateKey, getSectionDataKey, getColorForCurrentMode, darkenColor, lightenAndDesaturateColor, colorToGlassRgba, isGlassModeActive } from '../utils.js';
 import { PLACEHOLDER_URL, icons, LINK_ICON_SVG, TASKS_ICON_SVG } from '../constants.js';
 import { markDirtyAndSave, openEditPopover, openSubtitleColorPicker } from '../features/edit-mode.js';
-import { initializeDragHandlers, initializeItemDragHandlers, initializeContainerDragHandlers, initializeReminderDragHandlers, handleDragOver, handleDrop } from '../features/drag-drop.js';
+import { saveModel } from '../core/storage.js';
+import { initializeDragHandlers, initializeItemDragHandlers, initializeContainerDragHandlers, initializeReminderDragHandlers, initializeCardDropZone, handleDragOver, handleDrop } from '../features/drag-drop.js';
 import { createCardDeleteButton, createCardReorderButtons, createTwoColReorderButtons } from '../features/cards.js';
 import { persistImageFromLibraryEntry } from '../features/media-library.js';
 
@@ -195,6 +196,27 @@ export function createSectionElement(section) {
     }
   });
   sectionEl.appendChild(notepadBtn);
+
+  // Add collapse chevron button (only visible outside edit mode)
+  const collapseBtn = document.createElement('button');
+  collapseBtn.type = 'button';
+  collapseBtn.className = 'card-collapse-btn';
+  collapseBtn.title = 'Collapse/expand card';
+  collapseBtn.innerHTML = `
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="6 9 12 15 18 9"></polyline>
+    </svg>
+  `;
+  collapseBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleCardCollapse(section.id, sectionEl);
+  });
+  sectionEl.appendChild(collapseBtn);
+
+  // Apply collapsed state if stored
+  if (data.collapsedCards?.[section.id]) {
+    sectionEl.classList.add('collapsed');
+  }
 
   // All cards are now unified - they can contain icons, reminders, subtasks, and copy-paste items
   renderUnifiedCard(sectionEl, section.id);
@@ -2590,9 +2612,13 @@ export function addCardButtons() {
 
         // Add delete button (still allow deleting individual cards)
         sectionEl.appendChild(createCardDeleteButton(section.id));
+
+        // Initialize as drop zone for cross-card item moves
+        initializeCardDropZone(sectionEl, section.id);
       } else {
         // For regular cards: add up/down reorder buttons and drag handlers
         initializeDragHandlers(sectionEl, section.id);
+        initializeCardDropZone(sectionEl, section.id);
 
         // Add reorder buttons
         const reorderButtons = createCardReorderButtons(section.id, section.type);
@@ -2858,4 +2884,24 @@ function addGapButtons() {
     // Show the button since we're in edit mode
     gapBtn.style.display = 'flex';
   }
+}
+
+// --- Toggle individual card collapse state
+export function toggleCardCollapse(sectionId, cardElement) {
+  const isCollapsed = cardElement.classList.toggle('collapsed');
+
+  // Initialize collapsedCards object if needed
+  if (!model.collapsedCards) {
+    model.collapsedCards = {};
+  }
+
+  // Update the stored state
+  if (isCollapsed) {
+    model.collapsedCards[sectionId] = true;
+  } else {
+    delete model.collapsedCards[sectionId];
+  }
+
+  // Persist to localStorage immediately (not through edit mode)
+  saveModel();
 }

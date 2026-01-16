@@ -56,6 +56,14 @@ export function onDeleteCard(sectionId) {
   delete data.sectionTitles[sectionId];
   delete data[sectionId];
 
+  // Clean up associated data
+  if (data.collapsedCards) {
+    delete data.collapsedCards[sectionId];
+  }
+  if (data.cardNotes) {
+    delete data.cardNotes[sectionId];
+  }
+
   markDirtyAndSave();
   if (window.renderAllSections) window.renderAllSections();
 }

@@ -47,7 +47,8 @@ import {
   initializeItemDragHandlers,
   initializeContainerDragHandlers,
   initializeReminderDragHandlers,
-  removeDragHandlers
+  removeDragHandlers,
+  initializeCardDropZone
 } from './features/drag-drop.js';
 
 import {
@@ -137,7 +138,8 @@ import {
   renderListForSection,
   renderRemindersForSection,
   renderCopyPasteForSection,
-  addCardButtons
+  addCardButtons,
+  toggleCardCollapse
 } from './components/sections.js';
 
 import {
@@ -309,6 +311,7 @@ window.initializeItemDragHandlers = initializeItemDragHandlers;
 window.initializeContainerDragHandlers = initializeContainerDragHandlers;
 window.initializeReminderDragHandlers = initializeReminderDragHandlers;
 window.removeDragHandlers = removeDragHandlers;
+window.initializeCardDropZone = initializeCardDropZone;
 
 // Timers
 window.formatTime = formatTime;
@@ -393,6 +396,7 @@ window.renderListForSection = renderListForSection;
 window.renderRemindersForSection = renderRemindersForSection;
 window.renderCopyPasteForSection = renderCopyPasteForSection;
 window.addCardButtons = addCardButtons;
+window.toggleCardCollapse = toggleCardCollapse;
 
 // Reminders
 window.daysUntil = daysUntil;

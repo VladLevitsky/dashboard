@@ -850,6 +850,7 @@ h2, h3 { margin: 0 0 16px; }
   grid-template-columns: calc(50% - 8px) calc(50% - 8px);
   gap: 16px;
   margin: 0 16px 40px 16px; /* Add bottom margin back for proper vertical spacing */
+  align-items: start; /* Allow cards to have different heights (for individual collapse) */
 }
 
 /* Override dynamic sizing for cards in two-column layout */
@@ -1423,6 +1424,50 @@ h2, h3 { margin: 0 0 16px; }
   transform: scale(1.15);
 }
 
+/* Card collapse chevron button */
+.card-collapse-btn {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  width: 24px;
+  height: 24px;
+  background: transparent;
+  color: var(--muted);
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.35;
+  transition: opacity 0.2s, transform 0.2s;
+  z-index: 10;
+  padding: 0;
+}
+.card-collapse-btn:hover {
+  opacity: 0.6;
+}
+.card-collapse-btn svg {
+  width: 16px;
+  height: 16px;
+  transition: transform 0.2s ease;
+}
+/* Rotate chevron when card is collapsed */
+.card.collapsed .card-collapse-btn svg {
+  transform: rotate(180deg);
+}
+/* Hide collapse button in edit mode */
+.card.editing .card-collapse-btn {
+  display: none;
+}
+/* Reposition collapse button when card is collapsed */
+.card.collapsed .card-collapse-btn {
+  position: absolute;
+  bottom: auto;
+  top: 50%;
+  transform: translateY(-50%);
+  right: 16px;
+}
+
 /* Card reorder buttons */
 .card-reorder-buttons {
   position: absolute;
@@ -1551,6 +1596,18 @@ h2, h3 { margin: 0 0 16px; }
   cursor: move !important;
   transform: scale(0.98);
   transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+/* Cross-card item drop target highlight */
+.card.drop-target {
+  outline: 3px solid var(--brand);
+  outline-offset: -3px;
+  box-shadow: 0 0 20px rgba(44, 123, 229, 0.4);
+  transition: outline 0.15s ease, box-shadow 0.15s ease;
+}
+
+[data-theme="dark"] .card.drop-target {
+  box-shadow: 0 0 20px rgba(59, 130, 246, 0.5);
 }
 
 .drop-indicator {
@@ -2994,8 +3051,8 @@ section.card.collapsed {
   overflow: visible !important;
 }
 
-section.card.collapsed[id] > *:not(h2):not(h3):not(.section-title-wrapper),
-section.card.collapsed > *:not(h2):not(h3):not(.section-title-wrapper) {
+section.card.collapsed[id] > *:not(h2):not(h3):not(.section-title-wrapper):not(.card-collapse-btn),
+section.card.collapsed > *:not(h2):not(h3):not(.section-title-wrapper):not(.card-collapse-btn) {
   display: none !important;
   height: 0 !important;
   margin: 0 !important;
@@ -4442,6 +4499,7 @@ body.stacked-mode .app-main > .two-col {
   display: inline-grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
+  align-items: start; /* Allow cards to have different heights (for individual collapse) */
 }
 
 body.stacked-mode .two-col .card {

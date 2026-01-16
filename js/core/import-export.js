@@ -121,6 +121,8 @@ export function extractUrlOverrides() {
     sectionColors: data.sectionColors || {},
     subtitleColors: data.subtitleColors || {},
     collapsedSubtitles: data.collapsedSubtitles || {},
+    collapsedCards: data.collapsedCards || {},
+    cardNotes: data.cardNotes || {},
     header: data.header
   };
 
@@ -652,6 +654,14 @@ export function applyUrlOverrides(data) {
   if (structure.collapsedSubtitles && typeof structure.collapsedSubtitles === 'object') {
     current.collapsedSubtitles = structure.collapsedSubtitles;
   }
+  // Restore collapsed cards state
+  if (structure.collapsedCards && typeof structure.collapsedCards === 'object') {
+    current.collapsedCards = structure.collapsedCards;
+  }
+  // Restore card notes
+  if (structure.cardNotes && typeof structure.cardNotes === 'object') {
+    current.cardNotes = structure.cardNotes;
+  }
   if (structure.header) {
     current.header = structure.header;
   }
@@ -803,6 +813,8 @@ export function applyUrlOverrides(data) {
       sectionColors: current.sectionColors,
       subtitleColors: current.subtitleColors,
       collapsedSubtitles: current.collapsedSubtitles,
+      collapsedCards: current.collapsedCards,
+      cardNotes: current.cardNotes,
       header: current.header,
       darkMode: current.darkMode,
       glassMode: current.glassMode,
