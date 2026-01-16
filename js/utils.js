@@ -224,6 +224,94 @@ export function convertToDarkModeColor(hexColor) {
   return '#' + toHex(r2) + toHex(g2) + toHex(b2);
 }
 
+// Make a color more vibrant by increasing saturation and slightly darkening
+// Keeps the same hue, just makes it richer and more prominent
+export function makeColorMoreVibrant(color) {
+  if (!color) return color;
+
+  let r, g, b;
+
+  // Parse rgb/rgba format
+  if (color.startsWith('rgb')) {
+    const matches = color.match(/\d+\.?\d*/g);
+    if (matches && matches.length >= 3) {
+      r = parseInt(matches[0]) / 255;
+      g = parseInt(matches[1]) / 255;
+      b = parseInt(matches[2]) / 255;
+    } else {
+      return color;
+    }
+  }
+  // Parse hex format
+  else if (color.startsWith('#')) {
+    let hex = color.slice(1);
+    if (hex.length === 3) {
+      hex = hex.split('').map(c => c + c).join('');
+    }
+    r = parseInt(hex.substr(0, 2), 16) / 255;
+    g = parseInt(hex.substr(2, 2), 16) / 255;
+    b = parseInt(hex.substr(4, 2), 16) / 255;
+  } else {
+    return color;
+  }
+
+  // Convert RGB to HSL
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  let h, s, l = (max + min) / 2;
+
+  if (max === min) {
+    h = s = 0; // achromatic (grey)
+  } else {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+
+    switch (max) {
+      case r: h = ((g - b) / d + (g < b ? 6 : 0)) / 6; break;
+      case g: h = ((b - r) / d + 2) / 6; break;
+      case b: h = ((r - g) / d + 4) / 6; break;
+    }
+  }
+
+  // Make more vibrant:
+  // - Increase saturation significantly (but cap at 1.0)
+  // - Slightly decrease lightness for richness (but not too dark)
+  // - For very light colors (high L), we can darken more
+  // - For colors that are already dark, darken less
+
+  const saturationBoost = 0.25; // Add 25% to saturation
+  const lightnessReduction = l > 0.7 ? 0.12 : (l > 0.5 ? 0.08 : 0.05);
+
+  s = Math.min(1, s + saturationBoost);
+  l = Math.max(0.15, l - lightnessReduction);
+
+  // Convert HSL back to RGB
+  let r2, g2, b2;
+
+  if (s === 0) {
+    r2 = g2 = b2 = l;
+  } else {
+    const hue2rgb = (p, q, t) => {
+      if (t < 0) t += 1;
+      if (t > 1) t -= 1;
+      if (t < 1/6) return p + (q - p) * 6 * t;
+      if (t < 1/2) return q;
+      if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+      return p;
+    };
+
+    const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+    const p = 2 * l - q;
+
+    r2 = hue2rgb(p, q, h + 1/3);
+    g2 = hue2rgb(p, q, h);
+    b2 = hue2rgb(p, q, h - 1/3);
+  }
+
+  // Return as rgb string
+  return `rgb(${Math.round(r2 * 255)}, ${Math.round(g2 * 255)}, ${Math.round(b2 * 255)})`;
+}
+
 // Lighten a color by 20% (for link bubbles)
 export function lightenColorBy20Percent(color) {
   // Handle rgb format

@@ -429,6 +429,61 @@ export function isItemSelected(itemData, data) {
   return false;
 }
 
+// --- Toggle item in quick access (for priority button)
+// Returns true if item is now in quick access, false if removed
+export function toggleItemQuickAccess(itemData) {
+  const data = currentData();
+
+  // Ensure quickAccessItems exists
+  if (!data.quickAccessItems) {
+    data.quickAccessItems = { icons: [], listItems: [], quickLinks: [] };
+  }
+  if (!data.quickAccessItems.listItems) {
+    data.quickAccessItems.listItems = [];
+  }
+
+  const isSelected = isItemSelected(itemData, data);
+
+  if (isSelected) {
+    // Remove from quick access
+    if (itemData.type === 'list') {
+      data.quickAccessItems.listItems = data.quickAccessItems.listItems.filter(item =>
+        !(item.text === itemData.text && item.url === itemData.url && !item.copyText)
+      );
+    } else if (itemData.type === 'copyPaste') {
+      data.quickAccessItems.listItems = data.quickAccessItems.listItems.filter(item =>
+        !(item.text === itemData.text && item.copyText === itemData.copyText)
+      );
+    }
+  } else {
+    // Add to quick access
+    data.quickAccessItems.listItems.push(itemData);
+  }
+
+  // Re-render quick access if panel is open
+  if (data.quickAccessExpanded) {
+    renderQuickAccess();
+  }
+
+  // Re-render sections to update item positions (prioritized items move to top)
+  if (window.renderAllSections) {
+    window.renderAllSections();
+  }
+
+  // Save
+  if (!editState.enabled) {
+    saveModel();
+  }
+
+  return !isSelected;
+}
+
+// --- Check if item is in quick access (exported for external use)
+export function isItemInQuickAccess(itemData) {
+  const data = currentData();
+  return isItemSelected(itemData, data);
+}
+
 // --- Handle item selection click
 export function handleItemSelection(event) {
   const data = currentData();

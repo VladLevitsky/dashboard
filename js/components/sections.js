@@ -1649,7 +1649,19 @@ export function renderUnifiedCard(sectionEl, sectionId) {
       const subtasksGroup = document.createElement('div');
       subtasksGroup.className = 'unified-subtasks-group';
 
-      items.subtasks.forEach(subtask => {
+      // In view mode, sort prioritized items to the top
+      let subtasksToRender = items.subtasks;
+      if (!editState.enabled && window.isItemInQuickAccess) {
+        subtasksToRender = [...items.subtasks].sort((a, b) => {
+          const aInQA = window.isItemInQuickAccess({ type: 'list', text: a.text, url: a.url, name: a.key, sectionType: sectionId });
+          const bInQA = window.isItemInQuickAccess({ type: 'list', text: b.text, url: b.url, name: b.key, sectionType: sectionId });
+          if (aInQA && !bInQA) return -1;
+          if (!aInQA && bInQA) return 1;
+          return 0;
+        });
+      }
+
+      subtasksToRender.forEach(subtask => {
         const div = createUnifiedSubtaskItem(subtask, sectionId, subtitle, subtitleColor);
         subtasksGroup.appendChild(div);
       });
@@ -1666,7 +1678,19 @@ export function renderUnifiedCard(sectionEl, sectionId) {
       const copyPasteGroup = document.createElement('div');
       copyPasteGroup.className = 'unified-copypaste-group';
 
-      items.copyPaste.forEach(cpItem => {
+      // In view mode, sort prioritized items to the top
+      let copyPasteToRender = items.copyPaste;
+      if (!editState.enabled && window.isItemInQuickAccess) {
+        copyPasteToRender = [...items.copyPaste].sort((a, b) => {
+          const aInQA = window.isItemInQuickAccess({ type: 'copyPaste', text: a.text, copyText: a.copyText || a.text, name: a.key, sectionType: sectionId });
+          const bInQA = window.isItemInQuickAccess({ type: 'copyPaste', text: b.text, copyText: b.copyText || b.text, name: b.key, sectionType: sectionId });
+          if (aInQA && !bInQA) return -1;
+          if (!aInQA && bInQA) return 1;
+          return 0;
+        });
+      }
+
+      copyPasteToRender.forEach(cpItem => {
         const div = createUnifiedCopyPasteItem(cpItem, sectionId, subtitle, subtitleColor);
         copyPasteGroup.appendChild(div);
       });
@@ -1821,21 +1845,42 @@ function createUnifiedSubtaskItem(item, sectionId, subtitle, subtitleColor) {
   div.dataset.subtitle = subtitle;
   div.dataset.key = item.key;
 
+  // Check if item is in Quick Access (prioritized)
+  const priorityItemData = {
+    type: 'list',
+    text: item.text,
+    url: item.url,
+    name: item.key,
+    sectionType: sectionId
+  };
+  const isPrioritized = !editState.enabled && window.isItemInQuickAccess && window.isItemInQuickAccess(priorityItemData);
+
   // Apply custom color if set
-  if (subtitleColor) {
-    const defaultColorLight = '#f7fafc';
-    const defaultColorDark = '#334155';
-    const effectiveColor = getColorForCurrentMode(subtitleColor, defaultColorLight, defaultColorDark);
-    // Apply glass mode transparency if active
-    if (isGlassModeActive()) {
-      div.style.background = colorToGlassRgba(effectiveColor, 0.55);
-      div.style.backdropFilter = 'blur(8px)';
-      div.style.webkitBackdropFilter = 'blur(8px)';
-      div.style.borderColor = colorToGlassRgba(darkenColor(effectiveColor), 0.5);
-    } else {
-      div.style.background = effectiveColor;
-      div.style.borderColor = darkenColor(effectiveColor);
-    }
+  const defaultColorLight = '#f7fafc';
+  const defaultColorDark = '#334155';
+  let effectiveColor = subtitleColor
+    ? getColorForCurrentMode(subtitleColor, defaultColorLight, defaultColorDark)
+    : (window.model && window.model.darkMode ? defaultColorDark : defaultColorLight);
+
+  // Make color more vibrant if prioritized
+  if (isPrioritized && window.makeColorMoreVibrant) {
+    effectiveColor = window.makeColorMoreVibrant(effectiveColor);
+  }
+
+  // Store original color for toggle functionality
+  div.dataset.originalColor = subtitleColor
+    ? getColorForCurrentMode(subtitleColor, defaultColorLight, defaultColorDark)
+    : (window.model && window.model.darkMode ? defaultColorDark : defaultColorLight);
+
+  // Apply glass mode transparency if active
+  if (isGlassModeActive()) {
+    div.style.background = colorToGlassRgba(effectiveColor, 0.55);
+    div.style.backdropFilter = 'blur(8px)';
+    div.style.webkitBackdropFilter = 'blur(8px)';
+    div.style.borderColor = colorToGlassRgba(darkenColor(effectiveColor), 0.5);
+  } else {
+    div.style.background = effectiveColor;
+    div.style.borderColor = darkenColor(effectiveColor);
   }
 
   const a = document.createElement('a');
@@ -1920,11 +1965,64 @@ function createUnifiedSubtaskItem(item, sectionId, subtitle, subtitleColor) {
     }
 
     div.appendChild(leftContainer);
+
+    // Priority toggle button (Quick Access integration)
+    const itemData = {
+      type: 'list',
+      text: item.text,
+      url: item.url,
+      name: item.key,
+      sectionType: sectionId
+    };
+    const isHighlighted = window.isItemInQuickAccess && window.isItemInQuickAccess(itemData);
+
+    const priorityBtn = document.createElement('button');
+    priorityBtn.type = 'button';
+    priorityBtn.className = 'priority-toggle-btn' + (isHighlighted ? ' active' : '');
+    priorityBtn.title = isHighlighted ? 'Remove from Quick Access' : 'Add to Quick Access';
+    priorityBtn.innerHTML = `
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"></circle>
+        <circle cx="12" cy="12" r="6"></circle>
+        <circle cx="12" cy="12" r="2"></circle>
+      </svg>
+    `;
+    priorityBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      if (window.toggleItemQuickAccess) {
+        const nowActive = window.toggleItemQuickAccess(itemData);
+        priorityBtn.classList.toggle('active', nowActive);
+        priorityBtn.title = nowActive ? 'Remove from Quick Access' : 'Add to Quick Access';
+
+        // Apply or remove vibrant color inline
+        const originalColor = div.dataset.originalColor;
+        if (nowActive && window.makeColorMoreVibrant) {
+          const vibrantColor = window.makeColorMoreVibrant(originalColor);
+          if (isGlassModeActive()) {
+            div.style.background = colorToGlassRgba(vibrantColor, 0.55);
+            div.style.borderColor = colorToGlassRgba(darkenColor(vibrantColor), 0.5);
+          } else {
+            div.style.background = vibrantColor;
+            div.style.borderColor = darkenColor(vibrantColor);
+          }
+        } else {
+          if (isGlassModeActive()) {
+            div.style.background = colorToGlassRgba(originalColor, 0.55);
+            div.style.borderColor = colorToGlassRgba(darkenColor(originalColor), 0.5);
+          } else {
+            div.style.background = originalColor;
+            div.style.borderColor = darkenColor(originalColor);
+          }
+        }
+      }
+    });
+    div.appendChild(priorityBtn);
   }
 
   div.addEventListener('click', (e) => {
     if (!editState.enabled) {
-      if (e.target.closest('.list-item-links-toggle') || e.target.closest('.list-item-tasks-toggle')) return;
+      if (e.target.closest('.list-item-links-toggle') || e.target.closest('.list-item-tasks-toggle') || e.target.closest('.priority-toggle-btn')) return;
       e.preventDefault();
       const url = div.dataset.url;
       if (url && url !== PLACEHOLDER_URL) {
@@ -2247,21 +2345,42 @@ function createUnifiedCopyPasteItem(item, sectionId, subtitle, subtitleColor) {
   div.dataset.subtitle = subtitle;
   div.dataset.key = item.key;
 
+  // Check if item is in Quick Access (prioritized)
+  const priorityItemData = {
+    type: 'copyPaste',
+    text: item.text,
+    copyText: item.copyText || item.text,
+    name: item.key,
+    sectionType: sectionId
+  };
+  const isPrioritized = !editState.enabled && window.isItemInQuickAccess && window.isItemInQuickAccess(priorityItemData);
+
   // Apply custom color if set
-  if (subtitleColor) {
-    const defaultColorLight = '#f7fafc';
-    const defaultColorDark = '#334155';
-    const effectiveColor = getColorForCurrentMode(subtitleColor, defaultColorLight, defaultColorDark);
-    // Apply glass mode transparency if active
-    if (isGlassModeActive()) {
-      div.style.background = colorToGlassRgba(effectiveColor, 0.55);
-      div.style.backdropFilter = 'blur(8px)';
-      div.style.webkitBackdropFilter = 'blur(8px)';
-      div.style.borderColor = colorToGlassRgba(darkenColor(effectiveColor), 0.5);
-    } else {
-      div.style.background = effectiveColor;
-      div.style.borderColor = darkenColor(effectiveColor);
-    }
+  const defaultColorLight = '#f7fafc';
+  const defaultColorDark = '#334155';
+  let effectiveColor = subtitleColor
+    ? getColorForCurrentMode(subtitleColor, defaultColorLight, defaultColorDark)
+    : (window.model && window.model.darkMode ? defaultColorDark : defaultColorLight);
+
+  // Make color more vibrant if prioritized
+  if (isPrioritized && window.makeColorMoreVibrant) {
+    effectiveColor = window.makeColorMoreVibrant(effectiveColor);
+  }
+
+  // Store original color for toggle functionality
+  div.dataset.originalColor = subtitleColor
+    ? getColorForCurrentMode(subtitleColor, defaultColorLight, defaultColorDark)
+    : (window.model && window.model.darkMode ? defaultColorDark : defaultColorLight);
+
+  // Apply glass mode transparency if active
+  if (isGlassModeActive()) {
+    div.style.background = colorToGlassRgba(effectiveColor, 0.55);
+    div.style.backdropFilter = 'blur(8px)';
+    div.style.webkitBackdropFilter = 'blur(8px)';
+    div.style.borderColor = colorToGlassRgba(darkenColor(effectiveColor), 0.5);
+  } else {
+    div.style.background = effectiveColor;
+    div.style.borderColor = darkenColor(effectiveColor);
   }
 
   const textSpan = document.createElement('span');
@@ -2327,9 +2446,62 @@ function createUnifiedCopyPasteItem(item, sectionId, subtitle, subtitleColor) {
 
     initializeItemDragHandlers(div, item.key, `${sectionId}:${subtitle}:copyPaste`);
   } else {
+    // Priority toggle button (Quick Access integration)
+    const itemData = {
+      type: 'copyPaste',
+      text: item.text,
+      copyText: item.copyText || item.text,
+      name: item.key,
+      sectionType: sectionId
+    };
+    const isHighlighted = window.isItemInQuickAccess && window.isItemInQuickAccess(itemData);
+
+    const priorityBtn = document.createElement('button');
+    priorityBtn.type = 'button';
+    priorityBtn.className = 'priority-toggle-btn' + (isHighlighted ? ' active' : '');
+    priorityBtn.title = isHighlighted ? 'Remove from Quick Access' : 'Add to Quick Access';
+    priorityBtn.innerHTML = `
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"></circle>
+        <circle cx="12" cy="12" r="6"></circle>
+        <circle cx="12" cy="12" r="2"></circle>
+      </svg>
+    `;
+    priorityBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      if (window.toggleItemQuickAccess) {
+        const nowActive = window.toggleItemQuickAccess(itemData);
+        priorityBtn.classList.toggle('active', nowActive);
+        priorityBtn.title = nowActive ? 'Remove from Quick Access' : 'Add to Quick Access';
+
+        // Apply or remove vibrant color inline
+        const originalColor = div.dataset.originalColor;
+        if (nowActive && window.makeColorMoreVibrant) {
+          const vibrantColor = window.makeColorMoreVibrant(originalColor);
+          if (isGlassModeActive()) {
+            div.style.background = colorToGlassRgba(vibrantColor, 0.55);
+            div.style.borderColor = colorToGlassRgba(darkenColor(vibrantColor), 0.5);
+          } else {
+            div.style.background = vibrantColor;
+            div.style.borderColor = darkenColor(vibrantColor);
+          }
+        } else {
+          if (isGlassModeActive()) {
+            div.style.background = colorToGlassRgba(originalColor, 0.55);
+            div.style.borderColor = colorToGlassRgba(darkenColor(originalColor), 0.5);
+          } else {
+            div.style.background = originalColor;
+            div.style.borderColor = darkenColor(originalColor);
+          }
+        }
+      }
+    });
+    div.appendChild(priorityBtn);
+
     // View mode: clicking anywhere on bubble copies text
     div.addEventListener('click', (e) => {
-      if (e.target.closest('.copy-paste-icon')) return;
+      if (e.target.closest('.copy-paste-icon') || e.target.closest('.priority-toggle-btn')) return;
       e.preventDefault();
       copyToClipboard();
     });
