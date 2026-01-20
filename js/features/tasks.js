@@ -2,7 +2,7 @@
 // Handles reminder and list item tasks modals and toggles
 // Tasks are color-coded items (red/yellow/green) that can be reordered and color-changed in view mode
 
-import { currentData, currentSections } from '../state.js';
+import { model, editState, currentData, currentSections } from '../state.js';
 import { $, showToast } from '../utils.js';
 import { markDirtyAndSave } from './edit-mode.js';
 import { saveModel } from '../core/storage.js';
@@ -1054,16 +1054,11 @@ export function closeAllListItemTasks() {
 // TASKS SUMMARY MODAL (Header summary view)
 // ============================================================
 
-// --- Open tasks summary modal
-export function openTasksSummaryModal() {
-  const modal = $('#tasks-summary-modal');
-  const content = $('#tasks-summary-content');
-  if (!modal || !content) return;
-
-  content.innerHTML = '';
+// --- Collect all task groups for summary
+function collectTaskGroups() {
   const data = currentData();
   const sections = currentSections();
-  let hasAnyTasks = false;
+  const groups = [];
 
   sections.forEach(section => {
     if (section.type !== 'unified') return;
@@ -1077,8 +1072,15 @@ export function openTasksSummaryModal() {
       if (subtitleData.reminders) {
         subtitleData.reminders.forEach(rem => {
           if (rem.tasks && rem.tasks.length > 0) {
-            hasAnyTasks = true;
-            renderTaskSummaryGroup(content, rem.title || rem.key, rem.tasks, 'reminder', rem.key, section.id, subtitle);
+            groups.push({
+              id: `${section.id}:${rem.key}`,
+              title: rem.title || rem.key,
+              tasks: rem.tasks,
+              itemType: 'reminder',
+              itemKey: rem.key,
+              sectionId: section.id,
+              subtitle
+            });
           }
         });
       }
@@ -1087,42 +1089,138 @@ export function openTasksSummaryModal() {
       if (subtitleData.subtasks) {
         subtitleData.subtasks.forEach(item => {
           if (item.tasks && item.tasks.length > 0) {
-            hasAnyTasks = true;
-            renderTaskSummaryGroup(content, item.text || item.key, item.tasks, 'subtask', item.key, section.id, subtitle);
+            groups.push({
+              id: `${section.id}:${item.key}`,
+              title: item.text || item.key,
+              tasks: item.tasks,
+              itemType: 'subtask',
+              itemKey: item.key,
+              sectionId: section.id,
+              subtitle
+            });
           }
         });
       }
     }
   });
 
-  if (!hasAnyTasks) {
-    content.innerHTML = '<div class="tasks-summary-empty">No tasks found</div>';
-  }
+  return groups;
+}
 
+// --- Sort groups by saved order
+function sortGroupsByOrder(groups, order) {
+  if (!order || order.length === 0) return groups;
+
+  const orderMap = new Map(order.map((id, idx) => [id, idx]));
+  return [...groups].sort((a, b) => {
+    const aIdx = orderMap.has(a.id) ? orderMap.get(a.id) : Infinity;
+    const bIdx = orderMap.has(b.id) ? orderMap.get(b.id) : Infinity;
+    return aIdx - bIdx;
+  });
+}
+
+// --- Open tasks summary modal
+export function openTasksSummaryModal() {
+  const modal = $('#tasks-summary-modal');
+  const content = $('#tasks-summary-content');
+  if (!modal || !content) return;
+
+  renderTasksSummaryContent();
   modal.hidden = false;
 }
 
+// --- Render tasks summary content (separated for re-render on reorder)
+function renderTasksSummaryContent() {
+  const content = $('#tasks-summary-content');
+  if (!content) return;
+
+  content.innerHTML = '';
+  const data = currentData();
+
+  // Collect all groups
+  let groups = collectTaskGroups();
+
+  if (groups.length === 0) {
+    content.innerHTML = '<div class="tasks-summary-empty">No tasks found</div>';
+    return;
+  }
+
+  // Sort by saved order
+  const order = data.tasksSummaryOrder || [];
+  groups = sortGroupsByOrder(groups, order);
+
+  // Render each group
+  groups.forEach((group, index) => {
+    renderTaskSummaryGroup(content, group, index, groups.length);
+  });
+}
+
 // --- Render a task group in the summary modal
-function renderTaskSummaryGroup(container, title, tasks, itemType, itemKey, sectionId, subtitle) {
+function renderTaskSummaryGroup(container, group, index, totalGroups) {
+  const { id, title, tasks, itemType, itemKey, sectionId, subtitle } = group;
+
   const groupDiv = document.createElement('div');
   groupDiv.className = 'tasks-summary-group';
+  groupDiv.dataset.groupId = id;
+
+  // Title row with chevrons
+  const titleRow = document.createElement('div');
+  titleRow.className = 'tasks-summary-group-title-row';
 
   const titleDiv = document.createElement('div');
   titleDiv.className = 'tasks-summary-group-title';
   titleDiv.textContent = title;
-  groupDiv.appendChild(titleDiv);
+
+  // Chevron buttons container
+  const chevronsDiv = document.createElement('div');
+  chevronsDiv.className = 'tasks-summary-chevrons';
+
+  // Up chevron
+  const upBtn = document.createElement('button');
+  upBtn.type = 'button';
+  upBtn.className = 'tasks-summary-chevron-btn';
+  upBtn.disabled = index === 0;
+  upBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="18 15 12 9 6 15"></polyline>
+  </svg>`;
+  upBtn.title = 'Move up';
+  upBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    moveTaskSummaryGroup(id, -1);
+  });
+
+  // Down chevron
+  const downBtn = document.createElement('button');
+  downBtn.type = 'button';
+  downBtn.className = 'tasks-summary-chevron-btn';
+  downBtn.disabled = index === totalGroups - 1;
+  downBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="6 9 12 15 18 9"></polyline>
+  </svg>`;
+  downBtn.title = 'Move down';
+  downBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    moveTaskSummaryGroup(id, 1);
+  });
+
+  chevronsDiv.appendChild(upBtn);
+  chevronsDiv.appendChild(downBtn);
+
+  titleRow.appendChild(titleDiv);
+  titleRow.appendChild(chevronsDiv);
+  groupDiv.appendChild(titleRow);
 
   const bubblesDiv = document.createElement('div');
   bubblesDiv.className = 'tasks-summary-bubbles';
 
-  tasks.forEach((task, index) => {
+  tasks.forEach((task, taskIndex) => {
     const rowDiv = document.createElement('div');
     rowDiv.className = 'tasks-summary-row';
 
     const bubble = document.createElement('div');
     bubble.className = `tasks-summary-bubble task-bubble-${task.color}`;
     bubble.textContent = task.title || 'Task';
-    bubble.dataset.index = index;
+    bubble.dataset.index = taskIndex;
     bubble.dataset.itemType = itemType;
     bubble.dataset.itemKey = itemKey;
     bubble.dataset.sectionId = sectionId;
@@ -1131,7 +1229,7 @@ function renderTaskSummaryGroup(container, title, tasks, itemType, itemKey, sect
     bubble.addEventListener('click', (e) => {
       e.stopPropagation();
       e.preventDefault();
-      cycleTaskColorInSummary(bubble, itemType, itemKey, sectionId, index, subtitle);
+      cycleTaskColorInSummary(bubble, itemType, itemKey, sectionId, taskIndex, subtitle);
     });
 
     // Arrow button to navigate to source
@@ -1155,6 +1253,37 @@ function renderTaskSummaryGroup(container, title, tasks, itemType, itemKey, sect
 
   groupDiv.appendChild(bubblesDiv);
   container.appendChild(groupDiv);
+}
+
+// --- Move a task summary group up or down
+function moveTaskSummaryGroup(groupId, direction) {
+  const data = currentData();
+
+  // Collect current groups and their order
+  let groups = collectTaskGroups();
+  const currentOrder = data.tasksSummaryOrder || [];
+  groups = sortGroupsByOrder(groups, currentOrder);
+
+  // Find current index
+  const currentIndex = groups.findIndex(g => g.id === groupId);
+  if (currentIndex === -1) return;
+
+  const newIndex = currentIndex + direction;
+  if (newIndex < 0 || newIndex >= groups.length) return;
+
+  // Build new order array
+  const newOrder = groups.map(g => g.id);
+  [newOrder[currentIndex], newOrder[newIndex]] = [newOrder[newIndex], newOrder[currentIndex]];
+
+  // Save to both model and working copy (if in edit mode)
+  model.tasksSummaryOrder = newOrder;
+  if (editState.working) {
+    editState.working.tasksSummaryOrder = newOrder;
+  }
+  saveModel();
+
+  // Re-render
+  renderTasksSummaryContent();
 }
 
 // --- Navigate to the source reminder/subtask

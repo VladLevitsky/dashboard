@@ -5661,10 +5661,53 @@ body.stacked-mode .gap-add-btn {
   gap: 10px;
 }
 
+.tasks-summary-group-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 .tasks-summary-group-title {
   font-weight: 600;
   color: var(--text);
   font-size: 14px;
+  flex: 1;
+}
+
+.tasks-summary-chevrons {
+  display: flex;
+  gap: 2px;
+}
+
+.tasks-summary-chevron-btn {
+  width: 22px;
+  height: 22px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: color 0.15s, background 0.15s;
+}
+
+.tasks-summary-chevron-btn:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--bg);
+}
+
+.tasks-summary-chevron-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.tasks-summary-chevron-btn svg {
+  width: 14px;
+  height: 14px;
 }
 
 .tasks-summary-bubbles {

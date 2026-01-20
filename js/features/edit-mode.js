@@ -7,6 +7,24 @@ import { saveModel } from '../core/storage.js';
 
 // --- Toggle Edit Mode
 export function toggleEditMode() {
+  // Find the card closest to the center of the viewport to restore position after render
+  const viewportCenter = window.scrollY + window.innerHeight / 2;
+  let closestCard = null;
+  let closestDistance = Infinity;
+
+  document.querySelectorAll('.card, .two-col').forEach(card => {
+    const rect = card.getBoundingClientRect();
+    const cardCenter = window.scrollY + rect.top + rect.height / 2;
+    const distance = Math.abs(cardCenter - viewportCenter);
+    if (distance < closestDistance) {
+      closestDistance = distance;
+      closestCard = card;
+    }
+  });
+
+  // Get the card's ID to find it again after re-render
+  const targetCardId = closestCard?.id || closestCard?.querySelector('.card')?.id;
+
   if (!editState.enabled) {
     editState.enabled = true;
     editState.working = deepClone(model);
@@ -58,6 +76,15 @@ export function toggleEditMode() {
   }
 
   if (window.refreshEditingClasses) window.refreshEditingClasses();
+
+  // Scroll the same card back into view after rendering
+  if (targetCardId) {
+    const targetCard = document.getElementById(targetCardId);
+    if (targetCard) {
+      // Scroll the card to roughly the same viewport position (center)
+      targetCard.scrollIntoView({ block: 'center', behavior: 'instant' });
+    }
+  }
 }
 
 // --- Hide Edit Popover

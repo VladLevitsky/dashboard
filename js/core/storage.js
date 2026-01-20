@@ -265,6 +265,7 @@ export function saveModel() {
     selectorModeActive: data.selectorModeActive,
     quickAccessItems: data.quickAccessItems,
     displayMode: data.displayMode,
+    tasksSummaryOrder: data.tasksSummaryOrder,
   };
 
   // Add ALL sections - all are now unified format
@@ -404,6 +405,11 @@ export async function restoreModel() {
     // Restore display mode
     if (saved.displayMode === 'normal' || saved.displayMode === 'stacked') {
       model.displayMode = saved.displayMode;
+    }
+
+    // Restore tasks summary order
+    if (saved.tasksSummaryOrder && Array.isArray(saved.tasksSummaryOrder)) {
+      model.tasksSummaryOrder = saved.tasksSummaryOrder;
     }
 
     // Restore ALL section data (all are now unified format after migration)

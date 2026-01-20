@@ -28,7 +28,8 @@
       "Bash(echo:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(powershell -Command \"\\(Get-Content ''C:\\\\Users\\\\vlevitsky\\\\Documents\\\\Personal Dashboard - New\\\\CLAUDE.md'' -Raw\\).Length\")"
     ],
     "deny": [],
     "ask": []
