@@ -912,21 +912,108 @@ export function wireMoveButtonEvents() {
 
 // Track current notepad state
 let currentNotepadSectionId = null;
+let notepadInEditMode = false;
 
-// --- Open Notepad Popover
+// --- Render note text as HTML with bullet support
+function renderNoteAsHtml(text) {
+  if (!text || !text.trim()) return '';
+
+  const lines = text.split('\n');
+  let html = '';
+  let inList = false;
+  let currentIndent = 0;
+
+  lines.forEach(line => {
+    // Check for bullet patterns: "* ", "  * " (indented), "- ", "  - "
+    const bulletMatch = line.match(/^(\s*)[*-]\s(.*)$/);
+
+    if (bulletMatch) {
+      const indent = Math.floor(bulletMatch[1].length / 2);
+      const content = bulletMatch[2];
+
+      if (!inList) {
+        html += '<ul>';
+        inList = true;
+        currentIndent = 0;
+      }
+
+      // Handle indent changes
+      while (currentIndent < indent) {
+        html += '<ul>';
+        currentIndent++;
+      }
+      while (currentIndent > indent) {
+        html += '</ul>';
+        currentIndent--;
+      }
+
+      html += `<li>${escapeHtml(content)}</li>`;
+    } else {
+      // Close any open lists
+      while (currentIndent > 0) {
+        html += '</ul>';
+        currentIndent--;
+      }
+      if (inList) {
+        html += '</ul>';
+        inList = false;
+      }
+
+      // Regular text line
+      if (line.trim()) {
+        html += `<div>${escapeHtml(line)}</div>`;
+      } else {
+        html += '<div>&nbsp;</div>';
+      }
+    }
+  });
+
+  // Close any remaining open lists
+  while (currentIndent > 0) {
+    html += '</ul>';
+    currentIndent--;
+  }
+  if (inList) {
+    html += '</ul>';
+  }
+
+  return html;
+}
+
+// --- Escape HTML special characters
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+// --- Open Notepad Popover (in view mode)
 export function openNotepad(sectionId, cursorPos) {
   const pop = $('#notepad-popover');
   if (!pop) return;
 
   currentNotepadSectionId = sectionId;
+  notepadInEditMode = false;
 
-  // Get current note content - always from model directly (not working copy)
+  // Get current note content
   const noteText = model.cardNotes?.[sectionId] || '';
-  $('#notepad-textarea').value = noteText;
+
+  // Show view mode, hide edit mode
+  const viewContainer = $('#notepad-view');
+  const viewContent = $('#notepad-view-content');
+  const editor = $('#notepad-editor');
+  const actions = $('#notepad-actions');
+
+  viewContainer.hidden = false;
+  editor.hidden = true;
+  actions.hidden = true;
+
+  // Render the note content
+  viewContent.innerHTML = renderNoteAsHtml(noteText);
 
   // Make visible to measure size
   pop.hidden = false;
-  const popWidth = pop.offsetWidth || 320;
+  const popWidth = pop.offsetWidth || 384;
   const popHeight = pop.offsetHeight || 260;
   const margin = 12;
 
@@ -971,10 +1058,38 @@ export function openNotepad(sectionId, cursorPos) {
 
   pop.style.left = `${leftPos}px`;
   pop.style.top = `${topPos}px`;
+}
 
-  // Focus the textarea
+// --- Enter edit mode for notepad
+export function enterNotepadEditMode() {
+  if (notepadInEditMode) return;
+  notepadInEditMode = true;
+
+  const viewContainer = $('#notepad-view');
+  const editor = $('#notepad-editor');
+  const actions = $('#notepad-actions');
+
+  // Get current note content
+  const noteText = model.cardNotes?.[currentNotepadSectionId] || '';
+
+  // Convert plain text to HTML for contenteditable
+  editor.innerHTML = renderNoteAsHtml(noteText);
+
+  // Switch to edit mode
+  viewContainer.hidden = true;
+  editor.hidden = false;
+  actions.hidden = false;
+
+  // Focus and place cursor at end
   setTimeout(() => {
-    $('#notepad-textarea').focus();
+    editor.focus();
+    // Move cursor to end
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(editor);
+    range.collapse(false);
+    selection.removeAllRanges();
+    selection.addRange(range);
   }, 50);
 }
 
@@ -985,13 +1100,77 @@ export function closeNotepad() {
     pop.hidden = true;
   }
   currentNotepadSectionId = null;
+  notepadInEditMode = false;
+}
+
+// --- Convert contenteditable HTML back to plain text with bullet markers
+function editorHtmlToText(element) {
+  let result = '';
+
+  function processNode(node, indent = 0) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      return node.textContent;
+    }
+
+    if (node.nodeType !== Node.ELEMENT_NODE) return '';
+
+    const tag = node.tagName.toLowerCase();
+
+    if (tag === 'ul') {
+      let ulText = '';
+      for (const child of node.childNodes) {
+        ulText += processNode(child, indent);
+      }
+      return ulText;
+    }
+
+    if (tag === 'li') {
+      const indentStr = '  '.repeat(indent);
+      let liText = indentStr + '* ';
+      for (const child of node.childNodes) {
+        if (child.tagName && child.tagName.toLowerCase() === 'ul') {
+          liText += '\n' + processNode(child, indent + 1);
+        } else {
+          liText += processNode(child, indent);
+        }
+      }
+      return liText.trimEnd() + '\n';
+    }
+
+    if (tag === 'div' || tag === 'p') {
+      let text = '';
+      for (const child of node.childNodes) {
+        text += processNode(child, indent);
+      }
+      return text + '\n';
+    }
+
+    if (tag === 'br') {
+      return '\n';
+    }
+
+    // Default: process children
+    let text = '';
+    for (const child of node.childNodes) {
+      text += processNode(child, indent);
+    }
+    return text;
+  }
+
+  for (const child of element.childNodes) {
+    result += processNode(child, 0);
+  }
+
+  // Clean up multiple newlines and trim
+  return result.replace(/\n{3,}/g, '\n\n').trim();
 }
 
 // --- Save Note
 export function saveNote() {
   if (!currentNotepadSectionId) return;
 
-  const noteText = $('#notepad-textarea').value.trim();
+  const editor = $('#notepad-editor');
+  const noteText = editorHtmlToText(editor).trim();
 
   // Initialize cardNotes if needed
   if (!model.cardNotes) {
@@ -1044,6 +1223,8 @@ export function wireNotepadEvents() {
   const closeBtn = $('#notepad-close');
   const cancelBtn = $('#notepad-cancel');
   const saveBtn = $('#notepad-save');
+  const viewContainer = $('#notepad-view');
+  const editor = $('#notepad-editor');
 
   if (closeBtn) {
     closeBtn.addEventListener('click', closeNotepad);
@@ -1053,6 +1234,17 @@ export function wireNotepadEvents() {
   }
   if (saveBtn) {
     saveBtn.addEventListener('click', saveNote);
+  }
+
+  // Click on view container to enter edit mode
+  if (viewContainer) {
+    viewContainer.addEventListener('click', enterNotepadEditMode);
+  }
+
+  // Keyboard support for bullet points in contenteditable
+  if (editor) {
+    editor.addEventListener('keydown', handleEditorKeydown);
+    editor.addEventListener('input', handleEditorInput);
   }
 
   // Close on click outside
@@ -1067,4 +1259,129 @@ export function wireNotepadEvents() {
       closeNotepad();
     }
   });
+}
+
+// --- Check if cursor is inside a list item
+function isInListItem() {
+  const selection = window.getSelection();
+  if (!selection.rangeCount) return null;
+
+  let node = selection.anchorNode;
+  while (node && node !== document.body) {
+    if (node.tagName === 'LI') return node;
+    node = node.parentNode;
+  }
+  return null;
+}
+
+// --- Check if cursor is inside a list
+function isInList() {
+  const selection = window.getSelection();
+  if (!selection.rangeCount) return null;
+
+  let node = selection.anchorNode;
+  while (node && node !== document.body) {
+    if (node.tagName === 'UL') return node;
+    node = node.parentNode;
+  }
+  return null;
+}
+
+// --- Handle keydown in contenteditable editor
+function handleEditorKeydown(e) {
+  const editor = e.target;
+
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    const li = isInListItem();
+
+    if (li) {
+      if (e.shiftKey) {
+        // Shift+Tab: outdent
+        document.execCommand('outdent', false, null);
+      } else {
+        // Tab: indent (create nested list)
+        document.execCommand('indent', false, null);
+      }
+    }
+    return;
+  }
+
+  if (e.key === 'Enter' && !e.shiftKey) {
+    const li = isInListItem();
+    if (li) {
+      // Check if the list item is empty
+      const text = li.textContent.trim();
+      if (!text) {
+        e.preventDefault();
+        // Remove empty list item and exit list
+        const ul = li.parentNode;
+        const parentLi = ul.parentNode.tagName === 'LI' ? ul.parentNode : null;
+
+        li.remove();
+
+        // If this was nested, move cursor after parent li
+        if (parentLi) {
+          const range = document.createRange();
+          range.setStartAfter(parentLi);
+          range.collapse(true);
+          const selection = window.getSelection();
+          selection.removeAllRanges();
+          selection.addRange(range);
+        } else if (ul.children.length === 0) {
+          // Remove empty ul and add a line break
+          const br = document.createElement('div');
+          br.innerHTML = '<br>';
+          ul.parentNode.insertBefore(br, ul);
+          ul.remove();
+
+          const range = document.createRange();
+          range.setStart(br, 0);
+          range.collapse(true);
+          const selection = window.getSelection();
+          selection.removeAllRanges();
+          selection.addRange(range);
+        }
+        return;
+      }
+    }
+  }
+}
+
+// --- Handle input in contenteditable to auto-convert "* " to bullet
+function handleEditorInput(e) {
+  const editor = e.target;
+  const selection = window.getSelection();
+  if (!selection.rangeCount) return;
+
+  const range = selection.getRangeAt(0);
+  let node = range.startContainer;
+
+  // Only process text nodes
+  if (node.nodeType !== Node.TEXT_NODE) return;
+
+  const text = node.textContent;
+  const cursorPos = range.startOffset;
+
+  // Check for "* " or "- " pattern at start of text or after newline
+  const beforeCursor = text.substring(0, cursorPos);
+
+  // Pattern: text ends with "* " or "- " and it's at the beginning or after whitespace
+  const bulletMatch = beforeCursor.match(/(^|[\n])([*-])\s$/);
+
+  if (bulletMatch) {
+    // Check if we're not already in a list
+    if (!isInList()) {
+      // Remove the "* " or "- " text
+      const matchStart = beforeCursor.length - bulletMatch[0].length + (bulletMatch[1] ? bulletMatch[1].length : 0);
+      const afterCursor = text.substring(cursorPos);
+      const newText = text.substring(0, matchStart) + afterCursor;
+
+      // Update the text node
+      node.textContent = newText;
+
+      // Create bullet list
+      document.execCommand('insertUnorderedList', false, null);
+    }
+  }
 }

@@ -315,8 +315,12 @@
         <h4>Card Notes</h4>
         <button type="button" class="notepad-popover-close" id="notepad-close" title="Close">&times;</button>
       </div>
-      <textarea id="notepad-textarea" class="notepad-textarea" placeholder="Write your notes here..."></textarea>
-      <div class="notepad-popover-actions">
+      <div id="notepad-view" class="notepad-view">
+        <div id="notepad-view-content" class="notepad-view-content"></div>
+        <div class="notepad-view-empty">Click to add notes...</div>
+      </div>
+      <div id="notepad-editor" class="notepad-editor" contenteditable="true" hidden></div>
+      <div class="notepad-popover-actions" id="notepad-actions" hidden>
         <button type="button" class="notepad-cancel-btn" id="notepad-cancel">Cancel</button>
         <button type="button" class="notepad-save-btn" id="notepad-save">Save</button>
       </div>
