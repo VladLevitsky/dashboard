@@ -58,9 +58,10 @@ export function toggleEditMode() {
     hideCalendarPopover();
   }
 
-  // Close any open reminder and list item link bubbles when toggling edit mode
+  // Close any open reminder, list item, and icon link bubbles when toggling edit mode
   if (window.closeAllReminderLinks) window.closeAllReminderLinks();
   if (window.closeAllListItemLinks) window.closeAllListItemLinks();
+  if (window.closeAllIconLinks) window.closeAllIconLinks();
 
   if (window.renderHeaderAndTitles) window.renderHeaderAndTitles();
   if (window.renderAllSections) window.renderAllSections();
@@ -171,6 +172,17 @@ export function openEditPopover(targetEl, values, onDone, cursorPos) {
   currentMoveContext = values.moveContext || null;
   moveBtn.hidden = !currentMoveContext;
   if (moveSelector) moveSelector.hidden = true; // Always start with selector hidden
+
+  // Icon links button shows if allowIconLinks is true
+  const iconLinksBtn = $('#edit-icon-links');
+  if (iconLinksBtn) {
+    const showIconLinks = values.allowIconLinks === true;
+    iconLinksBtn.hidden = !showIconLinks;
+    // Store icon reference for links modal
+    editState.currentIconRef = showIconLinks ? values.iconRef : null;
+    editState.currentIconSectionId = showIconLinks ? values.iconSectionId : null;
+    editState.currentIconSubtitle = showIconLinks ? values.iconSubtitle : null;
+  }
 
   // Make visible to measure height, then position
   pop.hidden = false;

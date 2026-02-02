@@ -55,7 +55,9 @@ import {
 } from '../features/media-library.js';
 import {
   closeAllReminderLinks,
-  closeAllListItemLinks
+  closeAllListItemLinks,
+  closeAllIconLinks,
+  openIconLinksModal
 } from '../features/links.js';
 import {
   closeAllReminderTasks,
@@ -366,15 +368,16 @@ export function setupCardCollapseExpand() {
     // Only work when NOT in edit mode
     if (editState.enabled) return;
 
-    // Check if there are any open link containers (reminder or list item links)
-    const openLinkContainers = document.querySelectorAll('.reminder-links-expanded, .list-item-links-expanded');
+    // Check if there are any open link containers (reminder, list item, or icon links)
+    const openLinkContainers = document.querySelectorAll('.reminder-links-expanded, .list-item-links-expanded, .icon-links-expanded');
     if (openLinkContainers.length > 0) {
       // If click is inside a link container or on a link toggle button, let it handle itself
-      const isInsideLinks = e.target.closest('.reminder-links-expanded, .list-item-links-expanded, .reminder-links-toggle, .list-item-links-toggle');
+      const isInsideLinks = e.target.closest('.reminder-links-expanded, .list-item-links-expanded, .icon-links-expanded, .reminder-links-toggle, .list-item-links-toggle, .icon-link-indicator');
       if (!isInsideLinks) {
         // Close all open link containers and prevent card collapse
         closeAllReminderLinks();
         closeAllListItemLinks();
+        closeAllIconLinks();
         return;
       }
     }
@@ -541,12 +544,16 @@ export function wireUI() {
   document.addEventListener('click', (e) => {
     const clickedOnReminderToggle = e.target.closest('.reminder-links-toggle');
     const clickedOnListItemToggle = e.target.closest('.list-item-links-toggle');
+    const clickedOnIconIndicator = e.target.closest('.icon-link-indicator');
     const clickedOnBubble = e.target.closest('.reminder-link-bubble');
     if (!clickedOnReminderToggle && !clickedOnBubble) {
       closeAllReminderLinks();
     }
     if (!clickedOnListItemToggle && !clickedOnBubble) {
       closeAllListItemLinks();
+    }
+    if (!clickedOnIconIndicator && !clickedOnBubble) {
+      closeAllIconLinks();
     }
     // Close reminder and list item task bubbles when clicking outside
     const clickedOnReminderTasksToggle = e.target.closest('.reminder-tasks-toggle');
@@ -888,6 +895,20 @@ export function wireUI() {
       editState.chosenMedia = null;  // Clear image when emoji is chosen
       $('#chosen-image-name').textContent = `Emoji: ${emoji}`;
       $('#emoji-picker-container').hidden = true;
+    });
+  }
+
+  // Hook up "Icon Links" button to open icon links modal
+  const iconLinksBtn = $('#edit-icon-links');
+  if (iconLinksBtn) {
+    iconLinksBtn.addEventListener('click', () => {
+      if (editState.currentIconRef && editState.currentIconSectionId && editState.currentIconSubtitle) {
+        openIconLinksModal(
+          editState.currentIconRef,
+          editState.currentIconSectionId,
+          editState.currentIconSubtitle
+        );
+      }
     });
   }
 

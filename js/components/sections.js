@@ -1745,7 +1745,26 @@ function createUnifiedIconButton(item, sectionId, subtitle, subtitleColor) {
     btn.appendChild(img);
   }
 
+  // Add link indicator in view mode if icon has links
+  if (!editState.enabled && item.links && item.links.length > 0) {
+    const linkIndicator = document.createElement('div');
+    linkIndicator.className = 'icon-link-indicator';
+    linkIndicator.title = `${item.links.length} link${item.links.length > 1 ? 's' : ''}`;
+    linkIndicator.addEventListener('click', (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      if (window.toggleIconLinks) {
+        window.toggleIconLinks(item.key, subtitle, sectionId, linkIndicator);
+      }
+    });
+    btn.appendChild(linkIndicator);
+  }
+
   btn.addEventListener('click', (e) => {
+    // In view mode, if clicking the link indicator, don't navigate
+    if (!editState.enabled && e.target.classList.contains('icon-link-indicator')) {
+      return;
+    }
     if (!editState.enabled) {
       openUrl(item.url);
     } else {
@@ -1754,6 +1773,10 @@ function createUnifiedIconButton(item, sectionId, subtitle, subtitleColor) {
         url: item.url,
         allowImage: true,
         allowDelete: true,
+        allowIconLinks: true,
+        iconRef: item,
+        iconSectionId: sectionId,
+        iconSubtitle: subtitle,
         moveContext: { sectionId, subtitle, itemType: 'icons', itemKey: item.key }
       }, async ({ url, chosenMedia, chosenEmoji, delete: doDelete, accept }) => {
         if (!accept) return;

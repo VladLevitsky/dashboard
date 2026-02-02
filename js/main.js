@@ -199,7 +199,14 @@ import {
   cancelListItemLinksModal,
   saveListItemLinksModal,
   toggleListItemLinks,
-  closeAllListItemLinks
+  closeAllListItemLinks,
+  openIconLinksModal,
+  renderIconLinkRows,
+  addIconLinkRow,
+  cancelIconLinksModal,
+  saveIconLinksModal,
+  toggleIconLinks,
+  closeAllIconLinks
 } from './features/links.js';
 
 import {
@@ -457,6 +464,13 @@ window.cancelListItemLinksModal = cancelListItemLinksModal;
 window.saveListItemLinksModal = saveListItemLinksModal;
 window.toggleListItemLinks = toggleListItemLinks;
 window.closeAllListItemLinks = closeAllListItemLinks;
+window.openIconLinksModal = openIconLinksModal;
+window.renderIconLinkRows = renderIconLinkRows;
+window.addIconLinkRow = addIconLinkRow;
+window.cancelIconLinksModal = cancelIconLinksModal;
+window.saveIconLinksModal = saveIconLinksModal;
+window.toggleIconLinks = toggleIconLinks;
+window.closeAllIconLinks = closeAllIconLinks;
 
 // Tasks
 window.openTasksModal = openTasksModal;
