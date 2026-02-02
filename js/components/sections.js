@@ -1745,18 +1745,21 @@ function createUnifiedIconButton(item, sectionId, subtitle, subtitleColor) {
     btn.appendChild(img);
   }
 
-  // Add link indicator in view mode if icon has links
-  if (!editState.enabled && item.links && item.links.length > 0) {
+  // Add link indicator if icon has links (show in both edit and view mode)
+  if (item.links && item.links.length > 0) {
     const linkIndicator = document.createElement('div');
     linkIndicator.className = 'icon-link-indicator';
     linkIndicator.title = `${item.links.length} link${item.links.length > 1 ? 's' : ''}`;
-    linkIndicator.addEventListener('click', (e) => {
-      e.stopPropagation();
-      e.preventDefault();
-      if (window.toggleIconLinks) {
-        window.toggleIconLinks(item.key, subtitle, sectionId, linkIndicator);
-      }
-    });
+    // Only add click handler in view mode
+    if (!editState.enabled) {
+      linkIndicator.addEventListener('click', (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        if (window.toggleIconLinks) {
+          window.toggleIconLinks(item.key, subtitle, sectionId, linkIndicator);
+        }
+      });
+    }
     btn.appendChild(linkIndicator);
   }
 

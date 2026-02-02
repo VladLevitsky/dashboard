@@ -10,6 +10,293 @@ let currentLinksReminder = null;
 let currentLinksListItem = null;
 let currentLinksListItemSectionId = null;
 
+// Drag state for link/section reordering
+let linkDragState = {
+  dragging: null,
+  dragIndex: -1,
+  linksArray: null,
+  renderFn: null
+};
+
+// Default colors
+const defaultColorLight = '#f7fafc';
+const defaultColorDark = '#475569';
+
+// Backdrop element for link popups
+let linksBackdrop = null;
+let linksSourceElement = null;
+let linksSourceClone = null;
+let linksScrollHandler = null;
+
+function updateClonePosition() {
+  if (linksSourceElement && linksSourceClone) {
+    const rect = linksSourceElement.getBoundingClientRect();
+    linksSourceClone.style.left = rect.left + 'px';
+    linksSourceClone.style.top = rect.top + 'px';
+  }
+}
+
+function showLinksBackdrop(closeCallback, sourceElement) {
+  if (!linksBackdrop) {
+    linksBackdrop = document.createElement('div');
+    linksBackdrop.className = 'links-popup-backdrop';
+    document.body.appendChild(linksBackdrop);
+  }
+
+  // Keep track of source element and create a clone above the backdrop
+  if (sourceElement) {
+    linksSourceElement = sourceElement;
+
+    // Clone the element and position it exactly over the original
+    const rect = sourceElement.getBoundingClientRect();
+    const clone = sourceElement.cloneNode(true);
+    clone.className = sourceElement.className + ' links-source-clone';
+    clone.style.position = 'fixed';
+    clone.style.left = rect.left + 'px';
+    clone.style.top = rect.top + 'px';
+    clone.style.width = rect.width + 'px';
+    clone.style.height = rect.height + 'px';
+    clone.style.margin = '0';
+    clone.style.zIndex = '10001';
+    clone.style.pointerEvents = 'none';
+
+    document.body.appendChild(clone);
+    linksSourceClone = clone;
+
+    // Hide the original (but keep it in layout)
+    sourceElement.style.visibility = 'hidden';
+
+    // Add scroll listener to update clone position
+    linksScrollHandler = updateClonePosition;
+    window.addEventListener('scroll', linksScrollHandler, true);
+  }
+
+  linksBackdrop._closeCallback = closeCallback;
+  linksBackdrop.onclick = () => {
+    if (linksBackdrop._closeCallback) {
+      linksBackdrop._closeCallback();
+    }
+  };
+
+  // Trigger reflow then add active class for animation
+  linksBackdrop.offsetHeight;
+  linksBackdrop.classList.add('active');
+}
+
+function hideLinksBackdrop() {
+  if (linksBackdrop) {
+    linksBackdrop.classList.remove('active');
+  }
+  // Remove scroll listener
+  if (linksScrollHandler) {
+    window.removeEventListener('scroll', linksScrollHandler, true);
+    linksScrollHandler = null;
+  }
+  // Remove clone and restore original visibility
+  if (linksSourceClone) {
+    linksSourceClone.remove();
+    linksSourceClone = null;
+  }
+  if (linksSourceElement) {
+    linksSourceElement.style.visibility = '';
+    linksSourceElement = null;
+  }
+}
+
+// --- Create top drop zone for dragging items to position 0
+function createTopDropZone(linksArray, renderFn) {
+  const dropZone = document.createElement('div');
+  dropZone.className = 'link-top-drop-zone';
+
+  dropZone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    if (!linkDragState.dragging) return;
+    dropZone.classList.add('drag-over');
+  });
+
+  dropZone.addEventListener('dragleave', () => {
+    dropZone.classList.remove('drag-over');
+  });
+
+  dropZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+
+    if (!linkDragState.dragging || linkDragState.linksArray !== linksArray) return;
+
+    const fromIndex = linkDragState.dragIndex;
+    if (fromIndex === 0) return; // Already at top
+
+    const [movedItem] = linksArray.splice(fromIndex, 1);
+    linksArray.splice(0, 0, movedItem);
+    renderFn();
+  });
+
+  return dropZone;
+}
+
+// --- Shared function to create a link or section row with drag support
+function createLinkOrSectionRow(item, index, linksArray, renderFn) {
+  const isSection = item.type === 'section';
+
+  const rowDiv = document.createElement('div');
+  rowDiv.className = isSection ? 'reminder-link-row section-row' : 'reminder-link-row';
+  rowDiv.draggable = true;
+  rowDiv.dataset.index = index;
+
+  // Drag handle
+  const dragHandle = document.createElement('div');
+  dragHandle.className = 'link-drag-handle';
+  dragHandle.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+    <circle cx="9" cy="6" r="1.5"></circle>
+    <circle cx="15" cy="6" r="1.5"></circle>
+    <circle cx="9" cy="12" r="1.5"></circle>
+    <circle cx="15" cy="12" r="1.5"></circle>
+    <circle cx="9" cy="18" r="1.5"></circle>
+    <circle cx="15" cy="18" r="1.5"></circle>
+  </svg>`;
+  dragHandle.title = 'Drag to reorder';
+
+  // Drag events
+  rowDiv.addEventListener('dragstart', (e) => {
+    linkDragState.dragging = rowDiv;
+    linkDragState.dragIndex = index;
+    linkDragState.linksArray = linksArray;
+    linkDragState.renderFn = renderFn;
+    rowDiv.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+  });
+
+  rowDiv.addEventListener('dragend', () => {
+    rowDiv.classList.remove('dragging');
+    linkDragState.dragging = null;
+    linkDragState.dragIndex = -1;
+  });
+
+  rowDiv.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    if (!linkDragState.dragging || linkDragState.dragging === rowDiv) return;
+
+    const rect = rowDiv.getBoundingClientRect();
+    const midY = rect.top + rect.height / 2;
+
+    rowDiv.classList.remove('drag-over-top', 'drag-over-bottom');
+    if (e.clientY < midY) {
+      rowDiv.classList.add('drag-over-top');
+    } else {
+      rowDiv.classList.add('drag-over-bottom');
+    }
+  });
+
+  rowDiv.addEventListener('dragleave', () => {
+    rowDiv.classList.remove('drag-over-top', 'drag-over-bottom');
+  });
+
+  rowDiv.addEventListener('drop', (e) => {
+    e.preventDefault();
+    rowDiv.classList.remove('drag-over-top', 'drag-over-bottom');
+
+    if (!linkDragState.dragging || linkDragState.linksArray !== linksArray) return;
+
+    const fromIndex = linkDragState.dragIndex;
+    let toIndex = index;
+
+    const rect = rowDiv.getBoundingClientRect();
+    const midY = rect.top + rect.height / 2;
+    if (e.clientY >= midY && toIndex < linksArray.length - 1) {
+      toIndex++;
+    }
+
+    if (fromIndex !== toIndex) {
+      const [movedItem] = linksArray.splice(fromIndex, 1);
+      if (fromIndex < toIndex) toIndex--;
+      linksArray.splice(toIndex, 0, movedItem);
+      renderFn();
+    }
+  });
+
+  rowDiv.appendChild(dragHandle);
+
+  if (isSection) {
+    // Section row: just a title input spanning the row
+    const titleInput = document.createElement('input');
+    titleInput.type = 'text';
+    titleInput.placeholder = 'Section title';
+    titleInput.value = item.title || '';
+    titleInput.className = 'section-title-input';
+    titleInput.addEventListener('input', (e) => {
+      item.title = e.target.value;
+    });
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.type = 'button';
+    deleteBtn.className = 'btn-delete-link';
+    deleteBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+      <polyline points="3 6 5 6 21 6"></polyline>
+      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+    </svg>`;
+    deleteBtn.title = 'Delete section';
+    deleteBtn.addEventListener('click', () => {
+      linksArray.splice(index, 1);
+      renderFn();
+    });
+
+    rowDiv.appendChild(titleInput);
+    rowDiv.appendChild(deleteBtn);
+  } else {
+    // Link row: title, url, color, delete
+    const titleInput = document.createElement('input');
+    titleInput.type = 'text';
+    titleInput.placeholder = 'Link title';
+    titleInput.value = item.title || '';
+    titleInput.className = 'link-title-input';
+    titleInput.addEventListener('input', (e) => {
+      item.title = e.target.value;
+    });
+
+    const urlInput = document.createElement('input');
+    urlInput.type = 'url';
+    urlInput.placeholder = 'https://...';
+    urlInput.value = item.url || '';
+    urlInput.className = 'link-url-input';
+    urlInput.addEventListener('input', (e) => {
+      item.url = e.target.value;
+    });
+
+    // Color circle button
+    const colorBtn = document.createElement('button');
+    colorBtn.type = 'button';
+    colorBtn.className = 'icon-link-color-btn';
+    const currentColor = getColorForCurrentMode(item.color, defaultColorLight, defaultColorDark);
+    colorBtn.style.background = currentColor;
+    colorBtn.title = 'Choose bubble color';
+    colorBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openLinkColorPicker(item, colorBtn);
+    });
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.type = 'button';
+    deleteBtn.className = 'btn-delete-link';
+    deleteBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+      <polyline points="3 6 5 6 21 6"></polyline>
+      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+    </svg>`;
+    deleteBtn.title = 'Delete link';
+    deleteBtn.addEventListener('click', () => {
+      linksArray.splice(index, 1);
+      renderFn();
+    });
+
+    rowDiv.appendChild(titleInput);
+    rowDiv.appendChild(urlInput);
+    rowDiv.appendChild(colorBtn);
+    rowDiv.appendChild(deleteBtn);
+  }
+
+  return rowDiv;
+}
+
 // --- Open links modal for reminder
 export function openLinksModal(reminder) {
   currentLinksReminder = reminder;
@@ -29,13 +316,22 @@ export function openLinksModal(reminder) {
         <p class="icon-links-mode-hint">Setting colors for: <strong id="reminder-links-mode-label">Light</strong> mode</p>
         <div class="reminder-links-content">
           <div id="reminder-links-list" class="reminder-links-list"></div>
-          <button type="button" id="add-reminder-link-btn" class="btn-add-link">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="12" y1="5" x2="12" y2="19"></line>
-              <line x1="5" y1="12" x2="19" y2="12"></line>
-            </svg>
-            Add Link
-          </button>
+          <div class="links-modal-add-buttons">
+            <button type="button" id="add-reminder-link-btn" class="btn-add-link">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+              </svg>
+              Add Link
+            </button>
+            <button type="button" id="add-reminder-section-btn" class="btn-add-link btn-add-section">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+              </svg>
+              Add Section
+            </button>
+          </div>
         </div>
         <div class="reminder-links-actions">
           <button type="button" id="reminder-links-cancel" class="btn-secondary">Cancel</button>
@@ -46,6 +342,7 @@ export function openLinksModal(reminder) {
     document.body.appendChild(modal);
 
     $('#add-reminder-link-btn').addEventListener('click', addLinkRow);
+    $('#add-reminder-section-btn').addEventListener('click', addReminderSection);
     $('#reminder-links-cancel').addEventListener('click', cancelLinksModal);
     $('#reminder-links-save').addEventListener('click', saveLinksModal);
 
@@ -73,62 +370,28 @@ export function renderLinkRows() {
     currentLinksReminder.links = [];
   }
 
-  const defaultColorLight = '#f7fafc';
-  const defaultColorDark = '#475569';
+  // Add top drop zone for dragging to position 0
+  const topDropZone = createTopDropZone(currentLinksReminder.links, renderLinkRows);
+  listContainer.appendChild(topDropZone);
 
-  currentLinksReminder.links.forEach((link, index) => {
-    const rowDiv = document.createElement('div');
-    rowDiv.className = 'reminder-link-row';
-
-    const titleInput = document.createElement('input');
-    titleInput.type = 'text';
-    titleInput.placeholder = 'Link title';
-    titleInput.value = link.title || '';
-    titleInput.className = 'link-title-input';
-    titleInput.addEventListener('input', (e) => {
-      link.title = e.target.value;
-    });
-
-    const urlInput = document.createElement('input');
-    urlInput.type = 'url';
-    urlInput.placeholder = 'https://...';
-    urlInput.value = link.url || '';
-    urlInput.className = 'link-url-input';
-    urlInput.addEventListener('input', (e) => {
-      link.url = e.target.value;
-    });
-
-    // Color circle button - opens color picker popover
-    const colorBtn = document.createElement('button');
-    colorBtn.type = 'button';
-    colorBtn.className = 'icon-link-color-btn';
-    const currentColor = getColorForCurrentMode(link.color, defaultColorLight, defaultColorDark);
-    colorBtn.style.background = currentColor;
-    colorBtn.title = 'Choose bubble color';
-    colorBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      openLinkColorPicker(link, colorBtn);
-    });
-
-    const deleteBtn = document.createElement('button');
-    deleteBtn.type = 'button';
-    deleteBtn.className = 'btn-delete-link';
-    deleteBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-      <polyline points="3 6 5 6 21 6"></polyline>
-      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-    </svg>`;
-    deleteBtn.title = 'Delete link';
-    deleteBtn.addEventListener('click', () => {
-      currentLinksReminder.links.splice(index, 1);
-      renderLinkRows();
-    });
-
-    rowDiv.appendChild(titleInput);
-    rowDiv.appendChild(urlInput);
-    rowDiv.appendChild(colorBtn);
-    rowDiv.appendChild(deleteBtn);
+  currentLinksReminder.links.forEach((item, index) => {
+    const rowDiv = createLinkOrSectionRow(item, index, currentLinksReminder.links, renderLinkRows);
     listContainer.appendChild(rowDiv);
   });
+}
+
+// --- Add section for reminder
+function addReminderSection() {
+  if (!currentLinksReminder.links) {
+    currentLinksReminder.links = [];
+  }
+  currentLinksReminder.links.push({ type: 'section', title: '' });
+  renderLinkRows();
+
+  const inputs = document.querySelectorAll('#reminder-links-list .section-title-input');
+  if (inputs.length > 0) {
+    inputs[inputs.length - 1].focus();
+  }
 }
 
 // --- Add link row for reminder
@@ -157,9 +420,13 @@ export function cancelLinksModal() {
 export function saveLinksModal() {
   if (!currentLinksReminder) return;
 
-  currentLinksReminder.links = currentLinksReminder.links.filter(
-    link => link.title.trim() || link.url.trim()
-  );
+  // Filter: keep sections with titles, keep links with title or url
+  currentLinksReminder.links = currentLinksReminder.links.filter(item => {
+    if (item.type === 'section') {
+      return item.title && item.title.trim();
+    }
+    return (item.title && item.title.trim()) || (item.url && item.url.trim());
+  });
 
   markDirtyAndSave();
   if (window.renderAllSections) window.renderAllSections();
@@ -186,11 +453,16 @@ export function toggleReminderLinks(reminderKey, subtitle, sectionId, buttonEl) 
 
   if (linksContainer && linksContainer.parentNode) {
     const bubbles = linksContainer.querySelectorAll('.reminder-link-bubble');
+    const sections = linksContainer.querySelectorAll('.link-section-divider');
     bubbles.forEach(bubble => {
       bubble.style.animationDelay = '0ms';
     });
+    sections.forEach(section => {
+      section.style.animationDelay = '0ms';
+    });
     linksContainer.classList.remove('open');
     linksContainer.classList.add('closing');
+    hideLinksBackdrop();
     setTimeout(() => {
       if (linksContainer.parentNode) {
         linksContainer.remove();
@@ -198,6 +470,11 @@ export function toggleReminderLinks(reminderKey, subtitle, sectionId, buttonEl) 
     }, 250);
     buttonEl._linksContainer = null;
   } else {
+    // Close any other open link popups first
+    closeAllReminderLinks();
+    closeAllListItemLinks();
+    closeAllIconLinks();
+
     // Default colors for fallback
     const defaultColorLight = '#f7fafc';
     const defaultColorDark = '#475569';
@@ -216,30 +493,39 @@ export function toggleReminderLinks(reminderKey, subtitle, sectionId, buttonEl) 
     linksContainer = document.createElement('div');
     linksContainer.className = 'reminder-links-expanded';
 
-    reminder.links.forEach((link, index) => {
-      // Each link can have its own color
-      let bubbleColor;
-      if (link.color) {
-        bubbleColor = getColorForCurrentMode(link.color, defaultColorLight, defaultColorDark);
+    reminder.links.forEach((item, index) => {
+      if (item.type === 'section') {
+        // Render section divider
+        const sectionDiv = document.createElement('div');
+        sectionDiv.className = 'link-section-divider';
+        sectionDiv.textContent = item.title || 'Section';
+        sectionDiv.style.animationDelay = `${index * 50}ms`;
+        linksContainer.appendChild(sectionDiv);
       } else {
-        bubbleColor = fallbackColor;
+        // Each link can have its own color
+        let bubbleColor;
+        if (item.color) {
+          bubbleColor = getColorForCurrentMode(item.color, defaultColorLight, defaultColorDark);
+        } else {
+          bubbleColor = fallbackColor;
+        }
+
+        const linkBubble = document.createElement('a');
+        linkBubble.href = item.url || '#';
+        linkBubble.target = '_blank';
+        linkBubble.rel = 'noopener noreferrer';
+        linkBubble.className = 'reminder-link-bubble';
+        linkBubble.textContent = item.title || item.url || 'Link';
+        linkBubble.style.animationDelay = `${index * 50}ms`;
+        linkBubble.style.background = bubbleColor;
+
+        linkBubble.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (!item.url) e.preventDefault();
+        });
+
+        linksContainer.appendChild(linkBubble);
       }
-
-      const linkBubble = document.createElement('a');
-      linkBubble.href = link.url || '#';
-      linkBubble.target = '_blank';
-      linkBubble.rel = 'noopener noreferrer';
-      linkBubble.className = 'reminder-link-bubble';
-      linkBubble.textContent = link.title || link.url || 'Link';
-      linkBubble.style.animationDelay = `${index * 50}ms`;
-      linkBubble.style.background = bubbleColor;
-
-      linkBubble.addEventListener('click', (e) => {
-        e.stopPropagation();
-        if (!link.url) e.preventDefault();
-      });
-
-      linksContainer.appendChild(linkBubble);
     });
 
     document.body.appendChild(linksContainer);
@@ -283,6 +569,12 @@ export function toggleReminderLinks(reminderKey, subtitle, sectionId, buttonEl) 
       linksContainer.style.transform = 'translateY(-50%)';
 
       linksContainer.classList.add('open');
+
+      // Show backdrop - keep the reminder item unblurred
+      const sourceItem = buttonEl.closest('.reminder-item') || buttonEl.closest('.unified-reminder-item');
+      showLinksBackdrop(() => {
+        toggleReminderLinks(reminderKey, subtitle, sectionId, buttonEl);
+      }, sourceItem);
     });
   }
 }
@@ -290,10 +582,17 @@ export function toggleReminderLinks(reminderKey, subtitle, sectionId, buttonEl) 
 // --- Close all open reminder link bubbles
 export function closeAllReminderLinks() {
   const openContainers = document.querySelectorAll('.reminder-links-expanded');
+  if (openContainers.length > 0) {
+    hideLinksBackdrop();
+  }
   openContainers.forEach(container => {
     const bubbles = container.querySelectorAll('.reminder-link-bubble');
+    const sections = container.querySelectorAll('.link-section-divider');
     bubbles.forEach(bubble => {
       bubble.style.animationDelay = '0ms';
+    });
+    sections.forEach(section => {
+      section.style.animationDelay = '0ms';
     });
     container.classList.remove('open');
     container.classList.add('closing');
@@ -328,13 +627,22 @@ export function openListItemLinksModal(item, sectionId) {
         <p class="icon-links-mode-hint">Setting colors for: <strong id="list-item-links-mode-label">Light</strong> mode</p>
         <div class="reminder-links-content">
           <div id="list-item-links-list" class="reminder-links-list"></div>
-          <button type="button" id="add-list-item-link-btn" class="btn-add-link">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="12" y1="5" x2="12" y2="19"></line>
-              <line x1="5" y1="12" x2="19" y2="12"></line>
-            </svg>
-            Add Link
-          </button>
+          <div class="links-modal-add-buttons">
+            <button type="button" id="add-list-item-link-btn" class="btn-add-link">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+              </svg>
+              Add Link
+            </button>
+            <button type="button" id="add-list-item-section-btn" class="btn-add-link btn-add-section">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+              </svg>
+              Add Section
+            </button>
+          </div>
         </div>
         <div class="reminder-links-actions">
           <button type="button" id="list-item-links-cancel" class="btn-secondary">Cancel</button>
@@ -345,6 +653,7 @@ export function openListItemLinksModal(item, sectionId) {
     document.body.appendChild(modal);
 
     $('#add-list-item-link-btn').addEventListener('click', addListItemLinkRow);
+    $('#add-list-item-section-btn').addEventListener('click', addListItemSection);
     $('#list-item-links-cancel').addEventListener('click', cancelListItemLinksModal);
     $('#list-item-links-save').addEventListener('click', saveListItemLinksModal);
 
@@ -372,62 +681,28 @@ export function renderListItemLinkRows() {
     currentLinksListItem.links = [];
   }
 
-  const defaultColorLight = '#f7fafc';
-  const defaultColorDark = '#475569';
+  // Add top drop zone for dragging to position 0
+  const topDropZone = createTopDropZone(currentLinksListItem.links, renderListItemLinkRows);
+  listContainer.appendChild(topDropZone);
 
-  currentLinksListItem.links.forEach((link, index) => {
-    const rowDiv = document.createElement('div');
-    rowDiv.className = 'reminder-link-row';
-
-    const titleInput = document.createElement('input');
-    titleInput.type = 'text';
-    titleInput.placeholder = 'Link title';
-    titleInput.value = link.title || '';
-    titleInput.className = 'link-title-input';
-    titleInput.addEventListener('input', (e) => {
-      link.title = e.target.value;
-    });
-
-    const urlInput = document.createElement('input');
-    urlInput.type = 'url';
-    urlInput.placeholder = 'https://...';
-    urlInput.value = link.url || '';
-    urlInput.className = 'link-url-input';
-    urlInput.addEventListener('input', (e) => {
-      link.url = e.target.value;
-    });
-
-    // Color circle button - opens color picker popover
-    const colorBtn = document.createElement('button');
-    colorBtn.type = 'button';
-    colorBtn.className = 'icon-link-color-btn';
-    const currentColor = getColorForCurrentMode(link.color, defaultColorLight, defaultColorDark);
-    colorBtn.style.background = currentColor;
-    colorBtn.title = 'Choose bubble color';
-    colorBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      openLinkColorPicker(link, colorBtn);
-    });
-
-    const deleteBtn = document.createElement('button');
-    deleteBtn.type = 'button';
-    deleteBtn.className = 'btn-delete-link';
-    deleteBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-      <polyline points="3 6 5 6 21 6"></polyline>
-      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-    </svg>`;
-    deleteBtn.title = 'Delete link';
-    deleteBtn.addEventListener('click', () => {
-      currentLinksListItem.links.splice(index, 1);
-      renderListItemLinkRows();
-    });
-
-    rowDiv.appendChild(titleInput);
-    rowDiv.appendChild(urlInput);
-    rowDiv.appendChild(colorBtn);
-    rowDiv.appendChild(deleteBtn);
+  currentLinksListItem.links.forEach((item, index) => {
+    const rowDiv = createLinkOrSectionRow(item, index, currentLinksListItem.links, renderListItemLinkRows);
     listContainer.appendChild(rowDiv);
   });
+}
+
+// --- Add section for list item
+function addListItemSection() {
+  if (!currentLinksListItem.links) {
+    currentLinksListItem.links = [];
+  }
+  currentLinksListItem.links.push({ type: 'section', title: '' });
+  renderListItemLinkRows();
+
+  const inputs = document.querySelectorAll('#list-item-links-list .section-title-input');
+  if (inputs.length > 0) {
+    inputs[inputs.length - 1].focus();
+  }
 }
 
 // --- Add link row for list item
@@ -457,9 +732,13 @@ export function cancelListItemLinksModal() {
 export function saveListItemLinksModal() {
   if (!currentLinksListItem) return;
 
-  currentLinksListItem.links = currentLinksListItem.links.filter(
-    link => link.title.trim() || link.url.trim()
-  );
+  // Filter: keep sections with titles, keep links with title or url
+  currentLinksListItem.links = currentLinksListItem.links.filter(item => {
+    if (item.type === 'section') {
+      return item.title && item.title.trim();
+    }
+    return (item.title && item.title.trim()) || (item.url && item.url.trim());
+  });
 
   markDirtyAndSave();
   if (window.renderAllSections) window.renderAllSections();
@@ -478,11 +757,16 @@ export function toggleListItemLinks(item, sectionId, buttonEl) {
 
   if (linksContainer && linksContainer.parentNode) {
     const bubbles = linksContainer.querySelectorAll('.reminder-link-bubble');
+    const sections = linksContainer.querySelectorAll('.link-section-divider');
     bubbles.forEach(bubble => {
       bubble.style.animationDelay = '0ms';
     });
+    sections.forEach(section => {
+      section.style.animationDelay = '0ms';
+    });
     linksContainer.classList.remove('open');
     linksContainer.classList.add('closing');
+    hideLinksBackdrop();
     setTimeout(() => {
       if (linksContainer.parentNode) {
         linksContainer.remove();
@@ -490,6 +774,11 @@ export function toggleListItemLinks(item, sectionId, buttonEl) {
     }, 250);
     buttonEl._linksContainer = null;
   } else {
+    // Close any other open link popups first
+    closeAllReminderLinks();
+    closeAllListItemLinks();
+    closeAllIconLinks();
+
     // Default colors for fallback
     const defaultColorLight = '#f7fafc';
     const defaultColorDark = '#475569';
@@ -508,30 +797,39 @@ export function toggleListItemLinks(item, sectionId, buttonEl) {
     linksContainer = document.createElement('div');
     linksContainer.className = 'reminder-links-expanded';
 
-    item.links.forEach((link, index) => {
-      // Each link can have its own color
-      let bubbleColor;
-      if (link.color) {
-        bubbleColor = getColorForCurrentMode(link.color, defaultColorLight, defaultColorDark);
+    item.links.forEach((linkItem, index) => {
+      if (linkItem.type === 'section') {
+        // Render section divider
+        const sectionDiv = document.createElement('div');
+        sectionDiv.className = 'link-section-divider';
+        sectionDiv.textContent = linkItem.title || 'Section';
+        sectionDiv.style.animationDelay = `${index * 50}ms`;
+        linksContainer.appendChild(sectionDiv);
       } else {
-        bubbleColor = fallbackColor;
+        // Each link can have its own color
+        let bubbleColor;
+        if (linkItem.color) {
+          bubbleColor = getColorForCurrentMode(linkItem.color, defaultColorLight, defaultColorDark);
+        } else {
+          bubbleColor = fallbackColor;
+        }
+
+        const linkBubble = document.createElement('a');
+        linkBubble.href = linkItem.url || '#';
+        linkBubble.target = '_blank';
+        linkBubble.rel = 'noopener noreferrer';
+        linkBubble.className = 'reminder-link-bubble';
+        linkBubble.textContent = linkItem.title || linkItem.url || 'Link';
+        linkBubble.style.animationDelay = `${index * 50}ms`;
+        linkBubble.style.background = bubbleColor;
+
+        linkBubble.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (!linkItem.url) e.preventDefault();
+        });
+
+        linksContainer.appendChild(linkBubble);
       }
-
-      const linkBubble = document.createElement('a');
-      linkBubble.href = link.url || '#';
-      linkBubble.target = '_blank';
-      linkBubble.rel = 'noopener noreferrer';
-      linkBubble.className = 'reminder-link-bubble';
-      linkBubble.textContent = link.title || link.url || 'Link';
-      linkBubble.style.animationDelay = `${index * 50}ms`;
-      linkBubble.style.background = bubbleColor;
-
-      linkBubble.addEventListener('click', (e) => {
-        e.stopPropagation();
-        if (!link.url) e.preventDefault();
-      });
-
-      linksContainer.appendChild(linkBubble);
     });
 
     document.body.appendChild(linksContainer);
@@ -575,18 +873,30 @@ export function toggleListItemLinks(item, sectionId, buttonEl) {
       linksContainer.style.transform = 'translateY(-50%)';
 
       linksContainer.classList.add('open');
+
+      // Show backdrop - keep the list item unblurred
+      const sourceItem = buttonEl.closest('.list-item') || buttonEl.closest('.unified-subtask-item');
+      showLinksBackdrop(() => {
+        toggleListItemLinks(item, sectionId, buttonEl);
+      }, sourceItem);
     });
   }
 }
 
 // --- Close all open list item link bubbles
 export function closeAllListItemLinks() {
-  document.querySelectorAll('.list-item-links-toggle').forEach(btn => {
+  const toggles = document.querySelectorAll('.list-item-links-toggle');
+  let hadOpen = false;
+  toggles.forEach(btn => {
     if (btn._linksContainer && btn._linksContainer.parentNode) {
       btn._linksContainer.remove();
+      hadOpen = true;
     }
     btn._linksContainer = null;
   });
+  if (hadOpen) {
+    hideLinksBackdrop();
+  }
 }
 
 // ========== Icon Links Feature ==========
@@ -617,13 +927,22 @@ export function openIconLinksModal(icon, sectionId, subtitle) {
         <p class="icon-links-mode-hint">Setting colors for: <strong id="icon-links-mode-label">Light</strong> mode</p>
         <div class="reminder-links-content">
           <div id="icon-links-list" class="reminder-links-list"></div>
-          <button type="button" id="add-icon-link-btn" class="btn-add-link">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="12" y1="5" x2="12" y2="19"></line>
-              <line x1="5" y1="12" x2="19" y2="12"></line>
-            </svg>
-            Add Link
-          </button>
+          <div class="links-modal-add-buttons">
+            <button type="button" id="add-icon-link-btn" class="btn-add-link">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+              </svg>
+              Add Link
+            </button>
+            <button type="button" id="add-icon-section-btn" class="btn-add-link btn-add-section">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+              </svg>
+              Add Section
+            </button>
+          </div>
         </div>
         <div class="reminder-links-actions">
           <button type="button" id="icon-links-cancel" class="btn-secondary">Cancel</button>
@@ -634,6 +953,7 @@ export function openIconLinksModal(icon, sectionId, subtitle) {
     document.body.appendChild(modal);
 
     $('#add-icon-link-btn').addEventListener('click', addIconLinkRow);
+    $('#add-icon-section-btn').addEventListener('click', addIconSection);
     $('#icon-links-cancel').addEventListener('click', cancelIconLinksModal);
     $('#icon-links-save').addEventListener('click', saveIconLinksModal);
 
@@ -661,62 +981,28 @@ export function renderIconLinkRows() {
     currentLinksIcon.links = [];
   }
 
-  const defaultColorLight = '#f7fafc';
-  const defaultColorDark = '#475569';
+  // Add top drop zone for dragging to position 0
+  const topDropZone = createTopDropZone(currentLinksIcon.links, renderIconLinkRows);
+  listContainer.appendChild(topDropZone);
 
-  currentLinksIcon.links.forEach((link, index) => {
-    const rowDiv = document.createElement('div');
-    rowDiv.className = 'reminder-link-row';
-
-    const titleInput = document.createElement('input');
-    titleInput.type = 'text';
-    titleInput.placeholder = 'Link title';
-    titleInput.value = link.title || '';
-    titleInput.className = 'link-title-input';
-    titleInput.addEventListener('input', (e) => {
-      link.title = e.target.value;
-    });
-
-    const urlInput = document.createElement('input');
-    urlInput.type = 'url';
-    urlInput.placeholder = 'https://...';
-    urlInput.value = link.url || '';
-    urlInput.className = 'link-url-input';
-    urlInput.addEventListener('input', (e) => {
-      link.url = e.target.value;
-    });
-
-    // Color circle button - opens color picker popover
-    const colorBtn = document.createElement('button');
-    colorBtn.type = 'button';
-    colorBtn.className = 'icon-link-color-btn';
-    const currentColor = getColorForCurrentMode(link.color, defaultColorLight, defaultColorDark);
-    colorBtn.style.background = currentColor;
-    colorBtn.title = 'Choose bubble color';
-    colorBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      openLinkColorPicker(link, colorBtn);
-    });
-
-    const deleteBtn = document.createElement('button');
-    deleteBtn.type = 'button';
-    deleteBtn.className = 'btn-delete-link';
-    deleteBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-      <polyline points="3 6 5 6 21 6"></polyline>
-      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-    </svg>`;
-    deleteBtn.title = 'Delete link';
-    deleteBtn.addEventListener('click', () => {
-      currentLinksIcon.links.splice(index, 1);
-      renderIconLinkRows();
-    });
-
-    rowDiv.appendChild(titleInput);
-    rowDiv.appendChild(urlInput);
-    rowDiv.appendChild(colorBtn);
-    rowDiv.appendChild(deleteBtn);
+  currentLinksIcon.links.forEach((item, index) => {
+    const rowDiv = createLinkOrSectionRow(item, index, currentLinksIcon.links, renderIconLinkRows);
     listContainer.appendChild(rowDiv);
   });
+}
+
+// --- Add section for icon
+function addIconSection() {
+  if (!currentLinksIcon.links) {
+    currentLinksIcon.links = [];
+  }
+  currentLinksIcon.links.push({ type: 'section', title: '' });
+  renderIconLinkRows();
+
+  const inputs = document.querySelectorAll('#icon-links-list .section-title-input');
+  if (inputs.length > 0) {
+    inputs[inputs.length - 1].focus();
+  }
 }
 
 // --- Open color picker popover for a link
@@ -785,7 +1071,13 @@ function openLinkColorPicker(link, colorBtn) {
     colorBtn.style.background = newColor;
   });
 
-  // Handle preset clicks
+  // Close popover helper
+  const closePopover = () => {
+    popover.remove();
+    document.removeEventListener('click', handleClickOutside);
+  };
+
+  // Handle preset clicks - close popover after selection
   popover.querySelectorAll('.color-preset-small').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -793,17 +1085,17 @@ function openLinkColorPicker(link, colorBtn) {
       colorInput.value = newColor;
       link.color = setColorForCurrentMode(link.color, newColor);
       colorBtn.style.background = newColor;
+      closePopover();
     });
   });
 
   // Close on click outside
-  const closePopover = (e) => {
+  const handleClickOutside = (e) => {
     if (!popover.contains(e.target) && e.target !== colorBtn) {
-      popover.remove();
-      document.removeEventListener('click', closePopover);
+      closePopover();
     }
   };
-  setTimeout(() => document.addEventListener('click', closePopover), 0);
+  setTimeout(() => document.addEventListener('click', handleClickOutside), 0);
 }
 
 // --- Add link row for icon
@@ -835,10 +1127,13 @@ export function cancelIconLinksModal() {
 export function saveIconLinksModal() {
   if (!currentLinksIcon) return;
 
-  // Filter out empty links (colors are saved per-link in real-time)
-  currentLinksIcon.links = currentLinksIcon.links.filter(
-    link => link.title.trim() || link.url.trim()
-  );
+  // Filter: keep sections with titles, keep links with title or url
+  currentLinksIcon.links = currentLinksIcon.links.filter(item => {
+    if (item.type === 'section') {
+      return item.title && item.title.trim();
+    }
+    return (item.title && item.title.trim()) || (item.url && item.url.trim());
+  });
 
   markDirtyAndSave();
   if (window.renderAllSections) window.renderAllSections();
@@ -866,11 +1161,16 @@ export function toggleIconLinks(iconKey, subtitle, sectionId, indicatorEl) {
 
   if (linksContainer && linksContainer.parentNode) {
     const bubbles = linksContainer.querySelectorAll('.reminder-link-bubble');
+    const sections = linksContainer.querySelectorAll('.link-section-divider');
     bubbles.forEach(bubble => {
       bubble.style.animationDelay = '0ms';
     });
+    sections.forEach(section => {
+      section.style.animationDelay = '0ms';
+    });
     linksContainer.classList.remove('open');
     linksContainer.classList.add('closing');
+    hideLinksBackdrop();
     setTimeout(() => {
       if (linksContainer.parentNode) {
         linksContainer.remove();
@@ -878,6 +1178,11 @@ export function toggleIconLinks(iconKey, subtitle, sectionId, indicatorEl) {
     }, 250);
     indicatorEl._linksContainer = null;
   } else {
+    // Close any other open link popups first
+    closeAllReminderLinks();
+    closeAllListItemLinks();
+    closeAllIconLinks();
+
     // Default colors for fallback
     const defaultColorLight = '#f7fafc';
     const defaultColorDark = '#475569';
@@ -896,30 +1201,39 @@ export function toggleIconLinks(iconKey, subtitle, sectionId, indicatorEl) {
     linksContainer = document.createElement('div');
     linksContainer.className = 'reminder-links-expanded icon-links-expanded';
 
-    icon.links.forEach((link, index) => {
-      // Each link can have its own color
-      let bubbleColor;
-      if (link.color) {
-        bubbleColor = getColorForCurrentMode(link.color, defaultColorLight, defaultColorDark);
+    icon.links.forEach((linkItem, index) => {
+      if (linkItem.type === 'section') {
+        // Render section divider
+        const sectionDiv = document.createElement('div');
+        sectionDiv.className = 'link-section-divider';
+        sectionDiv.textContent = linkItem.title || 'Section';
+        sectionDiv.style.animationDelay = `${index * 50}ms`;
+        linksContainer.appendChild(sectionDiv);
       } else {
-        bubbleColor = fallbackColor;
+        // Each link can have its own color
+        let bubbleColor;
+        if (linkItem.color) {
+          bubbleColor = getColorForCurrentMode(linkItem.color, defaultColorLight, defaultColorDark);
+        } else {
+          bubbleColor = fallbackColor;
+        }
+
+        const linkBubble = document.createElement('a');
+        linkBubble.href = linkItem.url || '#';
+        linkBubble.target = '_blank';
+        linkBubble.rel = 'noopener noreferrer';
+        linkBubble.className = 'reminder-link-bubble';
+        linkBubble.textContent = linkItem.title || linkItem.url || 'Link';
+        linkBubble.style.animationDelay = `${index * 50}ms`;
+        linkBubble.style.background = bubbleColor;
+
+        linkBubble.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (!linkItem.url) e.preventDefault();
+        });
+
+        linksContainer.appendChild(linkBubble);
       }
-
-      const linkBubble = document.createElement('a');
-      linkBubble.href = link.url || '#';
-      linkBubble.target = '_blank';
-      linkBubble.rel = 'noopener noreferrer';
-      linkBubble.className = 'reminder-link-bubble';
-      linkBubble.textContent = link.title || link.url || 'Link';
-      linkBubble.style.animationDelay = `${index * 50}ms`;
-      linkBubble.style.background = bubbleColor;
-
-      linkBubble.addEventListener('click', (e) => {
-        e.stopPropagation();
-        if (!link.url) e.preventDefault();
-      });
-
-      linksContainer.appendChild(linkBubble);
     });
 
     document.body.appendChild(linksContainer);
@@ -958,6 +1272,12 @@ export function toggleIconLinks(iconKey, subtitle, sectionId, indicatorEl) {
       linksContainer.style.transform = 'translateY(-50%)';
 
       linksContainer.classList.add('open');
+
+      // Show backdrop - keep the icon button unblurred
+      const sourceItem = indicatorEl.closest('.icon-button');
+      showLinksBackdrop(() => {
+        toggleIconLinks(iconKey, subtitle, sectionId, indicatorEl);
+      }, sourceItem);
     });
   }
 }
@@ -965,10 +1285,17 @@ export function toggleIconLinks(iconKey, subtitle, sectionId, indicatorEl) {
 // --- Close all open icon link bubbles
 export function closeAllIconLinks() {
   const openContainers = document.querySelectorAll('.icon-links-expanded');
+  if (openContainers.length > 0) {
+    hideLinksBackdrop();
+  }
   openContainers.forEach(container => {
     const bubbles = container.querySelectorAll('.reminder-link-bubble');
+    const sections = container.querySelectorAll('.link-section-divider');
     bubbles.forEach(bubble => {
       bubble.style.animationDelay = '0ms';
+    });
+    sections.forEach(section => {
+      section.style.animationDelay = '0ms';
     });
     container.classList.remove('open');
     container.classList.add('closing');

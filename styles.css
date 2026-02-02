@@ -3452,12 +3452,39 @@ section.card.collapsed .section-icon {
 }
 
 /* Expanded links container - positioned absolute to scroll with content */
+/* Backdrop for link popups */
+.links-popup-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0);
+  backdrop-filter: blur(0px);
+  -webkit-backdrop-filter: blur(0px);
+  z-index: 9999;
+  transition: background 0.25s ease, backdrop-filter 0.25s ease, -webkit-backdrop-filter 0.25s ease;
+  pointer-events: none;
+}
+
+.links-popup-backdrop.active {
+  background: rgba(0, 0, 0, 0.10);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  pointer-events: auto;
+}
+
+/* Clone of source item positioned above the backdrop */
+.links-source-clone {
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+}
+
 .reminder-links-expanded {
   position: absolute;
   display: flex;
   flex-direction: column;
   gap: 6px;
-  z-index: 10000;
+  z-index: 10002;
   pointer-events: none;
 }
 
@@ -3469,7 +3496,8 @@ section.card.collapsed .section-icon {
   animation: linkBubbleIn 0.3s ease forwards;
 }
 
-.reminder-links-expanded.closing .reminder-link-bubble {
+.reminder-links-expanded.closing .reminder-link-bubble,
+.reminder-links-expanded.closing .link-section-divider {
   animation: linkBubbleOut 0.25s ease forwards;
 }
 
@@ -3502,6 +3530,50 @@ section.card.collapsed .section-icon {
 [data-theme="dark"] .reminder-link-bubble:hover {
   filter: brightness(1.1);
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5);
+}
+
+/* Section divider in expanded links view */
+.link-section-divider {
+  font-size: 15px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #1f2937;
+  padding: 9px 16px;
+  background: radial-gradient(ellipse 50% 70% at 50% 50%,
+    rgba(255,255,255,0.45) 0%,
+    rgba(255,255,255,0.25) 20%,
+    rgba(255,255,255,0.1) 45%,
+    rgba(255,255,255,0.03) 70%,
+    rgba(255,255,255,0) 100%
+  );
+  background-size: 350% 180%;
+  border: none;
+  border-radius: 0;
+  animation: linkBubbleIn 0.25s cubic-bezier(0.22, 1, 0.36, 1) forwards, sectionLightPass 4s ease-in-out infinite;
+  animation-fill-mode: backwards;
+  white-space: nowrap;
+}
+
+[data-theme="dark"] .link-section-divider {
+  color: #f1f5f9;
+  background: radial-gradient(ellipse 50% 70% at 50% 50%,
+    rgba(255,255,255,0.1) 0%,
+    rgba(255,255,255,0.05) 20%,
+    rgba(255,255,255,0.02) 45%,
+    rgba(255,255,255,0.005) 70%,
+    rgba(255,255,255,0) 100%
+  );
+  background-size: 350% 180%;
+}
+
+@keyframes sectionLightPass {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
 }
 
 /* Animation keyframes for link bubbles - fly out from behind icon */
@@ -3605,11 +3677,10 @@ body.stacked-mode .icon-link-indicator {
   border-radius: 16px;
   padding: 28px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-  max-width: 650px;
+  max-width: 685px;
   width: 90%;
   max-height: 80vh;
-  display: flex;
-  flex-direction: column;
+  overflow-y: auto;
 }
 
 .reminder-links-dialog h3 {
@@ -3619,8 +3690,6 @@ body.stacked-mode .icon-link-indicator {
 }
 
 .reminder-links-content {
-  flex: 1;
-  overflow-y: auto;
   margin-bottom: 20px;
 }
 
@@ -3633,9 +3702,89 @@ body.stacked-mode .icon-link-indicator {
 
 .reminder-link-row {
   display: grid;
-  grid-template-columns: 1fr 1.5fr auto auto;
+  grid-template-columns: auto minmax(0, 1fr) minmax(0, 1.5fr) auto auto;
   gap: 8px;
   align-items: center;
+  transition: background 0.15s ease, transform 0.15s ease;
+  padding: 4px;
+  margin: -4px;
+  border-radius: 8px;
+}
+
+.reminder-link-row.section-row {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  background: #f1f5f9;
+  border-radius: 8px;
+}
+
+[data-theme="dark"] .reminder-link-row.section-row {
+  background: #334155;
+}
+
+/* Drag handle */
+.link-drag-handle {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  color: var(--muted);
+  opacity: 0.5;
+  transition: opacity 0.15s ease, color 0.15s ease;
+}
+
+.link-drag-handle:hover {
+  opacity: 1;
+  color: var(--text);
+}
+
+.reminder-link-row.dragging {
+  opacity: 0.5;
+  background: rgba(59, 130, 246, 0.1);
+}
+
+.reminder-link-row.drag-over-top {
+  box-shadow: 0 -2px 0 0 var(--brand);
+}
+
+.reminder-link-row.drag-over-bottom {
+  box-shadow: 0 2px 0 0 var(--brand);
+}
+
+/* Top drop zone for dragging to first position */
+.link-top-drop-zone {
+  height: 8px;
+  margin-bottom: 4px;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+}
+
+.link-top-drop-zone.drag-over {
+  height: 24px;
+  background: rgba(59, 130, 246, 0.15);
+  border: 2px dashed var(--brand);
+}
+
+/* Section title input */
+.section-title-input {
+  padding: 10px 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  background: var(--card);
+  color: var(--text);
+}
+
+.section-title-input::placeholder {
+  font-weight: 400;
+  color: var(--muted);
+}
+
+[data-theme="dark"] .section-title-input {
+  background: #1e293b;
+  border-color: #475569;
 }
 
 .reminder-link-row input {
@@ -3645,6 +3794,7 @@ body.stacked-mode .icon-link-indicator {
   font-size: 14px;
   background: var(--bg);
   color: var(--text);
+  min-width: 0;
 }
 
 .reminder-link-row input:focus {
@@ -3677,36 +3827,50 @@ body.stacked-mode .icon-link-indicator {
   background: rgba(239, 68, 68, 0.2);
 }
 
-.btn-add-link {
+/* Add buttons container */
+.links-modal-add-buttons {
   display: flex;
+  gap: 8px;
+  padding: 4px;
+  margin: -4px;
+}
+
+.btn-add-link {
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  width: 100%;
-  padding: 12px;
-  border: 2px dashed #c7d2fe;
+  gap: 6px;
+  flex: 1;
+  padding: 8px 16px;
   background: #eef2ff;
+  border: 1px solid #c7d2fe;
+  border-radius: 20px;
   color: #3730a3;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background 0.2s, border-color 0.2s, transform 0.2s;
 }
 
 .btn-add-link:hover {
   background: #e0e7ff;
   border-color: #a5b4fc;
+  transform: scale(1.02);
+}
+
+.btn-add-link svg {
+  flex-shrink: 0;
 }
 
 [data-theme="dark"] .btn-add-link {
-  background: #374151;
-  border-color: #4b5563;
-  color: #cbd5e1;
+  background: #312e81;
+  border-color: #4338ca;
+  color: #a5b4fc;
 }
 
 [data-theme="dark"] .btn-add-link:hover {
-  background: #4b5563;
+  background: #3730a3;
+  border-color: #4f46e5;
 }
 
 .reminder-links-actions {
@@ -3730,7 +3894,7 @@ body.stacked-mode .icon-link-indicator {
 /* ==================== */
 
 .icon-links-dialog {
-  max-width: 580px;
+  max-width: 610px;
 }
 
 .icon-links-mode-hint {
