@@ -3540,39 +3540,24 @@ section.card.collapsed .section-icon {
   letter-spacing: 0.5px;
   color: #1f2937;
   padding: 9px 16px;
-  background: radial-gradient(ellipse 50% 70% at 50% 50%,
-    rgba(255,255,255,0.45) 0%,
-    rgba(255,255,255,0.25) 20%,
-    rgba(255,255,255,0.1) 45%,
-    rgba(255,255,255,0.03) 70%,
-    rgba(255,255,255,0) 100%
-  );
-  background-size: 350% 180%;
+  background: none;
   border: none;
   border-radius: 0;
-  animation: linkBubbleIn 0.25s cubic-bezier(0.22, 1, 0.36, 1) forwards, sectionLightPass 4s ease-in-out infinite;
+  animation: linkBubbleIn 0.25s cubic-bezier(0.22, 1, 0.36, 1) forwards;
   animation-fill-mode: backwards;
   white-space: nowrap;
 }
 
 [data-theme="dark"] .link-section-divider {
   color: #f1f5f9;
-  background: radial-gradient(ellipse 50% 70% at 50% 50%,
-    rgba(255,255,255,0.1) 0%,
-    rgba(255,255,255,0.05) 20%,
-    rgba(255,255,255,0.02) 45%,
-    rgba(255,255,255,0.005) 70%,
-    rgba(255,255,255,0) 100%
-  );
-  background-size: 350% 180%;
 }
 
-@keyframes sectionLightPass {
+@keyframes sectionLightMove {
   0% {
-    background-position: 200% 0;
+    background-position: 20% 50%;
   }
   100% {
-    background-position: -200% 0;
+    background-position: 80% 50%;
   }
 }
 

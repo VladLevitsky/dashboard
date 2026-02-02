@@ -350,6 +350,10 @@ export async function restoreModel() {
       model.collapsedSubtitles = { ...model.collapsedSubtitles, ...saved.collapsedSubtitles };
     }
 
+    if (saved.collapsedCards) {
+      model.collapsedCards = { ...model.collapsedCards, ...saved.collapsedCards };
+    }
+
     if (saved.cardNotes) {
       model.cardNotes = { ...model.cardNotes, ...saved.cardNotes };
     }
