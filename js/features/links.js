@@ -26,6 +26,7 @@ export function openLinksModal(reminder) {
     modal.innerHTML = `
       <div class="reminder-links-dialog">
         <h3>Manage Links</h3>
+        <p class="icon-links-mode-hint">Setting colors for: <strong id="reminder-links-mode-label">Light</strong> mode</p>
         <div class="reminder-links-content">
           <div id="reminder-links-list" class="reminder-links-list"></div>
           <button type="button" id="add-reminder-link-btn" class="btn-add-link">
@@ -55,6 +56,10 @@ export function openLinksModal(reminder) {
     });
   }
 
+  // Update mode label
+  const modeLabel = model.darkMode ? 'Dark' : 'Light';
+  $('#reminder-links-mode-label').textContent = modeLabel;
+
   renderLinkRows();
   modal.hidden = false;
 }
@@ -67,6 +72,9 @@ export function renderLinkRows() {
   if (!currentLinksReminder.links) {
     currentLinksReminder.links = [];
   }
+
+  const defaultColorLight = '#f7fafc';
+  const defaultColorDark = '#475569';
 
   currentLinksReminder.links.forEach((link, index) => {
     const rowDiv = document.createElement('div');
@@ -90,6 +98,18 @@ export function renderLinkRows() {
       link.url = e.target.value;
     });
 
+    // Color circle button - opens color picker popover
+    const colorBtn = document.createElement('button');
+    colorBtn.type = 'button';
+    colorBtn.className = 'icon-link-color-btn';
+    const currentColor = getColorForCurrentMode(link.color, defaultColorLight, defaultColorDark);
+    colorBtn.style.background = currentColor;
+    colorBtn.title = 'Choose bubble color';
+    colorBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openLinkColorPicker(link, colorBtn);
+    });
+
     const deleteBtn = document.createElement('button');
     deleteBtn.type = 'button';
     deleteBtn.className = 'btn-delete-link';
@@ -105,6 +125,7 @@ export function renderLinkRows() {
 
     rowDiv.appendChild(titleInput);
     rowDiv.appendChild(urlInput);
+    rowDiv.appendChild(colorBtn);
     rowDiv.appendChild(deleteBtn);
     listContainer.appendChild(rowDiv);
   });
@@ -115,7 +136,8 @@ export function addLinkRow() {
   if (!currentLinksReminder.links) {
     currentLinksReminder.links = [];
   }
-  currentLinksReminder.links.push({ title: '', url: '' });
+  // Initialize with default color for current mode
+  currentLinksReminder.links.push({ title: '', url: '', color: { light: '#f7fafc', dark: '#475569' } });
   renderLinkRows();
 
   const inputs = document.querySelectorAll('#reminder-links-list .link-title-input');
@@ -176,17 +198,33 @@ export function toggleReminderLinks(reminderKey, subtitle, sectionId, buttonEl) 
     }, 250);
     buttonEl._linksContainer = null;
   } else {
+    // Default colors for fallback
+    const defaultColorLight = '#f7fafc';
+    const defaultColorDark = '#475569';
+
     // Support both legacy .reminder-item and unified .unified-reminder-item classes
     const reminderItem = buttonEl.closest('.reminder-item') || buttonEl.closest('.unified-reminder-item');
-    if (!reminderItem) return;
-    const computedStyle = window.getComputedStyle(reminderItem);
-    const parentBgColor = computedStyle.backgroundColor;
-    const lighterColor = lightenColorBy20Percent(parentBgColor);
+    let fallbackColor;
+    if (reminderItem) {
+      const computedStyle = window.getComputedStyle(reminderItem);
+      const parentBgColor = computedStyle.backgroundColor;
+      fallbackColor = lightenColorBy20Percent(parentBgColor);
+    } else {
+      fallbackColor = model.darkMode ? defaultColorDark : defaultColorLight;
+    }
 
     linksContainer = document.createElement('div');
     linksContainer.className = 'reminder-links-expanded';
 
     reminder.links.forEach((link, index) => {
+      // Each link can have its own color
+      let bubbleColor;
+      if (link.color) {
+        bubbleColor = getColorForCurrentMode(link.color, defaultColorLight, defaultColorDark);
+      } else {
+        bubbleColor = fallbackColor;
+      }
+
       const linkBubble = document.createElement('a');
       linkBubble.href = link.url || '#';
       linkBubble.target = '_blank';
@@ -194,7 +232,7 @@ export function toggleReminderLinks(reminderKey, subtitle, sectionId, buttonEl) 
       linkBubble.className = 'reminder-link-bubble';
       linkBubble.textContent = link.title || link.url || 'Link';
       linkBubble.style.animationDelay = `${index * 50}ms`;
-      linkBubble.style.background = lighterColor;
+      linkBubble.style.background = bubbleColor;
 
       linkBubble.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -287,6 +325,7 @@ export function openListItemLinksModal(item, sectionId) {
     modal.innerHTML = `
       <div class="reminder-links-dialog">
         <h3>Manage Links</h3>
+        <p class="icon-links-mode-hint">Setting colors for: <strong id="list-item-links-mode-label">Light</strong> mode</p>
         <div class="reminder-links-content">
           <div id="list-item-links-list" class="reminder-links-list"></div>
           <button type="button" id="add-list-item-link-btn" class="btn-add-link">
@@ -316,6 +355,10 @@ export function openListItemLinksModal(item, sectionId) {
     });
   }
 
+  // Update mode label
+  const modeLabel = model.darkMode ? 'Dark' : 'Light';
+  $('#list-item-links-mode-label').textContent = modeLabel;
+
   renderListItemLinkRows();
   modal.hidden = false;
 }
@@ -328,6 +371,9 @@ export function renderListItemLinkRows() {
   if (!currentLinksListItem.links) {
     currentLinksListItem.links = [];
   }
+
+  const defaultColorLight = '#f7fafc';
+  const defaultColorDark = '#475569';
 
   currentLinksListItem.links.forEach((link, index) => {
     const rowDiv = document.createElement('div');
@@ -351,6 +397,18 @@ export function renderListItemLinkRows() {
       link.url = e.target.value;
     });
 
+    // Color circle button - opens color picker popover
+    const colorBtn = document.createElement('button');
+    colorBtn.type = 'button';
+    colorBtn.className = 'icon-link-color-btn';
+    const currentColor = getColorForCurrentMode(link.color, defaultColorLight, defaultColorDark);
+    colorBtn.style.background = currentColor;
+    colorBtn.title = 'Choose bubble color';
+    colorBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openLinkColorPicker(link, colorBtn);
+    });
+
     const deleteBtn = document.createElement('button');
     deleteBtn.type = 'button';
     deleteBtn.className = 'btn-delete-link';
@@ -366,6 +424,7 @@ export function renderListItemLinkRows() {
 
     rowDiv.appendChild(titleInput);
     rowDiv.appendChild(urlInput);
+    rowDiv.appendChild(colorBtn);
     rowDiv.appendChild(deleteBtn);
     listContainer.appendChild(rowDiv);
   });
@@ -376,7 +435,8 @@ export function addListItemLinkRow() {
   if (!currentLinksListItem.links) {
     currentLinksListItem.links = [];
   }
-  currentLinksListItem.links.push({ title: '', url: '' });
+  // Initialize with default color for current mode
+  currentLinksListItem.links.push({ title: '', url: '', color: { light: '#f7fafc', dark: '#475569' } });
   renderListItemLinkRows();
 
   const inputs = document.querySelectorAll('#list-item-links-list .link-title-input');
@@ -430,17 +490,33 @@ export function toggleListItemLinks(item, sectionId, buttonEl) {
     }, 250);
     buttonEl._linksContainer = null;
   } else {
+    // Default colors for fallback
+    const defaultColorLight = '#f7fafc';
+    const defaultColorDark = '#475569';
+
     // Support both legacy .list-item and unified .unified-subtask-item classes
     const listItem = buttonEl.closest('.list-item') || buttonEl.closest('.unified-subtask-item');
-    if (!listItem) return;
-    const computedStyle = window.getComputedStyle(listItem);
-    const parentBgColor = computedStyle.backgroundColor;
-    const lighterColor = lightenColorBy20Percent(parentBgColor);
+    let fallbackColor;
+    if (listItem) {
+      const computedStyle = window.getComputedStyle(listItem);
+      const parentBgColor = computedStyle.backgroundColor;
+      fallbackColor = lightenColorBy20Percent(parentBgColor);
+    } else {
+      fallbackColor = model.darkMode ? defaultColorDark : defaultColorLight;
+    }
 
     linksContainer = document.createElement('div');
     linksContainer.className = 'reminder-links-expanded';
 
     item.links.forEach((link, index) => {
+      // Each link can have its own color
+      let bubbleColor;
+      if (link.color) {
+        bubbleColor = getColorForCurrentMode(link.color, defaultColorLight, defaultColorDark);
+      } else {
+        bubbleColor = fallbackColor;
+      }
+
       const linkBubble = document.createElement('a');
       linkBubble.href = link.url || '#';
       linkBubble.target = '_blank';
@@ -448,7 +524,7 @@ export function toggleListItemLinks(item, sectionId, buttonEl) {
       linkBubble.className = 'reminder-link-bubble';
       linkBubble.textContent = link.title || link.url || 'Link';
       linkBubble.style.animationDelay = `${index * 50}ms`;
-      linkBubble.style.background = lighterColor;
+      linkBubble.style.background = bubbleColor;
 
       linkBubble.addEventListener('click', (e) => {
         e.stopPropagation();
