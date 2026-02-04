@@ -225,6 +225,64 @@ export function migrateToUnifiedCards(data) {
   return data;
 }
 
+// --- Migrate twoColumnPair/pairIndex to halfWidth (schemaVersion 4)
+export function migrateToHalfWidthCards(data) {
+  if (data.schemaVersion >= 4) return data;
+
+  // Handle old format where data is in _structure
+  if (data._structure) {
+    // Move sections from _structure to root
+    if (data._structure.sections && !data.sections) {
+      data.sections = data._structure.sections;
+    }
+    if (data._structure.sectionsStacked && !data.sectionsStacked) {
+      data.sectionsStacked = data._structure.sectionsStacked;
+    }
+    if (data._structure.sectionTitles && !data.sectionTitles) {
+      data.sectionTitles = data._structure.sectionTitles;
+    }
+    if (data._structure.sectionIcons && !data.sectionIcons) {
+      data.sectionIcons = data._structure.sectionIcons;
+    }
+    if (data._structure.sectionColors && !data.sectionColors) {
+      data.sectionColors = data._structure.sectionColors;
+    }
+    if (data._structure.subtitleColors && !data.subtitleColors) {
+      data.subtitleColors = data._structure.subtitleColors;
+    }
+    if (data._structure.collapsedSubtitles && !data.collapsedSubtitles) {
+      data.collapsedSubtitles = data._structure.collapsedSubtitles;
+    }
+    if (data._structure.collapsedCards && !data.collapsedCards) {
+      data.collapsedCards = data._structure.collapsedCards;
+    }
+    if (data._structure.cardNotes && !data.cardNotes) {
+      data.cardNotes = data._structure.cardNotes;
+    }
+    if (data._structure.header && !data.header) {
+      data.header = data._structure.header;
+    }
+    // Clean up _structure
+    delete data._structure;
+  }
+
+  const migrateArray = (sections) => {
+    if (!Array.isArray(sections)) return;
+    sections.forEach(section => {
+      if (section.twoColumnPair) {
+        section.halfWidth = true;
+        delete section.twoColumnPair;
+        delete section.pairIndex;
+      }
+    });
+  };
+
+  migrateArray(data.sections);
+  migrateArray(data.sectionsStacked);
+  data.schemaVersion = 4;
+  return data;
+}
+
 // --- Clean up old backup entries to prevent localStorage quota issues
 export function cleanupOldBackups() {
   const keys = Object.keys(localStorage);
@@ -244,7 +302,7 @@ export function saveModel() {
   const data = model;
 
   const payload = {
-    schemaVersion: data.schemaVersion || 3,
+    schemaVersion: data.schemaVersion || 4,
     sections: data.sections,
     sectionsStacked: data.sectionsStacked,
     sectionTitles: data.sectionTitles,
@@ -316,6 +374,9 @@ export async function restoreModel() {
 
     // Run migration for legacy card types (schemaVersion < 2)
     saved = migrateToUnifiedCards(saved);
+
+    // Run migration for twoColumnPair to halfWidth (schemaVersion < 4)
+    saved = migrateToHalfWidthCards(saved);
 
     // Restore schema version
     if (saved.schemaVersion) {

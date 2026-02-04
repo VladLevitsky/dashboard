@@ -7,7 +7,7 @@ import { PLACEHOLDER_URL, icons, LINK_ICON_SVG, TASKS_ICON_SVG } from '../consta
 import { markDirtyAndSave, openEditPopover, openSubtitleColorPicker } from '../features/edit-mode.js';
 import { saveModel } from '../core/storage.js';
 import { initializeDragHandlers, initializeItemDragHandlers, initializeContainerDragHandlers, initializeReminderDragHandlers, initializeCardDropZone, handleDragOver, handleDrop } from '../features/drag-drop.js';
-import { createCardDeleteButton, createCardReorderButtons, createTwoColReorderButtons } from '../features/cards.js';
+import { createCardDeleteButton, createCardReorderButtons } from '../features/cards.js';
 import { persistImageFromLibraryEntry } from '../features/media-library.js';
 
 // --- Render all sections
@@ -24,9 +24,11 @@ export function renderAllSections() {
   const existingSections = main.querySelectorAll('section.card');
   existingSections.forEach(section => section.remove());
 
-  // Clear existing two-col containers
+  // Clear existing two-col containers and half-width-single containers
   const existingTwoCol = main.querySelectorAll('.two-col');
   existingTwoCol.forEach(container => container.remove());
+  const existingHalfWidthSingle = main.querySelectorAll('.half-width-single');
+  existingHalfWidthSingle.forEach(container => container.remove());
 
   // Render sections based on the sections array
   let i = 0;
@@ -34,38 +36,26 @@ export function renderAllSections() {
     const section = sections[i];
     const nextSection = i + 1 < sections.length ? sections[i + 1] : null;
 
-    // Check if this section is part of a two-column pair
-    if (section.twoColumnPair && section.pairIndex === 0 &&
-        nextSection && nextSection.twoColumnPair && nextSection.pairIndex === 1) {
-      // These form a two-column pair - create two-column container
-      const twoColContainer = document.createElement('div');
-      twoColContainer.className = 'two-col';
-
-      const sectionEl1 = createSectionElement(section);
-      if (sectionEl1) twoColContainer.appendChild(sectionEl1);
-
-      const sectionEl2 = createSectionElement(nextSection);
-      if (sectionEl2) twoColContainer.appendChild(sectionEl2);
-
-      main.appendChild(twoColContainer);
+    if (section.halfWidth && nextSection?.halfWidth) {
+      // Two adjacent half-width cards -> pair in .two-col
+      const container = document.createElement('div');
+      container.className = 'two-col';
+      const el1 = createSectionElement(section);
+      const el2 = createSectionElement(nextSection);
+      if (el1) { el1.classList.add('half-width'); container.appendChild(el1); }
+      if (el2) { el2.classList.add('half-width'); container.appendChild(el2); }
+      main.appendChild(container);
       i += 2;
-    }
-    // Special case for dailyTasks and dailyTools (legacy behavior)
-    else if (!section.twoColumnPair && !nextSection?.twoColumnPair &&
-             section.type === 'dailyTasks' && nextSection?.type === 'dailyTools') {
-      const twoColContainer = document.createElement('div');
-      twoColContainer.className = 'two-col';
-
-      const sectionEl1 = createSectionElement(section);
-      if (sectionEl1) twoColContainer.appendChild(sectionEl1);
-
-      const sectionEl2 = createSectionElement(nextSection);
-      if (sectionEl2) twoColContainer.appendChild(sectionEl2);
-
-      main.appendChild(twoColContainer);
-      i += 2;
+    } else if (section.halfWidth) {
+      // Single half-width card
+      const container = document.createElement('div');
+      container.className = 'half-width-single';
+      const el = createSectionElement(section);
+      if (el) { el.classList.add('half-width'); container.appendChild(el); }
+      main.appendChild(container);
+      i += 1;
     } else {
-      // Single section
+      // Full-width card
       const sectionEl = createSectionElement(section);
       if (sectionEl) main.appendChild(sectionEl);
       i += 1;
@@ -82,6 +72,27 @@ export function renderAllSections() {
 
   // Restore scroll position after re-rendering
   window.scrollTo(scrollX, scrollY);
+}
+
+// --- Toggle card width between half and full
+function toggleCardWidth(sectionId) {
+  const data = currentData();
+  const sections = currentSections();
+  const section = sections.find(s => s.id === sectionId);
+  if (!section) return;
+
+  section.halfWidth = !section.halfWidth;
+
+  // Sync to other display mode array
+  const otherSections = data.displayMode === 'stacked' ? data.sections : data.sectionsStacked;
+  if (otherSections) {
+    const other = otherSections.find(s => s.id === sectionId);
+    if (other) other.halfWidth = section.halfWidth;
+  }
+
+  markDirtyAndSave();
+  renderAllSections();
+  showToast(section.halfWidth ? 'Card set to half width' : 'Card set to full width');
 }
 
 // --- Create a section element based on section configuration
@@ -166,6 +177,18 @@ export function createSectionElement(section) {
       }
     }
   }
+
+  // Add width toggle button (always visible, not just in edit mode)
+  const widthToggleBtn = document.createElement('button');
+  widthToggleBtn.type = 'button';
+  widthToggleBtn.className = 'card-width-toggle';
+  widthToggleBtn.title = section.halfWidth ? 'Switch to full width' : 'Switch to half width';
+  widthToggleBtn.textContent = section.halfWidth ? '½' : '1';
+  widthToggleBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleCardWidth(section.id);
+  });
+  titleWrapper.appendChild(widthToggleBtn);
 
   sectionEl.appendChild(titleWrapper);
 
@@ -2796,237 +2819,33 @@ export function addCardButtons() {
       const existingColorPicker = sectionEl.querySelector('.color-picker-btn');
       if (existingColorPicker) existingColorPicker.remove();
 
-      // Check if this card is part of a two-column pair
-      const isTwoColumnPair = section.twoColumnPair;
+      // Add drag handlers and drop zone for all cards
+      initializeDragHandlers(sectionEl, section.id);
+      initializeCardDropZone(sectionEl, section.id);
 
-      // Note: Card-level color picker removed - all cards now use per-subtitle color pickers
-      // which are rendered inline with each subtitle in renderUnifiedCard()
+      // Add reorder buttons
+      const reorderButtons = createCardReorderButtons(section.id, section.type);
 
-      if (isTwoColumnPair) {
-        // For two-column paired cards: add swap button instead of individual up/down buttons
-        // Don't make individual cards draggable - the container handles dragging
-        sectionEl.draggable = false;
-
-        // Add swap button at the bottom of each card
-        const swapBtn = createSwapButton(section.id, section.pairIndex);
-        sectionEl.appendChild(swapBtn);
-
-        // For the LEFT card (pairIndex 0), add up/down buttons to move the entire pair
-        if (section.pairIndex === 0) {
-          const reorderButtons = createTwoColReorderButtons(section.id);
-
-          // Disable up button if this pair is at the top
-          const reorderBtns = reorderButtons.querySelectorAll('.card-reorder-btn');
-          if (index === 0 && reorderBtns[0]) {
-            reorderBtns[0].disabled = true; // Up button
-          }
-
-          // Disable down button if this pair is at the bottom
-          // (check if the right card is the last in the array)
-          if (index + 1 >= sections.length - 1 && reorderBtns[1]) {
-            reorderBtns[1].disabled = true; // Down button
-          }
-
-          sectionEl.appendChild(reorderButtons);
-        }
-
-        // Add delete button (still allow deleting individual cards)
-        sectionEl.appendChild(createCardDeleteButton(section.id));
-
-        // Initialize as drop zone for cross-card item moves
-        initializeCardDropZone(sectionEl, section.id);
-      } else {
-        // For regular cards: add up/down reorder buttons and drag handlers
-        initializeDragHandlers(sectionEl, section.id);
-        initializeCardDropZone(sectionEl, section.id);
-
-        // Add reorder buttons
-        const reorderButtons = createCardReorderButtons(section.id, section.type);
-
-        // Disable up button for first card
-        const reorderBtns = reorderButtons.querySelectorAll('.card-reorder-btn');
-        if (index === 0 && reorderBtns[0]) {
-          reorderBtns[0].disabled = true; // Up button
-        }
-
-        // Disable down button for last card
-        if (index === sections.length - 1 && reorderBtns[1]) {
-          reorderBtns[1].disabled = true; // Down button
-        }
-
-        sectionEl.appendChild(reorderButtons);
-
-        // Add delete button
-        sectionEl.appendChild(createCardDeleteButton(section.id));
+      // Disable up button for first card
+      const reorderBtns = reorderButtons.querySelectorAll('.card-reorder-btn');
+      if (index === 0 && reorderBtns[0]) {
+        reorderBtns[0].disabled = true; // Up button
       }
+
+      // Disable down button for last card
+      if (index === sections.length - 1 && reorderBtns[1]) {
+        reorderBtns[1].disabled = true; // Down button
+      }
+
+      sectionEl.appendChild(reorderButtons);
+
+      // Add delete button
+      sectionEl.appendChild(createCardDeleteButton(section.id));
     }
   });
-
-  // Add swap buttons and drag handlers to two-column containers
-  addTwoColContainerButtons();
 
   // Add gap-based add buttons
   addGapButtons();
-}
-
-// --- Create swap button for two-column paired cards
-function createSwapButton(sectionId, pairIndex) {
-  const btn = document.createElement('button');
-  btn.type = 'button';
-  btn.className = 'card-swap-btn';
-  btn.title = 'Swap with adjacent card';
-
-  // Left chevron for right card (pairIndex 1), right chevron for left card (pairIndex 0)
-  if (pairIndex === 0) {
-    // Left card - show right chevron (pointing to right card)
-    btn.innerHTML = `
-      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"></path>
-      </svg>
-    `;
-    btn.classList.add('swap-right');
-  } else {
-    // Right card - show left chevron (pointing to left card)
-    btn.innerHTML = `
-      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"></path>
-      </svg>
-    `;
-    btn.classList.add('swap-left');
-  }
-
-  btn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    swapTwoColumnCards(sectionId);
-  });
-
-  return btn;
-}
-
-// --- Swap the positions of two cards in a two-column pair
-function swapTwoColumnCards(sectionId) {
-  const data = currentData();
-  const sections = currentSections();
-
-  const index = sections.findIndex(s => s.id === sectionId);
-  if (index === -1) return;
-
-  const currentCard = sections[index];
-  if (!currentCard.twoColumnPair) return;
-
-  // Find the pair card
-  const pairIndex = currentCard.pairIndex === 0 ? index + 1 : index - 1;
-  if (pairIndex < 0 || pairIndex >= sections.length) return;
-
-  const pairCard = sections[pairIndex];
-  if (!pairCard || !pairCard.twoColumnPair) return;
-
-  // Swap the pairIndex values
-  const tempPairIndex = currentCard.pairIndex;
-  currentCard.pairIndex = pairCard.pairIndex;
-  pairCard.pairIndex = tempPairIndex;
-
-  // Swap positions in the sections array
-  sections[index] = pairCard;
-  sections[pairIndex] = currentCard;
-
-  // Re-render
-  markDirtyAndSave();
-  renderAllSections();
-  if (editState.enabled) {
-    if (window.ensureSectionPlusButtons) window.ensureSectionPlusButtons();
-    if (window.refreshEditingClasses) window.refreshEditingClasses();
-  }
-
-  if (window.showToast) window.showToast('Cards swapped');
-}
-
-// --- Add buttons and drag handlers to two-column containers
-function addTwoColContainerButtons() {
-  const twoColContainers = document.querySelectorAll('.two-col');
-
-  twoColContainers.forEach(container => {
-    // Remove existing container buttons
-    const existingReorderBtns = container.querySelector('.two-col-reorder-buttons');
-    if (existingReorderBtns) existingReorderBtns.remove();
-
-    // Get the section IDs of cards in this container
-    const cards = container.querySelectorAll('.card');
-    if (cards.length < 2) return;
-
-    const firstCardId = cards[0].id;
-    const secondCardId = cards[1].id;
-
-    // Make the container draggable
-    container.draggable = true;
-    container.style.cursor = 'move';
-    container.dataset.firstCardId = firstCardId;
-    container.dataset.secondCardId = secondCardId;
-
-    // Initialize drag handlers for the container
-    initializeTwoColDragHandlers(container, firstCardId, secondCardId);
-  });
-}
-
-// --- Initialize drag handlers for two-column container
-function initializeTwoColDragHandlers(container, firstCardId, secondCardId) {
-  if (!container || !editState.enabled) return;
-
-  container.addEventListener('dragstart', (e) => {
-    // Prevent dragging if clicking on buttons or interactive elements
-    if (e.target.tagName === 'BUTTON' ||
-        e.target.closest('button') ||
-        e.target.closest('.editable') ||
-        e.target.closest('.icon-btn') ||
-        e.target.closest('.list-item')) {
-      e.preventDefault();
-      return;
-    }
-
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', `twocol:${firstCardId}:${secondCardId}`);
-
-    // Mark as dragging a two-col container
-    if (window.dragState) {
-      window.dragState.draggedElement = container;
-      window.dragState.draggedSection = firstCardId;
-      window.dragState.draggedTwoCol = true;
-      window.dragState.draggedSecondSection = secondCardId;
-    }
-
-    container.classList.add('dragging');
-
-    // Create drop indicator if it doesn't exist
-    if (window.dragState && !window.dragState.dropIndicator) {
-      window.dragState.dropIndicator = document.createElement('div');
-      window.dragState.dropIndicator.className = 'drop-indicator';
-      window.dragState.dropIndicator.style.position = 'absolute';
-      window.dragState.dropIndicator.style.zIndex = '1000';
-      window.dragState.dropIndicator.style.pointerEvents = 'none';
-      window.dragState.dropIndicator.innerHTML = '<div class="drop-line"></div>';
-      document.body.appendChild(window.dragState.dropIndicator);
-    }
-    if (window.dragState && window.dragState.dropIndicator) {
-      window.dragState.dropIndicator.style.display = 'none';
-    }
-  });
-
-  container.addEventListener('dragend', (e) => {
-    container.classList.remove('dragging');
-
-    if (window.dragState) {
-      if (window.dragState.dropIndicator) {
-        window.dragState.dropIndicator.style.display = 'none';
-      }
-
-      window.dragState.draggedElement = null;
-      window.dragState.draggedSection = null;
-      window.dragState.draggedTwoCol = false;
-      window.dragState.draggedSecondSection = null;
-      window.dragState.potentialDropZone = null;
-      window.dragState.potentialDropPosition = null;
-    }
-  });
 }
 
 // --- Add gap-based add buttons
@@ -3040,9 +2859,9 @@ function addGapButtons() {
 
   if (!editState.enabled) return;
 
-  // Get all direct children of main (cards and two-col containers)
+  // Get all direct children of main (cards, two-col containers, and half-width-single containers)
   const children = Array.from(main.children).filter(
-    child => child.classList.contains('card') || child.classList.contains('two-col')
+    child => child.classList.contains('card') || child.classList.contains('two-col') || child.classList.contains('half-width-single')
   );
   const sections = currentSections();
 
@@ -3057,6 +2876,9 @@ function addGapButtons() {
       // Two-column container - count both sections inside it
       const cards = child.querySelectorAll('.card');
       sectionIndex += cards.length;
+    } else if (child.classList.contains('half-width-single')) {
+      // Single half-width container - count one section
+      sectionIndex += 1;
     } else if (child.classList.contains('card')) {
       // Regular card - count one section
       sectionIndex += 1;
@@ -3077,7 +2899,7 @@ function addGapButtons() {
     gapBtn.dataset.targetIndex = targetSectionIndex;
     gapBtn.addEventListener('click', (e) => {
       e.preventDefault();
-      if (window.openCardTypePopover) window.openCardTypePopover(targetSectionIndex);
+      if (window.createCard) window.createCard(targetSectionIndex);
     });
 
     if (i === 0) {

@@ -7,7 +7,7 @@
 
 import { model, editState, currentData } from '../state.js';
 import { PLACEHOLDER_URL, APP_VERSION, STORAGE_KEY, LINKS_FILE_PATH } from '../constants.js';
-import { saveModel, cleanupOldBackups, migrateToUnifiedCards } from './storage.js';
+import { saveModel, cleanupOldBackups, migrateToUnifiedCards, migrateToHalfWidthCards } from './storage.js';
 
 // --- Helper to convert reminder from internal format to JSON for export
 // Exports in the same format as the internal model (compatible with old app)
@@ -75,9 +75,12 @@ export function extractUrlOverrides() {
           if (i.isDivider) {
             icon.isDivider = true;
           } else {
-            // Regular icons have url and title
+            // Regular icons have url, title, and optionally links
             icon.url = i.url || PLACEHOLDER_URL;
             icon.title = i.title || '';
+            if (i.links && i.links.length > 0) {
+              icon.links = i.links;
+            }
           }
           return icon;
         }) : [],
@@ -110,7 +113,7 @@ export function extractUrlOverrides() {
   });
 
   // Schema version for migration support
-  obj.schemaVersion = data.schemaVersion || 3;
+  obj.schemaVersion = data.schemaVersion || 4;
 
   // Structure information
   obj._structure = {
@@ -420,6 +423,9 @@ function migrateImportedData(data, model) {
                       } else {
                         icon.url = item.url || PLACEHOLDER_URL;
                         icon.title = item.title || item.name || '';
+                        if (item.links && item.links.length > 0) {
+                          icon.links = item.links;
+                        }
                       }
                       return icon;
                     }),
@@ -543,6 +549,9 @@ function migrateImportedData(data, model) {
                       } else {
                         icon.url = item.url || PLACEHOLDER_URL;
                         icon.title = item.title || item.name || '';
+                        if (item.links && item.links.length > 0) {
+                          icon.links = item.links;
+                        }
                       }
                       return icon;
                     }),
@@ -675,7 +684,31 @@ export function applyUrlOverrides(data) {
     // Migrate section types and data in the imported JSON
     migrateImportedData(data, current);
   }
-  current.schemaVersion = 3;
+  // Run halfWidth migration for schema versions < 4
+  if (importedVersion < 4) {
+    // Migrate twoColumnPair to halfWidth
+    migrateToHalfWidthCards(data);
+    // Also apply to current model sections
+    if (current.sections) {
+      current.sections.forEach(section => {
+        if (section.twoColumnPair) {
+          section.halfWidth = true;
+          delete section.twoColumnPair;
+          delete section.pairIndex;
+        }
+      });
+    }
+    if (current.sectionsStacked) {
+      current.sectionsStacked.forEach(section => {
+        if (section.twoColumnPair) {
+          section.halfWidth = true;
+          delete section.twoColumnPair;
+          delete section.pairIndex;
+        }
+      });
+    }
+  }
+  current.schemaVersion = 4;
 
   // Apply to ALL sections - all are now unified format
   // Helper function to import unified card data
@@ -721,9 +754,12 @@ export function applyUrlOverrides(data) {
           if (i.isDivider) {
             icon.isDivider = true;
           } else {
-            // Regular icons have url and title
+            // Regular icons have url, title, and optionally links
             icon.url = i.url || PLACEHOLDER_URL;
             icon.title = i.title || '';
+            if (i.links && i.links.length > 0) {
+              icon.links = i.links;
+            }
           }
           return icon;
         }) : [],
@@ -809,7 +845,7 @@ export function applyUrlOverrides(data) {
   if (window.isImporting) {
     // During import, only save to localStorage without triggering JSON file save
     const payload = {
-      schemaVersion: current.schemaVersion || 3,
+      schemaVersion: current.schemaVersion || 4,
       sections: current.sections,
       sectionsStacked: current.sectionsStacked,
       sectionTitles: current.sectionTitles,

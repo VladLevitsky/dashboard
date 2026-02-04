@@ -888,6 +888,66 @@ h2, h3 { margin: 0 0 16px; }
   gap: 8px;
 }
 
+/* Single half-width card container */
+.half-width-single {
+  display: flex;
+  justify-content: flex-start;
+  margin: 0 16px 40px 16px;
+}
+
+.half-width-single .card {
+  width: calc(50% - 8px) !important;
+  max-width: calc(50% - 8px) !important;
+  margin: 0 !important;
+}
+
+/* Minimum height for half-width cards (~2 icon rows) */
+.card.half-width {
+  min-height: 200px !important;
+}
+
+.two-col .card.half-width {
+  min-height: 200px !important;
+}
+
+/* Half-width cards: force single-column layout for items inside */
+.half-width-single .card .unified-subtasks-group,
+.half-width-single .card .unified-copypaste-group,
+.half-width-single .card .unified-reminders-group,
+.half-width-single .card .reminder-subtitle-container,
+.half-width-single .card .reminder-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Width toggle button - always visible */
+.card-width-toggle {
+  display: flex;
+  width: 28px;
+  height: 28px;
+  padding: 4px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.card-width-toggle:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--text);
+}
+
+[data-theme="dark"] .card-width-toggle:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
 /* Main reminders container - no grid layout, just holds subtitle groups */
 .reminders-container { 
   display: block; 
@@ -1377,126 +1437,6 @@ h2, h3 { margin: 0 0 16px; }
   background: #a7f3d0;
   transform: scale(1.1);
   box-shadow: 0 6px 16px rgba(0,0,0,0.2);
-}
-
-/* Card type selection popover */
-.card-type-popover {
-  position: fixed;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  width: 400px;
-  background: var(--card);
-  border-radius: 16px;
-  box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-  padding: 24px;
-  border: 1px solid #e5e7eb;
-  z-index: 1000;
-}
-
-.card-type-header {
-  text-align: center;
-  margin-bottom: 24px;
-}
-
-.card-type-header h3 {
-  margin: 0;
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--text);
-}
-
-.card-type-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-  margin-bottom: 24px;
-}
-
-.card-type-option {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 20px;
-  border: 2px solid #e5e7eb;
-  border-radius: 12px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  background: #f8fafc;
-}
-
-.card-type-option:hover {
-  border-color: var(--brand);
-  background: #f0f9ff;
-  transform: translateY(-2px);
-}
-
-.card-type-option.selected {
-  border-color: var(--brand);
-  background: #dbeafe;
-}
-
-.card-type-icon {
-  width: 48px;
-  height: 48px;
-  margin-bottom: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text);
-}
-.card-type-icon svg {
-  width: 32px;
-  height: 32px;
-  stroke: var(--text);
-}
-
-.card-type-label {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text);
-  text-align: center;
-}
-
-.card-type-description {
-  font-size: 12px;
-  color: var(--muted);
-  text-align: center;
-  margin-top: 4px;
-}
-
-.card-type-actions {
-  display: flex;
-  gap: 12px;
-  justify-content: flex-end;
-}
-
-.card-type-btn {
-  padding: 10px 20px;
-  border-radius: 8px;
-  border: none;
-  cursor: pointer;
-  font-weight: 600;
-  font-size: 14px;
-  transition: all 0.2s ease;
-}
-
-.card-type-btn.primary {
-  background: var(--brand);
-  color: white;
-}
-
-.card-type-btn.primary:hover {
-  background: #1d4ed8;
-}
-
-.card-type-btn.secondary {
-  background: #f3f4f6;
-  color: var(--text);
-}
-
-.card-type-btn.secondary:hover {
-  background: #e5e7eb;
 }
 
 /* Hide old card add buttons */
@@ -2830,30 +2770,6 @@ section.card[id^="new-card-"].card-size-full {
 }
 [data-theme="dark"] .reminder-subtitle.add-tile:hover {
   background: #4b5563 !important;
-}
-
-/* Dark mode styling for card type popover */
-[data-theme="dark"] .card-type-popover {
-  border-color: #475569;
-}
-[data-theme="dark"] .card-type-option {
-  background: #334155;
-  border-color: #475569;
-}
-[data-theme="dark"] .card-type-option:hover {
-  background: #3b4a5f;
-  border-color: var(--brand);
-}
-[data-theme="dark"] .card-type-option.selected {
-  background: #1e3a5f;
-  border-color: var(--brand);
-}
-[data-theme="dark"] .card-type-btn.secondary {
-  background: #374151;
-  color: #f3f4f6;
-}
-[data-theme="dark"] .card-type-btn.secondary:hover {
-  background: #4b5563;
 }
 
 /* Dark mode styling for edit and calendar popovers */
@@ -4928,6 +4844,19 @@ body.stacked-mode .two-col .card {
   margin: 0 !important;
   width: 100% !important;
   max-width: none !important;
+  padding: 14px 10px 16px 10px;
+}
+
+/* ===== HALF-WIDTH SINGLE CONTAINERS ===== */
+body.stacked-mode .half-width-single {
+  margin: 0 0 16px 0;
+  width: 100%;
+  break-inside: avoid;
+}
+
+body.stacked-mode .half-width-single .card {
+  width: 50% !important;
+  max-width: 50% !important;
   padding: 14px 10px 16px 10px;
 }
 

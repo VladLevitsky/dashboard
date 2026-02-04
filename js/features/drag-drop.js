@@ -71,8 +71,7 @@ export function initializeDragHandlers(cardElement, sectionId) {
 
 // --- Handle drag over for determining drop zones
 export function handleDragOver(e) {
-  // Check for either regular card drag or two-col container drag
-  if ((!dragState.draggedElement && !dragState.draggedTwoCol) || !editState.enabled) return;
+  if (!dragState.draggedElement || !editState.enabled) return;
 
   e.preventDefault();
   e.dataTransfer.dropEffect = 'move';
@@ -108,7 +107,6 @@ export function handleDragOver(e) {
   allCards.forEach(card => {
     const rect = card.getBoundingClientRect();
     const cardMiddleY = rect.top + rect.height / 2;
-    const cardMiddleX = rect.left + rect.width / 2;
 
     // Check if we're near this card
     const distanceY = Math.abs(mouseY - cardMiddleY);
@@ -123,60 +121,8 @@ export function handleDragOver(e) {
       } else {
         dropPosition = 'after';
       }
-
-      // Check if we're dragging to the side for two-column layout
-      const horizontalDistance = Math.abs(mouseX - cardMiddleX);
-      const verticalThreshold = rect.height * 0.3; // Within 30% of card height
-
-      if (distanceY < verticalThreshold && horizontalDistance > rect.width * 0.4) {
-        // Check if this card can form a two-column pair
-        const data = currentData();
-        const sections = currentSections();
-        const cardSection = sections.find(s => s.id === card.id);
-        const draggedSectionData = sections.find(s => s.id === dragState.draggedSection);
-
-        // Allow two-column creation for any cards
-        if (cardSection && draggedSectionData && cardSection.id !== draggedSectionData.id) {
-          dropPosition = mouseX < cardMiddleX ? 'beside-left' : 'beside-right';
-        }
-      }
     }
   });
-
-  // Check if we're trying to drop between two-column pair cards
-  if (closestCard && (dropPosition === 'before' || dropPosition === 'after')) {
-    const sections = currentSections();
-    const cardSection = sections.find(s => s.id === closestCard.id);
-
-    if (cardSection && cardSection.twoColumnPair) {
-      // If dropping "before" the RIGHT card (pairIndex 1), redirect to "before" the LEFT card
-      if (dropPosition === 'before' && cardSection.pairIndex === 1) {
-        const cardIndex = sections.findIndex(s => s.id === closestCard.id);
-        if (cardIndex > 0) {
-          const leftCard = sections[cardIndex - 1];
-          if (leftCard && leftCard.twoColumnPair && leftCard.pairIndex === 0) {
-            const leftCardEl = document.getElementById(leftCard.id);
-            if (leftCardEl) {
-              closestCard = leftCardEl;
-            }
-          }
-        }
-      }
-      // If dropping "after" the LEFT card (pairIndex 0), redirect to "after" the RIGHT card
-      else if (dropPosition === 'after' && cardSection.pairIndex === 0) {
-        const cardIndex = sections.findIndex(s => s.id === closestCard.id);
-        if (cardIndex < sections.length - 1) {
-          const rightCard = sections[cardIndex + 1];
-          if (rightCard && rightCard.twoColumnPair && rightCard.pairIndex === 1) {
-            const rightCardEl = document.getElementById(rightCard.id);
-            if (rightCardEl) {
-              closestCard = rightCardEl;
-            }
-          }
-        }
-      }
-    }
-  }
 
   // Update drop indicator position
   if (closestCard && dragState.dropIndicator) {
@@ -200,18 +146,6 @@ export function handleDragOver(e) {
       dragState.dropIndicator.style.width = `${rect.width}px`;
       dragState.dropIndicator.style.height = '4px';
       dragState.dropIndicator.className = 'drop-indicator horizontal';
-    } else if (dropPosition === 'beside-left') {
-      dragState.dropIndicator.style.left = `${rect.left + scrollLeft - 6}px`;
-      dragState.dropIndicator.style.top = `${rect.top + scrollTop}px`;
-      dragState.dropIndicator.style.width = '4px';
-      dragState.dropIndicator.style.height = `${rect.height}px`;
-      dragState.dropIndicator.className = 'drop-indicator vertical beside-left';
-    } else if (dropPosition === 'beside-right') {
-      dragState.dropIndicator.style.left = `${rect.right + scrollLeft + 2}px`;
-      dragState.dropIndicator.style.top = `${rect.top + scrollTop}px`;
-      dragState.dropIndicator.style.width = '4px';
-      dragState.dropIndicator.style.height = `${rect.height}px`;
-      dragState.dropIndicator.className = 'drop-indicator vertical beside-right';
     }
 
     dragState.potentialDropZone = closestCard.id;
@@ -222,215 +156,35 @@ export function handleDragOver(e) {
   }
 }
 
-// --- Handle drop for two-column container (moves both cards together)
-function handleTwoColDrop(e, sections) {
-  const firstCardId = dragState.draggedSection;
-  const secondCardId = dragState.draggedSecondSection;
-
-  const firstIndex = sections.findIndex(s => s.id === firstCardId);
-  const secondIndex = sections.findIndex(s => s.id === secondCardId);
-
-  if (firstIndex === -1 || secondIndex === -1) return;
-
-  // Get the target
-  let targetIndex = sections.findIndex(s => s.id === dragState.potentialDropZone);
-
-  // If target is part of the dragged pair, ignore
-  if (dragState.potentialDropZone === firstCardId || dragState.potentialDropZone === secondCardId) return;
-
-  if (targetIndex === -1) return;
-
-  let position = dragState.potentialDropPosition;
-
-  // Prevent wedging cards between two-column pair cards
-  if (position === 'before' || position === 'after') {
-    const targetCard = sections[targetIndex];
-    if (targetCard && targetCard.twoColumnPair) {
-      if (position === 'before' && targetCard.pairIndex === 1) {
-        if (targetIndex > 0) {
-          const leftCard = sections[targetIndex - 1];
-          if (leftCard && leftCard.twoColumnPair && leftCard.pairIndex === 0) {
-            targetIndex = targetIndex - 1;
-          }
-        }
-      }
-      else if (position === 'after' && targetCard.pairIndex === 0) {
-        if (targetIndex < sections.length - 1) {
-          const rightCard = sections[targetIndex + 1];
-          if (rightCard && rightCard.twoColumnPair && rightCard.pairIndex === 1) {
-            targetIndex = targetIndex + 1;
-          }
-        }
-      }
-    }
-  }
-
-  // Don't allow beside positioning when dragging a two-col
-  if (position === 'beside-left' || position === 'beside-right') {
-    showToast('Two-column pairs must stay together');
-    return;
-  }
-
-  // Get both cards
-  const firstCard = sections[firstIndex];
-  const secondCard = sections[secondIndex];
-
-  // Determine which card is actually first in the array
-  const lowerIndex = Math.min(firstIndex, secondIndex);
-  const higherIndex = Math.max(firstIndex, secondIndex);
-
-  // Remove both cards
-  const cardAtHigher = sections.splice(higherIndex, 1)[0];
-  const cardAtLower = sections.splice(lowerIndex, 1)[0];
-
-  // Recalculate target index after removals
-  let adjustedTargetIndex = targetIndex;
-  if (targetIndex > higherIndex) adjustedTargetIndex -= 1;
-  if (targetIndex > lowerIndex) adjustedTargetIndex -= 1;
-
-  // Calculate insertion index
-  let insertIndex = adjustedTargetIndex;
-  if (position === 'after') {
-    insertIndex = adjustedTargetIndex + 1;
-  }
-
-  // Insert both cards at the new position
-  const leftCard = cardAtLower.pairIndex === 0 ? cardAtLower : cardAtHigher;
-  const rightCard = cardAtLower.pairIndex === 0 ? cardAtHigher : cardAtLower;
-
-  sections.splice(insertIndex, 0, leftCard, rightCard);
-
-  // Update and re-render
-  markDirtyAndSave();
-  if (window.renderAllSections) window.renderAllSections();
-  if (editState.enabled) {
-    if (window.ensureSectionPlusButtons) window.ensureSectionPlusButtons();
-    refreshEditingClasses();
-  }
-
-  showToast('Cards moved');
-}
-
 // --- Handle drop event
 export function handleDrop(e) {
   e.preventDefault();
 
   if (!dragState.draggedSection || !dragState.potentialDropZone || !editState.enabled) return;
 
-  const data = currentData();
   const sections = currentSections();
 
-  // Handle two-column container drop
-  if (dragState.draggedTwoCol) {
-    handleTwoColDrop(e, sections);
-    return;
-  }
-
   const draggedIndex = sections.findIndex(s => s.id === dragState.draggedSection);
-  let targetIndex = sections.findIndex(s => s.id === dragState.potentialDropZone);
+  const targetIndex = sections.findIndex(s => s.id === dragState.potentialDropZone);
 
   if (draggedIndex === -1 || targetIndex === -1 || draggedIndex === targetIndex) return;
 
-  let position = dragState.potentialDropPosition;
+  const position = dragState.potentialDropPosition;
 
-  // Prevent wedging cards between two-column pair cards
-  if (position === 'before' || position === 'after') {
-    const targetCard = sections[targetIndex];
-    if (targetCard && targetCard.twoColumnPair) {
-      if (position === 'before' && targetCard.pairIndex === 1) {
-        if (targetIndex > 0) {
-          const leftCard = sections[targetIndex - 1];
-          if (leftCard && leftCard.twoColumnPair && leftCard.pairIndex === 0) {
-            targetIndex = targetIndex - 1;
-          }
-        }
-      }
-      else if (position === 'after' && targetCard.pairIndex === 0) {
-        if (targetIndex < sections.length - 1) {
-          const rightCard = sections[targetIndex + 1];
-          if (rightCard && rightCard.twoColumnPair && rightCard.pairIndex === 1) {
-            targetIndex = targetIndex + 1;
-          }
-        }
-      }
-    }
+  // Normal reordering
+  const draggedCard = sections[draggedIndex];
+
+  // Remove from current position
+  sections.splice(draggedIndex, 1);
+
+  // Calculate new index
+  let newIndex = draggedIndex < targetIndex ? targetIndex - 1 : targetIndex;
+  if (position === 'after') {
+    newIndex = draggedIndex < targetIndex ? targetIndex : targetIndex + 1;
   }
 
-  if (position === 'beside-left' || position === 'beside-right') {
-    // Create two-column layout
-    const draggedCard = sections[draggedIndex];
-    const targetCard = sections[targetIndex];
-
-    // Break existing pairs if needed
-    if (draggedCard.twoColumnPair) {
-      const draggedPairIndex = draggedCard.pairIndex === 0 ? draggedIndex + 1 : draggedIndex - 1;
-      if (draggedPairIndex >= 0 && draggedPairIndex < sections.length) {
-        const draggedPairCard = sections[draggedPairIndex];
-        if (draggedPairCard && draggedPairCard.twoColumnPair) {
-          delete draggedPairCard.twoColumnPair;
-          delete draggedPairCard.pairIndex;
-        }
-      }
-    }
-
-    if (targetCard.twoColumnPair) {
-      const targetPairIndex = targetCard.pairIndex === 0 ? targetIndex + 1 : targetIndex - 1;
-      if (targetPairIndex >= 0 && targetPairIndex < sections.length) {
-        const targetPairCard = sections[targetPairIndex];
-        if (targetPairCard && targetPairCard.twoColumnPair) {
-          delete targetPairCard.twoColumnPair;
-          delete targetPairCard.pairIndex;
-        }
-      }
-    }
-
-    // Remove dragged card from its current position
-    sections.splice(draggedIndex, 1);
-
-    // Update target index after removal
-    const newTargetIndex = draggedIndex < targetIndex ? targetIndex - 1 : targetIndex;
-
-    // Set two-column properties
-    draggedCard.twoColumnPair = true;
-    targetCard.twoColumnPair = true;
-
-    if (position === 'beside-left') {
-      draggedCard.pairIndex = 0;
-      targetCard.pairIndex = 1;
-      sections.splice(newTargetIndex, 0, draggedCard);
-    } else {
-      draggedCard.pairIndex = 1;
-      targetCard.pairIndex = 0;
-      sections.splice(newTargetIndex + 1, 0, draggedCard);
-    }
-  } else {
-    // Normal reordering
-    const draggedCard = sections[draggedIndex];
-
-    // Break existing pair if needed
-    if (draggedCard.twoColumnPair) {
-      const pairIndex = draggedCard.pairIndex === 0 ? draggedIndex + 1 : draggedIndex - 1;
-      const pairCard = sections[pairIndex];
-      if (pairCard && pairCard.twoColumnPair) {
-        delete pairCard.twoColumnPair;
-        delete pairCard.pairIndex;
-      }
-      delete draggedCard.twoColumnPair;
-      delete draggedCard.pairIndex;
-    }
-
-    // Remove from current position
-    sections.splice(draggedIndex, 1);
-
-    // Calculate new index
-    let newIndex = draggedIndex < targetIndex ? targetIndex - 1 : targetIndex;
-    if (position === 'after') {
-      newIndex = draggedIndex < targetIndex ? targetIndex : targetIndex + 1;
-    }
-
-    // Insert at new position
-    sections.splice(newIndex, 0, draggedCard);
-  }
+  // Insert at new position
+  sections.splice(newIndex, 0, draggedCard);
 
   // Update and re-render
   markDirtyAndSave();
@@ -440,11 +194,7 @@ export function handleDrop(e) {
     refreshEditingClasses();
   }
 
-  if (position === 'beside-left' || position === 'beside-right') {
-    showToast('Two-column layout created');
-  } else {
-    showToast('Card moved');
-  }
+  showToast('Card moved');
 }
 
 // --- Initialize drag handlers for items (icons, list items)

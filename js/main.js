@@ -171,18 +171,13 @@ import {
   onDeleteCard,
   moveCardUp,
   moveCardDown,
-  moveTwoColUp,
-  moveTwoColDown,
   createCardAddButton,
   createCardDeleteButton,
   createCardReorderButtons,
-  createTwoColReorderButtons,
   ensureSectionPlusButtons,
   addGapButtons,
   createGapAddButton,
-  openCardTypePopover,
-  hideCardTypePopover,
-  createCardByType
+  createCard
 } from './features/cards.js';
 
 import {
@@ -436,18 +431,13 @@ window.onAddCard = onAddCard;
 window.onDeleteCard = onDeleteCard;
 window.moveCardUp = moveCardUp;
 window.moveCardDown = moveCardDown;
-window.moveTwoColUp = moveTwoColUp;
-window.moveTwoColDown = moveTwoColDown;
 window.createCardAddButton = createCardAddButton;
 window.createCardDeleteButton = createCardDeleteButton;
 window.createCardReorderButtons = createCardReorderButtons;
-window.createTwoColReorderButtons = createTwoColReorderButtons;
 window.ensureSectionPlusButtons = ensureSectionPlusButtons;
 window.addGapButtons = addGapButtons;
 window.createGapAddButton = createGapAddButton;
-window.openCardTypePopover = openCardTypePopover;
-window.hideCardTypePopover = hideCardTypePopover;
-window.createCardByType = createCardByType;
+window.createCard = createCard;
 
 // Links
 window.openLinksModal = openLinksModal;

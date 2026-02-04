@@ -70,7 +70,6 @@ export function onDeleteCard(sectionId) {
 
 // --- Move card up
 export function moveCardUp(sectionId) {
-  const data = currentData();
   const sections = currentSections();
   const index = sections.findIndex(s => s.id === sectionId);
 
@@ -79,29 +78,6 @@ export function moveCardUp(sectionId) {
 
     const currentCard = sections[index];
     const prevCard = sections[index - 1];
-
-    if (currentCard.twoColumnPair) {
-      const pairIndex = currentCard.pairIndex === 0 ? index + 1 : index - 1;
-      const pairCard = sections[pairIndex];
-
-      delete currentCard.twoColumnPair;
-      delete currentCard.pairIndex;
-
-      if (pairCard && pairCard.twoColumnPair) {
-        delete pairCard.twoColumnPair;
-        delete pairCard.pairIndex;
-      }
-    }
-
-    if (prevCard.twoColumnPair && prevCard.pairIndex === 1) {
-      const prevPairCard = sections[index - 2];
-      if (prevPairCard && prevPairCard.twoColumnPair) {
-        delete prevPairCard.twoColumnPair;
-        delete prevPairCard.pairIndex;
-      }
-      delete prevCard.twoColumnPair;
-      delete prevCard.pairIndex;
-    }
 
     sections[index] = prevCard;
     sections[index - 1] = currentCard;
@@ -120,7 +96,6 @@ export function moveCardUp(sectionId) {
 
 // --- Move card down
 export function moveCardDown(sectionId) {
-  const data = currentData();
   const sections = currentSections();
   const index = sections.findIndex(s => s.id === sectionId);
 
@@ -129,29 +104,6 @@ export function moveCardDown(sectionId) {
 
     const currentCard = sections[index];
     const nextCard = sections[index + 1];
-
-    if (currentCard.twoColumnPair) {
-      const pairIndex = currentCard.pairIndex === 0 ? index + 1 : index - 1;
-      const pairCard = sections[pairIndex];
-
-      delete currentCard.twoColumnPair;
-      delete currentCard.pairIndex;
-
-      if (pairCard && pairCard.twoColumnPair) {
-        delete pairCard.twoColumnPair;
-        delete pairCard.pairIndex;
-      }
-    }
-
-    if (nextCard.twoColumnPair && nextCard.pairIndex === 0) {
-      const nextPairCard = sections[index + 2];
-      if (nextPairCard && nextPairCard.twoColumnPair) {
-        delete nextPairCard.twoColumnPair;
-        delete nextPairCard.pairIndex;
-      }
-      delete nextCard.twoColumnPair;
-      delete nextCard.pairIndex;
-    }
 
     sections[index] = nextCard;
     sections[index + 1] = currentCard;
@@ -165,86 +117,6 @@ export function moveCardDown(sectionId) {
 
     window.scrollTo(0, scrollY);
     showToast('Card moved down');
-  }
-}
-
-// --- Move two-column pair up
-export function moveTwoColUp(leftCardId) {
-  const sections = currentSections();
-  const leftIndex = sections.findIndex(s => s.id === leftCardId);
-
-  if (leftIndex > 0) {
-    const scrollY = window.scrollY;
-
-    const leftCard = sections[leftIndex];
-    const rightCard = sections[leftIndex + 1];
-
-    if (!leftCard || !rightCard) return;
-
-    const prevCard = sections[leftIndex - 1];
-
-    if (prevCard.twoColumnPair && prevCard.pairIndex === 1) {
-      const prevPairCard = sections[leftIndex - 2];
-      if (prevPairCard && prevPairCard.twoColumnPair) {
-        delete prevPairCard.twoColumnPair;
-        delete prevPairCard.pairIndex;
-      }
-      delete prevCard.twoColumnPair;
-      delete prevCard.pairIndex;
-    }
-
-    sections.splice(leftIndex, 2);
-    sections.splice(leftIndex - 1, 0, leftCard, rightCard);
-
-    markDirtyAndSave();
-    if (window.renderAllSections) window.renderAllSections();
-    if (editState.enabled) {
-      ensureSectionPlusButtons();
-      refreshEditingClasses();
-    }
-
-    window.scrollTo(0, scrollY);
-    showToast('Pair moved up');
-  }
-}
-
-// --- Move two-column pair down
-export function moveTwoColDown(leftCardId) {
-  const sections = currentSections();
-  const leftIndex = sections.findIndex(s => s.id === leftCardId);
-
-  if (leftIndex >= 0 && leftIndex + 2 < sections.length) {
-    const scrollY = window.scrollY;
-
-    const leftCard = sections[leftIndex];
-    const rightCard = sections[leftIndex + 1];
-
-    if (!leftCard || !rightCard) return;
-
-    const nextCard = sections[leftIndex + 2];
-
-    if (nextCard && nextCard.twoColumnPair && nextCard.pairIndex === 0) {
-      const nextPairCard = sections[leftIndex + 3];
-      if (nextPairCard && nextPairCard.twoColumnPair) {
-        delete nextPairCard.twoColumnPair;
-        delete nextPairCard.pairIndex;
-      }
-      delete nextCard.twoColumnPair;
-      delete nextCard.pairIndex;
-    }
-
-    sections.splice(leftIndex, 2);
-    sections.splice(leftIndex + 1, 0, leftCard, rightCard);
-
-    markDirtyAndSave();
-    if (window.renderAllSections) window.renderAllSections();
-    if (editState.enabled) {
-      ensureSectionPlusButtons();
-      refreshEditingClasses();
-    }
-
-    window.scrollTo(0, scrollY);
-    showToast('Pair moved down');
   }
 }
 
@@ -341,45 +213,6 @@ export function createCardReorderButtons(sectionId, sectionType) {
   return container;
 }
 
-// --- Create two-column reorder buttons
-export function createTwoColReorderButtons(leftCardId) {
-  const container = document.createElement('div');
-  container.className = 'card-reorder-buttons';
-
-  const upBtn = document.createElement('button');
-  upBtn.type = 'button';
-  upBtn.className = 'card-reorder-btn';
-  upBtn.title = 'Move pair up';
-  upBtn.innerHTML = `
-    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-      <path stroke-linecap="round" stroke-linejoin="round" d="M5 15l7-7 7 7"></path>
-    </svg>
-  `;
-  upBtn.addEventListener('click', (e) => {
-    e.preventDefault();
-    moveTwoColUp(leftCardId);
-  });
-
-  const downBtn = document.createElement('button');
-  downBtn.type = 'button';
-  downBtn.className = 'card-reorder-btn';
-  downBtn.title = 'Move pair down';
-  downBtn.innerHTML = `
-    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-      <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"></path>
-    </svg>
-  `;
-  downBtn.addEventListener('click', (e) => {
-    e.preventDefault();
-    moveTwoColDown(leftCardId);
-  });
-
-  container.appendChild(upBtn);
-  container.appendChild(downBtn);
-
-  return container;
-}
-
 // --- Ensure section plus buttons exist
 export function ensureSectionPlusButtons() {
   // This function is called by moveCardUp/moveCardDown
@@ -454,137 +287,41 @@ export function createGapAddButton(targetIndex) {
   btn.dataset.targetIndex = targetIndex;
   btn.addEventListener('click', (e) => {
     e.preventDefault();
-    openCardTypePopover(targetIndex);
+    createCard(targetIndex);
   });
   return btn;
 }
 
-// ===== CARD TYPE POPOVER =====
+// ===== CARD CREATION =====
 
-export function openCardTypePopover(targetIndex) {
-  const popover = $('#card-type-popover');
-  const options = popover.querySelectorAll('.card-type-option');
-
-  // Reset selection
-  options.forEach(option => option.classList.remove('selected'));
-
-  // Handle option selection - create card immediately when selected
-  options.forEach(option => {
-    // Clone to remove old listeners
-    const newOption = option.cloneNode(true);
-    option.parentNode.replaceChild(newOption, option);
-
-    newOption.addEventListener('click', (e) => {
-      e.preventDefault();
-      popover.querySelectorAll('.card-type-option').forEach(opt => opt.classList.remove('selected'));
-      newOption.classList.add('selected');
-      const selectedType = newOption.dataset.type;
-
-      // Create card immediately when type is selected
-      if (selectedType) {
-        createCardByType(selectedType, targetIndex);
-        hideCardTypePopover();
-      }
-    });
-  });
-
-  // Handle cancel button
-  $('#card-type-cancel').onclick = hideCardTypePopover;
-
-  // Show popover
-  popover.hidden = false;
-}
-
-export function hideCardTypePopover() {
-  const popover = $('#card-type-popover');
-  popover.hidden = true;
-}
-
-export function createCardByType(type, targetIndex) {
+export function createCard(targetIndex) {
   const data = currentData();
   const sections = currentSections();
-  let newSection;
-
-  // Use the targetIndex directly as the insertion position
-  let actualTargetIndex = targetIndex;
 
   // Ensure the index is within bounds
+  let actualTargetIndex = targetIndex;
   if (actualTargetIndex < 0) {
     actualTargetIndex = 0;
   } else if (actualTargetIndex > sections.length) {
     actualTargetIndex = sections.length;
   }
 
-  switch (type) {
-    case 'single':
-      // Create unified card that can hold icons, reminders, subtasks, and copy-paste items
-      newSection = {
-        id: generateSectionId(),
-        type: 'unified',
-        title: generateUniqueCardTitle('New Card')
-      };
-      // Initialize with unified structure (_default contains icons, reminders, subtasks, copyPaste)
-      data[newSection.id] = {
-        '_default': {
-          icons: [],
-          reminders: [],
-          subtasks: [],
-          copyPaste: []
-        }
-      };
-      break;
+  // Create unified card that can hold icons, reminders, subtasks, and copy-paste items
+  const newSection = {
+    id: generateSectionId(),
+    type: 'unified',
+    title: generateUniqueCardTitle('New Card')
+  };
 
-    case 'two-col':
-      // Create first section for two-column layout (unified card)
-      const section1 = {
-        id: generateSectionId(),
-        type: 'unified',
-        title: generateUniqueCardTitle('New Card'),
-        twoColumnPair: true,
-        pairIndex: 0
-      };
-
-      // Insert first section into current display mode's sections array
-      sections.splice(actualTargetIndex, 0, section1);
-      // Also add to the other sections array (for when switching modes)
-      ensureSectionInBothArrays(section1);
-      data[section1.id] = {
-        '_default': {
-          icons: [],
-          reminders: [],
-          subtasks: [],
-          copyPaste: []
-        }
-      };
-      data.sectionTitles[section1.id] = section1.title;
-
-      // Now create second section with a unique ID (unified card)
-      const section2 = {
-        id: generateSectionId(),
-        type: 'unified',
-        title: 'New Card 2',
-        twoColumnPair: true,
-        pairIndex: 1
-      };
-
-      data[section2.id] = {
-        '_default': {
-          icons: [],
-          reminders: [],
-          subtasks: [],
-          copyPaste: []
-        }
-      };
-      data.sectionTitles[section2.id] = section2.title;
-
-      // Insert second section after the first in current display mode's sections array
-      sections.splice(actualTargetIndex + 1, 0, section2);
-      // Also add to the other sections array
-      ensureSectionInBothArrays(section2);
-
-      if (window.renderAllSections) window.renderAllSections();
-      return;
-  }
+  // Initialize with unified structure (_default contains icons, reminders, subtasks, copyPaste)
+  data[newSection.id] = {
+    '_default': {
+      icons: [],
+      reminders: [],
+      subtasks: [],
+      copyPaste: []
+    }
+  };
 
   // Insert the new section into current display mode's sections array
   sections.splice(actualTargetIndex, 0, newSection);

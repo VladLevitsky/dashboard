@@ -19,8 +19,8 @@
 // Render order: Icons → Reminders → Subtasks → Copy-paste
 //
 export const model = {
-  // Schema version for data migration (3 = unified card with reminders)
-  schemaVersion: 3,
+  // Schema version for data migration (4 = halfWidth cards)
+  schemaVersion: 4,
   // Track the order and structure of sections for normal (single-column) mode
   // Empty by default - users add cards via the + button
   sections: [],
@@ -94,8 +94,6 @@ export const editState = {
 export const dragState = {
   draggedElement: null,
   draggedSection: null,
-  draggedTwoCol: false, // Whether dragging a two-column container
-  draggedSecondSection: null, // Second card ID when dragging two-col
   dropIndicator: null,
   potentialDropZone: null,
   potentialDropPosition: null,
@@ -120,12 +118,9 @@ export function currentSections() {
   if (displayMode === 'stacked') {
     // Initialize sectionsStacked from sections if not already done
     if (!data.sectionsStacked) {
-      // Deep copy sections but strip twoColumnPair/pairIndex since each mode has independent layout
+      // Deep copy sections - halfWidth is shared between modes
       data.sectionsStacked = data.sections.map(section => {
-        const copy = JSON.parse(JSON.stringify(section));
-        delete copy.twoColumnPair;
-        delete copy.pairIndex;
-        return copy;
+        return JSON.parse(JSON.stringify(section));
       });
     }
     return data.sectionsStacked;
@@ -137,36 +132,15 @@ export function currentSections() {
 // --- Helper to ensure a section exists in both arrays (normal and stacked)
 export function ensureSectionInBothArrays(section) {
   const data = currentData();
-  const displayMode = data.displayMode || 'normal';
-
-  // Create a clean copy without layout-specific properties for the OTHER mode
-  const cleanCopy = () => {
-    const copy = JSON.parse(JSON.stringify(section));
-    delete copy.twoColumnPair;
-    delete copy.pairIndex;
-    return copy;
-  };
 
   // Add to sections (normal mode) if not exists
   if (!data.sections.find(s => s.id === section.id)) {
-    // If we're in stacked mode, add clean copy to normal mode
-    if (displayMode === 'stacked') {
-      data.sections.push(cleanCopy());
-    } else {
-      // We're in normal mode, add the section as-is (it was created here)
-      data.sections.push(JSON.parse(JSON.stringify(section)));
-    }
+    data.sections.push(JSON.parse(JSON.stringify(section)));
   }
 
   // Add to sectionsStacked if it exists and section not in it
   if (data.sectionsStacked && !data.sectionsStacked.find(s => s.id === section.id)) {
-    // If we're in normal mode, add clean copy to stacked mode
-    if (displayMode === 'normal') {
-      data.sectionsStacked.push(cleanCopy());
-    } else {
-      // We're in stacked mode, add the section as-is (it was created here)
-      data.sectionsStacked.push(JSON.parse(JSON.stringify(section)));
-    }
+    data.sectionsStacked.push(JSON.parse(JSON.stringify(section)));
   }
 }
 
