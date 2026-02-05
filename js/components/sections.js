@@ -183,7 +183,15 @@ export function createSectionElement(section) {
   widthToggleBtn.type = 'button';
   widthToggleBtn.className = 'card-width-toggle';
   widthToggleBtn.title = section.halfWidth ? 'Switch to full width' : 'Switch to half width';
-  widthToggleBtn.textContent = section.halfWidth ? '½' : '1';
+  // Two vertical lines when full-width (will become half), single horizontal line when half-width (will become full)
+  widthToggleBtn.innerHTML = section.halfWidth
+    ? `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <line x1="3" y1="8" x2="13" y2="8"></line>
+      </svg>`
+    : `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <line x1="5" y1="3" x2="5" y2="13"></line>
+        <line x1="11" y1="3" x2="11" y2="13"></line>
+      </svg>`;
   widthToggleBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     toggleCardWidth(section.id);

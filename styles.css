@@ -12,8 +12,8 @@
 }
 
 [data-theme="dark"] {
-  --bg: #0f172a;
-  --card: #1e293b;
+  --bg: #1e293b;
+  --card: #0f172a;
   --text: #f1f5f9;
   --muted: #94a3b8;
   --brand: #3b82f6;
@@ -934,14 +934,17 @@ h2, h3 { margin: 0 0 16px; }
   cursor: pointer;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s ease;
+  transition: opacity 0.2s, background 0.2s;
   font-size: 14px;
   font-weight: 600;
+  position: relative;
+  top: 2px;
+  opacity: 0.4;
 }
 
 .card-width-toggle:hover {
+  opacity: 0.8;
   background: rgba(0, 0, 0, 0.05);
-  color: var(--text);
 }
 
 [data-theme="dark"] .card-width-toggle:hover {
@@ -2800,7 +2803,7 @@ body[data-style="glass"][data-glass-theme="classic"] {
 
 body[data-theme="dark"][data-style="glass"],
 body[data-theme="dark"][data-style="glass"][data-glass-theme="classic"] {
-  background: linear-gradient(135deg, #1e293b 0%, #334155 50%, #475569 100%);
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
   background-attachment: fixed;
 }
 
@@ -3048,6 +3051,11 @@ body[data-theme="dark"][data-style="glass"] .interval-popover {
   background: rgba(30, 41, 59, 0.85);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
+}
+
+/* Glass mode - Dark theme width toggle (match notepad button) */
+body[data-theme="dark"][data-style="glass"] .card-width-toggle:hover {
+  background: rgba(255, 255, 255, 0.1);
 }
 
 /* ========================================
@@ -5320,19 +5328,18 @@ body.stacked-mode .gap-add-btn {
   border: none;
   background: transparent;
   cursor: pointer;
-  padding: 4px;
-  border-radius: 50%;
+  padding: 2px;
+  border-radius: 4px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #cbd5e1;
+  color: var(--brand);
   transition: all 0.2s ease;
   flex-shrink: 0;
 }
 
 .priority-toggle-btn:hover {
-  color: #94a3b8;
-  background: rgba(0, 0, 0, 0.05);
+  transform: scale(1.1);
 }
 
 .priority-toggle-btn.active {
@@ -5340,25 +5347,24 @@ body.stacked-mode .gap-add-btn {
 }
 
 .priority-toggle-btn.active:hover {
-  color: #1d4ed8;
+  transform: scale(1.1);
 }
 
 .priority-toggle-btn svg {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
 }
 
 [data-theme="dark"] .priority-toggle-btn {
-  color: #475569;
+  color: #cbd5e1;
 }
 
 [data-theme="dark"] .priority-toggle-btn:hover {
-  color: #64748b;
-  background: rgba(255, 255, 255, 0.05);
+  color: #f1f5f9;
 }
 
 [data-theme="dark"] .priority-toggle-btn.active {
-  color: var(--brand);
+  color: #cbd5e1;
 }
 
 /* Priority Highlighted Items (in Quick Access) - color is applied inline via JS */
