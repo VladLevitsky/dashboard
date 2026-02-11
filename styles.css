@@ -921,34 +921,43 @@ h2, h3 { margin: 0 0 16px; }
   gap: 8px;
 }
 
-/* Width toggle button - always visible */
+/* Width toggle button - positioned to the left of collapse chevron */
 .card-width-toggle {
-  display: flex;
-  width: 28px;
-  height: 28px;
-  padding: 4px;
+  position: absolute;
+  bottom: 12px;
+  right: 40px;
+  width: 24px;
+  height: 24px;
+  padding: 0;
   border: none;
   border-radius: 6px;
   background: transparent;
   color: var(--muted);
   cursor: pointer;
+  display: flex;
   align-items: center;
   justify-content: center;
   transition: opacity 0.2s, background 0.2s;
-  font-size: 14px;
-  font-weight: 600;
-  position: relative;
-  top: 2px;
-  opacity: 0.4;
+  opacity: 0.35;
+  z-index: 10;
 }
 
 .card-width-toggle:hover {
-  opacity: 0.8;
+  opacity: 0.6;
   background: rgba(0, 0, 0, 0.05);
+}
+.card-width-toggle svg {
+  width: 16px;
+  height: 16px;
 }
 
 [data-theme="dark"] .card-width-toggle:hover {
   background: rgba(255, 255, 255, 0.1);
+}
+
+/* Hide width toggle in edit mode */
+.card.editing .card-width-toggle {
+  display: none;
 }
 
 /* Main reminders container - no grid layout, just holds subtitle groups */
@@ -1516,6 +1525,14 @@ h2, h3 { margin: 0 0 16px; }
   top: 50%;
   transform: translateY(-50%);
   right: 16px;
+}
+/* Reposition width toggle when card is collapsed */
+.card.collapsed .card-width-toggle {
+  position: absolute;
+  bottom: auto;
+  top: 50%;
+  transform: translateY(-50%);
+  right: 44px;
 }
 
 /* Card reorder buttons */
@@ -2320,7 +2337,7 @@ section.card[id^="new-card-"].card-size-full {
   transition: all 0.2s ease;
   font-size: 13px;
   font-weight: 500;
-  color: var(--text);
+  color: #1f2937;
 }
 .appearance-option:hover {
   background: #f1f5f9;
@@ -2443,7 +2460,7 @@ section.card[id^="new-card-"].card-size-full {
 [data-theme="dark"] .appearance-dialog { border-color: #475569; }
 [data-theme="dark"] .appearance-header { border-color: #475569; }
 [data-theme="dark"] .appearance-actions { border-color: #475569; }
-[data-theme="dark"] .appearance-option { background: #334155; border-color: #475569; }
+[data-theme="dark"] .appearance-option { background: #334155; border-color: #475569; color: #f1f5f9; }
 [data-theme="dark"] .appearance-option:hover { background: #3d4f65; border-color: #64748b; }
 [data-theme="dark"] .appearance-option.active { background: #1e3a5f; border-color: var(--brand); }
 [data-theme="dark"] .appearance-btn.secondary { background: #334155; color: var(--text); }
@@ -3082,8 +3099,8 @@ section.card.collapsed {
   overflow: visible !important;
 }
 
-section.card.collapsed[id] > *:not(h2):not(h3):not(.section-title-wrapper):not(.card-collapse-btn),
-section.card.collapsed > *:not(h2):not(h3):not(.section-title-wrapper):not(.card-collapse-btn) {
+section.card.collapsed[id] > *:not(h2):not(h3):not(.section-title-wrapper):not(.card-collapse-btn):not(.card-width-toggle),
+section.card.collapsed > *:not(h2):not(h3):not(.section-title-wrapper):not(.card-collapse-btn):not(.card-width-toggle) {
   display: none !important;
   height: 0 !important;
   margin: 0 !important;

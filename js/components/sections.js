@@ -178,26 +178,6 @@ export function createSectionElement(section) {
     }
   }
 
-  // Add width toggle button (always visible, not just in edit mode)
-  const widthToggleBtn = document.createElement('button');
-  widthToggleBtn.type = 'button';
-  widthToggleBtn.className = 'card-width-toggle';
-  widthToggleBtn.title = section.halfWidth ? 'Switch to full width' : 'Switch to half width';
-  // Two vertical lines when full-width (will become half), single horizontal line when half-width (will become full)
-  widthToggleBtn.innerHTML = section.halfWidth
-    ? `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-        <line x1="3" y1="8" x2="13" y2="8"></line>
-      </svg>`
-    : `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-        <line x1="5" y1="3" x2="5" y2="13"></line>
-        <line x1="11" y1="3" x2="11" y2="13"></line>
-      </svg>`;
-  widthToggleBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    toggleCardWidth(section.id);
-  });
-  titleWrapper.appendChild(widthToggleBtn);
-
   sectionEl.appendChild(titleWrapper);
 
   // Add notepad button (hidden in edit mode via CSS)
@@ -227,6 +207,26 @@ export function createSectionElement(section) {
     }
   });
   sectionEl.appendChild(notepadBtn);
+
+  // Add width toggle button (positioned to the left of collapse chevron)
+  const widthToggleBtn = document.createElement('button');
+  widthToggleBtn.type = 'button';
+  widthToggleBtn.className = 'card-width-toggle';
+  widthToggleBtn.title = section.halfWidth ? 'Switch to full width' : 'Switch to half width';
+  // Two vertical lines when full-width (will become half), single horizontal line when half-width (will become full)
+  widthToggleBtn.innerHTML = section.halfWidth
+    ? `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <line x1="5" y1="12" x2="19" y2="12"></line>
+      </svg>`
+    : `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <line x1="8" y1="5" x2="8" y2="19"></line>
+        <line x1="16" y1="5" x2="16" y2="19"></line>
+      </svg>`;
+  widthToggleBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleCardWidth(section.id);
+  });
+  sectionEl.appendChild(widthToggleBtn);
 
   // Add collapse chevron button (only visible outside edit mode)
   const collapseBtn = document.createElement('button');
