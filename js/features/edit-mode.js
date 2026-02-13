@@ -920,11 +920,43 @@ export function wireMoveButtonEvents() {
   }
 }
 
-// ========== Notepad Feature ==========
+// ========== Notepad Feature (Multi-Note) ==========
 
 // Track current notepad state
 let currentNotepadSectionId = null;
-let notepadInEditMode = false;
+let currentNoteKey = null; // Key of the note being edited (null = new note)
+
+// --- Generate unique key for notes
+function generateNoteKey() {
+  return 'note_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+}
+
+// --- Get notes array for a section (handles migration from old string format)
+function getNotesForSection(sectionId) {
+  if (!model.cardNotes) return [];
+  const notes = model.cardNotes[sectionId];
+  if (!notes) return [];
+
+  // Migration: if it's a string (old format), convert to array
+  if (typeof notes === 'string') {
+    if (notes.trim()) {
+      const migratedNote = {
+        key: generateNoteKey(),
+        title: 'Note',
+        content: notes
+      };
+      model.cardNotes[sectionId] = [migratedNote];
+      if (editState.working?.cardNotes) {
+        editState.working.cardNotes[sectionId] = [migratedNote];
+      }
+      saveModel();
+      return [migratedNote];
+    }
+    return [];
+  }
+
+  return Array.isArray(notes) ? notes : [];
+}
 
 // --- Render note text as HTML with bullet support
 function renderNoteAsHtml(text) {
@@ -936,7 +968,6 @@ function renderNoteAsHtml(text) {
   let currentIndent = 0;
 
   lines.forEach(line => {
-    // Check for bullet patterns: "* ", "  * " (indented), "- ", "  - "
     const bulletMatch = line.match(/^(\s*)[*-]\s(.*)$/);
 
     if (bulletMatch) {
@@ -949,7 +980,6 @@ function renderNoteAsHtml(text) {
         currentIndent = 0;
       }
 
-      // Handle indent changes
       while (currentIndent < indent) {
         html += '<ul>';
         currentIndent++;
@@ -961,7 +991,6 @@ function renderNoteAsHtml(text) {
 
       html += `<li>${escapeHtml(content)}</li>`;
     } else {
-      // Close any open lists
       while (currentIndent > 0) {
         html += '</ul>';
         currentIndent--;
@@ -971,7 +1000,6 @@ function renderNoteAsHtml(text) {
         inList = false;
       }
 
-      // Regular text line
       if (line.trim()) {
         html += `<div>${escapeHtml(line)}</div>`;
       } else {
@@ -980,7 +1008,6 @@ function renderNoteAsHtml(text) {
     }
   });
 
-  // Close any remaining open lists
   while (currentIndent > 0) {
     html += '</ul>';
     currentIndent--;
@@ -999,37 +1026,62 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
-// --- Open Notepad Popover (in view mode)
+// --- Render saved notes list at top of notepad
+function renderSavedNotesList() {
+  const listContainer = $('#notepad-saved-list');
+  if (!listContainer) return;
+
+  const notes = getNotesForSection(currentNotepadSectionId);
+
+  if (notes.length === 0) {
+    listContainer.hidden = true;
+    return;
+  }
+
+  listContainer.hidden = false;
+  listContainer.innerHTML = notes.map(note => `
+    <button type="button" class="notepad-saved-bubble" data-key="${note.key}">
+      ${escapeHtml(note.title || 'Untitled')}
+    </button>
+  `).join('');
+
+  // Add click handlers
+  listContainer.querySelectorAll('.notepad-saved-bubble').forEach(bubble => {
+    bubble.addEventListener('click', () => {
+      openNoteViewer(bubble.dataset.key);
+    });
+  });
+}
+
+// --- Clear editor fields
+function clearNotepadEditor() {
+  const titleInput = $('#notepad-title');
+  const editor = $('#notepad-editor');
+  if (titleInput) titleInput.value = '';
+  if (editor) editor.innerHTML = '';
+  currentNoteKey = null;
+}
+
+// --- Open Notepad Popover
 export function openNotepad(sectionId, cursorPos) {
   const pop = $('#notepad-popover');
   if (!pop) return;
 
   currentNotepadSectionId = sectionId;
-  notepadInEditMode = false;
+  currentNoteKey = null;
 
-  // Get current note content
-  const noteText = model.cardNotes?.[sectionId] || '';
+  // Render saved notes at top
+  renderSavedNotesList();
 
-  // Show view mode, hide edit mode
-  const viewContainer = $('#notepad-view');
-  const viewContent = $('#notepad-view-content');
-  const editor = $('#notepad-editor');
-  const actions = $('#notepad-actions');
-
-  viewContainer.hidden = false;
-  editor.hidden = true;
-  actions.hidden = true;
-
-  // Render the note content
-  viewContent.innerHTML = renderNoteAsHtml(noteText);
+  // Clear editor for new note
+  clearNotepadEditor();
 
   // Make visible to measure size
   pop.hidden = false;
   const popWidth = pop.offsetWidth || 384;
-  const popHeight = pop.offsetHeight || 260;
+  const popHeight = pop.offsetHeight || 300;
   const margin = 12;
 
-  // Get scroll offsets for absolute positioning
   const scrollX = window.scrollX || window.pageXOffset;
   const scrollY = window.scrollY || window.pageYOffset;
 
@@ -1039,7 +1091,6 @@ export function openNotepad(sectionId, cursorPos) {
     const cursorX = cursorPos.x;
     const cursorY = cursorPos.y;
 
-    // Horizontal: try right of cursor, then left, then clamp
     const spaceOnRight = window.innerWidth - cursorX;
     const spaceOnLeft = cursorX;
 
@@ -1051,7 +1102,6 @@ export function openNotepad(sectionId, cursorPos) {
       leftPos = Math.max(margin, Math.min(window.innerWidth - popWidth - margin, cursorX - popWidth / 2)) + scrollX;
     }
 
-    // Vertical: try below cursor, then above, then clamp
     const spaceBelow = window.innerHeight - cursorY;
     const spaceAbove = cursorY;
 
@@ -1063,45 +1113,45 @@ export function openNotepad(sectionId, cursorPos) {
       topPos = Math.max(margin, Math.min(window.innerHeight - popHeight - margin, cursorY - popHeight / 2)) + scrollY;
     }
   } else {
-    // Fallback: center on screen
     leftPos = (window.innerWidth - popWidth) / 2 + scrollX;
     topPos = (window.innerHeight - popHeight) / 2 + scrollY;
   }
 
   pop.style.left = `${leftPos}px`;
   pop.style.top = `${topPos}px`;
+
+  // Focus title input
+  setTimeout(() => {
+    const titleInput = $('#notepad-title');
+    if (titleInput) titleInput.focus();
+  }, 50);
 }
 
-// --- Enter edit mode for notepad
-export function enterNotepadEditMode() {
-  if (notepadInEditMode) return;
-  notepadInEditMode = true;
+// --- Enter edit mode for existing note
+export function enterNotepadEditMode(noteKey) {
+  if (!noteKey) return;
+  currentNoteKey = noteKey;
 
-  const viewContainer = $('#notepad-view');
+  const notes = getNotesForSection(currentNotepadSectionId);
+  const note = notes.find(n => n.key === noteKey);
+  if (!note) return;
+
+  const titleInput = $('#notepad-title');
   const editor = $('#notepad-editor');
-  const actions = $('#notepad-actions');
 
-  // Get current note content
-  const noteText = model.cardNotes?.[currentNotepadSectionId] || '';
+  if (titleInput) titleInput.value = note.title || '';
+  if (editor) editor.innerHTML = renderNoteAsHtml(note.content || '');
 
-  // Convert plain text to HTML for contenteditable
-  editor.innerHTML = renderNoteAsHtml(noteText);
-
-  // Switch to edit mode
-  viewContainer.hidden = true;
-  editor.hidden = false;
-  actions.hidden = false;
-
-  // Focus and place cursor at end
   setTimeout(() => {
-    editor.focus();
-    // Move cursor to end
-    const selection = window.getSelection();
-    const range = document.createRange();
-    range.selectNodeContents(editor);
-    range.collapse(false);
-    selection.removeAllRanges();
-    selection.addRange(range);
+    if (editor) {
+      editor.focus();
+      const selection = window.getSelection();
+      const range = document.createRange();
+      range.selectNodeContents(editor);
+      range.collapse(false);
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }
   }, 50);
 }
 
@@ -1112,10 +1162,10 @@ export function closeNotepad() {
     pop.hidden = true;
   }
   currentNotepadSectionId = null;
-  notepadInEditMode = false;
+  currentNoteKey = null;
 }
 
-// --- Convert contenteditable HTML back to plain text with bullet markers
+// --- Convert contenteditable HTML back to plain text
 function editorHtmlToText(element) {
   let result = '';
 
@@ -1161,7 +1211,6 @@ function editorHtmlToText(element) {
       return '\n';
     }
 
-    // Default: process children
     let text = '';
     for (const child of node.childNodes) {
       text += processNode(child, indent);
@@ -1173,7 +1222,6 @@ function editorHtmlToText(element) {
     result += processNode(child, 0);
   }
 
-  // Clean up multiple newlines and trim
   return result.replace(/\n{3,}/g, '\n\n').trim();
 }
 
@@ -1182,43 +1230,127 @@ export function saveNote() {
   if (!currentNotepadSectionId) return;
 
   const editor = $('#notepad-editor');
-  const noteText = editorHtmlToText(editor).trim();
+  const titleInput = $('#notepad-title');
+  const noteTitle = titleInput.value.trim() || 'Untitled';
+  const noteContent = editorHtmlToText(editor).trim();
 
-  // Initialize cardNotes if needed
+  if (!noteContent) {
+    showToast('Note is empty');
+    return;
+  }
+
   if (!model.cardNotes) {
     model.cardNotes = {};
   }
-
-  // Save or remove the note
-  if (noteText) {
-    model.cardNotes[currentNotepadSectionId] = noteText;
-  } else {
-    delete model.cardNotes[currentNotepadSectionId];
+  if (!model.cardNotes[currentNotepadSectionId] || typeof model.cardNotes[currentNotepadSectionId] === 'string') {
+    model.cardNotes[currentNotepadSectionId] = [];
   }
 
-  // Also update working copy if in edit mode
+  const notes = model.cardNotes[currentNotepadSectionId];
+
+  if (currentNoteKey) {
+    // Update existing note
+    const noteIndex = notes.findIndex(n => n.key === currentNoteKey);
+    if (noteIndex !== -1) {
+      notes[noteIndex].title = noteTitle;
+      notes[noteIndex].content = noteContent;
+    }
+  } else {
+    // Add new note
+    notes.push({
+      key: generateNoteKey(),
+      title: noteTitle,
+      content: noteContent
+    });
+  }
+
   if (editState.working) {
     if (!editState.working.cardNotes) {
       editState.working.cardNotes = {};
     }
-    if (noteText) {
-      editState.working.cardNotes[currentNotepadSectionId] = noteText;
-    } else {
-      delete editState.working.cardNotes[currentNotepadSectionId];
-    }
+    editState.working.cardNotes[currentNotepadSectionId] = [...notes];
   }
 
-  // Save to localStorage
   saveModel();
-
-  // Update the notepad button indicator
   updateNotepadButtonIndicator(currentNotepadSectionId);
 
-  closeNotepad();
+  // Clear editor and refresh saved notes list
+  clearNotepadEditor();
+  renderSavedNotesList();
+
   showToast('Note saved');
 }
 
-// --- Update notepad button indicator (show dot if has note)
+// --- Delete a note
+export function deleteNote(noteKey) {
+  if (!currentNotepadSectionId || !noteKey) return;
+
+  const notes = getNotesForSection(currentNotepadSectionId);
+  const noteIndex = notes.findIndex(n => n.key === noteKey);
+
+  if (noteIndex === -1) return;
+
+  notes.splice(noteIndex, 1);
+  model.cardNotes[currentNotepadSectionId] = notes;
+
+  if (editState.working?.cardNotes) {
+    editState.working.cardNotes[currentNotepadSectionId] = [...notes];
+  }
+
+  saveModel();
+  updateNotepadButtonIndicator(currentNotepadSectionId);
+}
+
+// --- Open Note Viewer Modal (read-only)
+export function openNoteViewer(noteKey) {
+  const modal = $('#note-viewer-modal');
+  if (!modal) return;
+
+  const notes = getNotesForSection(currentNotepadSectionId);
+  const note = notes.find(n => n.key === noteKey);
+  if (!note) return;
+
+  currentNoteKey = noteKey;
+
+  const titleEl = $('#note-viewer-title');
+  const contentEl = $('#note-viewer-content');
+
+  titleEl.textContent = note.title || 'Untitled';
+  contentEl.innerHTML = renderNoteAsHtml(note.content);
+
+  modal.hidden = false;
+}
+
+// --- Close Note Viewer Modal
+export function closeNoteViewer() {
+  const modal = $('#note-viewer-modal');
+  if (modal) {
+    modal.hidden = true;
+  }
+}
+
+// --- Edit note from viewer
+export function editNoteFromViewer() {
+  const noteKey = currentNoteKey;
+  closeNoteViewer();
+  enterNotepadEditMode(noteKey);
+}
+
+// --- Delete note from viewer
+export function deleteNoteFromViewer() {
+  const noteKey = currentNoteKey;
+  if (!noteKey) return;
+
+  if (!confirm('Delete this note?')) return;
+
+  deleteNote(noteKey);
+  closeNoteViewer();
+  renderSavedNotesList();
+
+  showToast('Note deleted');
+}
+
+// --- Update notepad button indicator
 export function updateNotepadButtonIndicator(sectionId) {
   const card = document.getElementById(sectionId);
   if (!card) return;
@@ -1226,16 +1358,18 @@ export function updateNotepadButtonIndicator(sectionId) {
   const notepadBtn = card.querySelector('.card-notepad-btn');
   if (!notepadBtn) return;
 
-  const hasNote = model.cardNotes?.[sectionId]?.trim();
-  notepadBtn.classList.toggle('has-note', !!hasNote);
+  const notes = getNotesForSection(sectionId);
+  notepadBtn.classList.toggle('has-note', notes.length > 0);
 }
 
-// --- Wire up notepad event listeners (called from init)
+// Placeholder for toggleSavedNotesList (no longer needed but exported)
+export function toggleSavedNotesList() {}
+
+// --- Wire up notepad event listeners
 export function wireNotepadEvents() {
   const closeBtn = $('#notepad-close');
   const cancelBtn = $('#notepad-cancel');
   const saveBtn = $('#notepad-save');
-  const viewContainer = $('#notepad-view');
   const editor = $('#notepad-editor');
 
   if (closeBtn) {
@@ -1248,12 +1382,6 @@ export function wireNotepadEvents() {
     saveBtn.addEventListener('click', saveNote);
   }
 
-  // Click on view container to enter edit mode
-  if (viewContainer) {
-    viewContainer.addEventListener('click', enterNotepadEditMode);
-  }
-
-  // Keyboard support for bullet points in contenteditable
   if (editor) {
     editor.addEventListener('keydown', handleEditorKeydown);
     editor.addEventListener('input', handleEditorInput);
@@ -1271,6 +1399,25 @@ export function wireNotepadEvents() {
       closeNotepad();
     }
   });
+
+  // Wire up note viewer modal events
+  const viewerCloseBtn = $('#note-viewer-close');
+  const viewerEditBtn = $('#note-viewer-edit');
+  const viewerDeleteBtn = $('#note-viewer-delete');
+  const viewerBackdrop = document.querySelector('.note-viewer-backdrop');
+
+  if (viewerCloseBtn) {
+    viewerCloseBtn.addEventListener('click', closeNoteViewer);
+  }
+  if (viewerEditBtn) {
+    viewerEditBtn.addEventListener('click', editNoteFromViewer);
+  }
+  if (viewerDeleteBtn) {
+    viewerDeleteBtn.addEventListener('click', deleteNoteFromViewer);
+  }
+  if (viewerBackdrop) {
+    viewerBackdrop.addEventListener('click', closeNoteViewer);
+  }
 }
 
 // --- Check if cursor is inside a list item

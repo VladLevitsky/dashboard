@@ -36,8 +36,14 @@ import {
   openNotepad,
   closeNotepad,
   saveNote,
+  enterNotepadEditMode,
   updateNotepadButtonIndicator,
   wireNotepadEvents,
+  toggleSavedNotesList,
+  openNoteViewer,
+  closeNoteViewer,
+  editNoteFromViewer,
+  deleteNoteFromViewer,
   wireMoveButtonEvents
 } from './features/edit-mode.js';
 
@@ -490,7 +496,13 @@ window.applyLogoTransform = applyLogoTransform;
 window.openNotepad = openNotepad;
 window.closeNotepad = closeNotepad;
 window.saveNote = saveNote;
+window.enterNotepadEditMode = enterNotepadEditMode;
 window.updateNotepadButtonIndicator = updateNotepadButtonIndicator;
 window.wireNotepadEvents = wireNotepadEvents;
+window.toggleSavedNotesList = toggleSavedNotesList;
+window.openNoteViewer = openNoteViewer;
+window.closeNoteViewer = closeNoteViewer;
+window.editNoteFromViewer = editNoteFromViewer;
+window.deleteNoteFromViewer = deleteNoteFromViewer;
 window.wireMoveButtonEvents = wireMoveButtonEvents;
 

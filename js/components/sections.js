@@ -195,8 +195,10 @@ export function createSectionElement(section) {
     </svg>
   `;
 
-  // Check if this card has a note and add indicator class
-  if (data.cardNotes?.[section.id]?.trim()) {
+  // Check if this card has notes and add indicator class
+  const notes = data.cardNotes?.[section.id];
+  const hasNotes = Array.isArray(notes) ? notes.length > 0 : (typeof notes === 'string' && notes.trim());
+  if (hasNotes) {
     notepadBtn.classList.add('has-note');
   }
 
