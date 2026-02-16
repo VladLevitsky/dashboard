@@ -5841,12 +5841,12 @@ body.stacked-mode .gap-add-btn {
 
 .notepad-popover-actions {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
   gap: 8px;
   margin-top: 12px;
 }
 
-.notepad-popover-actions button {
+.notepad-popover-actions button:not(.notepad-color-btn) {
   padding: 8px 16px;
   border-radius: 6px;
   font-size: 13px;
@@ -5959,8 +5959,8 @@ body.stacked-mode .gap-add-btn {
   border-radius: 999px;
   font-size: 12px;
   font-weight: 500;
-  background: var(--brand);
-  color: white;
+  background: #e6f3ff;
+  color: #1f2937;
   border: none;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -5968,16 +5968,48 @@ body.stacked-mode .gap-add-btn {
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
 }
 .notepad-saved-bubble:hover {
-  filter: brightness(1.1);
+  filter: brightness(0.95);
   box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
   transform: translateY(-1px);
 }
 [data-theme="dark"] .notepad-saved-bubble {
+  background: #475569;
+  color: #f1f5f9;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
 }
 [data-theme="dark"] .notepad-saved-bubble:hover {
+  filter: brightness(1.1);
   box-shadow: 0 3px 10px rgba(0, 0, 0, 0.4);
 }
+
+/* Note color button - matches link color button style exactly */
+.notepad-color-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid rgba(0, 0, 0, 0.15);
+  background: #e6f3ff;
+  cursor: pointer;
+  transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+  margin-right: auto;
+  padding: 0;
+  flex-shrink: 0;
+}
+.notepad-color-btn:hover {
+  transform: scale(1.1);
+  border-color: var(--brand);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+[data-theme="dark"] .notepad-color-btn {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: #475569;
+}
+[data-theme="dark"] .notepad-color-btn:hover {
+  border-color: var(--brand);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* Note color picker now uses .link-color-popover classes for consistency */
 
 /* Note Viewer Modal */
 .note-viewer-modal {

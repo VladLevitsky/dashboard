@@ -44,6 +44,7 @@ import {
   closeNoteViewer,
   editNoteFromViewer,
   deleteNoteFromViewer,
+  openNoteColorPicker,
   wireMoveButtonEvents
 } from './features/edit-mode.js';
 
@@ -504,5 +505,6 @@ window.openNoteViewer = openNoteViewer;
 window.closeNoteViewer = closeNoteViewer;
 window.editNoteFromViewer = editNoteFromViewer;
 window.deleteNoteFromViewer = deleteNoteFromViewer;
+window.openNoteColorPicker = openNoteColorPicker;
 window.wireMoveButtonEvents = wireMoveButtonEvents;
 

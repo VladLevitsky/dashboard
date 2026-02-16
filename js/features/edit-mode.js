@@ -1039,11 +1039,15 @@ function renderSavedNotesList() {
   }
 
   listContainer.hidden = false;
-  listContainer.innerHTML = notes.map(note => `
-    <button type="button" class="notepad-saved-bubble" data-key="${note.key}">
-      ${escapeHtml(note.title || 'Untitled')}
-    </button>
-  `).join('');
+  const defaultBgColor = model.darkMode ? '#475569' : '#e6f3ff';
+  listContainer.innerHTML = notes.map(note => {
+    const bgColor = note.color || defaultBgColor;
+    return `
+      <button type="button" class="notepad-saved-bubble" data-key="${note.key}" style="background: ${bgColor}">
+        ${escapeHtml(note.title || 'Untitled')}
+      </button>
+    `;
+  }).join('');
 
   // Add click handlers
   listContainer.querySelectorAll('.notepad-saved-bubble').forEach(bubble => {
@@ -1053,6 +1057,109 @@ function renderSavedNotesList() {
   });
 }
 
+// --- Update note color preview button
+function updateNoteColorPreview() {
+  const colorBtn = $('#notepad-color-btn');
+  if (!colorBtn) return;
+  const defaultColor = model.darkMode ? '#475569' : '#e6f3ff';
+  const color = currentNoteColor || defaultColor;
+  colorBtn.style.background = color;
+}
+
+// --- Open note color picker (matches link color picker style exactly)
+export function openNoteColorPicker() {
+  const colorBtn = $('#notepad-color-btn');
+  if (!colorBtn) return;
+
+  // Close any existing picker
+  const existingPicker = document.querySelector('.link-color-popover');
+  if (existingPicker) {
+    existingPicker.remove();
+  }
+
+  const defaultColorLight = '#e6f3ff';
+  const defaultColorDark = '#475569';
+  const currentColor = currentNoteColor || (model.darkMode ? defaultColorDark : defaultColorLight);
+  const modeLabel = model.darkMode ? 'Dark' : 'Light';
+
+  const picker = document.createElement('div');
+  picker.className = 'link-color-popover';
+  picker.innerHTML = `
+    <div class="link-color-popover-header">
+      <span>Bubble Color (${modeLabel})</span>
+    </div>
+    <div class="link-color-popover-content">
+      <input type="color" class="link-color-input" value="${currentColor}">
+      <div class="link-color-presets">
+        <button type="button" class="color-preset-small" data-color="#f7fafc" style="background: #f7fafc;" title="Gray"></button>
+        <button type="button" class="color-preset-small" data-color="#fff4e5" style="background: #fff4e5;" title="Yellow"></button>
+        <button type="button" class="color-preset-small" data-color="#e6fff3" style="background: #e6fff3;" title="Green"></button>
+        <button type="button" class="color-preset-small" data-color="#ffe6f0" style="background: #ffe6f0;" title="Pink"></button>
+        <button type="button" class="color-preset-small" data-color="#e6f3ff" style="background: #e6f3ff;" title="Blue"></button>
+        <button type="button" class="color-preset-small" data-color="#f3e6ff" style="background: #f3e6ff;" title="Purple"></button>
+        <button type="button" class="color-preset-small" data-color="#fff6e6" style="background: #fff6e6;" title="Orange"></button>
+        <button type="button" class="color-preset-small" data-color="#ffe6e6" style="background: #ffe6e6;" title="Red"></button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(picker);
+
+  // Position picker near the button
+  const btnRect = colorBtn.getBoundingClientRect();
+  const popoverWidth = 200;
+  const popoverHeight = picker.offsetHeight || 120;
+  const margin = 8;
+
+  let left = btnRect.left;
+  let top = btnRect.bottom + margin;
+
+  // Adjust if overflowing right
+  if (left + popoverWidth > window.innerWidth - margin) {
+    left = window.innerWidth - popoverWidth - margin;
+  }
+
+  // Adjust if overflowing bottom - show above instead
+  if (top + popoverHeight > window.innerHeight - margin) {
+    top = btnRect.top - popoverHeight - margin;
+  }
+
+  picker.style.left = `${left}px`;
+  picker.style.top = `${top}px`;
+
+  // Handle color input change
+  const colorInput = picker.querySelector('.link-color-input');
+  colorInput.addEventListener('input', (e) => {
+    currentNoteColor = e.target.value;
+    updateNoteColorPreview();
+  });
+
+  // Close picker helper
+  const closePicker = () => {
+    picker.remove();
+    document.removeEventListener('click', closeHandler);
+  };
+
+  // Handle preset clicks - close popover after selection
+  picker.querySelectorAll('.color-preset-small').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const newColor = btn.dataset.color;
+      colorInput.value = newColor;
+      currentNoteColor = newColor;
+      updateNoteColorPreview();
+      closePicker();
+    });
+  });
+
+  // Close on click outside
+  const closeHandler = (e) => {
+    if (!picker.contains(e.target) && e.target !== colorBtn) {
+      closePicker();
+    }
+  };
+  setTimeout(() => document.addEventListener('click', closeHandler), 0);
+}
+
 // --- Clear editor fields
 function clearNotepadEditor() {
   const titleInput = $('#notepad-title');
@@ -1060,6 +1167,8 @@ function clearNotepadEditor() {
   if (titleInput) titleInput.value = '';
   if (editor) editor.innerHTML = '';
   currentNoteKey = null;
+  currentNoteColor = null;
+  updateNoteColorPreview();
 }
 
 // --- Open Notepad Popover
@@ -1140,7 +1249,12 @@ export function enterNotepadEditMode(noteKey) {
   const editor = $('#notepad-editor');
 
   if (titleInput) titleInput.value = note.title || '';
-  if (editor) editor.innerHTML = renderNoteAsHtml(note.content || '');
+  // Load HTML directly (content is now stored as HTML)
+  if (editor) editor.innerHTML = note.content || '';
+
+  // Set current color for editing
+  currentNoteColor = note.color || null;
+  updateNoteColorPreview();
 
   setTimeout(() => {
     if (editor) {
@@ -1225,6 +1339,28 @@ function editorHtmlToText(element) {
   return result.replace(/\n{3,}/g, '\n\n').trim();
 }
 
+// --- Sanitize HTML content (allow only safe tags)
+function sanitizeHtml(html) {
+  const temp = document.createElement('div');
+  temp.innerHTML = html;
+
+  // Remove script tags and event handlers
+  temp.querySelectorAll('script').forEach(el => el.remove());
+  temp.querySelectorAll('*').forEach(el => {
+    // Remove event handler attributes
+    Array.from(el.attributes).forEach(attr => {
+      if (attr.name.startsWith('on')) {
+        el.removeAttribute(attr.name);
+      }
+    });
+  });
+
+  return temp.innerHTML;
+}
+
+// --- Current note color (for new notes)
+let currentNoteColor = null;
+
 // --- Save Note
 export function saveNote() {
   if (!currentNotepadSectionId) return;
@@ -1232,9 +1368,9 @@ export function saveNote() {
   const editor = $('#notepad-editor');
   const titleInput = $('#notepad-title');
   const noteTitle = titleInput.value.trim() || 'Untitled';
-  const noteContent = editorHtmlToText(editor).trim();
+  const noteContent = sanitizeHtml(editor.innerHTML).trim();
 
-  if (!noteContent) {
+  if (!noteContent || noteContent === '<br>' || noteContent === '<div><br></div>') {
     showToast('Note is empty');
     return;
   }
@@ -1254,13 +1390,17 @@ export function saveNote() {
     if (noteIndex !== -1) {
       notes[noteIndex].title = noteTitle;
       notes[noteIndex].content = noteContent;
+      if (currentNoteColor) {
+        notes[noteIndex].color = currentNoteColor;
+      }
     }
   } else {
     // Add new note
     notes.push({
       key: generateNoteKey(),
       title: noteTitle,
-      content: noteContent
+      content: noteContent,
+      color: currentNoteColor || null
     });
   }
 
@@ -1276,6 +1416,7 @@ export function saveNote() {
 
   // Clear editor and refresh saved notes list
   clearNotepadEditor();
+  currentNoteColor = null;
   renderSavedNotesList();
 
   showToast('Note saved');
@@ -1316,7 +1457,8 @@ export function openNoteViewer(noteKey) {
   const contentEl = $('#note-viewer-content');
 
   titleEl.textContent = note.title || 'Untitled';
-  contentEl.innerHTML = renderNoteAsHtml(note.content);
+  // Display HTML directly (content is now stored as HTML)
+  contentEl.innerHTML = note.content || '';
 
   modal.hidden = false;
 }
@@ -1370,6 +1512,7 @@ export function wireNotepadEvents() {
   const closeBtn = $('#notepad-close');
   const cancelBtn = $('#notepad-cancel');
   const saveBtn = $('#notepad-save');
+  const colorBtn = $('#notepad-color-btn');
   const editor = $('#notepad-editor');
 
   if (closeBtn) {
@@ -1381,21 +1524,26 @@ export function wireNotepadEvents() {
   if (saveBtn) {
     saveBtn.addEventListener('click', saveNote);
   }
+  if (colorBtn) {
+    colorBtn.addEventListener('click', openNoteColorPicker);
+  }
 
   if (editor) {
     editor.addEventListener('keydown', handleEditorKeydown);
     editor.addEventListener('input', handleEditorInput);
   }
 
-  // Close on click outside
+  // Close on click outside (but not when clicking in the note viewer modal or color picker)
   document.addEventListener('click', (e) => {
     const pop = $('#notepad-popover');
     if (!pop || pop.hidden) return;
 
     const isInsidePopover = e.target.closest('#notepad-popover');
     const isNotepadButton = e.target.closest('.card-notepad-btn');
+    const isInsideViewer = e.target.closest('#note-viewer-modal');
+    const isInsideColorPicker = e.target.closest('.link-color-popover');
 
-    if (!isInsidePopover && !isNotepadButton) {
+    if (!isInsidePopover && !isNotepadButton && !isInsideViewer && !isInsideColorPicker) {
       closeNotepad();
     }
   });
@@ -1520,27 +1668,66 @@ function handleEditorInput(e) {
   if (node.nodeType !== Node.TEXT_NODE) return;
 
   const text = node.textContent;
-  const cursorPos = range.startOffset;
 
-  // Check for "* " or "- " pattern at start of text or after newline
-  const beforeCursor = text.substring(0, cursorPos);
+  // Only convert if the ENTIRE text content is just "* " or "- " (nothing more)
+  if (text !== '* ' && text !== '- ') return;
 
-  // Pattern: text ends with "* " or "- " and it's at the beginning or after whitespace
-  const bulletMatch = beforeCursor.match(/(^|[\n])([*-])\s$/);
+  // Cursor must be at the end (position 2)
+  if (range.startOffset !== 2) return;
 
-  if (bulletMatch) {
-    // Check if we're not already in a list
-    if (!isInList()) {
-      // Remove the "* " or "- " text
-      const matchStart = beforeCursor.length - bulletMatch[0].length + (bulletMatch[1] ? bulletMatch[1].length : 0);
-      const afterCursor = text.substring(cursorPos);
-      const newText = text.substring(0, matchStart) + afterCursor;
+  // Check if we're not already in a list
+  if (isInList()) return;
 
-      // Update the text node
-      node.textContent = newText;
+  // Find the block element containing this text (div created by Enter key)
+  let blockToReplace = node.parentElement;
 
-      // Create bullet list
-      document.execCommand('insertUnorderedList', false, null);
-    }
+  // If parent is the editor itself, we need to handle differently
+  if (blockToReplace === editor) {
+    // Text is directly in the editor - only proceed if editor is essentially empty
+    // (just contains this "* " text)
+    const editorContent = editor.innerHTML.trim();
+    if (editorContent !== '* ' && editorContent !== '- ') return;
+
+    // Create a new list and replace editor contents
+    const ul = document.createElement('ul');
+    const li = document.createElement('li');
+    li.appendChild(document.createElement('br')); // Empty li needs br for cursor
+    ul.appendChild(li);
+    editor.innerHTML = '';
+    editor.appendChild(ul);
+
+    // Place cursor in the list item
+    const newRange = document.createRange();
+    newRange.setStart(li, 0);
+    newRange.collapse(true);
+    selection.removeAllRanges();
+    selection.addRange(newRange);
+    return;
   }
+
+  // Block must be a div or p that's a direct child of the editor
+  if ((blockToReplace.tagName !== 'DIV' && blockToReplace.tagName !== 'P') ||
+      blockToReplace.parentElement !== editor) {
+    return;
+  }
+
+  // Verify this block ONLY contains "* " or "- " (no other content)
+  const blockContent = blockToReplace.textContent;
+  if (blockContent !== '* ' && blockContent !== '- ') return;
+
+  // Create a new list item
+  const ul = document.createElement('ul');
+  const li = document.createElement('li');
+  li.appendChild(document.createElement('br')); // Empty li needs br for cursor
+  ul.appendChild(li);
+
+  // Replace the block with the list
+  blockToReplace.parentElement.replaceChild(ul, blockToReplace);
+
+  // Place cursor in the list item
+  const newRange = document.createRange();
+  newRange.setStart(li, 0);
+  newRange.collapse(true);
+  selection.removeAllRanges();
+  selection.addRange(newRange);
 }
