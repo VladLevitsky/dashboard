@@ -1614,6 +1614,74 @@ function handleEditorKeydown(e) {
     return;
   }
 
+  if (e.key === 'Backspace') {
+    const li = isInListItem();
+    if (li) {
+      // Check if cursor is at the very beginning of the list item
+      const selection = window.getSelection();
+      if (!selection.rangeCount) return;
+
+      const range = selection.getRangeAt(0);
+      const isAtStart = isCursorAtStartOfElement(li, range);
+
+      if (isAtStart) {
+        e.preventDefault();
+
+        const ul = li.parentNode;
+        const parentLi = ul.parentNode.tagName === 'LI' ? ul.parentNode : null;
+
+        // Create a div with the list item's content
+        const div = document.createElement('div');
+        while (li.firstChild) {
+          div.appendChild(li.firstChild);
+        }
+        if (!div.hasChildNodes()) {
+          div.innerHTML = '<br>';
+        }
+
+        // Get position of this li among siblings
+        const liIndex = Array.from(ul.children).indexOf(li);
+        const isFirstItem = liIndex === 0;
+        const isLastItem = liIndex === ul.children.length - 1;
+
+        li.remove();
+
+        if (parentLi) {
+          // Nested list: insert after parent li
+          if (parentLi.nextSibling) {
+            parentLi.parentNode.insertBefore(div, parentLi.nextSibling);
+          } else {
+            parentLi.parentNode.appendChild(div);
+          }
+        } else if (isFirstItem) {
+          // First item: insert before the ul
+          ul.parentNode.insertBefore(div, ul);
+        } else {
+          // Middle or last item: insert after the ul
+          if (ul.nextSibling) {
+            ul.parentNode.insertBefore(div, ul.nextSibling);
+          } else {
+            ul.parentNode.appendChild(div);
+          }
+        }
+
+        // Remove empty ul if needed
+        if (ul.children.length === 0) {
+          ul.remove();
+        }
+
+        // Place cursor at start of the new div
+        const newRange = document.createRange();
+        newRange.setStart(div, 0);
+        newRange.collapse(true);
+        selection.removeAllRanges();
+        selection.addRange(newRange);
+
+        return;
+      }
+    }
+  }
+
   if (e.key === 'Enter' && !e.shiftKey) {
     const li = isInListItem();
     if (li) {
@@ -1653,6 +1721,30 @@ function handleEditorKeydown(e) {
       }
     }
   }
+}
+
+// --- Check if cursor is at the very start of an element
+function isCursorAtStartOfElement(element, range) {
+  if (!range.collapsed) return false;
+
+  // Check if cursor is at offset 0
+  if (range.startOffset !== 0) return false;
+
+  // Walk up from the cursor position to see if we're at the start
+  let node = range.startContainer;
+  while (node && node !== element) {
+    // If this node has previous siblings with content, we're not at start
+    let prev = node.previousSibling;
+    while (prev) {
+      if (prev.textContent && prev.textContent.length > 0) {
+        return false;
+      }
+      prev = prev.previousSibling;
+    }
+    node = node.parentNode;
+  }
+
+  return true;
 }
 
 // --- Handle input in contenteditable to auto-convert "* " to bullet
