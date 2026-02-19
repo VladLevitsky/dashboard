@@ -4739,6 +4739,22 @@ body.stacked-mode .two-col .card .days-badge {
   padding: 3px 7px;
 }
 
+/* Color swatch group in stacked mode */
+body.stacked-mode .card .unified-swatch-group,
+body.stacked-mode .two-col .card .unified-swatch-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-start;
+}
+
+body.stacked-mode .card .unified-copypaste-item.color-swatch,
+body.stacked-mode .two-col .card .unified-copypaste-item.color-swatch {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 50px;
+}
+
 /* ===== SUBTITLES - Consistent sizing ===== */
 body.stacked-mode .card .unified-subtitle,
 body.stacked-mode .two-col .card .unified-subtitle {
@@ -5529,6 +5545,43 @@ body.stacked-mode .gap-add-btn {
 
 [data-theme="dark"] .unified-copypaste-item:hover {
   box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+/* Color Swatch Group - flexbox container that wraps tightly */
+.unified-swatch-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-start;
+}
+
+/* Color Swatch - compact copy-paste item for color codes */
+.unified-copypaste-item.color-swatch {
+  flex: 0 0 auto;
+  width: auto;
+  max-width: none;
+  min-width: 60px;
+  justify-content: center;
+  border: none !important;
+}
+
+.unified-copypaste-item.color-swatch .unified-copypaste-text {
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
+  color: inherit;
+}
+
+.unified-copypaste-item.color-swatch .copy-paste-icon {
+  color: inherit;
+  opacity: 0.7;
+  display: none;
+}
+
+.card.editing .unified-copypaste-item.color-swatch .copy-paste-icon {
+  display: flex;
+}
+
+.card.editing .unified-copypaste-item.color-swatch:hover .copy-paste-icon {
+  opacity: 1;
 }
 
 .unified-copypaste-text {

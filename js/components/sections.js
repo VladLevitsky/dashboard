@@ -2,7 +2,7 @@
 // Handles all section rendering (icons, lists, reminders, copy-paste)
 
 import { editState, model, currentData, currentSections } from '../state.js';
-import { $, $$, openUrl, generateKey, getSectionDataKey, getColorForCurrentMode, darkenColor, lightenAndDesaturateColor, colorToGlassRgba, isGlassModeActive } from '../utils.js';
+import { $, $$, openUrl, generateKey, getSectionDataKey, getColorForCurrentMode, darkenColor, lightenAndDesaturateColor, colorToGlassRgba, isGlassModeActive, isColorCode, getContrastTextColor } from '../utils.js';
 import { PLACEHOLDER_URL, icons, LINK_ICON_SVG, TASKS_ICON_SVG } from '../constants.js';
 import { markDirtyAndSave, openEditPopover, openSubtitleColorPicker } from '../features/edit-mode.js';
 import { saveModel } from '../core/storage.js';
@@ -1708,30 +1708,55 @@ export function renderUnifiedCard(sectionEl, sectionId) {
 
     // Render copy-paste items (if any)
     if (items.copyPaste.length > 0 || editState.enabled) {
-      const copyPasteGroup = document.createElement('div');
-      copyPasteGroup.className = 'unified-copypaste-group';
+      // Separate color swatches from regular items
+      const regularItems = items.copyPaste.filter(cp => !isColorCode((cp.copyText || '').trim()));
+      const colorSwatches = items.copyPaste.filter(cp => isColorCode((cp.copyText || '').trim()));
 
-      // In view mode, sort prioritized items to the top
-      let copyPasteToRender = items.copyPaste;
+      // In view mode, sort prioritized items to the top within each group
+      let regularToRender = regularItems;
+      let swatchesToRender = colorSwatches;
       if (!editState.enabled && window.isItemInQuickAccess) {
-        copyPasteToRender = [...items.copyPaste].sort((a, b) => {
+        const sortByQA = (a, b) => {
           const aInQA = window.isItemInQuickAccess({ type: 'copyPaste', text: a.text, copyText: a.copyText || a.text, name: a.key, sectionType: sectionId });
           const bInQA = window.isItemInQuickAccess({ type: 'copyPaste', text: b.text, copyText: b.copyText || b.text, name: b.key, sectionType: sectionId });
           if (aInQA && !bInQA) return -1;
           if (!aInQA && bInQA) return 1;
           return 0;
-        });
+        };
+        regularToRender = [...regularItems].sort(sortByQA);
+        swatchesToRender = [...colorSwatches].sort(sortByQA);
       }
 
-      copyPasteToRender.forEach(cpItem => {
-        const div = createUnifiedCopyPasteItem(cpItem, sectionId, subtitle, subtitleColor);
-        copyPasteGroup.appendChild(div);
-      });
+      // Render regular copy-paste items in standard grid
+      if (regularToRender.length > 0 || editState.enabled) {
+        const copyPasteGroup = document.createElement('div');
+        copyPasteGroup.className = 'unified-copypaste-group';
 
-      contentGroup.appendChild(copyPasteGroup);
-      // Initialize drag handlers for copy-paste items
-      if (editState.enabled) {
-        initializeContainerDragHandlers(copyPasteGroup, `${sectionId}:${subtitle}:copyPaste`);
+        regularToRender.forEach(cpItem => {
+          const div = createUnifiedCopyPasteItem(cpItem, sectionId, subtitle, subtitleColor);
+          copyPasteGroup.appendChild(div);
+        });
+
+        contentGroup.appendChild(copyPasteGroup);
+        if (editState.enabled) {
+          initializeContainerDragHandlers(copyPasteGroup, `${sectionId}:${subtitle}:copyPaste`);
+        }
+      }
+
+      // Render color swatches in a flex container that wraps tightly
+      if (swatchesToRender.length > 0) {
+        const swatchGroup = document.createElement('div');
+        swatchGroup.className = 'unified-swatch-group';
+
+        swatchesToRender.forEach(cpItem => {
+          const div = createUnifiedCopyPasteItem(cpItem, sectionId, subtitle, subtitleColor);
+          swatchGroup.appendChild(div);
+        });
+
+        contentGroup.appendChild(swatchGroup);
+        if (editState.enabled) {
+          initializeContainerDragHandlers(swatchGroup, `${sectionId}:${subtitle}:copyPaste`);
+        }
       }
     }
 
@@ -2404,42 +2429,56 @@ function createUnifiedCopyPasteItem(item, sectionId, subtitle, subtitleColor) {
   div.dataset.subtitle = subtitle;
   div.dataset.key = item.key;
 
-  // Check if item is in Quick Access (prioritized)
-  const priorityItemData = {
-    type: 'copyPaste',
-    text: item.text,
-    copyText: item.copyText || item.text,
-    name: item.key,
-    sectionType: sectionId
-  };
-  const isPrioritized = !editState.enabled && window.isItemInQuickAccess && window.isItemInQuickAccess(priorityItemData);
+  // Check if the copyText is a color code - if so, render as a color swatch
+  const copyTextToCheck = (item.copyText || '').trim();
+  const isColorSwatch = isColorCode(copyTextToCheck);
 
-  // Apply custom color if set
-  const defaultColorLight = '#f7fafc';
-  const defaultColorDark = '#334155';
-  let effectiveColor = subtitleColor
-    ? getColorForCurrentMode(subtitleColor, defaultColorLight, defaultColorDark)
-    : (window.model && window.model.darkMode ? defaultColorDark : defaultColorLight);
-
-  // Make color more vibrant if prioritized
-  if (isPrioritized && window.makeColorMoreVibrant) {
-    effectiveColor = window.makeColorMoreVibrant(effectiveColor);
-  }
-
-  // Store original color for toggle functionality
-  div.dataset.originalColor = subtitleColor
-    ? getColorForCurrentMode(subtitleColor, defaultColorLight, defaultColorDark)
-    : (window.model && window.model.darkMode ? defaultColorDark : defaultColorLight);
-
-  // Apply glass mode transparency if active
-  if (isGlassModeActive()) {
-    div.style.background = colorToGlassRgba(effectiveColor, 0.55);
-    div.style.backdropFilter = 'blur(8px)';
-    div.style.webkitBackdropFilter = 'blur(8px)';
-    div.style.borderColor = colorToGlassRgba(darkenColor(effectiveColor), 0.5);
+  if (isColorSwatch) {
+    div.classList.add('color-swatch');
+    // Use the color code as the background
+    div.style.background = copyTextToCheck;
+    // Set text color for contrast
+    const contrastColor = getContrastTextColor(copyTextToCheck);
+    div.style.color = contrastColor;
+    div.dataset.originalColor = copyTextToCheck;
   } else {
-    div.style.background = effectiveColor;
-    div.style.borderColor = darkenColor(effectiveColor);
+    // Check if item is in Quick Access (prioritized)
+    const priorityItemData = {
+      type: 'copyPaste',
+      text: item.text,
+      copyText: item.copyText || item.text,
+      name: item.key,
+      sectionType: sectionId
+    };
+    const isPrioritized = !editState.enabled && window.isItemInQuickAccess && window.isItemInQuickAccess(priorityItemData);
+
+    // Apply custom color if set
+    const defaultColorLight = '#f7fafc';
+    const defaultColorDark = '#334155';
+    let effectiveColor = subtitleColor
+      ? getColorForCurrentMode(subtitleColor, defaultColorLight, defaultColorDark)
+      : (window.model && window.model.darkMode ? defaultColorDark : defaultColorLight);
+
+    // Make color more vibrant if prioritized
+    if (isPrioritized && window.makeColorMoreVibrant) {
+      effectiveColor = window.makeColorMoreVibrant(effectiveColor);
+    }
+
+    // Store original color for toggle functionality
+    div.dataset.originalColor = subtitleColor
+      ? getColorForCurrentMode(subtitleColor, defaultColorLight, defaultColorDark)
+      : (window.model && window.model.darkMode ? defaultColorDark : defaultColorLight);
+
+    // Apply glass mode transparency if active
+    if (isGlassModeActive()) {
+      div.style.background = colorToGlassRgba(effectiveColor, 0.55);
+      div.style.backdropFilter = 'blur(8px)';
+      div.style.webkitBackdropFilter = 'blur(8px)';
+      div.style.borderColor = colorToGlassRgba(darkenColor(effectiveColor), 0.5);
+    } else {
+      div.style.background = effectiveColor;
+      div.style.borderColor = darkenColor(effectiveColor);
+    }
   }
 
   const textSpan = document.createElement('span');

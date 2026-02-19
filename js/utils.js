@@ -455,6 +455,96 @@ export async function fileToDataURL(file) {
   });
 }
 
+// --- Color code detection
+// Check if a string is a valid color code (hex, rgb, rgba, hsl, hsla)
+export function isColorCode(text) {
+  if (!text || typeof text !== 'string') return false;
+  const trimmed = text.trim();
+
+  // Hex color: #RGB, #RRGGBB, #RGBA, #RRGGBBAA
+  if (/^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{4}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$/.test(trimmed)) {
+    return true;
+  }
+
+  // rgb(r, g, b) or rgba(r, g, b, a)
+  if (/^rgba?\s*\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*(,\s*[\d.]+)?\s*\)$/i.test(trimmed)) {
+    return true;
+  }
+
+  // hsl(h, s%, l%) or hsla(h, s%, l%, a)
+  if (/^hsla?\s*\(\s*\d{1,3}\s*,\s*\d{1,3}%?\s*,\s*\d{1,3}%?\s*(,\s*[\d.]+)?\s*\)$/i.test(trimmed)) {
+    return true;
+  }
+
+  return false;
+}
+
+// Get contrasting text color (black or white) for a given background color
+export function getContrastTextColor(color) {
+  if (!color) return '#000000';
+
+  let r, g, b;
+
+  // Parse hex format
+  if (color.startsWith('#')) {
+    let hex = color.slice(1);
+    if (hex.length === 3 || hex.length === 4) {
+      hex = hex.split('').map(c => c + c).join('').slice(0, 6);
+    }
+    r = parseInt(hex.substr(0, 2), 16);
+    g = parseInt(hex.substr(2, 2), 16);
+    b = parseInt(hex.substr(4, 2), 16);
+  }
+  // Parse rgb/rgba format
+  else if (color.startsWith('rgb')) {
+    const matches = color.match(/\d+/g);
+    if (matches && matches.length >= 3) {
+      r = parseInt(matches[0]);
+      g = parseInt(matches[1]);
+      b = parseInt(matches[2]);
+    } else {
+      return '#000000';
+    }
+  }
+  // Parse hsl/hsla format - convert to RGB first
+  else if (color.startsWith('hsl')) {
+    const matches = color.match(/[\d.]+/g);
+    if (matches && matches.length >= 3) {
+      const h = parseInt(matches[0]) / 360;
+      const s = parseInt(matches[1]) / 100;
+      const l = parseInt(matches[2]) / 100;
+
+      if (s === 0) {
+        r = g = b = Math.round(l * 255);
+      } else {
+        const hue2rgb = (p, q, t) => {
+          if (t < 0) t += 1;
+          if (t > 1) t -= 1;
+          if (t < 1/6) return p + (q - p) * 6 * t;
+          if (t < 1/2) return q;
+          if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+          return p;
+        };
+        const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+        const p = 2 * l - q;
+        r = Math.round(hue2rgb(p, q, h + 1/3) * 255);
+        g = Math.round(hue2rgb(p, q, h) * 255);
+        b = Math.round(hue2rgb(p, q, h - 1/3) * 255);
+      }
+    } else {
+      return '#000000';
+    }
+  } else {
+    return '#000000';
+  }
+
+  // Calculate relative luminance using sRGB
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+
+  // Return black for light backgrounds, white for dark backgrounds
+  return luminance > 0.5 ? '#000000' : '#ffffff';
+}
+
 // --- Copy text to clipboard
 export function copyToClipboard(text) {
   if (!navigator.clipboard) {
