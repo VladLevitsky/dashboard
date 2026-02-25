@@ -5566,7 +5566,6 @@ body.stacked-mode .gap-add-btn {
 }
 
 .unified-copypaste-item.color-swatch .unified-copypaste-text {
-  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
   color: inherit;
 }
 
