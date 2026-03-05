@@ -176,6 +176,29 @@ export function createSectionElement(section) {
         titleWrapper.appendChild(colorBtn);
       }
     }
+
+    // Add reorder subtitles button if card has multiple subtitles
+    const subtitles = cardData ? Object.keys(cardData).filter(s => s !== '_default') : [];
+    if (subtitles.length > 1) {
+      const reorderBtn = document.createElement('button');
+      reorderBtn.type = 'button';
+      reorderBtn.className = 'reorder-subtitles-btn';
+      reorderBtn.title = 'Reorder sections';
+      reorderBtn.innerHTML = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="12" y1="5" x2="12" y2="19"></line>
+          <polyline points="8 9 12 5 16 9"></polyline>
+          <polyline points="8 15 12 19 16 15"></polyline>
+        </svg>
+      `;
+      reorderBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (window.openReorderSubtitlesModal) {
+          window.openReorderSubtitlesModal(section.id, e);
+        }
+      });
+      titleWrapper.appendChild(reorderBtn);
+    }
   }
 
   sectionEl.appendChild(titleWrapper);
@@ -1533,7 +1556,12 @@ export function renderUnifiedCard(sectionEl, sectionId) {
       if (editState.enabled) {
         subtitleEl.addEventListener('click', (e) => {
           e.preventDefault();
-          openEditPopover(subtitleEl, { text: subtitle, hideUrl: true, allowDelete: true }, ({ text, delete: doDelete, accept }) => {
+          openEditPopover(subtitleEl, {
+            text: subtitle,
+            hideUrl: true,
+            allowDelete: true,
+            moveContext: { sectionId, subtitle, isSubtitle: true }
+          }, ({ text, delete: doDelete, accept }) => {
             if (!accept) return;
             const cardData = currentData()[sectionId];
 

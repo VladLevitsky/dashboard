@@ -33,6 +33,7 @@ import {
   cancelGlobalEdit,
   openColorPicker,
   openSubtitleColorPicker,
+  openReorderSubtitlesModal,
   openNotepad,
   closeNotepad,
   saveNote,
@@ -316,6 +317,7 @@ window.confirmGlobalEdit = confirmGlobalEdit;
 window.cancelGlobalEdit = cancelGlobalEdit;
 window.openColorPicker = openColorPicker;
 window.openSubtitleColorPicker = openSubtitleColorPicker;
+window.openReorderSubtitlesModal = openReorderSubtitlesModal;
 
 // Drag and Drop
 window.initializeDragHandlers = initializeDragHandlers;

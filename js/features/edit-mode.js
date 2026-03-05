@@ -827,6 +827,7 @@ function populateMoveCardList() {
   const sections = currentSections() || [];
   const data = currentData();
   const sourceSectionId = currentMoveContext.sectionId;
+  const isSubtitleMove = currentMoveContext.isSubtitle === true;
 
   // Get all available cards (excluding the source card)
   sections.forEach(section => {
@@ -835,48 +836,60 @@ function populateMoveCardList() {
     // Skip non-unified cards (two-col containers don't store items)
     if (section.type !== 'unified') return;
 
-    // Get subtitles for this card
-    const cardData = data[section.id] || {};
-    const subtitles = Object.keys(cardData).filter(s => s !== '_default');
-
-    if (subtitles.length > 0) {
-      // Card has named subtitles - show card header and subtitle options
-      const cardHeader = document.createElement('div');
-      cardHeader.className = 'move-card-header';
-      cardHeader.textContent = section.title || section.id;
-      list.appendChild(cardHeader);
-
-      // Add _default option (top of card)
-      const defaultBtn = document.createElement('button');
-      defaultBtn.type = 'button';
-      defaultBtn.className = 'move-card-option move-subtitle-option';
-      defaultBtn.textContent = '(Top of card)';
-      defaultBtn.addEventListener('click', () => {
-        handleMoveToCard(section.id, '_default');
-      });
-      list.appendChild(defaultBtn);
-
-      // Add each subtitle as an option
-      subtitles.forEach(subtitle => {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'move-card-option move-subtitle-option';
-        btn.textContent = subtitle;
-        btn.addEventListener('click', () => {
-          handleMoveToCard(section.id, subtitle);
-        });
-        list.appendChild(btn);
-      });
-    } else {
-      // Card has no named subtitles - just show card option
+    if (isSubtitleMove) {
+      // Moving a subtitle - just show card names (subtitle will be added to that card)
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'move-card-option';
       btn.textContent = section.title || section.id;
       btn.addEventListener('click', () => {
-        handleMoveToCard(section.id, '_default');
+        handleMoveSubtitleToCard(section.id);
       });
       list.appendChild(btn);
+    } else {
+      // Moving an item - show card headers with subtitle options
+      const cardData = data[section.id] || {};
+      const subtitles = Object.keys(cardData).filter(s => s !== '_default');
+
+      if (subtitles.length > 0) {
+        // Card has named subtitles - show card header and subtitle options
+        const cardHeader = document.createElement('div');
+        cardHeader.className = 'move-card-header';
+        cardHeader.textContent = section.title || section.id;
+        list.appendChild(cardHeader);
+
+        // Add _default option (top of card)
+        const defaultBtn = document.createElement('button');
+        defaultBtn.type = 'button';
+        defaultBtn.className = 'move-card-option move-subtitle-option';
+        defaultBtn.textContent = '(Top of card)';
+        defaultBtn.addEventListener('click', () => {
+          handleMoveToCard(section.id, '_default');
+        });
+        list.appendChild(defaultBtn);
+
+        // Add each subtitle as an option
+        subtitles.forEach(subtitle => {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'move-card-option move-subtitle-option';
+          btn.textContent = subtitle;
+          btn.addEventListener('click', () => {
+            handleMoveToCard(section.id, subtitle);
+          });
+          list.appendChild(btn);
+        });
+      } else {
+        // Card has no named subtitles - just show card option
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'move-card-option';
+        btn.textContent = section.title || section.id;
+        btn.addEventListener('click', () => {
+          handleMoveToCard(section.id, '_default');
+        });
+        list.appendChild(btn);
+      }
     }
   });
 
@@ -964,6 +977,73 @@ function handleMoveToCard(targetSectionId, targetSubtitle = '_default') {
   showToast(`Item moved${subtitleLabel}`);
 }
 
+// --- Handle Move Subtitle To Card (moves entire subtitle with all items)
+function handleMoveSubtitleToCard(targetSectionId) {
+  if (!currentMoveContext || !currentMoveContext.isSubtitle) return;
+
+  const { sectionId: sourceSectionId, subtitle: sourceSubtitle } = currentMoveContext;
+  const data = currentData();
+
+  console.log('[MoveSubtitle] Moving subtitle:', { sourceSectionId, sourceSubtitle, targetSectionId });
+
+  // Get source subtitle data
+  const sourceData = data[sourceSectionId];
+  if (!sourceData || !sourceData[sourceSubtitle]) {
+    showToast('Subtitle not found');
+    return;
+  }
+
+  // Check if target card already has this subtitle name
+  if (!data[targetSectionId]) {
+    data[targetSectionId] = {};
+  }
+
+  let finalSubtitleName = sourceSubtitle;
+  if (data[targetSectionId][sourceSubtitle]) {
+    // Subtitle name exists in target - append a number
+    let counter = 2;
+    while (data[targetSectionId][`${sourceSubtitle} ${counter}`]) {
+      counter++;
+    }
+    finalSubtitleName = `${sourceSubtitle} ${counter}`;
+  }
+
+  // Move the subtitle data
+  data[targetSectionId][finalSubtitleName] = sourceData[sourceSubtitle];
+  delete sourceData[sourceSubtitle];
+
+  // Also move subtitle color if it exists
+  if (data.subtitleColors) {
+    const oldColorKey = `${sourceSectionId}:${sourceSubtitle}`;
+    const newColorKey = `${targetSectionId}:${finalSubtitleName}`;
+    if (data.subtitleColors[oldColorKey]) {
+      data.subtitleColors[newColorKey] = data.subtitleColors[oldColorKey];
+      delete data.subtitleColors[oldColorKey];
+    }
+  }
+
+  // Also move collapsed state if it exists
+  if (data.collapsedSubtitles) {
+    const oldCollapseKey = `${sourceSectionId}:${sourceSubtitle}`;
+    const newCollapseKey = `${targetSectionId}:${finalSubtitleName}`;
+    if (data.collapsedSubtitles[oldCollapseKey]) {
+      data.collapsedSubtitles[newCollapseKey] = data.collapsedSubtitles[oldCollapseKey];
+      delete data.collapsedSubtitles[oldCollapseKey];
+    }
+  }
+
+  // Save and re-render
+  markDirtyAndSave();
+  hideEditPopover();
+
+  if (window.renderAllSections) window.renderAllSections();
+  if (editState.enabled && window.addCardButtons) window.addCardButtons();
+
+  const targetSection = currentSections().find(s => s.id === targetSectionId);
+  const targetName = targetSection ? (targetSection.title || targetSectionId) : targetSectionId;
+  showToast(`"${sourceSubtitle}" moved to ${targetName}`);
+}
+
 // --- Wire Move Button Events (called from init)
 export function wireMoveButtonEvents() {
   const moveBtn = $('#edit-move');
@@ -974,6 +1054,195 @@ export function wireMoveButtonEvents() {
       toggleMoveCardSelector();
     });
   }
+}
+
+// ========== Reorder Subtitles Modal ==========
+
+let currentReorderSectionId = null;
+let reorderDraggedItem = null;
+
+export function openReorderSubtitlesModal(sectionId, event) {
+  currentReorderSectionId = sectionId;
+  const data = currentData();
+  const cardData = data[sectionId] || {};
+
+  // Get subtitles in current order (excluding _default)
+  const subtitles = Object.keys(cardData).filter(s => s !== '_default');
+
+  if (subtitles.length < 2) {
+    showToast('Need at least 2 sections to reorder');
+    return;
+  }
+
+  // Create modal if it doesn't exist
+  let modal = $('#reorder-subtitles-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'reorder-subtitles-modal';
+    modal.className = 'reorder-subtitles-modal';
+    modal.innerHTML = `
+      <div class="reorder-modal-content">
+        <div class="reorder-modal-header">
+          <h3>Reorder Sections</h3>
+          <button type="button" class="reorder-modal-close">&times;</button>
+        </div>
+        <div class="reorder-modal-body">
+          <p class="reorder-hint">Drag to reorder sections</p>
+          <ul id="reorder-subtitles-list" class="reorder-subtitles-list"></ul>
+        </div>
+        <div class="reorder-modal-footer">
+          <button type="button" class="btn reorder-cancel">Cancel</button>
+          <button type="button" class="btn primary reorder-save">Save Order</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+
+    // Wire up close buttons
+    modal.querySelector('.reorder-modal-close').addEventListener('click', closeReorderSubtitlesModal);
+    modal.querySelector('.reorder-cancel').addEventListener('click', closeReorderSubtitlesModal);
+    modal.querySelector('.reorder-save').addEventListener('click', saveSubtitleOrder);
+
+    // Close on backdrop click
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) closeReorderSubtitlesModal();
+    });
+  }
+
+  // Populate the list
+  const list = $('#reorder-subtitles-list');
+  list.innerHTML = '';
+
+  subtitles.forEach((subtitle, index) => {
+    const li = document.createElement('li');
+    li.className = 'reorder-subtitle-item';
+    li.dataset.subtitle = subtitle;
+    li.draggable = true;
+    li.innerHTML = `
+      <span class="reorder-drag-handle">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="8" y1="6" x2="16" y2="6"></line>
+          <line x1="8" y1="12" x2="16" y2="12"></line>
+          <line x1="8" y1="18" x2="16" y2="18"></line>
+        </svg>
+      </span>
+      <span class="reorder-subtitle-name">${subtitle}</span>
+    `;
+
+    // Drag events
+    li.addEventListener('dragstart', handleReorderDragStart);
+    li.addEventListener('dragend', handleReorderDragEnd);
+    li.addEventListener('dragover', handleReorderDragOver);
+    li.addEventListener('drop', handleReorderDrop);
+
+    list.appendChild(li);
+  });
+
+  // Position modal near click
+  const modalContent = modal.querySelector('.reorder-modal-content');
+  modal.hidden = false;
+
+  // Center the modal
+  modalContent.style.position = 'fixed';
+  modalContent.style.top = '50%';
+  modalContent.style.left = '50%';
+  modalContent.style.transform = 'translate(-50%, -50%)';
+}
+
+function closeReorderSubtitlesModal() {
+  const modal = $('#reorder-subtitles-modal');
+  if (modal) modal.hidden = true;
+  currentReorderSectionId = null;
+  reorderDraggedItem = null;
+}
+
+function handleReorderDragStart(e) {
+  reorderDraggedItem = e.target.closest('.reorder-subtitle-item');
+  reorderDraggedItem.classList.add('dragging');
+  e.dataTransfer.effectAllowed = 'move';
+}
+
+function handleReorderDragEnd(e) {
+  if (reorderDraggedItem) {
+    reorderDraggedItem.classList.remove('dragging');
+  }
+  // Remove all drag-over classes
+  document.querySelectorAll('.reorder-subtitle-item.drag-over').forEach(el => {
+    el.classList.remove('drag-over');
+  });
+  reorderDraggedItem = null;
+}
+
+function handleReorderDragOver(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+
+  const item = e.target.closest('.reorder-subtitle-item');
+  if (!item || item === reorderDraggedItem) return;
+
+  // Remove drag-over from all items
+  document.querySelectorAll('.reorder-subtitle-item.drag-over').forEach(el => {
+    el.classList.remove('drag-over');
+  });
+
+  item.classList.add('drag-over');
+}
+
+function handleReorderDrop(e) {
+  e.preventDefault();
+  const targetItem = e.target.closest('.reorder-subtitle-item');
+  if (!targetItem || !reorderDraggedItem || targetItem === reorderDraggedItem) return;
+
+  const list = $('#reorder-subtitles-list');
+  const items = Array.from(list.children);
+  const draggedIndex = items.indexOf(reorderDraggedItem);
+  const targetIndex = items.indexOf(targetItem);
+
+  // Insert dragged item before or after target based on position
+  if (draggedIndex < targetIndex) {
+    targetItem.after(reorderDraggedItem);
+  } else {
+    targetItem.before(reorderDraggedItem);
+  }
+
+  targetItem.classList.remove('drag-over');
+}
+
+function saveSubtitleOrder() {
+  if (!currentReorderSectionId) return;
+
+  const list = $('#reorder-subtitles-list');
+  const newOrder = Array.from(list.children).map(li => li.dataset.subtitle);
+
+  const data = currentData();
+  const cardData = data[currentReorderSectionId];
+  if (!cardData) return;
+
+  // Rebuild the card data with new subtitle order
+  const newCardData = {};
+
+  // Keep _default first if it exists
+  if (cardData['_default']) {
+    newCardData['_default'] = cardData['_default'];
+  }
+
+  // Add subtitles in new order
+  newOrder.forEach(subtitle => {
+    if (cardData[subtitle]) {
+      newCardData[subtitle] = cardData[subtitle];
+    }
+  });
+
+  // Replace card data
+  data[currentReorderSectionId] = newCardData;
+
+  markDirtyAndSave();
+  closeReorderSubtitlesModal();
+
+  if (window.renderAllSections) window.renderAllSections();
+  if (editState.enabled && window.addCardButtons) window.addCardButtons();
+
+  showToast('Section order updated');
 }
 
 // ========== Notepad Feature (Multi-Note) ==========
