@@ -675,6 +675,9 @@ export function deepMergeModel(target, source) {
   if (typeof source.displayMode !== 'undefined') {
     target.displayMode = source.displayMode;
   }
+  if (source.tasksSummaryOrder && Array.isArray(source.tasksSummaryOrder)) {
+    target.tasksSummaryOrder = [...source.tasksSummaryOrder];
+  }
 
   // Handle ALL section data (unified format - objects keyed by section ID)
   // This includes dynamic 'new-card-*' sections AND legacy section IDs like 'dailyTasks', 'analytics', etc.

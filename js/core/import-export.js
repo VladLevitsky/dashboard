@@ -46,6 +46,11 @@ function convertReminderToJson(r) {
         schedCopy.date = schedCopy.date.toISOString();
       }
       json.schedule = schedCopy;
+
+      // Export scheduleSetAt for one-time reminders (needed for progress bar calculation)
+      if (r.scheduleSetAt) {
+        json.scheduleSetAt = r.scheduleSetAt;
+      }
     } else {
       json.schedule = null;
     }
@@ -140,6 +145,7 @@ export function extractUrlOverrides() {
   obj.displayMode = data.displayMode || 'normal';
   obj.quickAccessItems = data.quickAccessItems || { icons: [], listItems: [] };
   obj.timers = data.timers || [];
+  obj.tasksSummaryOrder = data.tasksSummaryOrder || null;
 
   // Metadata
   obj._metadata = {
@@ -317,6 +323,10 @@ function convertReminderFromJson(r) {
       // Ensure date is a Date object if it exists
       if (reminder.schedule.date && typeof reminder.schedule.date === 'string') {
         reminder.schedule.date = new Date(reminder.schedule.date);
+      }
+      // Restore scheduleSetAt for one-time reminders (needed for progress bar calculation)
+      if (r.scheduleSetAt) {
+        reminder.scheduleSetAt = r.scheduleSetAt;
       }
     }
     // Convert flat date/repeat fields to schedule object
@@ -835,6 +845,11 @@ export function applyUrlOverrides(data) {
     current.timers = data.timers;
   }
 
+  // Apply tasks summary order
+  if (data.tasksSummaryOrder && Array.isArray(data.tasksSummaryOrder)) {
+    current.tasksSummaryOrder = data.tasksSummaryOrder;
+  }
+
   // Synchronize editState.working if in edit mode
   if (editState.enabled && editState.working) {
     editState.working = JSON.parse(JSON.stringify(model));
@@ -865,6 +880,7 @@ export function applyUrlOverrides(data) {
       selectorModeActive: current.selectorModeActive,
       quickAccessItems: current.quickAccessItems,
       displayMode: current.displayMode,
+      tasksSummaryOrder: current.tasksSummaryOrder,
     };
 
     // Add ALL sections - all are now unified format
