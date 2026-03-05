@@ -102,7 +102,8 @@ export const dragState = {
   draggedItem: null,
   draggedItemKey: null,
   draggedItemSection: null,
-  itemDropIndicator: null
+  itemDropIndicator: null,
+  targetSubtitle: null  // Subtitle detected during cross-card drag
 };
 
 // --- Helper to get current active data (working copy in edit mode, or main model)

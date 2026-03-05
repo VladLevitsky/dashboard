@@ -825,6 +825,7 @@ function populateMoveCardList() {
   list.innerHTML = '';
 
   const sections = currentSections() || [];
+  const data = currentData();
   const sourceSectionId = currentMoveContext.sectionId;
 
   // Get all available cards (excluding the source card)
@@ -834,14 +835,49 @@ function populateMoveCardList() {
     // Skip non-unified cards (two-col containers don't store items)
     if (section.type !== 'unified') return;
 
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'move-card-option';
-    btn.textContent = section.title || section.id;
-    btn.addEventListener('click', () => {
-      handleMoveToCard(section.id);
-    });
-    list.appendChild(btn);
+    // Get subtitles for this card
+    const cardData = data[section.id] || {};
+    const subtitles = Object.keys(cardData).filter(s => s !== '_default');
+
+    if (subtitles.length > 0) {
+      // Card has named subtitles - show card header and subtitle options
+      const cardHeader = document.createElement('div');
+      cardHeader.className = 'move-card-header';
+      cardHeader.textContent = section.title || section.id;
+      list.appendChild(cardHeader);
+
+      // Add _default option (top of card)
+      const defaultBtn = document.createElement('button');
+      defaultBtn.type = 'button';
+      defaultBtn.className = 'move-card-option move-subtitle-option';
+      defaultBtn.textContent = '(Top of card)';
+      defaultBtn.addEventListener('click', () => {
+        handleMoveToCard(section.id, '_default');
+      });
+      list.appendChild(defaultBtn);
+
+      // Add each subtitle as an option
+      subtitles.forEach(subtitle => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'move-card-option move-subtitle-option';
+        btn.textContent = subtitle;
+        btn.addEventListener('click', () => {
+          handleMoveToCard(section.id, subtitle);
+        });
+        list.appendChild(btn);
+      });
+    } else {
+      // Card has no named subtitles - just show card option
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'move-card-option';
+      btn.textContent = section.title || section.id;
+      btn.addEventListener('click', () => {
+        handleMoveToCard(section.id, '_default');
+      });
+      list.appendChild(btn);
+    }
   });
 
   // If no valid targets, show a message
@@ -856,22 +892,26 @@ function populateMoveCardList() {
 }
 
 // --- Handle Move To Card
-function handleMoveToCard(targetSectionId) {
+function handleMoveToCard(targetSectionId, targetSubtitle = '_default') {
   if (!currentMoveContext) return;
 
   const { sectionId: sourceSectionId, subtitle: sourceSubtitle, itemType, itemKey } = currentMoveContext;
   const data = currentData();
 
+  console.log('[MoveToCard] Moving item:', { sourceSectionId, sourceSubtitle, itemType, itemKey, targetSectionId, targetSubtitle });
+
   // Get source collection
   const sourceData = data[sourceSectionId];
   if (!sourceData || !sourceData[sourceSubtitle]) {
     showToast('Source not found');
+    console.error('[MoveToCard] Source not found:', { sourceSectionId, sourceSubtitle, sourceData });
     return;
   }
 
   const sourceCollection = sourceData[sourceSubtitle][itemType];
   if (!Array.isArray(sourceCollection)) {
     showToast('Invalid source collection');
+    console.error('[MoveToCard] Invalid source collection:', sourceData[sourceSubtitle]);
     return;
   }
 
@@ -879,24 +919,38 @@ function handleMoveToCard(targetSectionId) {
   const itemIndex = sourceCollection.findIndex(item => item.key === itemKey);
   if (itemIndex === -1) {
     showToast('Item not found');
+    console.error('[MoveToCard] Item not found in collection');
     return;
   }
 
   const [movedItem] = sourceCollection.splice(itemIndex, 1);
+  console.log('[MoveToCard] Removed item from source:', movedItem);
 
-  // Ensure target card has data structure
+  // Ensure target card and subtitle have data structure
   if (!data[targetSectionId]) {
     data[targetSectionId] = {};
+    console.log('[MoveToCard] Created new target section');
   }
-  if (!data[targetSectionId]['_default']) {
-    data[targetSectionId]['_default'] = {};
+  if (!data[targetSectionId][targetSubtitle]) {
+    data[targetSectionId][targetSubtitle] = {
+      icons: [],
+      reminders: [],
+      subtasks: [],
+      copyPaste: []
+    };
+    console.log('[MoveToCard] Created new target subtitle structure');
   }
-  if (!Array.isArray(data[targetSectionId]['_default'][itemType])) {
-    data[targetSectionId]['_default'][itemType] = [];
+  if (!Array.isArray(data[targetSectionId][targetSubtitle][itemType])) {
+    data[targetSectionId][targetSubtitle][itemType] = [];
+    console.log('[MoveToCard] Created new itemType array');
   }
 
-  // Add item to end of target's _default subtitle
-  data[targetSectionId]['_default'][itemType].push(movedItem);
+  console.log('[MoveToCard] Target structure before push:', data[targetSectionId][targetSubtitle]);
+
+  // Add item to end of target subtitle
+  data[targetSectionId][targetSubtitle][itemType].push(movedItem);
+  console.log('[MoveToCard] After push, target collection:', data[targetSectionId][targetSubtitle][itemType]);
+  console.log('[MoveToCard] Full target subtitle data:', JSON.stringify(data[targetSectionId][targetSubtitle], null, 2));
 
   // Save and re-render
   markDirtyAndSave();
@@ -905,7 +959,9 @@ function handleMoveToCard(targetSectionId) {
   if (window.renderAllSections) window.renderAllSections();
   if (editState.enabled && window.addCardButtons) window.addCardButtons();
 
-  showToast('Item moved');
+  // Show toast with destination subtitle
+  const subtitleLabel = targetSubtitle === '_default' ? '' : ` to "${targetSubtitle}"`;
+  showToast(`Item moved${subtitleLabel}`);
 }
 
 // --- Wire Move Button Events (called from init)

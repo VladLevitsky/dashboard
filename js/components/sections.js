@@ -1400,7 +1400,14 @@ export function renderUnifiedCard(sectionEl, sectionId) {
   // Get section config for color picker
   const section = data.sections.find(s => s.id === sectionId);
 
-  Object.entries(cardData).forEach(([subtitle, items]) => {
+  // Sort subtitles so _default always comes first (renders at top of card)
+  const sortedEntries = Object.entries(cardData).sort(([a], [b]) => {
+    if (a === '_default') return -1;
+    if (b === '_default') return 1;
+    return 0;
+  });
+
+  sortedEntries.forEach(([subtitle, items]) => {
     console.log(`[Render] Processing subtitle "${subtitle}" for ${sectionId}:`, items);
     console.log(`[Render] items type: ${typeof items}, isArray: ${Array.isArray(items)}`);
 
@@ -1961,10 +1968,8 @@ function createUnifiedSubtaskItem(item, sectionId, subtitle, subtitleColor) {
     div.style.background = colorToGlassRgba(effectiveColor, 0.55);
     div.style.backdropFilter = 'blur(8px)';
     div.style.webkitBackdropFilter = 'blur(8px)';
-    div.style.borderColor = colorToGlassRgba(darkenColor(effectiveColor), 0.5);
   } else {
     div.style.background = effectiveColor;
-    div.style.borderColor = darkenColor(effectiveColor);
   }
 
   const a = document.createElement('a');
@@ -2085,18 +2090,14 @@ function createUnifiedSubtaskItem(item, sectionId, subtitle, subtitleColor) {
           const vibrantColor = window.makeColorMoreVibrant(originalColor);
           if (isGlassModeActive()) {
             div.style.background = colorToGlassRgba(vibrantColor, 0.55);
-            div.style.borderColor = colorToGlassRgba(darkenColor(vibrantColor), 0.5);
           } else {
             div.style.background = vibrantColor;
-            div.style.borderColor = darkenColor(vibrantColor);
           }
         } else {
           if (isGlassModeActive()) {
             div.style.background = colorToGlassRgba(originalColor, 0.55);
-            div.style.borderColor = colorToGlassRgba(darkenColor(originalColor), 0.5);
           } else {
             div.style.background = originalColor;
-            div.style.borderColor = darkenColor(originalColor);
           }
         }
       }
@@ -2167,10 +2168,8 @@ function createUnifiedReminderItem(rem, sectionId, subtitle, subtitleColor) {
       div.style.background = colorToGlassRgba(effectiveColor, 0.55);
       div.style.backdropFilter = 'blur(8px)';
       div.style.webkitBackdropFilter = 'blur(8px)';
-      div.style.borderColor = colorToGlassRgba(darkenColor(effectiveColor), 0.5);
     } else {
       div.style.background = effectiveColor;
-      div.style.borderColor = darkenColor(effectiveColor);
     }
     div.dataset.customColor = JSON.stringify(subtitleColor);
   }
@@ -2252,6 +2251,29 @@ function createUnifiedReminderItem(rem, sectionId, subtitle, subtitleColor) {
         }
         badge.classList.add(window.classForDaysLeft(days));
         showBadge = true;
+
+        // Apply progress bar visualization
+        if (window.calculateCalendarProgress) {
+          const progress = window.calculateCalendarProgress(rem);
+          // Map color class to progress state (days-green, days-warn, days-orange, days-danger)
+          let progressState = 'green';
+          if (progress.colorClass === 'days-danger') {
+            progressState = 'red';
+          } else if (progress.colorClass === 'days-orange') {
+            progressState = 'orange';
+          } else if (progress.colorClass === 'days-warn') {
+            progressState = 'yellow';
+          }
+
+          div.dataset.progressState = progressState;
+
+          // For overdue items, show full red bar
+          if (days <= 0) {
+            div.style.setProperty('--progress-width', '100%');
+          } else {
+            div.style.setProperty('--progress-width', `${progress.percentage}%`);
+          }
+        }
       } catch (e) {
         badge.textContent = 'Schedule error';
         badge.classList.add('badge-red');

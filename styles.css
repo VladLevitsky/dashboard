@@ -1306,6 +1306,31 @@ h2, h3 { margin: 0 0 16px; }
   background: #334155;
 }
 
+/* Move card header (card name when it has subtitles) */
+.move-card-header {
+  padding: 8px 12px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-top: 1px solid #e5e7eb;
+  margin-top: 4px;
+}
+.move-card-header:first-child {
+  border-top: none;
+  margin-top: 0;
+}
+[data-theme="dark"] .move-card-header {
+  border-color: #475569;
+}
+
+/* Subtitle options (indented under card header) */
+.move-subtitle-option {
+  padding-left: 24px !important;
+  font-size: 13px;
+}
+
 /* Emoji picker container in edit popover */
 .emoji-picker-container {
   margin-top: 10px;
@@ -1675,6 +1700,30 @@ h2, h3 { margin: 0 0 16px; }
 
 [data-theme="dark"] .card.drop-target {
   box-shadow: 0 0 20px rgba(59, 130, 246, 0.5);
+}
+
+/* Subtitle-level drop target highlight for cross-card moves */
+.unified-content-group.subtitle-drop-target {
+  background: rgba(44, 123, 229, 0.08);
+  border-radius: 8px;
+  outline: 2px dashed var(--brand);
+  outline-offset: 4px;
+  transition: background 0.15s ease, outline 0.15s ease;
+}
+
+.unified-subtitle-wrapper.subtitle-drop-target {
+  background: rgba(44, 123, 229, 0.12);
+  border-radius: 6px;
+  margin: -4px;
+  padding: 4px;
+}
+
+[data-theme="dark"] .unified-content-group.subtitle-drop-target {
+  background: rgba(59, 130, 246, 0.15);
+}
+
+[data-theme="dark"] .unified-subtitle-wrapper.subtitle-drop-target {
+  background: rgba(59, 130, 246, 0.2);
 }
 
 .drop-indicator {
@@ -2880,7 +2929,7 @@ body[data-style="glass"] .reminder-item {
   background: rgba(255, 255, 255, 0.55);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.4);
+  border: none;
 }
 
 body[data-style="glass"] .unified-reminder-item:hover,
@@ -2893,7 +2942,7 @@ body[data-style="glass"] .list-item {
   background: rgba(255, 255, 255, 0.55);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.4);
+  border: none;
 }
 
 body[data-style="glass"] .unified-subtask-item:hover,
@@ -2906,7 +2955,7 @@ body[data-style="glass"] .copy-paste-item {
   background: rgba(255, 255, 255, 0.55);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.4);
+  border: none;
 }
 
 body[data-style="glass"] .unified-copypaste-item:hover,
@@ -2952,7 +3001,7 @@ body[data-theme="dark"][data-style="glass"] .reminder-item {
   background: rgba(51, 65, 85, 0.6);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
-  border: 1px solid rgba(71, 85, 105, 0.4);
+  border: none;
 }
 
 body[data-theme="dark"][data-style="glass"] .unified-reminder-item:hover,
@@ -2965,7 +3014,7 @@ body[data-theme="dark"][data-style="glass"] .list-item {
   background: rgba(51, 65, 85, 0.6);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
-  border: 1px solid rgba(71, 85, 105, 0.4);
+  border: none;
 }
 
 body[data-theme="dark"][data-style="glass"] .unified-subtask-item:hover,
@@ -2978,7 +3027,7 @@ body[data-theme="dark"][data-style="glass"] .copy-paste-item {
   background: rgba(51, 65, 85, 0.6);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
-  border: 1px solid rgba(71, 85, 105, 0.4);
+  border: none;
 }
 
 body[data-theme="dark"][data-style="glass"] .unified-copypaste-item:hover,
@@ -5297,7 +5346,7 @@ body.stacked-mode .gap-add-btn {
   align-items: center;
   justify-content: space-between;
   background: #f7fafc;
-  border: 1px solid #edf2f7;
+  border: none;
   border-radius: 999px;
   padding: 10px 16px 10px 20px;
   cursor: pointer;
@@ -5308,6 +5357,7 @@ body.stacked-mode .gap-add-btn {
   max-height: 44px;
   box-sizing: border-box;
   overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
 }
 
 .unified-subtask-item:hover {
@@ -5317,7 +5367,7 @@ body.stacked-mode .gap-add-btn {
 
 [data-theme="dark"] .unified-subtask-item {
   background: #334155;
-  border-color: #475569;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.25);
 }
 
 [data-theme="dark"] .unified-subtask-item:hover {
@@ -5415,7 +5465,7 @@ body.stacked-mode .gap-add-btn {
   align-items: center;
   justify-content: space-between;
   background: #f7fafc;
-  border: 1px solid #edf2f7;
+  border: none;
   border-radius: 999px;
   padding: 10px 16px 10px 20px;
   cursor: pointer;
@@ -5426,6 +5476,7 @@ body.stacked-mode .gap-add-btn {
   max-height: 44px;
   box-sizing: border-box;
   overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
 }
 
 .unified-reminder-item:hover {
@@ -5435,11 +5486,58 @@ body.stacked-mode .gap-add-btn {
 
 [data-theme="dark"] .unified-reminder-item {
   background: #334155;
-  border-color: #475569;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.25);
 }
 
 [data-theme="dark"] .unified-reminder-item:hover {
   box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+/* Progress bar for calendar reminders */
+.unified-reminder-item {
+  position: relative;
+  z-index: 0;
+}
+
+.unified-reminder-item::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: var(--progress-width, 100%);
+  background: var(--progress-color, transparent);
+  border-radius: 999px 0 0 999px;
+  z-index: -1;
+  transition: width 0.3s ease;
+}
+
+/* Progress bar colors - light theme (opaque for consistency) */
+.unified-reminder-item[data-progress-state="green"]::before {
+  background: #bbf7d0;
+}
+.unified-reminder-item[data-progress-state="yellow"]::before {
+  background: #fde68a;
+}
+.unified-reminder-item[data-progress-state="orange"]::before {
+  background: #fed7aa;
+}
+.unified-reminder-item[data-progress-state="red"]::before {
+  background: #fecaca;
+}
+
+/* Progress bar colors - dark theme (opaque for consistency) */
+[data-theme="dark"] .unified-reminder-item[data-progress-state="green"]::before {
+  background: #166534;
+}
+[data-theme="dark"] .unified-reminder-item[data-progress-state="yellow"]::before {
+  background: #a16207;
+}
+[data-theme="dark"] .unified-reminder-item[data-progress-state="orange"]::before {
+  background: #c2410c;
+}
+[data-theme="dark"] .unified-reminder-item[data-progress-state="red"]::before {
+  background: #b91c1c;
 }
 
 .unified-reminder-left {
@@ -5465,13 +5563,14 @@ body.stacked-mode .gap-add-btn {
 }
 
 .unified-reminder-item .days-badge {
-  min-width: 92px;
-  text-align: center;
-  font-weight: 400;
-  padding: 6px 10px;
-  border-radius: 999px;
+  text-align: right;
+  font-weight: 500;
+  padding: 0;
+  background: none !important;
+  border-radius: 0;
   white-space: nowrap;
   flex-shrink: 0;
+  color: var(--text);
 }
 
 .unified-reminder-edit-btns {
@@ -5520,7 +5619,7 @@ body.stacked-mode .gap-add-btn {
   align-items: center;
   justify-content: space-between;
   background: #f7fafc;
-  border: 1px solid #edf2f7;
+  border: none;
   border-radius: 999px;
   padding: 10px 16px 10px 20px;
   cursor: pointer;
@@ -5531,6 +5630,7 @@ body.stacked-mode .gap-add-btn {
   max-height: 44px;
   box-sizing: border-box;
   overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
 }
 
 .unified-copypaste-item:hover {
@@ -5540,7 +5640,7 @@ body.stacked-mode .gap-add-btn {
 
 [data-theme="dark"] .unified-copypaste-item {
   background: #334155;
-  border-color: #475569;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.25);
 }
 
 [data-theme="dark"] .unified-copypaste-item:hover {
@@ -5562,7 +5662,6 @@ body.stacked-mode .gap-add-btn {
   max-width: none;
   min-width: 60px;
   justify-content: center;
-  border: none !important;
 }
 
 .unified-copypaste-item.color-swatch .unified-copypaste-text {

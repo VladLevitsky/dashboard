@@ -840,18 +840,70 @@ export function initializeCardDropZone(cardElement, targetSectionId) {
   if (cardElement.dataset.dropZoneInitialized) return;
   cardElement.dataset.dropZoneInitialized = 'true';
 
-  // Dragover - highlight card if dragging item from different card
+  // Dragover - highlight card and detect target subtitle
   cardElement.addEventListener('dragover', (e) => {
     // Only handle item drags, not card drags
     if (!dragState.draggedItemKey || !dragState.draggedItemSection) return;
 
-    // Parse source section from dragged item
-    const [sourceSectionId] = dragState.draggedItemSection.split(':');
+    // Parse source section and subtitle from dragged item
+    const [sourceSectionId, sourceSubtitle] = dragState.draggedItemSection.split(':');
 
-    // Only highlight if cross-card drag
-    if (sourceSectionId !== targetSectionId) {
+    // Detect which subtitle is being hovered
+    const subtitleGroups = cardElement.querySelectorAll('.unified-content-group');
+    let detectedSubtitle = '_default';
+    let hoveredGroup = null;
+
+    subtitleGroups.forEach(group => {
+      const rect = group.getBoundingClientRect();
+      // Check if mouse is within this group's bounds
+      if (e.clientX >= rect.left && e.clientX <= rect.right &&
+          e.clientY >= rect.top && e.clientY <= rect.bottom) {
+        detectedSubtitle = group.dataset.subtitle || '_default';
+        hoveredGroup = group;
+      }
+    });
+
+    // Check if this is a valid drop target:
+    // - Cross-card drag (different sectionId), OR
+    // - Same-card but different subtitle (cross-subtitle move)
+    const isCrossCard = sourceSectionId !== targetSectionId;
+    const isCrossSubtitle = sourceSubtitle !== detectedSubtitle;
+
+    if (isCrossCard || isCrossSubtitle) {
       e.preventDefault();
-      cardElement.classList.add('drop-target');
+
+      // Only show card-level highlight for cross-card drags
+      if (isCrossCard) {
+        cardElement.classList.add('drop-target');
+      }
+
+      // Store detected subtitle for drop handler
+      dragState.targetSubtitle = detectedSubtitle;
+
+      // Visual feedback: highlight the target subtitle area
+      // Remove previous highlights
+      cardElement.querySelectorAll('.subtitle-drop-target').forEach(el => {
+        el.classList.remove('subtitle-drop-target');
+      });
+
+      if (hoveredGroup) {
+        // Highlight the content group
+        hoveredGroup.classList.add('subtitle-drop-target');
+
+        // Also highlight the subtitle wrapper if it exists (for named subtitles)
+        if (detectedSubtitle !== '_default') {
+          const wrapper = hoveredGroup.previousElementSibling;
+          if (wrapper && wrapper.classList.contains('unified-subtitle-wrapper')) {
+            wrapper.classList.add('subtitle-drop-target');
+          }
+        }
+      }
+    } else {
+      // Same card, same subtitle - clear highlights (let container handlers deal with it)
+      cardElement.querySelectorAll('.subtitle-drop-target').forEach(el => {
+        el.classList.remove('subtitle-drop-target');
+      });
+      dragState.targetSubtitle = null;
     }
   });
 
@@ -860,23 +912,39 @@ export function initializeCardDropZone(cardElement, targetSectionId) {
     // Only remove if actually leaving the card (not entering a child)
     if (!cardElement.contains(e.relatedTarget)) {
       cardElement.classList.remove('drop-target');
+      // Clear subtitle highlights
+      cardElement.querySelectorAll('.subtitle-drop-target').forEach(el => {
+        el.classList.remove('subtitle-drop-target');
+      });
+      dragState.targetSubtitle = null;
     }
   });
 
   // Drop - move item to this card
   cardElement.addEventListener('drop', (e) => {
     cardElement.classList.remove('drop-target');
+    // Clear subtitle highlights
+    cardElement.querySelectorAll('.subtitle-drop-target').forEach(el => {
+      el.classList.remove('subtitle-drop-target');
+    });
 
     // Only handle item drags
     if (!dragState.draggedItemKey || !dragState.draggedItemSection) return;
 
     const [sourceSectionId, sourceSubtitle, sourceType] = dragState.draggedItemSection.split(':');
 
-    // Only handle cross-card drops
-    if (sourceSectionId === targetSectionId) return;
-
     // Validate we have all required parts
     if (!sourceSubtitle || !sourceType) return;
+
+    // Get target subtitle (detected during dragover)
+    const targetSubtitle = dragState.targetSubtitle || '_default';
+
+    // Handle cross-card drops OR same-card cross-subtitle drops
+    const isCrossCard = sourceSectionId !== targetSectionId;
+    const isCrossSubtitle = sourceSubtitle !== targetSubtitle;
+
+    // Skip if same card AND same subtitle (handled by container drag handlers)
+    if (!isCrossCard && !isCrossSubtitle) return;
 
     e.preventDefault();
     e.stopPropagation();
@@ -892,26 +960,27 @@ export function initializeCardDropZone(cardElement, targetSectionId) {
 
     const [draggedItem] = sourceCollection.splice(draggedIndex, 1);
 
-    // Ensure target has _default subtitle with item type array
+    // Ensure target section and subtitle exist with item type array
     if (!data[targetSectionId]) data[targetSectionId] = {};
-    if (!data[targetSectionId]['_default']) {
-      data[targetSectionId]['_default'] = {
+    if (!data[targetSectionId][targetSubtitle]) {
+      data[targetSectionId][targetSubtitle] = {
         icons: [],
         reminders: [],
         subtasks: [],
         copyPaste: []
       };
     }
-    if (!data[targetSectionId]['_default'][sourceType]) {
-      data[targetSectionId]['_default'][sourceType] = [];
+    if (!data[targetSectionId][targetSubtitle][sourceType]) {
+      data[targetSectionId][targetSubtitle][sourceType] = [];
     }
 
     // Add to end of target collection
-    data[targetSectionId]['_default'][sourceType].push(draggedItem);
+    data[targetSectionId][targetSubtitle][sourceType].push(draggedItem);
 
     // Clear drag state
     dragState.draggedItemKey = null;
     dragState.draggedItemSection = null;
+    dragState.targetSubtitle = null;
 
     // Persist and re-render
     markDirtyAndSave();
@@ -921,6 +990,8 @@ export function initializeCardDropZone(cardElement, targetSectionId) {
       refreshEditingClasses();
     }
 
-    showToast('Item moved to card');
+    // Show toast with destination subtitle
+    const subtitleLabel = targetSubtitle === '_default' ? '' : ` to "${targetSubtitle}"`;
+    showToast(`Item moved${subtitleLabel}`);
   });
 }

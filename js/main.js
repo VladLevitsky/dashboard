@@ -157,6 +157,7 @@ import {
   getNextOccurrence,
   classForDaysLeft,
   calculateIntervalProgress,
+  calculateCalendarProgress,
   getIntervalColorClass,
   formatIntervalNumber,
   openCalendarPopover,
@@ -418,6 +419,7 @@ window.daysUntil = daysUntil;
 window.getNextOccurrence = getNextOccurrence;
 window.classForDaysLeft = classForDaysLeft;
 window.calculateIntervalProgress = calculateIntervalProgress;
+window.calculateCalendarProgress = calculateCalendarProgress;
 window.getIntervalColorClass = getIntervalColorClass;
 window.formatIntervalNumber = formatIntervalNumber;
 window.openCalendarPopover = openCalendarPopover;

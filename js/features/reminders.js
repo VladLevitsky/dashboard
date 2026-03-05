@@ -206,6 +206,61 @@ export function getIntervalColorClass(percentage, type = 'limit') {
   }
 }
 
+// --- Calculate calendar progress (for progress bar visualization)
+export function calculateCalendarProgress(reminder) {
+  if (!reminder.schedule) {
+    return { daysRemaining: 0, totalDays: 1, percentage: 0, colorClass: 'days-danger' };
+  }
+
+  const nextDate = getNextOccurrence(reminder.schedule);
+  const daysRemaining = daysUntil(nextDate);
+  const colorClass = classForDaysLeft(daysRemaining);
+
+  // Calculate total cycle length based on schedule type
+  let totalDays;
+  const spec = reminder.schedule;
+
+  if (spec.type === 'weekday') {
+    // Weekly reminder: cycle is weekInterval * 7 days
+    totalDays = (spec.weekInterval || 1) * 7;
+  } else if (spec.type === 'monthly' || spec.type === 'monthlyWeekday' || spec.type === 'firstWeekdayOfMonth') {
+    // Monthly reminder: assume 30 day cycle
+    totalDays = 30;
+  } else if (spec.type === 'once') {
+    // One-time reminder: use scheduleSetAt if available, otherwise default to 14 days
+    if (reminder.scheduleSetAt) {
+      const setDate = new Date(reminder.scheduleSetAt);
+      const dueDate = new Date(spec.date);
+      const msPerDay = 24 * 60 * 60 * 1000;
+      totalDays = Math.max(1, Math.round((dueDate - setDate) / msPerDay));
+    } else {
+      // Fallback: assume 14 day cycle for legacy reminders
+      totalDays = 14;
+    }
+  } else {
+    totalDays = 14; // Default fallback
+  }
+
+  // Calculate percentage (clamped between 0 and 100)
+  let percentage;
+  if (daysRemaining <= 0) {
+    // Overdue: 0% remaining (full red bar)
+    percentage = 0;
+  } else if (daysRemaining >= totalDays) {
+    // Just started or more than a full cycle: 100%
+    percentage = 100;
+  } else {
+    percentage = Math.round((daysRemaining / totalDays) * 100);
+  }
+
+  return {
+    daysRemaining,
+    totalDays,
+    percentage,
+    colorClass
+  };
+}
+
 // --- Format interval number
 export function formatIntervalNumber(number, unit = 'none') {
   const formattedNumber = Math.abs(number) >= 100 ? number.toLocaleString() : number.toString();
@@ -360,6 +415,15 @@ export function openCalendarPopover(reminder, event) {
     }
 
     reminder.schedule = newSchedule;
+
+    // For one-time schedules, track when it was set (for progress bar calculation)
+    if (newSchedule.type === 'once') {
+      reminder.scheduleSetAt = new Date().toISOString();
+    } else {
+      // Clear scheduleSetAt for recurring schedules (they use interval as total days)
+      delete reminder.scheduleSetAt;
+    }
+
     markDirtyAndSave();
     if (window.renderAllSections) window.renderAllSections();
     hideCalendarPopover();
