@@ -1318,6 +1318,124 @@ h2, h3 { margin: 0 0 16px; }
 .fab-left-up2 { bottom: 128px; }
 .fab-left-up3 { bottom: 182px; }
 
+/* Sticky Note Button (bottom-left, only visible outside edit mode) */
+.sticky-note-btn {
+  position: fixed;
+  left: 20px;
+  bottom: 20px;
+  width: 62px;
+  height: 62px;
+  border: none;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: var(--shadow);
+  display: grid;
+  place-items: center;
+  cursor: grab;
+  transition: all 0.2s ease;
+  z-index: 9998;
+  padding: 0;
+  overflow: hidden;
+}
+.sticky-note-btn:hover {
+  transform: scale(1.05);
+}
+.sticky-note-btn:active {
+  cursor: grabbing;
+}
+.sticky-note-btn img {
+  width: 38px;
+  height: 38px;
+  pointer-events: none;
+}
+.sticky-note-btn[hidden] {
+  display: none;
+}
+
+[data-theme="dark"] .sticky-note-btn {
+  background: #1e293b;
+}
+
+/* Sticky Note Drag Preview */
+.sticky-note-preview {
+  position: fixed;
+  width: 238px;
+  height: 238px;
+  background: #f9ed80;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  z-index: 99999;
+  pointer-events: none;
+  opacity: 0.75;
+  transform: rotate(-2deg);
+}
+.sticky-note-preview .sticky-note-header {
+  height: 18%;
+  background: #ede277;
+}
+.sticky-note-preview .sticky-note-body {
+  height: 82%;
+}
+
+/* Actual Sticky Note */
+.sticky-note {
+  position: absolute;
+  width: 238px;
+  height: 238px;
+  background: #f9ed80;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  z-index: 9990;
+  transform: rotate(-1deg);
+  font-family: 'Caveat', 'Segoe Script', 'Comic Sans MS', cursive;
+}
+.sticky-note-header {
+  height: 10%;
+  background: #ede277;
+  position: relative;
+  border-bottom: 1px solid #e2cb6a;
+}
+.sticky-note-delete {
+  position: absolute;
+  top: 2px;
+  right: 6px;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  color: #666;
+  font-size: 21px;
+  font-weight: bold;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  padding: 0;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.sticky-note-delete:hover {
+  color: #c00;
+}
+.sticky-note-body {
+  height: 90%;
+  padding: 10px 14px;
+  font-size: 21px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: #333;
+  outline: none;
+  overflow: hidden;
+  word-wrap: break-word;
+}
+.sticky-note-body:empty:before {
+  content: attr(placeholder);
+  color: #999;
+  pointer-events: none;
+}
+.sticky-note-body:focus {
+  outline: none;
+}
+
 /* Reminder edit buttons */
 .calendar-btn,
 .hashtag-btn {

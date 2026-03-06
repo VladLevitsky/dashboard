@@ -78,6 +78,9 @@ export function toggleEditMode() {
 
   if (window.refreshEditingClasses) window.refreshEditingClasses();
 
+  // Update sticky note button visibility (only visible outside edit mode)
+  if (window.updateStickyButtonVisibility) window.updateStickyButtonVisibility();
+
   // Scroll the same card back into view after rendering
   if (targetCardId) {
     const targetCard = document.getElementById(targetCardId);

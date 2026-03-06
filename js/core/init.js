@@ -74,6 +74,7 @@ import {
   setCurrentBreakdownReminder
 } from '../features/reminders.js';
 import { ensureSectionPlusButtons } from '../features/cards.js';
+import { initStickyNotes } from '../features/sticky-notes.js';
 
 // Module state
 let cardsCollapsed = false;
@@ -142,6 +143,7 @@ export async function init() {
   wireAppearanceModalEvents();
   ensureSectionPlusButtons();
   refreshEditingClasses();
+  initStickyNotes();
 
   // Initialize time tracking if it was expanded
   if (model.timeTrackingExpanded) {

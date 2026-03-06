@@ -239,6 +239,12 @@ import {
   applyLogoTransform
 } from './features/image-editor.js';
 
+import {
+  initStickyNotes,
+  updateStickyButtonVisibility,
+  clearAllStickyNotes
+} from './features/sticky-notes.js';
+
 // Make key functions available globally for the transition period
 // This allows app.js to still work while we gradually migrate
 window.model = model;
@@ -496,6 +502,11 @@ window.openImageEditor = openImageEditor;
 window.closeImageEditor = closeImageEditor;
 window.applyProfilePhotoTransform = applyProfilePhotoTransform;
 window.applyLogoTransform = applyLogoTransform;
+
+// Sticky Notes
+window.initStickyNotes = initStickyNotes;
+window.updateStickyButtonVisibility = updateStickyButtonVisibility;
+window.clearAllStickyNotes = clearAllStickyNotes;
 
 // Notepad
 window.openNotepad = openNotepad;
