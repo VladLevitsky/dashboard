@@ -3,9 +3,18 @@
 // Persisted in localStorage (separate from main model), deleted only when user clicks X
 
 import { editState } from '../state.js';
-import { $ } from '../utils.js';
+import { $, $$ } from '../utils.js';
 
 const STICKY_NOTES_STORAGE_KEY = 'personal_dashboard_sticky_notes';
+const STICKY_COLOR_STORAGE_KEY = 'personal_dashboard_sticky_color';
+
+// Pastel color definitions
+const STICKY_COLORS = {
+  yellow: { body: '#f9ed80', header: '#ede277', border: '#e2cb6a' },
+  purple: { body: '#e0c8f0', header: '#d4b8e8', border: '#c8a8dc' },
+  green: { body: '#c8f0d4', header: '#b8e4c6', border: '#a8d8b8' },
+  blue: { body: '#c8e0f5', header: '#b8d4ed', border: '#a8c8e0' }
+};
 
 // Track all active sticky notes
 const stickyNotes = [];
@@ -13,6 +22,7 @@ let dragPreview = null;
 let isDragging = false;
 let dragStartX = 0;
 let dragStartY = 0;
+let selectedColor = 'yellow';
 
 // Minimum drag distance before we consider it a drag vs click
 const DRAG_THRESHOLD = 5;
@@ -22,11 +32,20 @@ export function initStickyNotes() {
   const stickyBtn = $('#sticky-note-btn');
   if (!stickyBtn) return;
 
+  // Load saved color preference
+  loadSelectedColor();
+
+  // Update sticky button icon to match saved color
+  updateStickyButtonColor();
+
   // Load existing sticky notes from localStorage
   loadStickyNotes();
 
   // Update visibility based on edit mode
   updateStickyButtonVisibility();
+
+  // Set up color picker buttons
+  initColorPicker();
 
   // Mouse events for drag-to-drop
   stickyBtn.addEventListener('mousedown', handleStickyDragStart);
@@ -39,16 +58,81 @@ export function initStickyNotes() {
   document.addEventListener('touchend', handleStickyTouchEnd);
 }
 
-// Show/hide sticky button based on edit mode
-export function updateStickyButtonVisibility() {
+// Initialize color picker buttons
+function initColorPicker() {
+  const colorBtns = $$('.sticky-color-btn');
+  colorBtns.forEach(btn => {
+    // Mark the selected color
+    if (btn.dataset.color === selectedColor) {
+      btn.classList.add('selected');
+    }
+
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      selectColor(btn.dataset.color);
+    });
+  });
+}
+
+// Load saved color from localStorage
+function loadSelectedColor() {
+  try {
+    const saved = localStorage.getItem(STICKY_COLOR_STORAGE_KEY);
+    if (saved && STICKY_COLORS[saved]) {
+      selectedColor = saved;
+    }
+  } catch (e) {
+    console.error('Error loading sticky color:', e);
+  }
+}
+
+// Save selected color to localStorage
+function saveSelectedColor() {
+  try {
+    localStorage.setItem(STICKY_COLOR_STORAGE_KEY, selectedColor);
+  } catch (e) {
+    console.error('Error saving sticky color:', e);
+  }
+}
+
+// Select a color
+function selectColor(color) {
+  if (!STICKY_COLORS[color]) return;
+
+  selectedColor = color;
+  saveSelectedColor();
+
+  // Update color picker button states
+  const colorBtns = $$('.sticky-color-btn');
+  colorBtns.forEach(btn => {
+    btn.classList.toggle('selected', btn.dataset.color === color);
+  });
+
+  // Update sticky note button icon color
+  updateStickyButtonColor();
+}
+
+// Update the sticky note button icon to match selected color
+function updateStickyButtonColor() {
   const stickyBtn = $('#sticky-note-btn');
   if (!stickyBtn) return;
 
+  // Remove all color classes
+  stickyBtn.classList.remove('sticky-yellow', 'sticky-purple', 'sticky-green', 'sticky-blue');
+  // Add the selected color class
+  stickyBtn.classList.add(`sticky-${selectedColor}`);
+}
+
+// Show/hide sticky button based on edit mode
+export function updateStickyButtonVisibility() {
+  const container = $('#sticky-note-container');
+  if (!container) return;
+
   // Only show when NOT in edit mode
   if (editState.enabled) {
-    stickyBtn.hidden = true;
+    container.hidden = true;
   } else {
-    stickyBtn.hidden = false;
+    container.hidden = false;
   }
 }
 
@@ -75,7 +159,8 @@ function saveStickyNotes() {
       x: note.x,
       y: note.y,
       content: note.content,
-      fontSize: note.fontSize
+      fontSize: note.fontSize,
+      color: note.color || 'yellow'
     }));
     localStorage.setItem(STICKY_NOTES_STORAGE_KEY, JSON.stringify(notesData));
   } catch (e) {
@@ -86,7 +171,7 @@ function saveStickyNotes() {
 // Create the drag preview element
 function createDragPreview() {
   const preview = document.createElement('div');
-  preview.className = 'sticky-note-preview';
+  preview.className = `sticky-note-preview sticky-${selectedColor}`;
   preview.innerHTML = `
     <div class="sticky-note-header"></div>
     <div class="sticky-note-body"></div>
@@ -204,9 +289,10 @@ function handleStickyTouchEnd(e) {
 }
 
 // Create a new sticky note at the given position
-function createStickyNote(x, y, content = '', fontSize = 21) {
+function createStickyNote(x, y, content = '', fontSize = 21, color = null) {
   const id = 'sticky-' + Date.now();
-  const noteData = { id, x, y, content, fontSize };
+  const noteColor = color || selectedColor;
+  const noteData = { id, x, y, content, fontSize, color: noteColor };
 
   createStickyNoteFromData(noteData);
   saveStickyNotes();
@@ -214,10 +300,11 @@ function createStickyNote(x, y, content = '', fontSize = 21) {
 
 // Create a sticky note element from stored data
 function createStickyNoteFromData(noteData) {
-  const { id, x, y, content, fontSize } = noteData;
+  const { id, x, y, content, fontSize, color } = noteData;
+  const noteColor = color || 'yellow';
 
   const note = document.createElement('div');
-  note.className = 'sticky-note';
+  note.className = `sticky-note sticky-${noteColor}`;
   note.id = id;
   note.style.left = x + 'px';
   note.style.top = y + 'px';
@@ -247,7 +334,8 @@ function createStickyNoteFromData(noteData) {
     x,
     y,
     content,
-    fontSize: fontSize || 21
+    fontSize: fontSize || 21,
+    color: noteColor
   };
   stickyNotes.push(noteRef);
 
@@ -265,12 +353,14 @@ function createStickyNoteFromData(noteData) {
     saveStickyNotes();
   });
 
-  // Show delete button on focus/click
-  note.addEventListener('click', () => {
+  // Show delete button on click or focus
+  const showDelete = () => {
     deleteBtn.style.opacity = '1';
-  });
+  };
+  note.addEventListener('click', showDelete);
+  body.addEventListener('focus', showDelete);
 
-  // Hide delete button when clicking outside
+  // Hide delete button when clicking outside or losing focus
   const hideDeleteHandler = (e) => {
     if (!note.contains(e.target)) {
       deleteBtn.style.opacity = '0';

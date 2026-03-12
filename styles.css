@@ -1318,11 +1318,20 @@ h2, h3 { margin: 0 0 16px; }
 .fab-left-up2 { bottom: 128px; }
 .fab-left-up3 { bottom: 182px; }
 
-/* Sticky Note Button (bottom-left, only visible outside edit mode) */
-.sticky-note-btn {
+/* Sticky Note Container */
+.sticky-note-container {
   position: fixed;
   left: 20px;
   bottom: 20px;
+  z-index: 9998;
+}
+.sticky-note-container[hidden] {
+  display: none;
+}
+
+/* Sticky Note Button (bottom-left, only visible outside edit mode) */
+.sticky-note-btn {
+  position: relative;
   width: 62px;
   height: 62px;
   border: none;
@@ -1333,7 +1342,6 @@ h2, h3 { margin: 0 0 16px; }
   place-items: center;
   cursor: grab;
   transition: all 0.2s ease;
-  z-index: 9998;
   padding: 0;
   overflow: hidden;
 }
@@ -1343,25 +1351,113 @@ h2, h3 { margin: 0 0 16px; }
 .sticky-note-btn:active {
   cursor: grabbing;
 }
-.sticky-note-btn img {
+.sticky-note-icon {
   width: 38px;
   height: 38px;
   pointer-events: none;
 }
-.sticky-note-btn[hidden] {
-  display: none;
+.sticky-icon-body { fill: var(--sticky-icon-body, #f9ed80); }
+.sticky-icon-header { fill: var(--sticky-icon-header, #ede277); }
+.sticky-icon-fold { fill: var(--sticky-icon-fold, #e2cb6a); }
+
+/* Sticky icon color variants */
+.sticky-note-btn.sticky-yellow {
+  --sticky-icon-body: #f9ed80;
+  --sticky-icon-header: #ede277;
+  --sticky-icon-fold: #e2cb6a;
+}
+.sticky-note-btn.sticky-purple {
+  --sticky-icon-body: #e0c8f0;
+  --sticky-icon-header: #d4b8e8;
+  --sticky-icon-fold: #c8a8dc;
+}
+.sticky-note-btn.sticky-green {
+  --sticky-icon-body: #c8f0d4;
+  --sticky-icon-header: #b8e4c6;
+  --sticky-icon-fold: #a8d8b8;
+}
+.sticky-note-btn.sticky-blue {
+  --sticky-icon-body: #c8e0f5;
+  --sticky-icon-header: #b8d4ed;
+  --sticky-icon-fold: #a8c8e0;
 }
 
 [data-theme="dark"] .sticky-note-btn {
   background: #1e293b;
 }
 
+/* Sticky Note Color Picker */
+.sticky-color-picker {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 160px;
+  height: 130px;
+  pointer-events: none;
+}
+.sticky-note-container:hover .sticky-color-picker {
+  pointer-events: auto;
+}
+.sticky-color-btn {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  border-radius: 50%;
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  z-index: 10000;
+  transition: opacity 0.2s ease;
+}
+.sticky-color-btn:hover {
+  border-color: rgba(255, 255, 255, 1);
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.25);
+}
+.sticky-color-btn.selected {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 2px var(--brand), 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* Color button colors and positions (fixed positions, no transform animation) */
+.sticky-color-btn[data-color="yellow"] {
+  background: #f9ed80;
+  bottom: 73px;
+  left: 30px;
+}
+.sticky-color-btn[data-color="purple"] {
+  background: #e0c8f0;
+  bottom: 58px;
+  left: 55px;
+}
+.sticky-color-btn[data-color="green"] {
+  background: #c8f0d4;
+  bottom: 37px;
+  left: 76px;
+}
+.sticky-color-btn[data-color="blue"] {
+  background: #c8e0f5;
+  bottom: 12px;
+  left: 89px;
+}
+
+/* Expanded state - all colors visible at once */
+.sticky-note-container:hover .sticky-color-btn {
+  opacity: 1;
+  pointer-events: auto;
+}
+.sticky-note-container:hover .sticky-color-btn[data-color="yellow"] { transition-delay: 0s; }
+.sticky-note-container:hover .sticky-color-btn[data-color="purple"] { transition-delay: 0.04s; }
+.sticky-note-container:hover .sticky-color-btn[data-color="green"] { transition-delay: 0.08s; }
+.sticky-note-container:hover .sticky-color-btn[data-color="blue"] { transition-delay: 0.12s; }
+
 /* Sticky Note Drag Preview */
 .sticky-note-preview {
   position: fixed;
   width: 238px;
   height: 238px;
-  background: #f9ed80;
+  background: var(--sticky-body, #f9ed80);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
   z-index: 99999;
   pointer-events: none;
@@ -1370,7 +1466,7 @@ h2, h3 { margin: 0 0 16px; }
 }
 .sticky-note-preview .sticky-note-header {
   height: 18%;
-  background: #ede277;
+  background: var(--sticky-header, #ede277);
 }
 .sticky-note-preview .sticky-note-body {
   height: 82%;
@@ -1381,7 +1477,7 @@ h2, h3 { margin: 0 0 16px; }
   position: absolute;
   width: 238px;
   height: 238px;
-  background: #f9ed80;
+  background: var(--sticky-body, #f9ed80);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
   z-index: 9990;
   transform: rotate(-1deg);
@@ -1389,9 +1485,35 @@ h2, h3 { margin: 0 0 16px; }
 }
 .sticky-note-header {
   height: 10%;
-  background: #ede277;
+  background: var(--sticky-header, #ede277);
   position: relative;
-  border-bottom: 1px solid #e2cb6a;
+  border-bottom: 1px solid var(--sticky-border, #e2cb6a);
+}
+
+/* Sticky Note Color Variants */
+.sticky-note-preview.sticky-yellow,
+.sticky-note.sticky-yellow {
+  --sticky-body: #f9ed80;
+  --sticky-header: #ede277;
+  --sticky-border: #e2cb6a;
+}
+.sticky-note-preview.sticky-purple,
+.sticky-note.sticky-purple {
+  --sticky-body: #e0c8f0;
+  --sticky-header: #d4b8e8;
+  --sticky-border: #c8a8dc;
+}
+.sticky-note-preview.sticky-green,
+.sticky-note.sticky-green {
+  --sticky-body: #c8f0d4;
+  --sticky-header: #b8e4c6;
+  --sticky-border: #a8d8b8;
+}
+.sticky-note-preview.sticky-blue,
+.sticky-note.sticky-blue {
+  --sticky-body: #c8e0f5;
+  --sticky-header: #b8d4ed;
+  --sticky-border: #a8c8e0;
 }
 .sticky-note-delete {
   position: absolute;

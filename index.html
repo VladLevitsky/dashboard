@@ -109,9 +109,21 @@
       </svg>
     </button>
 
-    <button id="sticky-note-btn" class="sticky-note-btn" title="Drag to drop a sticky note" aria-label="Drag to drop a sticky note">
-      <img src="assets/icons/sticky-note.svg" alt="Sticky Note" draggable="false" />
-    </button>
+    <div id="sticky-note-container" class="sticky-note-container">
+      <div class="sticky-color-picker">
+        <button class="sticky-color-btn" data-color="yellow" title="Yellow"></button>
+        <button class="sticky-color-btn" data-color="purple" title="Purple"></button>
+        <button class="sticky-color-btn" data-color="green" title="Green"></button>
+        <button class="sticky-color-btn" data-color="blue" title="Blue"></button>
+      </div>
+      <button id="sticky-note-btn" class="sticky-note-btn" title="Drag to drop a sticky note" aria-label="Drag to drop a sticky note">
+        <svg class="sticky-note-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" draggable="false">
+          <path class="sticky-icon-body" d="M0,20.05v312.21l69.48,67.74h310.47c11.07,0,20.05-8.98,20.05-20.05V20.05c0-11.07-8.98-20.05-20.05-20.05H20.05C8.98,0,0,8.98,0,20.05Z"/>
+          <path class="sticky-icon-fold" d="M59.54,332.26H0l69.48,67.74v-57.8c0-5.49-4.45-9.94-9.94-9.94Z"/>
+          <path class="sticky-icon-header" d="M379.95,0H20.05C8.98,0,0,8.98,0,20.05v22.82h400v-22.82c0-11.07-8.98-20.05-20.05-20.05Z"/>
+        </svg>
+      </button>
+    </div>
 
     <div class="fab-group" id="edit-fab-group" hidden>
       <button id="edit-accept-global" class="fab fab-accept" title="Confirm changes" aria-label="Confirm changes" type="button" data-checkmark="true"></button>
