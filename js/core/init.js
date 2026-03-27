@@ -37,11 +37,7 @@ import {
 } from '../features/timers.js';
 import {
   toggleQuickAccess,
-  toggleSelectorMode,
-  clearQuickAccess,
   renderQuickAccess,
-  makeItemsSelectable,
-  handleItemSelection,
   openQuickLinkModal,
   removeQuickLink
 } from '../features/quick-access.js';
@@ -175,15 +171,6 @@ export async function init() {
     }
   }
 
-  // Initialize selector mode if it was active
-  if (model.selectorModeActive) {
-    const btn = $('#selector-mode-toggle');
-    if (btn) {
-      btn.classList.add('active');
-      // Re-render sections to make items selectable
-      setTimeout(() => makeItemsSelectable(), 100);
-    }
-  }
 }
 
 // ===== DISPLAY MODE =====
@@ -531,8 +518,6 @@ export function wireUI() {
 
   // Quick access event handlers
   $('#quick-access-toggle').addEventListener('click', toggleQuickAccess);
-  $('#selector-mode-toggle').addEventListener('click', toggleSelectorMode);
-  $('#quick-access-clear').addEventListener('click', clearQuickAccess);
   $('#quick-links-add').addEventListener('click', openQuickLinkModal);
 
   // Global drag and drop event listeners

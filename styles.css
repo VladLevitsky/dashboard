@@ -399,7 +399,10 @@ body {
   overflow: hidden;
   opacity: 0;
   padding: 0 !important;
-  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+              padding 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+              margin 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+              opacity 0.15s ease-out;
   position: relative;
   display: flex;
   flex-direction: column;
@@ -410,6 +413,10 @@ body {
   margin: 0 auto 40px auto !important;
   opacity: 1;
   padding: 28.8px 40.32px 48.384px 40.32px !important;
+  transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+              padding 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+              margin 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+              opacity 0.3s ease-in 0.1s;
 }
 
 .quick-access-card.collapsed {
@@ -706,6 +713,24 @@ body {
 .quick-link-btn.secondary:hover {
   background: var(--bg);
   color: var(--text);
+}
+
+.quick-link-btn.danger {
+  background: transparent;
+  color: var(--danger);
+  border: 1px solid var(--danger);
+  margin-right: auto;
+}
+
+.quick-link-btn.danger:hover {
+  background: var(--danger);
+  color: white;
+}
+
+.quick-link-btn.danger:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
 }
 
 /* Quick Link Items in Quick Access */
@@ -1323,7 +1348,7 @@ h2, h3 { margin: 0 0 16px; }
   position: fixed;
   left: 20px;
   bottom: 20px;
-  z-index: 9998;
+  z-index: 500;
 }
 .sticky-note-container[hidden] {
   display: none;
@@ -1408,7 +1433,7 @@ h2, h3 { margin: 0 0 16px; }
   opacity: 0;
   pointer-events: none;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-  z-index: 10000;
+  z-index: 501;
   transition: opacity 0.2s ease;
 }
 .sticky-color-btn:hover {
@@ -1479,7 +1504,7 @@ h2, h3 { margin: 0 0 16px; }
   height: 238px;
   background: var(--sticky-body, #f9ed80);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
-  z-index: 9990;
+  z-index: 500;
   transform: rotate(-1deg);
   font-family: 'Caveat', 'Segoe Script', 'Comic Sans MS', cursive;
 }

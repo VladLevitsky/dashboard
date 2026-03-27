@@ -80,17 +80,10 @@ import {
 
 import {
   toggleQuickAccess,
-  toggleSelectorMode,
-  clearQuickAccess,
   openQuickLinkModal,
   removeQuickLink,
   renderQuickAccess,
-  makeItemsSelectable,
-  removeSelectableHandlers,
-  updateSelectedItemsUI,
-  extractItemData,
   isItemSelected,
-  handleItemSelection,
   toggleItemQuickAccess,
   isItemInQuickAccess
 } from './features/quick-access.js';
@@ -354,17 +347,10 @@ window.startTimerInterval = startTimerInterval;
 
 // Quick Access
 window.toggleQuickAccess = toggleQuickAccess;
-window.toggleSelectorMode = toggleSelectorMode;
-window.clearQuickAccess = clearQuickAccess;
 window.openQuickLinkModal = openQuickLinkModal;
 window.removeQuickLink = removeQuickLink;
 window.renderQuickAccess = renderQuickAccess;
-window.makeItemsSelectable = makeItemsSelectable;
-window.removeSelectableHandlers = removeSelectableHandlers;
-window.updateSelectedItemsUI = updateSelectedItemsUI;
-window.extractItemData = extractItemData;
 window.isItemSelected = isItemSelected;
-window.handleItemSelection = handleItemSelection;
 window.toggleItemQuickAccess = toggleItemQuickAccess;
 window.isItemInQuickAccess = isItemInQuickAccess;
 

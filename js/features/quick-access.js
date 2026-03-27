@@ -22,56 +22,7 @@ export function toggleQuickAccess() {
   } else {
     card.classList.remove('active');
     setTimeout(() => card.hidden = true, CARD_HIDE_DELAY_MS);
-
-    // Exit selector mode when closing
-    if (data.selectorModeActive) {
-      toggleSelectorMode();
-    }
   }
-
-  if (!editState.enabled) {
-    saveModel();
-  }
-}
-
-// --- Toggle selector mode
-export function toggleSelectorMode() {
-  const data = currentData();
-  const btn = $('#selector-mode-toggle');
-  if (!btn) return;
-
-  data.selectorModeActive = !data.selectorModeActive;
-
-  if (data.selectorModeActive) {
-    btn.classList.add('active');
-    makeItemsSelectable();
-  } else {
-    btn.classList.remove('active');
-    removeSelectableHandlers();
-  }
-
-  if (!editState.enabled) {
-    saveModel();
-  }
-}
-
-// --- Clear quick access items
-export function clearQuickAccess() {
-  const data = currentData();
-
-  const hasItems = data.quickAccessItems.icons.length > 0 ||
-                   data.quickAccessItems.listItems.length > 0 ||
-                   (data.quickAccessItems.quickLinks && data.quickAccessItems.quickLinks.length > 0);
-
-  if (!hasItems) {
-    return;
-  }
-
-  data.quickAccessItems.icons = [];
-  data.quickAccessItems.listItems = [];
-  data.quickAccessItems.quickLinks = [];
-
-  renderQuickAccess();
 
   if (!editState.enabled) {
     saveModel();
@@ -80,6 +31,9 @@ export function clearQuickAccess() {
 
 // --- Open quick link modal
 export function openQuickLinkModal() {
+  const data = currentData();
+  const hasQuickLinks = data.quickAccessItems.quickLinks && data.quickAccessItems.quickLinks.length > 0;
+
   // Create modal
   const modal = document.createElement('div');
   modal.className = 'quick-link-modal';
@@ -97,6 +51,7 @@ export function openQuickLinkModal() {
         </div>
       </div>
       <div class="quick-link-actions">
+        <button type="button" id="quick-link-clear-all" class="quick-link-btn danger" ${hasQuickLinks ? '' : 'disabled'}>Clear All Links</button>
         <button type="button" id="quick-link-cancel" class="quick-link-btn secondary">Cancel</button>
         <button type="button" id="quick-link-save" class="quick-link-btn primary">Add Link</button>
       </div>
@@ -138,6 +93,21 @@ export function openQuickLinkModal() {
       saveModel();
     }
 
+    document.body.removeChild(modal);
+  });
+
+  // Handle clear all links
+  const clearAllBtn = modal.querySelector('#quick-link-clear-all');
+  clearAllBtn.addEventListener('click', () => {
+    const data = currentData();
+    if (data.quickAccessItems.quickLinks && data.quickAccessItems.quickLinks.length > 0) {
+      data.quickAccessItems.quickLinks = [];
+      renderQuickAccess();
+
+      if (!editState.enabled) {
+        saveModel();
+      }
+    }
     document.body.removeChild(modal);
   });
 
@@ -192,7 +162,7 @@ export function renderQuickAccess() {
   const listItems = data.quickAccessItems.listItems || [];
 
   if (quickLinks.length === 0 && icons.length === 0 && listItems.length === 0) {
-    content.innerHTML = '<div class="quick-access-empty">No items selected. Click the circle button above to enter selector mode, or the link button to add quick links.</div>';
+    content.innerHTML = '<div class="quick-access-empty">No quick links yet. Click the link button above to add quick links.</div>';
     return;
   }
 
@@ -294,122 +264,6 @@ export function renderQuickAccess() {
   content.addEventListener('click', clickHandler);
 }
 
-// --- Make items selectable
-export function makeItemsSelectable() {
-  const iconButtons = document.querySelectorAll('.icon-button:not(.add-tile):not(.quick-access-icon)');
-  const listItems = document.querySelectorAll('.list-item:not(.add-tile):not(.quick-access-list), .copy-paste-item:not(.add-tile)');
-
-  iconButtons.forEach(btn => {
-    btn.classList.add('selectable-item');
-    btn.dataset.selectableType = 'icon';
-  });
-
-  listItems.forEach(item => {
-    item.classList.add('selectable-item');
-    item.dataset.selectableType = 'list';
-  });
-
-  updateSelectedItemsUI();
-}
-
-// --- Remove selectable handlers
-export function removeSelectableHandlers() {
-  const selectableItems = document.querySelectorAll('.selectable-item');
-  selectableItems.forEach(item => {
-    item.classList.remove('selectable-item', 'selected');
-    delete item.dataset.selectableType;
-  });
-}
-
-// --- Update selected items UI
-export function updateSelectedItemsUI() {
-  const data = currentData();
-  const selectableItems = document.querySelectorAll('.selectable-item');
-
-  selectableItems.forEach(item => {
-    const itemData = extractItemData(item);
-    if (itemData && isItemSelected(itemData, data)) {
-      item.classList.add('selected');
-    } else {
-      item.classList.remove('selected');
-    }
-  });
-}
-
-// --- Extract item data from element
-export function extractItemData(element) {
-  const selectableType = element.dataset.selectableType;
-  const data = currentData();
-
-  if (selectableType === 'icon') {
-    const sectionType = element.dataset.type;
-    const itemKey = element.dataset.key;
-
-    if (!sectionType || !itemKey) return null;
-
-    const section = data[sectionType];
-    if (!section) return null;
-
-    const item = section.find(i => i.key === itemKey);
-    if (!item) return null;
-
-    return {
-      type: 'icon',
-      icon: item.icon,
-      url: item.url,
-      title: item.title || itemKey,
-      name: itemKey,
-    };
-  } else if (selectableType === 'list') {
-    const sectionType = element.dataset.type;
-    const itemKey = element.dataset.key;
-    const subtitle = element.dataset.subtitle;
-
-    if (sectionType && itemKey) {
-      if (subtitle) {
-        const section = data[sectionType];
-        if (!section || !section[subtitle]) return null;
-
-        const item = section[subtitle].find(i => i.key === itemKey);
-        if (!item) return null;
-
-        return {
-          type: 'copyPaste',
-          text: item.text,
-          copyText: item.copyText || item.text,
-          name: itemKey,
-          sectionType: sectionType,
-        };
-      } else {
-        const section = data[sectionType];
-        if (!section) return null;
-
-        const item = section.find(i => i.key === itemKey);
-        if (!item) return null;
-
-        return {
-          type: 'list',
-          text: item.text,
-          url: item.url,
-          name: itemKey,
-          sectionType: sectionType,
-        };
-      }
-    } else {
-      const link = element.querySelector('a');
-      const url = link ? link.href : '';
-      const text = element.textContent.trim();
-
-      return {
-        type: 'list',
-        text: text,
-        url: url,
-      };
-    }
-  }
-
-  return null;
-}
 
 // --- Check if item is selected
 export function isItemSelected(itemData, data) {
@@ -484,52 +338,3 @@ export function isItemInQuickAccess(itemData) {
   return isItemSelected(itemData, data);
 }
 
-// --- Handle item selection click
-export function handleItemSelection(event) {
-  const data = currentData();
-
-  if (!data.selectorModeActive) return;
-
-  const selectableItem = event.target.closest('.selectable-item');
-  if (!selectableItem) return;
-
-  event.preventDefault();
-  event.stopPropagation();
-
-  const itemData = extractItemData(selectableItem);
-  if (!itemData) return;
-
-  if (isItemSelected(itemData, data)) {
-    // Deselect
-    if (itemData.type === 'icon') {
-      data.quickAccessItems.icons = data.quickAccessItems.icons.filter(item =>
-        !(item.icon === itemData.icon && item.url === itemData.url)
-      );
-    } else if (itemData.type === 'list') {
-      data.quickAccessItems.listItems = data.quickAccessItems.listItems.filter(item =>
-        !(item.text === itemData.text && item.url === itemData.url && !item.copyText)
-      );
-    } else if (itemData.type === 'copyPaste') {
-      data.quickAccessItems.listItems = data.quickAccessItems.listItems.filter(item =>
-        !(item.text === itemData.text && item.copyText === itemData.copyText)
-      );
-    }
-    selectableItem.classList.remove('selected');
-  } else {
-    // Select
-    if (itemData.type === 'icon') {
-      data.quickAccessItems.icons.push(itemData);
-    } else if (itemData.type === 'list') {
-      data.quickAccessItems.listItems.push(itemData);
-    } else if (itemData.type === 'copyPaste') {
-      data.quickAccessItems.listItems.push(itemData);
-    }
-    selectableItem.classList.add('selected');
-  }
-
-  renderQuickAccess();
-
-  if (!editState.enabled) {
-    saveModel();
-  }
-}
