@@ -124,7 +124,8 @@ import {
   setupCardCollapseExpand,
   collapseAllCards,
   expandAllCards,
-  renderHeaderAndTitles
+  renderHeaderAndTitles,
+  clearSearch
 } from './core/init.js';
 
 import {
@@ -389,6 +390,7 @@ window.setupCardCollapseExpand = setupCardCollapseExpand;
 window.collapseAllCards = collapseAllCards;
 window.expandAllCards = expandAllCards;
 window.renderHeaderAndTitles = renderHeaderAndTitles;
+window.clearSearch = clearSearch;
 
 // Sections Component
 window.renderAllSections = renderAllSections;

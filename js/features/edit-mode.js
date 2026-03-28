@@ -63,6 +63,15 @@ export function toggleEditMode() {
   if (window.closeAllListItemLinks) window.closeAllListItemLinks();
   if (window.closeAllIconLinks) window.closeAllIconLinks();
 
+  // Clear search when toggling edit mode
+  if (window.clearSearch) window.clearSearch();
+  const searchInput = document.getElementById('dashboard-search');
+  if (searchInput) {
+    searchInput.value = '';
+    const clearBtn = document.getElementById('search-clear');
+    if (clearBtn) clearBtn.hidden = true;
+  }
+
   if (window.renderHeaderAndTitles) window.renderHeaderAndTitles();
   if (window.renderAllSections) window.renderAllSections();
 
@@ -1859,7 +1868,41 @@ export function wireNotepadEvents() {
   if (editor) {
     editor.addEventListener('keydown', handleEditorKeydown);
     editor.addEventListener('input', handleEditorInput);
+    // Update toolbar state after keyboard shortcuts (Ctrl+B, Ctrl+I, Ctrl+U)
+    editor.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && ['b', 'i', 'u'].includes(e.key.toLowerCase())) {
+        // Delay to allow browser to process the formatting command
+        setTimeout(updateToolbarState, 0);
+      }
+    });
   }
+
+  // Toolbar button handlers
+  const toolbarBtns = $$('.notepad-toolbar-btn');
+  toolbarBtns.forEach(btn => {
+    btn.addEventListener('mousedown', (e) => {
+      e.preventDefault(); // Prevent losing focus from editor
+    });
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const command = btn.dataset.command;
+      if (command) {
+        document.execCommand(command, false, null);
+        // Update active state
+        updateToolbarState();
+        // Refocus editor
+        if (editor) editor.focus();
+      }
+    });
+  });
+
+  // Update toolbar state on selection change
+  document.addEventListener('selectionchange', () => {
+    const pop = $('#notepad-popover');
+    if (pop && !pop.hidden) {
+      updateToolbarState();
+    }
+  });
 
   // Close on click outside (but not when clicking in the note viewer modal or color picker)
   document.addEventListener('click', (e) => {
@@ -2075,7 +2118,19 @@ function isCursorAtStartOfElement(element, range) {
   return true;
 }
 
-// --- Handle input in contenteditable to auto-convert "* " to bullet
+// --- Update toolbar button active states
+function updateToolbarState() {
+  const toolbarBtns = $$('.notepad-toolbar-btn');
+  toolbarBtns.forEach(btn => {
+    const command = btn.dataset.command;
+    if (command) {
+      const isActive = document.queryCommandState(command);
+      btn.classList.toggle('active', isActive);
+    }
+  });
+}
+
+// --- Handle input in contenteditable to auto-convert markdown patterns
 function handleEditorInput(e) {
   const editor = e.target;
   const selection = window.getSelection();
@@ -2089,7 +2144,28 @@ function handleEditorInput(e) {
 
   const text = node.textContent;
 
-  // Only convert if the ENTIRE text content is just "* " or "- " (nothing more)
+  // Check for markdown heading patterns (# ## ### etc. followed by space)
+  const headingMatch = text.match(/^(#{1,6}) $/);
+  if (headingMatch) {
+    const level = headingMatch[1].length;
+    const cursorAtEnd = range.startOffset === text.length;
+    if (cursorAtEnd) {
+      convertToHeading(editor, node, level, selection);
+      return;
+    }
+  }
+
+  // Check for numbered list pattern (1. 2. etc.)
+  const numberedMatch = text.match(/^(\d+)\. $/);
+  if (numberedMatch && !isInList()) {
+    const cursorAtEnd = range.startOffset === text.length;
+    if (cursorAtEnd) {
+      convertToNumberedList(editor, node, selection);
+      return;
+    }
+  }
+
+  // Check for bullet list patterns (* or -)
   if (text !== '* ' && text !== '- ') return;
 
   // Cursor must be at the end (position 2)
@@ -2143,6 +2219,90 @@ function handleEditorInput(e) {
 
   // Replace the block with the list
   blockToReplace.parentElement.replaceChild(ul, blockToReplace);
+
+  // Place cursor in the list item
+  const newRange = document.createRange();
+  newRange.setStart(li, 0);
+  newRange.collapse(true);
+  selection.removeAllRanges();
+  selection.addRange(newRange);
+}
+
+// --- Convert text to heading (h1-h6)
+function convertToHeading(editor, textNode, level, selection) {
+  let blockToReplace = textNode.parentElement;
+
+  // If parent is the editor itself
+  if (blockToReplace === editor) {
+    const heading = document.createElement(`h${level}`);
+    heading.appendChild(document.createElement('br'));
+    editor.innerHTML = '';
+    editor.appendChild(heading);
+
+    const newRange = document.createRange();
+    newRange.setStart(heading, 0);
+    newRange.collapse(true);
+    selection.removeAllRanges();
+    selection.addRange(newRange);
+    return;
+  }
+
+  // Block must be a div or p that's a direct child of the editor
+  if ((blockToReplace.tagName !== 'DIV' && blockToReplace.tagName !== 'P') ||
+      blockToReplace.parentElement !== editor) {
+    return;
+  }
+
+  // Create the heading element
+  const heading = document.createElement(`h${level}`);
+  heading.appendChild(document.createElement('br'));
+
+  // Replace the block with the heading
+  blockToReplace.parentElement.replaceChild(heading, blockToReplace);
+
+  // Place cursor in the heading
+  const newRange = document.createRange();
+  newRange.setStart(heading, 0);
+  newRange.collapse(true);
+  selection.removeAllRanges();
+  selection.addRange(newRange);
+}
+
+// --- Convert text to numbered list
+function convertToNumberedList(editor, textNode, selection) {
+  let blockToReplace = textNode.parentElement;
+
+  // If parent is the editor itself
+  if (blockToReplace === editor) {
+    const ol = document.createElement('ol');
+    const li = document.createElement('li');
+    li.appendChild(document.createElement('br'));
+    ol.appendChild(li);
+    editor.innerHTML = '';
+    editor.appendChild(ol);
+
+    const newRange = document.createRange();
+    newRange.setStart(li, 0);
+    newRange.collapse(true);
+    selection.removeAllRanges();
+    selection.addRange(newRange);
+    return;
+  }
+
+  // Block must be a div or p that's a direct child of the editor
+  if ((blockToReplace.tagName !== 'DIV' && blockToReplace.tagName !== 'P') ||
+      blockToReplace.parentElement !== editor) {
+    return;
+  }
+
+  // Create a numbered list
+  const ol = document.createElement('ol');
+  const li = document.createElement('li');
+  li.appendChild(document.createElement('br'));
+  ol.appendChild(li);
+
+  // Replace the block with the list
+  blockToReplace.parentElement.replaceChild(ol, blockToReplace);
 
   // Place cursor in the list item
   const newRange = document.createRange();

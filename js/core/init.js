@@ -19,7 +19,9 @@ import {
   markDirtyAndSave,
   openEditPopover,
   wireNotepadEvents,
-  wireMoveButtonEvents
+  wireMoveButtonEvents,
+  openNotepad,
+  openNoteViewer
 } from '../features/edit-mode.js';
 import {
   handleDragOver,
@@ -120,6 +122,590 @@ function initGlassGlowEffect() {
   });
 }
 
+// ===== SEARCH FUNCTIONALITY =====
+
+let searchTimeout = null;
+let currentSearchQuery = '';
+let searchResultsContainer = null;
+
+function initSearch() {
+  const searchInput = $('#dashboard-search');
+  const clearBtn = $('#search-clear');
+
+  if (!searchInput) return;
+
+  // Create search results container
+  createSearchResultsContainer();
+
+  // Debounced search on input
+  searchInput.addEventListener('input', (e) => {
+    const query = e.target.value.trim();
+    clearBtn.hidden = !query;
+
+    // Debounce search
+    if (searchTimeout) clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(() => {
+      performSearch(query);
+    }, 150);
+  });
+
+  // Clear button
+  if (clearBtn) {
+    clearBtn.addEventListener('click', () => {
+      searchInput.value = '';
+      clearBtn.hidden = true;
+      clearSearch();
+      searchInput.focus();
+    });
+  }
+
+  // Escape to clear search
+  searchInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      searchInput.value = '';
+      clearBtn.hidden = true;
+      clearSearch();
+      searchInput.blur();
+    }
+  });
+
+  // Global keyboard shortcut: Ctrl+F or / to focus search
+  document.addEventListener('keydown', (e) => {
+    // Don't trigger if user is typing in an input/textarea/contenteditable
+    const activeEl = document.activeElement;
+    const isTyping = activeEl.tagName === 'INPUT' ||
+                     activeEl.tagName === 'TEXTAREA' ||
+                     activeEl.isContentEditable;
+
+    if ((e.key === '/' || (e.ctrlKey && e.key === 'f')) && !isTyping) {
+      e.preventDefault();
+      searchInput.focus();
+      searchInput.select();
+    }
+  });
+}
+
+function createSearchResultsContainer() {
+  searchResultsContainer = document.createElement('div');
+  searchResultsContainer.id = 'search-results';
+  searchResultsContainer.className = 'search-results';
+  searchResultsContainer.hidden = true;
+
+  // Insert after header, before app-main
+  const appMain = $('.app-main');
+  if (appMain && appMain.parentNode) {
+    appMain.parentNode.insertBefore(searchResultsContainer, appMain);
+  }
+}
+
+// Extract domain from URL (e.g., "google" from "https://www.google.com/search")
+function extractDomain(url) {
+  if (!url) return '';
+  try {
+    // Remove protocol
+    let domain = url.replace(/^(https?:\/\/)?(www\.)?/i, '');
+    // Get just the domain part before any path or TLD
+    domain = domain.split('/')[0]; // Remove path
+    domain = domain.split('.')[0]; // Get first part before .com/.org/etc
+    return domain.toLowerCase();
+  } catch (e) {
+    return '';
+  }
+}
+
+function performSearch(query) {
+  currentSearchQuery = query.toLowerCase();
+
+  if (!currentSearchQuery) {
+    clearSearch();
+    return;
+  }
+
+  const data = currentData();
+  const results = {
+    icons: [],
+    reminders: [],
+    subtasks: [],
+    copyPaste: [],
+    cardNotes: []
+  };
+
+  // Search through all sections
+  const sections = currentSections();
+  sections.forEach(section => {
+    const sectionData = data[section.id];
+    const cardTitle = section.title || 'Untitled Card';
+
+    // Search card notes for this section
+    if (data.cardNotes && data.cardNotes[section.id]) {
+      const notes = data.cardNotes[section.id];
+      const notesArray = Array.isArray(notes) ? notes : [];
+      notesArray.forEach(note => {
+        if (matchesQuery(note.title, currentSearchQuery) ||
+            matchesQuery(note.content, currentSearchQuery)) {
+          results.cardNotes.push({
+            ...note,
+            cardTitle,
+            sectionId: section.id
+          });
+        }
+      });
+    }
+
+    if (!sectionData) return;
+
+    // Iterate through subtitles
+    Object.keys(sectionData).forEach(subtitle => {
+      const subtitleData = sectionData[subtitle];
+      if (!subtitleData) return;
+
+      // Search icons
+      if (subtitleData.icons) {
+        subtitleData.icons.forEach(icon => {
+          if (matchesQuery(icon.title, currentSearchQuery) ||
+              matchesQuery(extractDomain(icon.url), currentSearchQuery)) {
+            results.icons.push({
+              ...icon,
+              cardTitle,
+              subtitle: subtitle !== '_default' ? subtitle : null,
+              sectionId: section.id,
+              subtitleRaw: subtitle
+            });
+          }
+        });
+      }
+
+      // Search reminders
+      if (subtitleData.reminders) {
+        subtitleData.reminders.forEach(reminder => {
+          if (matchesQuery(reminder.title, currentSearchQuery) ||
+              matchesQuery(extractDomain(reminder.url), currentSearchQuery)) {
+            results.reminders.push({
+              ...reminder,
+              cardTitle,
+              subtitle: subtitle !== '_default' ? subtitle : null,
+              sectionId: section.id,
+              subtitleRaw: subtitle
+            });
+          }
+        });
+      }
+
+      // Search subtasks
+      if (subtitleData.subtasks) {
+        subtitleData.subtasks.forEach(subtask => {
+          if (matchesQuery(subtask.text, currentSearchQuery) ||
+              matchesQuery(extractDomain(subtask.url), currentSearchQuery)) {
+            results.subtasks.push({
+              ...subtask,
+              cardTitle,
+              subtitle: subtitle !== '_default' ? subtitle : null,
+              sectionId: section.id,
+              subtitleRaw: subtitle
+            });
+          }
+        });
+      }
+
+      // Search copy-paste items
+      if (subtitleData.copyPaste) {
+        subtitleData.copyPaste.forEach(item => {
+          if (matchesQuery(item.text, currentSearchQuery) ||
+              matchesQuery(item.copyText, currentSearchQuery)) {
+            results.copyPaste.push({
+              ...item,
+              cardTitle,
+              subtitle: subtitle !== '_default' ? subtitle : null,
+              sectionId: section.id,
+              subtitleRaw: subtitle
+            });
+          }
+        });
+      }
+    });
+  });
+
+  renderSearchResults(results);
+}
+
+function matchesQuery(text, query) {
+  if (!text) return false;
+  return text.toLowerCase().includes(query);
+}
+
+function renderSearchResults(results) {
+  const appMain = $('.app-main');
+  const totalResults = results.icons.length + results.reminders.length +
+                       results.subtasks.length + results.copyPaste.length +
+                       results.cardNotes.length;
+
+  if (totalResults === 0) {
+    searchResultsContainer.innerHTML = `
+      <div class="search-no-results">
+        <div class="search-no-results-icon">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+        </div>
+        <p>No results found for "<strong>${escapeHtml(currentSearchQuery)}</strong>"</p>
+      </div>
+    `;
+    searchResultsContainer.hidden = false;
+    appMain.hidden = true;
+    return;
+  }
+
+  let html = '';
+
+  // Reminders section
+  if (results.reminders.length > 0) {
+    html += `<div class="search-category">
+      <h3 class="search-category-header">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+          <line x1="16" y1="2" x2="16" y2="6"></line>
+          <line x1="8" y1="2" x2="8" y2="6"></line>
+          <line x1="3" y1="10" x2="21" y2="10"></line>
+        </svg>
+        Reminders <span class="search-count">${results.reminders.length}</span>
+      </h3>
+      <div class="search-items">
+        ${results.reminders.map(r => renderSearchReminder(r)).join('')}
+      </div>
+    </div>`;
+  }
+
+  // Icons section
+  if (results.icons.length > 0) {
+    html += `<div class="search-category">
+      <h3 class="search-category-header">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="7" height="7"></rect>
+          <rect x="14" y="3" width="7" height="7"></rect>
+          <rect x="14" y="14" width="7" height="7"></rect>
+          <rect x="3" y="14" width="7" height="7"></rect>
+        </svg>
+        Icons <span class="search-count">${results.icons.length}</span>
+      </h3>
+      <div class="search-items search-items-icons">
+        ${results.icons.map(i => renderSearchIcon(i)).join('')}
+      </div>
+    </div>`;
+  }
+
+  // Subtasks section
+  if (results.subtasks.length > 0) {
+    html += `<div class="search-category">
+      <h3 class="search-category-header">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="8" y1="6" x2="21" y2="6"></line>
+          <line x1="8" y1="12" x2="21" y2="12"></line>
+          <line x1="8" y1="18" x2="21" y2="18"></line>
+          <line x1="3" y1="6" x2="3.01" y2="6"></line>
+          <line x1="3" y1="12" x2="3.01" y2="12"></line>
+          <line x1="3" y1="18" x2="3.01" y2="18"></line>
+        </svg>
+        Links <span class="search-count">${results.subtasks.length}</span>
+      </h3>
+      <div class="search-items">
+        ${results.subtasks.map(s => renderSearchSubtask(s)).join('')}
+      </div>
+    </div>`;
+  }
+
+  // Copy-paste section
+  if (results.copyPaste.length > 0) {
+    html += `<div class="search-category">
+      <h3 class="search-category-header">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+        </svg>
+        Copy-Paste <span class="search-count">${results.copyPaste.length}</span>
+      </h3>
+      <div class="search-items">
+        ${results.copyPaste.map(c => renderSearchCopyPaste(c)).join('')}
+      </div>
+    </div>`;
+  }
+
+  // Card Notes section (always at the bottom)
+  if (results.cardNotes.length > 0) {
+    html += `<div class="search-category">
+      <h3 class="search-category-header">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+          <polyline points="14 2 14 8 20 8"></polyline>
+          <line x1="16" y1="13" x2="8" y2="13"></line>
+          <line x1="16" y1="17" x2="8" y2="17"></line>
+          <polyline points="10 9 9 9 8 9"></polyline>
+        </svg>
+        Card Notes <span class="search-count">${results.cardNotes.length}</span>
+      </h3>
+      <div class="search-items">
+        ${results.cardNotes.map(n => renderSearchCardNote(n)).join('')}
+      </div>
+    </div>`;
+  }
+
+  searchResultsContainer.innerHTML = html;
+  searchResultsContainer.hidden = false;
+  appMain.hidden = true;
+
+  // Attach click handlers
+  attachSearchResultHandlers();
+}
+
+function renderSearchReminder(reminder) {
+  const domain = extractDomain(reminder.url);
+  const locationText = reminder.subtitle ?
+    `${reminder.cardTitle} › ${reminder.subtitle}` : reminder.cardTitle;
+
+  // Add links toggle if reminder has links
+  const hasLinks = reminder.links && reminder.links.length > 0;
+  const linksToggle = hasLinks ?
+    `<button type="button" class="search-links-toggle" data-key="${escapeAttr(reminder.key)}" data-section-id="${escapeAttr(reminder.sectionId)}" data-subtitle="${escapeAttr(reminder.subtitleRaw)}" data-type="reminder" title="${reminder.links.length} link${reminder.links.length > 1 ? 's' : ''}">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+      </svg>
+    </button>` : '';
+
+  return `
+    <div class="search-item search-item-reminder${hasLinks ? ' has-links' : ''}" data-url="${escapeAttr(reminder.url || '')}">
+      <div class="search-item-left">
+        <div class="search-item-content">
+          <span class="search-item-title">${highlightMatch(reminder.title || 'Untitled', currentSearchQuery)}</span>
+          ${domain ? `<span class="search-item-domain">${highlightMatch(domain, currentSearchQuery)}</span>` : ''}
+        </div>
+        ${linksToggle}
+      </div>
+      <span class="search-item-location">${escapeHtml(locationText)}</span>
+    </div>
+  `;
+}
+
+function renderSearchIcon(icon) {
+  const domain = extractDomain(icon.url);
+  const locationText = icon.subtitle ?
+    `${icon.cardTitle} › ${icon.subtitle}` : icon.cardTitle;
+
+  // Check if icon is emoji or image
+  const isEmoji = icon.icon && !icon.icon.includes('/') && !icon.icon.includes('.') &&
+                  !icon.icon.startsWith('http') && !icon.icon.startsWith('data:') &&
+                  icon.icon.length <= 10;
+
+  const iconHtml = isEmoji ?
+    `<span class="search-icon-emoji">${icon.icon}</span>` :
+    `<img class="search-icon-img" src="${escapeAttr(icon.icon)}" alt="" />`;
+
+  // Add links toggle if icon has links (same style as reminders/subtasks)
+  const hasLinks = icon.links && icon.links.length > 0;
+  const linksToggle = hasLinks ?
+    `<button type="button" class="search-links-toggle" data-key="${escapeAttr(icon.key)}" data-section-id="${escapeAttr(icon.sectionId)}" data-subtitle="${escapeAttr(icon.subtitleRaw)}" data-type="icon" title="${icon.links.length} link${icon.links.length > 1 ? 's' : ''}">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+      </svg>
+    </button>` : '';
+
+  return `
+    <div class="search-item search-item-icon${hasLinks ? ' has-links' : ''}" data-url="${escapeAttr(icon.url || '')}">
+      <div class="search-icon-preview">${iconHtml}</div>
+      <div class="search-item-content">
+        <span class="search-item-title">${highlightMatch(icon.title || domain || 'Untitled', currentSearchQuery)}</span>
+        ${domain && icon.title ? `<span class="search-item-domain">${highlightMatch(domain, currentSearchQuery)}</span>` : ''}
+        <span class="search-item-location">${escapeHtml(locationText)}</span>
+      </div>
+      ${linksToggle}
+    </div>
+  `;
+}
+
+function renderSearchSubtask(subtask) {
+  const domain = extractDomain(subtask.url);
+  const locationText = subtask.subtitle ?
+    `${subtask.cardTitle} › ${subtask.subtitle}` : subtask.cardTitle;
+
+  // Add links toggle if subtask has links
+  const hasLinks = subtask.links && subtask.links.length > 0;
+  const linksToggle = hasLinks ?
+    `<button type="button" class="search-links-toggle" data-key="${escapeAttr(subtask.key)}" data-section-id="${escapeAttr(subtask.sectionId)}" data-subtitle="${escapeAttr(subtask.subtitleRaw)}" data-type="subtask" title="${subtask.links.length} link${subtask.links.length > 1 ? 's' : ''}">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+      </svg>
+    </button>` : '';
+
+  return `
+    <div class="search-item search-item-subtask${hasLinks ? ' has-links' : ''}" data-url="${escapeAttr(subtask.url || '')}">
+      <div class="search-item-left">
+        <div class="search-item-content">
+          <span class="search-item-title">${highlightMatch(subtask.text || 'Untitled', currentSearchQuery)}</span>
+          ${domain ? `<span class="search-item-domain">${highlightMatch(domain, currentSearchQuery)}</span>` : ''}
+        </div>
+        ${linksToggle}
+      </div>
+      <span class="search-item-location">${escapeHtml(locationText)}</span>
+    </div>
+  `;
+}
+
+function renderSearchCopyPaste(item) {
+  const locationText = item.subtitle ?
+    `${item.cardTitle} › ${item.subtitle}` : item.cardTitle;
+
+  return `
+    <div class="search-item search-item-copypaste" data-copy-text="${escapeAttr(item.copyText || item.text || '')}">
+      <div class="search-item-content">
+        <span class="search-item-title">${highlightMatch(item.text || 'Untitled', currentSearchQuery)}</span>
+        <span class="search-item-preview">${escapeHtml((item.copyText || '').substring(0, 50))}${(item.copyText || '').length > 50 ? '...' : ''}</span>
+      </div>
+      <span class="search-item-location">${escapeHtml(locationText)}</span>
+    </div>
+  `;
+}
+
+function renderSearchCardNote(note) {
+  // Show a preview of the content (first 80 chars), stripping HTML tags
+  const plainContent = note.content ? note.content.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim() : '';
+  const contentPreview = plainContent.substring(0, 80) + (plainContent.length > 80 ? '...' : '');
+
+  return `
+    <div class="search-item search-item-cardnote" data-section-id="${escapeAttr(note.sectionId)}" data-note-key="${escapeAttr(note.key)}">
+      <div class="search-item-content">
+        <span class="search-item-title">${highlightMatch(note.title || 'Untitled Note', currentSearchQuery)}</span>
+        <span class="search-item-preview">${highlightMatch(contentPreview, currentSearchQuery)}</span>
+      </div>
+      <span class="search-item-location">${escapeHtml(note.cardTitle)}</span>
+    </div>
+  `;
+}
+
+function highlightMatch(text, query) {
+  if (!text) return '';
+  const lowerText = text.toLowerCase();
+  const index = lowerText.indexOf(query);
+  if (index === -1) return escapeHtml(text);
+
+  const before = text.substring(0, index);
+  const match = text.substring(index, index + query.length);
+  const after = text.substring(index + query.length);
+
+  return escapeHtml(before) +
+    '<mark class="search-highlight">' + escapeHtml(match) + '</mark>' +
+    escapeHtml(after);
+}
+
+function escapeHtml(text) {
+  if (!text) return '';
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+function escapeAttr(text) {
+  if (!text) return '';
+  return text.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function attachSearchResultHandlers() {
+  // Handle clicks on link toggles for icons, reminders, and subtasks
+  const linkToggles = searchResultsContainer.querySelectorAll('.search-links-toggle');
+  linkToggles.forEach(toggle => {
+    toggle.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const key = toggle.dataset.key;
+      const sectionId = toggle.dataset.sectionId;
+      const subtitle = toggle.dataset.subtitle;
+      const type = toggle.dataset.type;
+
+      if (type === 'icon' && window.toggleIconLinks) {
+        window.toggleIconLinks(key, subtitle, sectionId, toggle);
+      } else if (type === 'reminder' && window.toggleReminderLinks) {
+        window.toggleReminderLinks(key, subtitle, sectionId, toggle);
+      } else if (type === 'subtask' && window.toggleListItemLinks) {
+        // Look up the actual item from the data
+        const data = currentData();
+        const cardData = data[sectionId];
+        if (cardData && cardData[subtitle] && cardData[subtitle].subtasks) {
+          const item = cardData[subtitle].subtasks.find(s => s.key === key);
+          if (item) {
+            window.toggleListItemLinks(item, sectionId, toggle);
+          }
+        }
+      }
+    });
+  });
+
+  // Handle clicks on search items
+  const items = searchResultsContainer.querySelectorAll('.search-item');
+  items.forEach(item => {
+    item.addEventListener('click', (e) => {
+      // Don't navigate if clicking on link toggle
+      if (e.target.closest('.search-links-toggle')) {
+        return;
+      }
+
+      const url = item.dataset.url;
+      const copyText = item.dataset.copyText;
+      const sectionId = item.dataset.sectionId;
+
+      // Handle card note clicks - open the notepad modal and the specific note viewer
+      if (item.classList.contains('search-item-cardnote') && sectionId) {
+        const targetSectionId = sectionId;
+        const noteKey = item.dataset.noteKey;
+        const searchInput = $('#dashboard-search');
+        if (searchInput) {
+          searchInput.value = '';
+          const clearBtn = $('#search-clear');
+          if (clearBtn) clearBtn.hidden = true;
+        }
+        clearSearch();
+        // Open the notepad modal for this card, then open the specific note viewer
+        setTimeout(() => {
+          openNotepad(targetSectionId);
+          // Open the specific note viewer on top
+          if (noteKey) {
+            setTimeout(() => {
+              openNoteViewer(noteKey);
+            }, 50);
+          }
+        }, 100);
+        return;
+      }
+
+      if (copyText !== undefined) {
+        // Copy to clipboard
+        navigator.clipboard.writeText(copyText).then(() => {
+          showToast('Copied to clipboard');
+        }).catch(() => {
+          showToast('Failed to copy');
+        });
+      } else if (url) {
+        // Open URL
+        window.open(url, '_blank');
+      }
+    });
+  });
+}
+
+function clearSearch() {
+  currentSearchQuery = '';
+
+  const appMain = $('.app-main');
+  if (appMain) appMain.hidden = false;
+
+  if (searchResultsContainer) {
+    searchResultsContainer.hidden = true;
+    searchResultsContainer.innerHTML = '';
+  }
+}
+
+// Export for external use
+export { clearSearch };
+
 // ===== INITIALIZATION =====
 
 export async function init() {
@@ -140,6 +726,7 @@ export async function init() {
   ensureSectionPlusButtons();
   refreshEditingClasses();
   initStickyNotes();
+  initSearch();
 
   // Initialize time tracking if it was expanded
   if (model.timeTrackingExpanded) {
@@ -523,9 +1110,6 @@ export function wireUI() {
   // Global drag and drop event listeners
   document.addEventListener('dragover', handleDragOver);
   document.addEventListener('drop', handleDrop);
-
-  // Global click handler for item selection in selector mode
-  document.addEventListener('click', handleItemSelection, true);
 
   // Close reminder and list item link bubbles when clicking outside
   document.addEventListener('click', (e) => {

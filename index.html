@@ -18,6 +18,14 @@
         <div class="company-logo-container">
           <img src="assets/icons/placeholder-logo.svg" alt="Logo" class="company-logo editable" data-type="headerLogo" />
         </div>
+        <div class="search-container">
+          <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+          <input type="text" id="dashboard-search" class="search-input" placeholder="Search dashboard..." autocomplete="off" />
+          <button type="button" id="search-clear" class="search-clear" title="Clear search" hidden>&times;</button>
+        </div>
       </div>
       <div class="header-right">
         <div class="profile-photo-container">
@@ -329,6 +337,24 @@
       </div>
       <div id="notepad-saved-list" class="notepad-saved-list"></div>
       <input type="text" id="notepad-title" class="notepad-title-input" placeholder="Note title...">
+      <div class="notepad-toolbar">
+        <button type="button" class="notepad-toolbar-btn" data-command="bold" title="Bold (Ctrl+B)">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4h8a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"/><path d="M6 12h9a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"/></svg>
+        </button>
+        <button type="button" class="notepad-toolbar-btn" data-command="italic" title="Italic (Ctrl+I)">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="4" x2="10" y2="4"/><line x1="14" y1="20" x2="5" y2="20"/><line x1="15" y1="4" x2="9" y2="20"/></svg>
+        </button>
+        <button type="button" class="notepad-toolbar-btn" data-command="underline" title="Underline (Ctrl+U)">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3v7a6 6 0 0 0 6 6 6 6 0 0 0 6-6V3"/><line x1="4" y1="21" x2="20" y2="21"/></svg>
+        </button>
+        <span class="notepad-toolbar-divider"></span>
+        <button type="button" class="notepad-toolbar-btn" data-command="insertUnorderedList" title="Bullet List">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="9" y1="6" x2="20" y2="6"/><line x1="9" y1="12" x2="20" y2="12"/><line x1="9" y1="18" x2="20" y2="18"/><circle cx="4" cy="6" r="1.5" fill="currentColor"/><circle cx="4" cy="12" r="1.5" fill="currentColor"/><circle cx="4" cy="18" r="1.5" fill="currentColor"/></svg>
+        </button>
+        <button type="button" class="notepad-toolbar-btn" data-command="insertOrderedList" title="Numbered List">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="10" y1="6" x2="21" y2="6"/><line x1="10" y1="12" x2="21" y2="12"/><line x1="10" y1="18" x2="21" y2="18"/><text x="3" y="8" font-size="7" font-weight="600" fill="currentColor" stroke="none">1</text><text x="3" y="14" font-size="7" font-weight="600" fill="currentColor" stroke="none">2</text><text x="3" y="20" font-size="7" font-weight="600" fill="currentColor" stroke="none">3</text></svg>
+        </button>
+      </div>
       <div id="notepad-editor" class="notepad-editor" contenteditable="true"></div>
       <div class="notepad-popover-actions" id="notepad-actions">
         <button type="button" class="notepad-color-btn" id="notepad-color-btn" title="Note color"></button>
