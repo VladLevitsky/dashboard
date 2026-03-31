@@ -7651,6 +7651,10 @@ body[data-theme="dark"][data-style="glass"][data-glass-theme="sunset"] .tasks-su
   flex-direction: column;
 }
 
+.eisenhower-card[hidden] {
+  display: none;
+}
+
 .eisenhower-card.active {
   max-height: 2000px;
   margin: 0 auto 40px auto !important;
@@ -7781,6 +7785,7 @@ body[data-theme="dark"][data-style="glass"][data-glass-theme="sunset"] .tasks-su
 }
 
 .eisenhower-task {
+  position: relative;
   cursor: pointer;
   padding: 10px 14px;
   border-radius: 8px;
@@ -7822,13 +7827,70 @@ body[data-theme="dark"][data-style="glass"][data-glass-theme="sunset"] .tasks-su
   white-space: nowrap;
 }
 
+.eisenhower-task-icons {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.eisenhower-task-link-btn {
+  background: none;
+  border: none;
+  padding: 2px;
+  cursor: pointer;
+  color: inherit;
+  opacity: 0.6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.2s;
+}
+
+.eisenhower-task-link-btn:hover {
+  opacity: 1;
+}
+
+.eisenhower-task-link-btn svg {
+  display: block;
+}
+
 .eisenhower-task-linked {
   opacity: 0.6;
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
 }
 
 .eisenhower-task-linked svg {
   display: block;
+}
+
+/* Task Link Bubble */
+.task-link-bubble {
+  position: fixed;
+  background: var(--card);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  padding: 8px 12px;
+  z-index: 10000;
+  white-space: nowrap;
+}
+
+.task-link-bubble-link {
+  color: var(--brand);
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.task-link-bubble-link:hover {
+  text-decoration: underline;
+}
+
+[data-theme="dark"] .task-link-bubble {
+  background: #334155;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
 .eisenhower-drop-indicator {

@@ -87,7 +87,7 @@ function findItemByReference(linkedItem) {
 }
 
 // Create a new task
-export function createTask(title, color, linkedItem) {
+export function createTask(title, color, linkedItem, link = null) {
   const data = currentData();
   data.tasks = data.tasks || [];
 
@@ -97,6 +97,7 @@ export function createTask(title, color, linkedItem) {
     title: title || '',
     color: color || 'blue',
     linkedItem: linkedItem,
+    link: link || null,
     order: getTasksByColor(color).length
   };
 
@@ -1280,9 +1281,11 @@ function createEisenhowerCard(color) {
 
 // --- Create a task element within an Eisenhower card
 function createEisenhowerTaskElement(task, color) {
+  if (!task) return document.createElement('div');
+
   const taskEl = document.createElement('div');
   taskEl.className = `eisenhower-task task-bubble-${color}`;
-  taskEl.dataset.taskId = task.id;
+  taskEl.dataset.taskId = task.id || '';
   taskEl.draggable = true;
 
   // Task title
@@ -1291,6 +1294,29 @@ function createEisenhowerTaskElement(task, color) {
   titleSpan.textContent = task.title || 'Untitled Task';
   taskEl.appendChild(titleSpan);
 
+  // Right side container for icons
+  const iconsContainer = document.createElement('div');
+  iconsContainer.className = 'eisenhower-task-icons';
+
+  // Task link icon (if task has a link)
+  if (task.link && typeof task.link === 'string' && task.link.trim()) {
+    const linkBtn = document.createElement('button');
+    linkBtn.type = 'button';
+    linkBtn.className = 'eisenhower-task-link-btn';
+    linkBtn.title = 'Task link';
+    linkBtn.innerHTML = `
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+      </svg>
+    `;
+    linkBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleTaskLinkBubble(taskEl, task);
+    });
+    iconsContainer.appendChild(linkBtn);
+  }
+
   // Linked item indicator
   if (task.linkedItem) {
     const linkedIndicator = document.createElement('span');
@@ -1298,15 +1324,20 @@ function createEisenhowerTaskElement(task, color) {
     linkedIndicator.title = `Linked to ${task.linkedItem.type}`;
     linkedIndicator.innerHTML = `
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
-        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+        <circle cx="12" cy="12" r="10"></circle>
+        <circle cx="12" cy="12" r="3"></circle>
       </svg>
     `;
-    taskEl.appendChild(linkedIndicator);
+    iconsContainer.appendChild(linkedIndicator);
+  }
+
+  if (iconsContainer.children.length > 0) {
+    taskEl.appendChild(iconsContainer);
   }
 
   // Click to edit
   taskEl.addEventListener('click', (e) => {
+    if (e.target.closest('.eisenhower-task-link-btn')) return;
     e.stopPropagation();
     openEditTaskModal(task.id);
   });
@@ -1326,6 +1357,70 @@ function createEisenhowerTaskElement(task, color) {
   });
 
   return taskEl;
+}
+
+// --- Toggle task link bubble
+function toggleTaskLinkBubble(taskEl, task) {
+  if (!taskEl || !task || !task.link) return;
+
+  // Close any existing bubbles
+  document.querySelectorAll('.task-link-bubble').forEach(b => b.remove());
+
+  // Check if bubble already exists for this task (by data attribute)
+  if (taskEl.dataset.bubbleOpen === 'true') {
+    taskEl.dataset.bubbleOpen = 'false';
+    return;
+  }
+
+  // Create the bubble
+  const bubble = document.createElement('div');
+  bubble.className = 'task-link-bubble';
+
+  const link = document.createElement('a');
+  link.href = task.link;
+  link.target = '_blank';
+  link.rel = 'noopener noreferrer';
+  link.className = 'task-link-bubble-link';
+
+  // Extract domain for display (without query parameters)
+  let displayText = task.link;
+  try {
+    const url = new URL(task.link);
+    // Show hostname only (e.g., www.example.com)
+    displayText = url.hostname;
+  } catch (e) {
+    // Fallback: remove query params manually if URL parsing fails
+    displayText = task.link.split('?')[0].split('#')[0];
+  }
+  link.textContent = displayText;
+
+  link.addEventListener('click', (e) => {
+    e.stopPropagation();
+  });
+
+  bubble.appendChild(link);
+
+  // Append to body for proper z-index stacking
+  document.body.appendChild(bubble);
+
+  // Position the bubble below the task element
+  const rect = taskEl.getBoundingClientRect();
+  bubble.style.position = 'fixed';
+  bubble.style.top = `${rect.bottom + 4}px`;
+  bubble.style.left = `${rect.right - bubble.offsetWidth}px`;
+
+  // Mark that bubble is open for this task
+  taskEl.dataset.bubbleOpen = 'true';
+
+  // Close bubble when clicking outside
+  const closeHandler = (e) => {
+    if (!bubble.contains(e.target) && !e.target.closest('.eisenhower-task-link-btn')) {
+      bubble.remove();
+      taskEl.dataset.bubbleOpen = 'false';
+      document.removeEventListener('click', closeHandler);
+    }
+  };
+  setTimeout(() => document.addEventListener('click', closeHandler), 0);
 }
 
 // --- Initialize drop zone for Eisenhower card
@@ -1592,6 +1687,10 @@ function openTaskEditorModal(taskData, titleText) {
             <div class="task-editor-colors" id="task-editor-colors"></div>
           </div>
           <div class="task-editor-field">
+            <label for="task-editor-link">Task Link (Optional)</label>
+            <input type="url" id="task-editor-link" placeholder="https://example.com" />
+          </div>
+          <div class="task-editor-field">
             <label>Link to Item (Optional)</label>
             <div class="task-editor-item-selector" id="task-editor-item-selector">
               <span class="task-editor-item-text">No item selected</span>
@@ -1621,6 +1720,10 @@ function openTaskEditorModal(taskData, titleText) {
   // Populate name field
   const nameInput = $('#task-editor-name');
   nameInput.value = taskData.title || '';
+
+  // Populate link field
+  const linkInput = $('#task-editor-link');
+  linkInput.value = taskData.link || '';
 
   // Render color buttons
   const colorsContainer = $('#task-editor-colors');
@@ -1680,17 +1783,20 @@ function openTaskEditorModal(taskData, titleText) {
       return;
     }
 
+    const link = linkInput.value.trim() || null;
+
     if (currentEditingTaskId) {
       // Update existing task
       updateTask(currentEditingTaskId, {
         title,
         color: selectedColor,
-        linkedItem: selectedLinkedItem
+        linkedItem: selectedLinkedItem,
+        link: link
       });
       showToast('Task updated');
     } else {
       // Create new task
-      createTask(title, selectedColor, selectedLinkedItem);
+      createTask(title, selectedColor, selectedLinkedItem, link);
       showToast('Task created');
     }
 
