@@ -283,6 +283,110 @@ export function migrateToHalfWidthCards(data) {
   return data;
 }
 
+// --- Migrate embedded tasks to centralized Eisenhower Matrix (schemaVersion 5)
+// Converts tasks from embedded arrays in reminders/subtasks to central model.tasks array
+// Also converts 3-color system (red/yellow/green) to 4-color (red/orange/yellow/blue)
+export function migrateToEisenhowerTasks(data) {
+  if (data.schemaVersion >= 5) return data;
+
+  // Initialize central tasks array
+  data.tasks = data.tasks || [];
+
+  // Helper to generate unique task ID
+  const generateTaskId = () => 'task-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+
+  // Color migration: green -> blue (Not Urgent & Not Important)
+  const migrateColor = (oldColor) => {
+    if (oldColor === 'green') return 'blue';
+    return oldColor; // red and yellow stay the same
+  };
+
+  // Process all sections
+  const processSection = (section) => {
+    const cardData = data[section.id];
+    if (!cardData || typeof cardData !== 'object') return;
+
+    Object.entries(cardData).forEach(([subtitle, subtitleData]) => {
+      if (!subtitleData) return;
+
+      // Migrate reminder tasks
+      if (subtitleData.reminders && Array.isArray(subtitleData.reminders)) {
+        subtitleData.reminders.forEach(reminder => {
+          if (reminder.tasks && Array.isArray(reminder.tasks) && reminder.tasks.length > 0) {
+            reminder.taskIds = [];
+            reminder.tasks.forEach((task, index) => {
+              const taskId = generateTaskId();
+              data.tasks.push({
+                id: taskId,
+                title: task.title || '',
+                color: migrateColor(task.color || 'blue'),
+                linkedItem: {
+                  type: 'reminder',
+                  key: reminder.key,
+                  sectionId: section.id,
+                  subtitle: subtitle
+                },
+                order: data.tasks.length
+              });
+              reminder.taskIds.push(taskId);
+            });
+            delete reminder.tasks; // Remove embedded tasks
+          }
+        });
+      }
+
+      // Migrate subtask tasks
+      if (subtitleData.subtasks && Array.isArray(subtitleData.subtasks)) {
+        subtitleData.subtasks.forEach(subtask => {
+          if (subtask.tasks && Array.isArray(subtask.tasks) && subtask.tasks.length > 0) {
+            subtask.taskIds = [];
+            subtask.tasks.forEach((task, index) => {
+              const taskId = generateTaskId();
+              data.tasks.push({
+                id: taskId,
+                title: task.title || '',
+                color: migrateColor(task.color || 'blue'),
+                linkedItem: {
+                  type: 'subtask',
+                  key: subtask.key,
+                  sectionId: section.id,
+                  subtitle: subtitle
+                },
+                order: data.tasks.length
+              });
+              subtask.taskIds.push(taskId);
+            });
+            delete subtask.tasks; // Remove embedded tasks
+          }
+        });
+      }
+
+      // Icons don't have tasks in old system, but initialize taskIds for consistency
+      if (subtitleData.icons && Array.isArray(subtitleData.icons)) {
+        subtitleData.icons.forEach(icon => {
+          if (!icon.taskIds) {
+            icon.taskIds = [];
+          }
+        });
+      }
+    });
+  };
+
+  // Process sections array
+  if (Array.isArray(data.sections)) {
+    data.sections.forEach(processSection);
+  }
+
+  // Process sectionsStacked (data already migrated via section.id reference)
+  // No need to process again since data is shared by section.id
+
+  // Remove old tasksSummaryOrder (will be replaced by per-color ordering)
+  delete data.tasksSummaryOrder;
+
+  data.schemaVersion = 5;
+  return data;
+}
+
 // --- Clean up old backup entries to prevent localStorage quota issues
 export function cleanupOldBackups() {
   const keys = Object.keys(localStorage);
@@ -323,7 +427,7 @@ export function saveModel() {
     selectorModeActive: data.selectorModeActive,
     quickAccessItems: data.quickAccessItems,
     displayMode: data.displayMode,
-    tasksSummaryOrder: data.tasksSummaryOrder,
+    tasks: data.tasks || [],
   };
 
   // Add ALL sections - all are now unified format
@@ -377,6 +481,9 @@ export async function restoreModel() {
 
     // Run migration for twoColumnPair to halfWidth (schemaVersion < 4)
     saved = migrateToHalfWidthCards(saved);
+
+    // Run migration for embedded tasks to Eisenhower Matrix (schemaVersion < 5)
+    saved = migrateToEisenhowerTasks(saved);
 
     // Restore schema version
     if (saved.schemaVersion) {
@@ -472,9 +579,9 @@ export async function restoreModel() {
       model.displayMode = saved.displayMode;
     }
 
-    // Restore tasks summary order
-    if (saved.tasksSummaryOrder && Array.isArray(saved.tasksSummaryOrder)) {
-      model.tasksSummaryOrder = saved.tasksSummaryOrder;
+    // Restore centralized tasks (Eisenhower Matrix)
+    if (saved.tasks && Array.isArray(saved.tasks)) {
+      model.tasks = saved.tasks;
     }
 
     // Restore ALL section data (all are now unified format after migration)
@@ -675,8 +782,8 @@ export function deepMergeModel(target, source) {
   if (typeof source.displayMode !== 'undefined') {
     target.displayMode = source.displayMode;
   }
-  if (source.tasksSummaryOrder && Array.isArray(source.tasksSummaryOrder)) {
-    target.tasksSummaryOrder = [...source.tasksSummaryOrder];
+  if (source.tasks && Array.isArray(source.tasks)) {
+    target.tasks = JSON.parse(JSON.stringify(source.tasks));
   }
 
   // Handle ALL section data (unified format - objects keyed by section ID)

@@ -1653,7 +1653,20 @@ export function renderUnifiedCard(sectionEl, sectionId) {
     const iconsGroup = document.createElement('div');
     iconsGroup.className = 'unified-icons-group';
 
-    items.icons.forEach(icon => {
+    // In view mode, sort Quick Access icons to the front
+    let iconsToRender = items.icons;
+    if (!editState.enabled && window.isItemInQuickAccess) {
+      iconsToRender = [...items.icons].sort((a, b) => {
+        if (a.isDivider || b.isDivider) return 0; // Don't sort dividers
+        const aInQA = window.isItemInQuickAccess({ type: 'icon', icon: a.icon, url: a.url, title: a.title || a.key, name: a.key });
+        const bInQA = window.isItemInQuickAccess({ type: 'icon', icon: b.icon, url: b.url, title: b.title || b.key, name: b.key });
+        if (aInQA && !bInQA) return -1;
+        if (!aInQA && bInQA) return 1;
+        return 0;
+      });
+    }
+
+    iconsToRender.forEach(icon => {
       if (icon.isDivider) {
         // Render separator
         const separatorEl = createUnifiedSeparator(icon, sectionId, subtitle);
@@ -1825,6 +1838,13 @@ function createUnifiedIconButton(item, sectionId, subtitle, subtitleColor) {
   btn.dataset.key = item.key;
   btn.title = item.title || '';
 
+  // Check if icon is in Quick Access and add persistent glow
+  const iconQAData = { type: 'icon', icon: item.icon, url: item.url, title: item.title || item.key, name: item.key };
+  const isInQuickAccess = !editState.enabled && window.isItemInQuickAccess && window.isItemInQuickAccess(iconQAData);
+  if (isInQuickAccess) {
+    btn.classList.add('icon-in-quick-access');
+  }
+
   // Check if icon is emoji or image URL
   if (isEmojiIcon(item.icon)) {
     const emojiSpan = document.createElement('span');
@@ -1856,9 +1876,85 @@ function createUnifiedIconButton(item, sectionId, subtitle, subtitleColor) {
     btn.appendChild(linkIndicator);
   }
 
+  // Add task indicator if icon has tasks (show in both view and edit mode)
+  const iconTasks = window.getTasksForItem ? window.getTasksForItem('icon', item.key, sectionId) : [];
+  if (iconTasks.length > 0) {
+    const taskIndicator = document.createElement('div');
+    taskIndicator.className = 'icon-task-indicator';
+    taskIndicator.title = `${iconTasks.length} task${iconTasks.length > 1 ? 's' : ''}`;
+    taskIndicator.addEventListener('click', (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      if (editState.enabled) {
+        // In edit mode, open the item tasks modal
+        if (window.openItemTasksModal) {
+          window.openItemTasksModal('icon', item.key, sectionId, subtitle);
+        }
+      } else {
+        // In view mode, toggle the tasks popup
+        if (window.toggleIconTasks) {
+          window.toggleIconTasks(item.key, subtitle, sectionId, taskIndicator);
+        }
+      }
+    });
+    btn.appendChild(taskIndicator);
+  }
+
+  // Long-press detection for adding to Quick Access (view mode only)
+  let longPressTimer = null;
+  let longPressTriggered = false;
+
+  const startLongPress = (e) => {
+    if (editState.enabled) return;
+    // Don't trigger on indicator clicks
+    if (e.target.classList.contains('icon-link-indicator') || e.target.classList.contains('icon-task-indicator')) return;
+
+    longPressTriggered = false;
+
+    longPressTimer = setTimeout(() => {
+      longPressTriggered = true;
+
+      // Toggle quick access (this will re-render with the glow class)
+      if (window.toggleItemQuickAccess) {
+        const iconData = {
+          type: 'icon',
+          icon: item.icon,
+          url: item.url,
+          title: item.title || item.key,
+          name: item.key
+        };
+        const isNowInQuickAccess = window.toggleItemQuickAccess(iconData);
+        if (window.showToast) {
+          window.showToast(isNowInQuickAccess ? 'Added to Quick Access' : 'Removed from Quick Access');
+        }
+      }
+    }, 1500);
+  };
+
+  const cancelLongPress = () => {
+    if (longPressTimer) {
+      clearTimeout(longPressTimer);
+      longPressTimer = null;
+    }
+  };
+
+  btn.addEventListener('mousedown', startLongPress);
+  btn.addEventListener('mouseup', cancelLongPress);
+  btn.addEventListener('mouseleave', cancelLongPress);
+  btn.addEventListener('touchstart', startLongPress, { passive: true });
+  btn.addEventListener('touchend', cancelLongPress);
+  btn.addEventListener('touchcancel', cancelLongPress);
+
   btn.addEventListener('click', (e) => {
-    // In view mode, if clicking the link indicator, don't navigate
-    if (!editState.enabled && e.target.classList.contains('icon-link-indicator')) {
+    // If long press was triggered, don't navigate
+    if (longPressTriggered) {
+      e.preventDefault();
+      e.stopPropagation();
+      longPressTriggered = false;
+      return;
+    }
+    // In view mode, if clicking the link or task indicator, don't navigate
+    if (!editState.enabled && (e.target.classList.contains('icon-link-indicator') || e.target.classList.contains('icon-task-indicator'))) {
       return;
     }
     if (!editState.enabled) {
@@ -1870,6 +1966,7 @@ function createUnifiedIconButton(item, sectionId, subtitle, subtitleColor) {
         allowImage: true,
         allowDelete: true,
         allowIconLinks: true,
+        allowIconTasks: true,
         iconRef: item,
         iconSectionId: sectionId,
         iconSubtitle: subtitle,
@@ -1880,6 +1977,10 @@ function createUnifiedIconButton(item, sectionId, subtitle, subtitleColor) {
         const subtitleData = cardData[subtitle];
 
         if (doDelete) {
+          // Clean up any tasks linked to this icon
+          if (window.cleanupTasksForItem) {
+            window.cleanupTasksForItem('icon', item.key, sectionId);
+          }
           const idx = subtitleData.icons.findIndex(i => i.key === item.key);
           if (idx !== -1) subtitleData.icons.splice(idx, 1);
           markDirtyAndSave();
@@ -2032,8 +2133,8 @@ function createUnifiedSubtaskItem(item, sectionId, subtitle, subtitleColor) {
     tasksBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       e.preventDefault();
-      if (window.openListItemTasksModal) {
-        window.openListItemTasksModal(item, sectionId);
+      if (window.openItemTasksModal) {
+        window.openItemTasksModal('subtask', item.key, sectionId, subtitle);
       }
     });
 
@@ -2065,17 +2166,19 @@ function createUnifiedSubtaskItem(item, sectionId, subtitle, subtitleColor) {
       leftContainer.appendChild(linksToggleBtn);
     }
 
-    if (item.tasks && item.tasks.length > 0) {
+    // Check central store for linked tasks
+    const linkedTasks = window.getTasksForItem ? window.getTasksForItem('subtask', item.key, sectionId) : [];
+    if (linkedTasks.length > 0) {
       const tasksToggleBtn = document.createElement('button');
       tasksToggleBtn.type = 'button';
       tasksToggleBtn.className = 'list-item-tasks-toggle';
       tasksToggleBtn.innerHTML = TASKS_ICON_SVG;
-      tasksToggleBtn.title = `${item.tasks.length} task${item.tasks.length > 1 ? 's' : ''}`;
+      tasksToggleBtn.title = `${linkedTasks.length} task${linkedTasks.length > 1 ? 's' : ''}`;
       tasksToggleBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         e.preventDefault();
         if (window.toggleListItemTasks) {
-          window.toggleListItemTasks(item, sectionId, tasksToggleBtn);
+          window.toggleListItemTasks(item.key, sectionId, subtitle, tasksToggleBtn);
         }
       });
       leftContainer.appendChild(tasksToggleBtn);
@@ -2156,6 +2259,10 @@ function createUnifiedSubtaskItem(item, sectionId, subtitle, subtitleColor) {
       const subtitleData = cardData[subtitle];
 
       if (doDelete) {
+        // Clean up any tasks linked to this subtask
+        if (window.cleanupTasksForItem) {
+          window.cleanupTasksForItem('subtask', item.key, sectionId);
+        }
         const idx = subtitleData.subtasks.findIndex(i => i.key === item.key);
         if (idx !== -1) subtitleData.subtasks.splice(idx, 1);
         markDirtyAndSave();
@@ -2231,13 +2338,14 @@ function createUnifiedReminderItem(rem, sectionId, subtitle, subtitleColor) {
     leftContainer.appendChild(linksToggleBtn);
   }
 
-  // Tasks toggle button in view mode
-  if (!editState.enabled && rem.tasks && rem.tasks.length > 0) {
+  // Tasks toggle button in view mode - check central store for linked tasks
+  const reminderLinkedTasks = window.getTasksForItem ? window.getTasksForItem('reminder', rem.key, sectionId) : [];
+  if (!editState.enabled && reminderLinkedTasks.length > 0) {
     const tasksToggleBtn = document.createElement('button');
     tasksToggleBtn.type = 'button';
     tasksToggleBtn.className = 'reminder-tasks-toggle';
     tasksToggleBtn.innerHTML = TASKS_ICON_SVG;
-    tasksToggleBtn.title = `${rem.tasks.length} task${rem.tasks.length > 1 ? 's' : ''}`;
+    tasksToggleBtn.title = `${reminderLinkedTasks.length} task${reminderLinkedTasks.length > 1 ? 's' : ''}`;
     tasksToggleBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       e.preventDefault();
@@ -2379,8 +2487,8 @@ function createUnifiedReminderItem(rem, sectionId, subtitle, subtitleColor) {
     tasksBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       e.preventDefault();
-      if (window.openTasksModal) {
-        window.openTasksModal(rem);
+      if (window.openItemTasksModal) {
+        window.openItemTasksModal('reminder', rem.key, sectionId, subtitle);
       }
     });
     editBtns.appendChild(tasksBtn);
@@ -2403,6 +2511,10 @@ function createUnifiedReminderItem(rem, sectionId, subtitle, subtitleColor) {
         const subtitleData = cardData[subtitle];
 
         if (doDelete) {
+          // Clean up any tasks linked to this reminder
+          if (window.cleanupTasksForItem) {
+            window.cleanupTasksForItem('reminder', rem.key, sectionId);
+          }
           const idx = subtitleData.reminders.findIndex(r => r.key === rem.key);
           if (idx !== -1) subtitleData.reminders.splice(idx, 1);
           markDirtyAndSave();
@@ -2442,6 +2554,10 @@ function createUnifiedReminderItem(rem, sectionId, subtitle, subtitleColor) {
         const subtitleData = cardData[subtitle];
 
         if (doDelete) {
+          // Clean up any tasks linked to this reminder
+          if (window.cleanupTasksForItem) {
+            window.cleanupTasksForItem('reminder', rem.key, sectionId);
+          }
           const idx = subtitleData.reminders.findIndex(r => r.key === rem.key);
           if (idx !== -1) subtitleData.reminders.splice(idx, 1);
           markDirtyAndSave();

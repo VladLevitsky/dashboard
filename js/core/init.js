@@ -61,7 +61,9 @@ import {
   closeAllReminderTasks,
   closeAllListItemTasks,
   openTasksSummaryModal,
-  closeTasksSummaryModal
+  toggleTasksSummary,
+  closeTasksSummaryModal,
+  openAddTaskModal
 } from '../features/tasks.js';
 import {
   renderBreakdownRows,
@@ -1086,21 +1088,16 @@ export function wireUI() {
   // Display mode toggle
   $('#display-mode-toggle').addEventListener('click', openDisplayModeModal);
 
-  // Tasks summary toggle
+  // Tasks summary toggle (Eisenhower Matrix slide-out card)
   const tasksSummaryToggle = $('#tasks-summary-toggle');
   if (tasksSummaryToggle) {
-    tasksSummaryToggle.addEventListener('click', openTasksSummaryModal);
+    tasksSummaryToggle.addEventListener('click', toggleTasksSummary);
   }
 
-  // Tasks summary modal close handlers
-  const tasksSummaryClose = $('#tasks-summary-close');
-  if (tasksSummaryClose) {
-    tasksSummaryClose.addEventListener('click', closeTasksSummaryModal);
-  }
-
-  const tasksSummaryBackdrop = document.querySelector('.tasks-summary-backdrop');
-  if (tasksSummaryBackdrop) {
-    tasksSummaryBackdrop.addEventListener('click', closeTasksSummaryModal);
+  // Add task button in Eisenhower card header
+  const addTaskBtn = $('#add-task-btn');
+  if (addTaskBtn) {
+    addTaskBtn.addEventListener('click', () => openAddTaskModal());
   }
 
   // Quick access event handlers
@@ -1479,6 +1476,22 @@ export function wireUI() {
           editState.currentIconSectionId,
           editState.currentIconSubtitle
         );
+      }
+    });
+  }
+
+  // Hook up "Icon Tasks" button to open add task modal with icon pre-selected
+  const iconTasksBtn = $('#edit-icon-tasks');
+  if (iconTasksBtn) {
+    iconTasksBtn.addEventListener('click', () => {
+      if (editState.currentIconRef && editState.currentIconSectionId && editState.currentIconSubtitle) {
+        if (window.openIconTasksModal) {
+          window.openIconTasksModal(
+            editState.currentIconRef,
+            editState.currentIconSectionId,
+            editState.currentIconSubtitle
+          );
+        }
       }
     });
   }

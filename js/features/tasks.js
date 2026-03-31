@@ -1,23 +1,242 @@
 // Personal Dashboard - Tasks Module
-// Handles reminder and list item tasks modals and toggles
-// Tasks are color-coded items (red/yellow/green) that can be reordered and color-changed in view mode
+// Handles Eisenhower Matrix task management with centralized task storage
+// Tasks are color-coded (blue/yellow/orange/red) representing urgency and importance
 
 import { model, editState, currentData, currentSections } from '../state.js';
 import { $, showToast } from '../utils.js';
 import { markDirtyAndSave } from './edit-mode.js';
 import { saveModel } from '../core/storage.js';
+import { TASK_COLORS, TASK_COLOR_LABELS, ANIMATION_DELAY_MS, CARD_HIDE_DELAY_MS } from '../constants.js';
 
 // Module state
 let currentTasksReminder = null;
 let currentTasksListItem = null;
 let currentTasksListItemSectionId = null;
+let currentEditingTaskId = null;
+let currentItemSelectorCallback = null;
+
+// Pre-linked item context (when adding task from an item)
+let preLinkedItemContext = null;
 
 // Edit mode drag state (module level for proper sharing)
 let dragSrcIndex = null;
 let dragTargetIndex = null;
 
-// Color cycle order
-const COLOR_CYCLE = ['red', 'yellow', 'green'];
+// Color cycle order (Eisenhower Matrix)
+// blue = Not Urgent & Not Important
+// yellow = Not Urgent & Important
+// orange = Urgent & Not Important
+// red = Urgent & Important
+const COLOR_CYCLE = TASK_COLORS;
+const COLOR_LABELS = TASK_COLOR_LABELS;
+
+// ============================================================
+// CENTRAL TASK STORE - CRUD Operations
+// ============================================================
+
+// Generate unique task ID
+export function generateTaskId() {
+  return 'task-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+}
+
+// Get all tasks from central store
+export function getAllTasks() {
+  const data = currentData();
+  return data.tasks || [];
+}
+
+// Get task by ID
+export function getTaskById(taskId) {
+  const tasks = getAllTasks();
+  return tasks.find(t => t.id === taskId);
+}
+
+// Get tasks by color
+export function getTasksByColor(color) {
+  const tasks = getAllTasks();
+  return tasks.filter(t => t.color === color).sort((a, b) => (a.order || 0) - (b.order || 0));
+}
+
+// Get tasks for a specific item
+export function getTasksForItem(type, key, sectionId) {
+  const tasks = getAllTasks();
+  return tasks.filter(t =>
+    t.linkedItem &&
+    t.linkedItem.type === type &&
+    t.linkedItem.key === key &&
+    t.linkedItem.sectionId === sectionId
+  );
+}
+
+// Find item by linkedItem reference
+function findItemByReference(linkedItem) {
+  if (!linkedItem) return null;
+  const data = currentData();
+  const cardData = data[linkedItem.sectionId];
+  if (!cardData || !cardData[linkedItem.subtitle]) return null;
+
+  const subtitleData = cardData[linkedItem.subtitle];
+  if (linkedItem.type === 'icon') {
+    return subtitleData.icons?.find(i => i.key === linkedItem.key);
+  } else if (linkedItem.type === 'reminder') {
+    return subtitleData.reminders?.find(r => r.key === linkedItem.key);
+  } else if (linkedItem.type === 'subtask') {
+    return subtitleData.subtasks?.find(s => s.key === linkedItem.key);
+  }
+  return null;
+}
+
+// Create a new task
+export function createTask(title, color, linkedItem) {
+  const data = currentData();
+  data.tasks = data.tasks || [];
+
+  const taskId = generateTaskId();
+  const task = {
+    id: taskId,
+    title: title || '',
+    color: color || 'blue',
+    linkedItem: linkedItem,
+    order: getTasksByColor(color).length
+  };
+
+  data.tasks.push(task);
+
+  // Add reference to linked item
+  if (linkedItem) {
+    const item = findItemByReference(linkedItem);
+    if (item) {
+      item.taskIds = item.taskIds || [];
+      if (!item.taskIds.includes(taskId)) {
+        item.taskIds.push(taskId);
+      }
+    }
+  }
+
+  saveModel();
+  return task;
+}
+
+// Update an existing task
+export function updateTask(taskId, updates) {
+  const data = currentData();
+  const tasks = data.tasks || [];
+  const task = tasks.find(t => t.id === taskId);
+  if (!task) return null;
+
+  // If changing linked item, update old and new item references
+  if (updates.linkedItem && JSON.stringify(updates.linkedItem) !== JSON.stringify(task.linkedItem)) {
+    // Remove from old item
+    if (task.linkedItem) {
+      const oldItem = findItemByReference(task.linkedItem);
+      if (oldItem?.taskIds) {
+        oldItem.taskIds = oldItem.taskIds.filter(id => id !== taskId);
+      }
+    }
+    // Add to new item
+    const newItem = findItemByReference(updates.linkedItem);
+    if (newItem) {
+      newItem.taskIds = newItem.taskIds || [];
+      if (!newItem.taskIds.includes(taskId)) {
+        newItem.taskIds.push(taskId);
+      }
+    }
+  }
+
+  // If changing color, update order to be last in new color group
+  if (updates.color && updates.color !== task.color) {
+    updates.order = getTasksByColor(updates.color).length;
+  }
+
+  Object.assign(task, updates);
+  saveModel();
+  return task;
+}
+
+// Delete a task
+export function deleteTask(taskId) {
+  const data = currentData();
+  const tasks = data.tasks || [];
+  const taskIndex = tasks.findIndex(t => t.id === taskId);
+  if (taskIndex === -1) return false;
+
+  const task = tasks[taskIndex];
+
+  // Remove reference from linked item
+  if (task.linkedItem) {
+    const item = findItemByReference(task.linkedItem);
+    if (item?.taskIds) {
+      item.taskIds = item.taskIds.filter(id => id !== taskId);
+    }
+  }
+
+  tasks.splice(taskIndex, 1);
+  saveModel();
+  return true;
+}
+
+// Move task to a different color (for drag-drop between Eisenhower cards)
+export function moveTaskToColor(taskId, newColor, newOrder = null) {
+  const task = getTaskById(taskId);
+  if (!task) return null;
+
+  if (newOrder === null) {
+    newOrder = getTasksByColor(newColor).length;
+  }
+
+  return updateTask(taskId, { color: newColor, order: newOrder });
+}
+
+// Reorder task within same color group
+export function reorderTaskWithinColor(taskId, newOrder) {
+  const task = getTaskById(taskId);
+  if (!task) return null;
+
+  const data = currentData();
+  const tasksInColor = getTasksByColor(task.color);
+  const currentIndex = tasksInColor.findIndex(t => t.id === taskId);
+
+  if (currentIndex === -1) return null;
+
+  // Remove from current position and insert at new position
+  tasksInColor.splice(currentIndex, 1);
+  tasksInColor.splice(newOrder, 0, task);
+
+  // Update order values for all tasks in this color
+  tasksInColor.forEach((t, idx) => {
+    t.order = idx;
+  });
+
+  saveModel();
+  return task;
+}
+
+// Clean up tasks when an item is deleted
+export function cleanupTasksForItem(type, key, sectionId) {
+  const data = currentData();
+  const tasks = data.tasks || [];
+
+  // Find and remove all tasks linked to this item
+  const tasksToRemove = tasks.filter(t =>
+    t.linkedItem &&
+    t.linkedItem.type === type &&
+    t.linkedItem.key === key &&
+    t.linkedItem.sectionId === sectionId
+  );
+
+  tasksToRemove.forEach(task => {
+    const idx = tasks.findIndex(t => t.id === task.id);
+    if (idx !== -1) {
+      tasks.splice(idx, 1);
+    }
+  });
+
+  if (tasksToRemove.length > 0) {
+    saveModel();
+  }
+
+  return tasksToRemove.length;
+}
 
 // --- Open tasks modal for reminder
 export function openTasksModal(reminder) {
@@ -118,11 +337,11 @@ export function renderTaskRows() {
     const colorContainer = document.createElement('div');
     colorContainer.className = 'task-color-selector';
 
-    ['red', 'yellow', 'green'].forEach(color => {
+    COLOR_CYCLE.forEach(color => {
       const colorBtn = document.createElement('button');
       colorBtn.type = 'button';
       colorBtn.className = `task-color-btn ${color}${task.color === color ? ' active' : ''}`;
-      colorBtn.title = color.charAt(0).toUpperCase() + color.slice(1);
+      colorBtn.title = COLOR_LABELS[color] || color;
       colorBtn.addEventListener('click', () => {
         task.color = color;
         colorContainer.querySelectorAll('.task-color-btn').forEach(btn => {
@@ -209,7 +428,7 @@ export function addTaskRow() {
   if (!currentTasksReminder.tasks) {
     currentTasksReminder.tasks = [];
   }
-  currentTasksReminder.tasks.push({ title: '', color: 'green' });
+  currentTasksReminder.tasks.push({ title: '', color: 'blue' });
   renderTaskRows();
 
   const inputs = document.querySelectorAll('#reminder-tasks-list .task-title-input');
@@ -243,15 +462,9 @@ export function saveTasksModal() {
 
 // --- Toggle reminder tasks in view mode
 export function toggleReminderTasks(reminderKey, subtitle, sectionId, buttonEl) {
-  const data = currentData();
-  const cardData = data[sectionId];
-  if (!cardData || !cardData[subtitle]) return;
-
-  const subtitleData = cardData[subtitle];
-  const remindersArray = subtitleData.reminders || [];
-  const reminder = remindersArray.find(r => r.key === reminderKey);
-
-  if (!reminder || !reminder.tasks || reminder.tasks.length === 0) return;
+  // Query central store for tasks linked to this reminder
+  const linkedTasks = getTasksForItem('reminder', reminderKey, sectionId);
+  if (linkedTasks.length === 0) return;
 
   let tasksContainer = buttonEl._tasksContainer;
 
@@ -274,105 +487,20 @@ export function toggleReminderTasks(reminderKey, subtitle, sectionId, buttonEl) 
     tasksContainer = document.createElement('div');
     tasksContainer.className = 'reminder-tasks-expanded';
 
-    // Create drop indicator line
-    const dropIndicator = document.createElement('div');
-    dropIndicator.className = 'task-drop-indicator';
-    dropIndicator.style.display = 'none';
-
-    let draggedIndex = null;
-    let dropTargetIndex = null;
-
-    reminder.tasks.forEach((task, index) => {
+    linkedTasks.forEach((task, index) => {
       const taskBubble = document.createElement('div');
       taskBubble.className = `reminder-task-bubble task-bubble-${task.color}`;
       taskBubble.textContent = task.title || 'Task';
       taskBubble.style.animationDelay = `${index * 50}ms`;
-      taskBubble.draggable = true;
-      taskBubble.dataset.index = index;
+      taskBubble.dataset.taskId = task.id;
 
-      // Click to cycle color
+      // Click to open task editor
       taskBubble.addEventListener('click', (e) => {
         e.stopPropagation();
-        cycleTaskColor(task, taskBubble, reminder, sectionId, subtitle);
-      });
-
-      // Drag to reorder
-      taskBubble.addEventListener('dragstart', (e) => {
-        e.stopPropagation();
-        taskBubble.classList.add('dragging');
-        draggedIndex = index;
-        e.dataTransfer.setData('text/plain', index.toString());
-        e.dataTransfer.effectAllowed = 'move';
-      });
-
-      taskBubble.addEventListener('dragend', (e) => {
-        e.stopPropagation();
-        taskBubble.classList.remove('dragging');
-        dropIndicator.style.display = 'none';
-        draggedIndex = null;
-        dropTargetIndex = null;
-      });
-
-      taskBubble.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        if (draggedIndex === null || draggedIndex === index) return;
-
-        const rect = taskBubble.getBoundingClientRect();
-        const containerRect = tasksContainer.getBoundingClientRect();
-        const midY = rect.top + rect.height / 2;
-        const isAbove = e.clientY < midY;
-
-        // Calculate indicator position relative to container
-        let indicatorTop;
-        if (isAbove) {
-          indicatorTop = rect.top - containerRect.top - 2;
-          dropTargetIndex = index;
-        } else {
-          indicatorTop = rect.bottom - containerRect.top + 2;
-          dropTargetIndex = index + 1;
-        }
-
-        dropIndicator.style.display = 'block';
-        dropIndicator.style.top = `${indicatorTop}px`;
-      });
-
-      taskBubble.addEventListener('dragleave', (e) => {
-        e.stopPropagation();
-      });
-
-      taskBubble.addEventListener('drop', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        dropIndicator.style.display = 'none';
-
-        const fromIndex = parseInt(e.dataTransfer.getData('text/plain'), 10);
-        let toIndex = dropTargetIndex;
-
-        // Adjust target index if dragging down
-        if (toIndex !== null && fromIndex < toIndex) {
-          toIndex--;
-        }
-
-        if (fromIndex !== toIndex && toIndex !== null) {
-          reorderTasks(reminder, fromIndex, toIndex, sectionId, buttonEl, subtitle);
-        }
+        openEditTaskModal(task.id);
       });
 
       tasksContainer.appendChild(taskBubble);
-    });
-
-    // Add drop indicator to container
-    tasksContainer.appendChild(dropIndicator);
-
-    // Also handle drop on container itself (for dropping at the end)
-    tasksContainer.addEventListener('dragover', (e) => {
-      e.preventDefault();
-    });
-
-    tasksContainer.addEventListener('drop', (e) => {
-      e.preventDefault();
-      dropIndicator.style.display = 'none';
     });
 
     document.body.appendChild(tasksContainer);
@@ -551,6 +679,105 @@ export function closeAllReminderTasks() {
 }
 
 // ============================================================
+// ICON TASKS
+// ============================================================
+
+// --- Toggle icon tasks in view mode (shows tasks linked to this icon)
+export function toggleIconTasks(iconKey, subtitle, sectionId, buttonEl) {
+  const tasks = getTasksForItem('icon', iconKey, sectionId);
+  if (!tasks || tasks.length === 0) return;
+
+  let tasksContainer = buttonEl._tasksContainer;
+
+  if (tasksContainer && tasksContainer.parentNode) {
+    // Close existing container
+    const bubbles = tasksContainer.querySelectorAll('.reminder-task-bubble');
+    bubbles.forEach(bubble => {
+      bubble.style.animationDelay = '0ms';
+    });
+    tasksContainer.classList.remove('open');
+    tasksContainer.classList.add('closing');
+    setTimeout(() => {
+      if (tasksContainer.parentNode) {
+        tasksContainer.remove();
+      }
+    }, 250);
+    buttonEl._tasksContainer = null;
+  } else {
+    // Open new container
+    tasksContainer = document.createElement('div');
+    tasksContainer.className = 'reminder-tasks-expanded';
+
+    tasks.forEach((task, index) => {
+      const taskBubble = document.createElement('div');
+      taskBubble.className = `reminder-task-bubble task-bubble-${task.color}`;
+      taskBubble.textContent = task.title || 'Task';
+      taskBubble.style.animationDelay = `${index * 50}ms`;
+      taskBubble.dataset.taskId = task.id;
+
+      // Click to edit task
+      taskBubble.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openEditTaskModal(task.id);
+      });
+
+      tasksContainer.appendChild(taskBubble);
+    });
+
+    document.body.appendChild(tasksContainer);
+    buttonEl._tasksContainer = tasksContainer;
+
+    const buttonRect = buttonEl.getBoundingClientRect();
+    const scrollX = window.scrollX || window.pageXOffset;
+    const scrollY = window.scrollY || window.pageYOffset;
+
+    const margin = 20;
+    let leftPos = buttonRect.right + margin + scrollX;
+    let topPos = buttonRect.top + buttonRect.height / 2 + scrollY;
+
+    requestAnimationFrame(() => {
+      const containerWidth = tasksContainer.offsetWidth || 150;
+      const containerHeight = tasksContainer.offsetHeight || 100;
+
+      if (buttonRect.right + margin + containerWidth > window.innerWidth) {
+        leftPos = buttonRect.left - containerWidth - margin + scrollX;
+        if (leftPos < scrollX + margin) {
+          leftPos = scrollX + margin;
+        }
+      }
+
+      const halfHeight = containerHeight / 2;
+      if (topPos - halfHeight < scrollY + margin) {
+        topPos = scrollY + margin + halfHeight;
+      } else if (topPos + halfHeight > scrollY + window.innerHeight - margin) {
+        topPos = scrollY + window.innerHeight - margin - halfHeight;
+      }
+
+      tasksContainer.style.left = `${leftPos}px`;
+      tasksContainer.style.top = `${topPos}px`;
+      tasksContainer.style.transform = 'translateY(-50%)';
+
+      tasksContainer.classList.add('open');
+    });
+  }
+}
+
+// --- Close all open icon task bubbles
+export function closeAllIconTasks() {
+  document.querySelectorAll('.icon-task-indicator').forEach(btn => {
+    if (btn._tasksContainer && btn._tasksContainer.parentNode) {
+      btn._tasksContainer.remove();
+    }
+    btn._tasksContainer = null;
+  });
+}
+
+// --- Open icon tasks modal (for edit mode - shows linked tasks and allows adding)
+export function openIconTasksModal(iconRef, sectionId, subtitle) {
+  openItemTasksModal('icon', iconRef.key, sectionId, subtitle);
+}
+
+// ============================================================
 // LIST ITEM TASKS (for subtasks)
 // ============================================================
 
@@ -654,11 +881,11 @@ export function renderListItemTaskRows() {
     const colorContainer = document.createElement('div');
     colorContainer.className = 'task-color-selector';
 
-    ['red', 'yellow', 'green'].forEach(color => {
+    COLOR_CYCLE.forEach(color => {
       const colorBtn = document.createElement('button');
       colorBtn.type = 'button';
       colorBtn.className = `task-color-btn ${color}${task.color === color ? ' active' : ''}`;
-      colorBtn.title = color.charAt(0).toUpperCase() + color.slice(1);
+      colorBtn.title = COLOR_LABELS[color] || color;
       colorBtn.addEventListener('click', () => {
         task.color = color;
         colorContainer.querySelectorAll('.task-color-btn').forEach(btn => {
@@ -742,7 +969,7 @@ export function addListItemTaskRow() {
   if (!currentTasksListItem.tasks) {
     currentTasksListItem.tasks = [];
   }
-  currentTasksListItem.tasks.push({ title: '', color: 'green' });
+  currentTasksListItem.tasks.push({ title: '', color: 'blue' });
   renderListItemTaskRows();
 
   const inputs = document.querySelectorAll('#list-item-tasks-list .task-title-input');
@@ -777,8 +1004,10 @@ export function saveListItemTasksModal() {
 }
 
 // --- Toggle list item tasks in view mode
-export function toggleListItemTasks(item, sectionId, buttonEl) {
-  if (!item || !item.tasks || item.tasks.length === 0) return;
+export function toggleListItemTasks(itemKey, sectionId, subtitle, buttonEl) {
+  // Query central store for tasks linked to this subtask
+  const linkedTasks = getTasksForItem('subtask', itemKey, sectionId);
+  if (linkedTasks.length === 0) return;
 
   let tasksContainer = buttonEl._tasksContainer;
 
@@ -801,105 +1030,20 @@ export function toggleListItemTasks(item, sectionId, buttonEl) {
     tasksContainer = document.createElement('div');
     tasksContainer.className = 'reminder-tasks-expanded';
 
-    // Create drop indicator line
-    const dropIndicator = document.createElement('div');
-    dropIndicator.className = 'task-drop-indicator';
-    dropIndicator.style.display = 'none';
-
-    let draggedIndex = null;
-    let dropTargetIndex = null;
-
-    item.tasks.forEach((task, index) => {
+    linkedTasks.forEach((task, index) => {
       const taskBubble = document.createElement('div');
       taskBubble.className = `reminder-task-bubble task-bubble-${task.color}`;
       taskBubble.textContent = task.title || 'Task';
       taskBubble.style.animationDelay = `${index * 50}ms`;
-      taskBubble.draggable = true;
-      taskBubble.dataset.index = index;
+      taskBubble.dataset.taskId = task.id;
 
-      // Click to cycle color
+      // Click to open task editor
       taskBubble.addEventListener('click', (e) => {
         e.stopPropagation();
-        cycleListItemTaskColor(task, taskBubble, item, sectionId);
-      });
-
-      // Drag to reorder
-      taskBubble.addEventListener('dragstart', (e) => {
-        e.stopPropagation();
-        taskBubble.classList.add('dragging');
-        draggedIndex = index;
-        e.dataTransfer.setData('text/plain', index.toString());
-        e.dataTransfer.effectAllowed = 'move';
-      });
-
-      taskBubble.addEventListener('dragend', (e) => {
-        e.stopPropagation();
-        taskBubble.classList.remove('dragging');
-        dropIndicator.style.display = 'none';
-        draggedIndex = null;
-        dropTargetIndex = null;
-      });
-
-      taskBubble.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        if (draggedIndex === null || draggedIndex === index) return;
-
-        const rect = taskBubble.getBoundingClientRect();
-        const containerRect = tasksContainer.getBoundingClientRect();
-        const midY = rect.top + rect.height / 2;
-        const isAbove = e.clientY < midY;
-
-        // Calculate indicator position relative to container
-        let indicatorTop;
-        if (isAbove) {
-          indicatorTop = rect.top - containerRect.top - 2;
-          dropTargetIndex = index;
-        } else {
-          indicatorTop = rect.bottom - containerRect.top + 2;
-          dropTargetIndex = index + 1;
-        }
-
-        dropIndicator.style.display = 'block';
-        dropIndicator.style.top = `${indicatorTop}px`;
-      });
-
-      taskBubble.addEventListener('dragleave', (e) => {
-        e.stopPropagation();
-      });
-
-      taskBubble.addEventListener('drop', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        dropIndicator.style.display = 'none';
-
-        const fromIndex = parseInt(e.dataTransfer.getData('text/plain'), 10);
-        let toIndex = dropTargetIndex;
-
-        // Adjust target index if dragging down
-        if (toIndex !== null && fromIndex < toIndex) {
-          toIndex--;
-        }
-
-        if (fromIndex !== toIndex && toIndex !== null) {
-          reorderListItemTasks(item, fromIndex, toIndex, sectionId, buttonEl);
-        }
+        openEditTaskModal(task.id);
       });
 
       tasksContainer.appendChild(taskBubble);
-    });
-
-    // Add drop indicator to container
-    tasksContainer.appendChild(dropIndicator);
-
-    // Also handle drop on container itself (for dropping at the end)
-    tasksContainer.addEventListener('dragover', (e) => {
-      e.preventDefault();
-    });
-
-    tasksContainer.addEventListener('drop', (e) => {
-      e.preventDefault();
-      dropIndicator.style.display = 'none';
     });
 
     document.body.appendChild(tasksContainer);
@@ -1051,243 +1195,827 @@ export function closeAllListItemTasks() {
 }
 
 // ============================================================
-// TASKS SUMMARY MODAL (Header summary view)
+// EISENHOWER MATRIX TASKS SUMMARY (Slide-out card)
 // ============================================================
 
-// --- Collect all task groups for summary
-function collectTaskGroups() {
-  const data = currentData();
-  const sections = currentSections();
-  const groups = [];
+// Module state for tasks summary
+let tasksSummaryExpanded = false;
 
-  sections.forEach(section => {
-    if (section.type !== 'unified') return;
-    const cardData = data[section.id];
-    if (!cardData) return;
+// --- Toggle tasks summary card (Eisenhower Matrix)
+export function toggleTasksSummary() {
+  const card = $('#eisenhower-card');
+  if (!card) return;
 
-    for (const [subtitle, subtitleData] of Object.entries(cardData)) {
-      if (!subtitleData) continue;
+  tasksSummaryExpanded = !tasksSummaryExpanded;
 
-      // Check reminders
-      if (subtitleData.reminders) {
-        subtitleData.reminders.forEach(rem => {
-          if (rem.tasks && rem.tasks.length > 0) {
-            groups.push({
-              id: `${section.id}:${rem.key}`,
-              title: rem.title || rem.key,
-              tasks: rem.tasks,
-              itemType: 'reminder',
-              itemKey: rem.key,
-              sectionId: section.id,
-              subtitle
-            });
-          }
-        });
-      }
+  if (tasksSummaryExpanded) {
+    renderEisenhowerMatrix();
+    card.hidden = false;
+    setTimeout(() => card.classList.add('active'), ANIMATION_DELAY_MS);
+  } else {
+    card.classList.remove('active');
+    setTimeout(() => card.hidden = true, CARD_HIDE_DELAY_MS);
+  }
+}
 
-      // Check subtasks
-      if (subtitleData.subtasks) {
-        subtitleData.subtasks.forEach(item => {
-          if (item.tasks && item.tasks.length > 0) {
-            groups.push({
-              id: `${section.id}:${item.key}`,
-              title: item.text || item.key,
-              tasks: item.tasks,
-              itemType: 'subtask',
-              itemKey: item.key,
-              sectionId: section.id,
-              subtitle
-            });
-          }
-        });
+// --- Alias for backwards compatibility
+export function openTasksSummaryModal() {
+  if (!tasksSummaryExpanded) {
+    toggleTasksSummary();
+  }
+}
+
+// --- Render Eisenhower Matrix with 4 cards
+function renderEisenhowerMatrix() {
+  const grid = $('#eisenhower-grid');
+  if (!grid) return;
+
+  grid.innerHTML = '';
+
+  // Render 4 cards in order: Blue, Yellow, Orange, Red
+  COLOR_CYCLE.forEach(color => {
+    const card = createEisenhowerCard(color);
+    grid.appendChild(card);
+  });
+}
+
+// --- Create a single Eisenhower card for a color
+function createEisenhowerCard(color) {
+  const card = document.createElement('div');
+  card.className = `eisenhower-priority-card eisenhower-priority-card-${color}`;
+  card.dataset.color = color;
+
+  // Header
+  const header = document.createElement('div');
+  header.className = 'eisenhower-card-header';
+  header.textContent = COLOR_LABELS[color];
+  card.appendChild(header);
+
+  // Tasks container
+  const tasksContainer = document.createElement('div');
+  tasksContainer.className = 'eisenhower-card-tasks';
+  tasksContainer.dataset.dropzone = color;
+
+  // Get tasks for this color
+  const tasks = getTasksByColor(color);
+
+  if (tasks.length === 0) {
+    const emptyMsg = document.createElement('div');
+    emptyMsg.className = 'eisenhower-card-empty';
+    emptyMsg.textContent = 'No tasks';
+    tasksContainer.appendChild(emptyMsg);
+  } else {
+    tasks.forEach(task => {
+      const taskEl = createEisenhowerTaskElement(task, color);
+      tasksContainer.appendChild(taskEl);
+    });
+  }
+
+  // Enable drop zone for drag-drop
+  initEisenhowerDropZone(tasksContainer, color);
+
+  card.appendChild(tasksContainer);
+  return card;
+}
+
+// --- Create a task element within an Eisenhower card
+function createEisenhowerTaskElement(task, color) {
+  const taskEl = document.createElement('div');
+  taskEl.className = `eisenhower-task task-bubble-${color}`;
+  taskEl.dataset.taskId = task.id;
+  taskEl.draggable = true;
+
+  // Task title
+  const titleSpan = document.createElement('span');
+  titleSpan.className = 'eisenhower-task-title';
+  titleSpan.textContent = task.title || 'Untitled Task';
+  taskEl.appendChild(titleSpan);
+
+  // Linked item indicator
+  if (task.linkedItem) {
+    const linkedIndicator = document.createElement('span');
+    linkedIndicator.className = 'eisenhower-task-linked';
+    linkedIndicator.title = `Linked to ${task.linkedItem.type}`;
+    linkedIndicator.innerHTML = `
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+      </svg>
+    `;
+    taskEl.appendChild(linkedIndicator);
+  }
+
+  // Click to edit
+  taskEl.addEventListener('click', (e) => {
+    e.stopPropagation();
+    openEditTaskModal(task.id);
+  });
+
+  // Drag events
+  taskEl.addEventListener('dragstart', (e) => {
+    e.stopPropagation();
+    taskEl.classList.add('dragging');
+    e.dataTransfer.setData('text/plain', task.id);
+    e.dataTransfer.effectAllowed = 'move';
+  });
+
+  taskEl.addEventListener('dragend', () => {
+    taskEl.classList.remove('dragging');
+    // Remove all drop indicators
+    document.querySelectorAll('.eisenhower-drop-indicator').forEach(el => el.remove());
+  });
+
+  return taskEl;
+}
+
+// --- Initialize drop zone for Eisenhower card
+function initEisenhowerDropZone(container, targetColor) {
+  container.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+
+    // Show drop indicator
+    const dragging = document.querySelector('.eisenhower-task.dragging');
+    if (!dragging) return;
+
+    const afterElement = getDragAfterElement(container, e.clientY);
+    let indicator = container.querySelector('.eisenhower-drop-indicator');
+
+    if (!indicator) {
+      indicator = document.createElement('div');
+      indicator.className = 'eisenhower-drop-indicator';
+      container.appendChild(indicator);
+    }
+
+    if (afterElement) {
+      container.insertBefore(indicator, afterElement);
+    } else {
+      // At the end
+      const emptyMsg = container.querySelector('.eisenhower-card-empty');
+      if (emptyMsg) {
+        container.insertBefore(indicator, emptyMsg);
+      } else {
+        container.appendChild(indicator);
       }
     }
   });
 
-  return groups;
-}
+  container.addEventListener('dragleave', (e) => {
+    // Only remove if leaving the container entirely
+    if (!container.contains(e.relatedTarget)) {
+      const indicator = container.querySelector('.eisenhower-drop-indicator');
+      if (indicator) indicator.remove();
+    }
+  });
 
-// --- Sort groups by saved order
-function sortGroupsByOrder(groups, order) {
-  if (!order || order.length === 0) return groups;
+  container.addEventListener('drop', (e) => {
+    e.preventDefault();
+    const taskId = e.dataTransfer.getData('text/plain');
+    if (!taskId) return;
 
-  const orderMap = new Map(order.map((id, idx) => [id, idx]));
-  return [...groups].sort((a, b) => {
-    const aIdx = orderMap.has(a.id) ? orderMap.get(a.id) : Infinity;
-    const bIdx = orderMap.has(b.id) ? orderMap.get(b.id) : Infinity;
-    return aIdx - bIdx;
+    const indicator = container.querySelector('.eisenhower-drop-indicator');
+    if (indicator) indicator.remove();
+
+    // Calculate new order based on position
+    const tasks = Array.from(container.querySelectorAll('.eisenhower-task:not(.dragging)'));
+    const afterElement = getDragAfterElement(container, e.clientY);
+    let newOrder = tasks.length;
+
+    if (afterElement) {
+      newOrder = tasks.indexOf(afterElement);
+    }
+
+    // Move task to new color/position
+    const task = getTaskById(taskId);
+    if (task) {
+      if (task.color !== targetColor) {
+        // Moving to different color - update color and order
+        moveTaskToColor(taskId, targetColor, newOrder);
+      } else {
+        // Same color - just reorder
+        reorderTaskWithinColor(taskId, newOrder);
+      }
+      // Re-render the matrix
+      renderEisenhowerMatrix();
+    }
   });
 }
 
-// --- Open tasks summary modal
-export function openTasksSummaryModal() {
-  const modal = $('#tasks-summary-modal');
-  const content = $('#tasks-summary-content');
-  if (!modal || !content) return;
+// --- Get element after which to insert during drag
+function getDragAfterElement(container, y) {
+  const tasks = [...container.querySelectorAll('.eisenhower-task:not(.dragging)')];
 
-  renderTasksSummaryContent();
+  return tasks.reduce((closest, child) => {
+    const box = child.getBoundingClientRect();
+    const offset = y - box.top - box.height / 2;
+
+    if (offset < 0 && offset > closest.offset) {
+      return { offset: offset, element: child };
+    } else {
+      return closest;
+    }
+  }, { offset: Number.NEGATIVE_INFINITY }).element;
+}
+
+// --- Close tasks summary card
+export function closeTasksSummaryModal() {
+  if (tasksSummaryExpanded) {
+    toggleTasksSummary();
+  }
+}
+
+// ============================================================
+// ADD/EDIT TASK MODAL
+// ============================================================
+
+// --- Open modal to add a new task (optionally with a pre-linked item)
+export function openAddTaskModal(preLinkedItem = null) {
+  currentEditingTaskId = null;
+  preLinkedItemContext = preLinkedItem;
+  openTaskEditorModal({
+    title: '',
+    color: 'blue',
+    linkedItem: preLinkedItem
+  }, 'Add Task');
+}
+
+// --- Open modal to edit an existing task
+export function openEditTaskModal(taskId) {
+  const task = getTaskById(taskId);
+  if (!task) return;
+
+  currentEditingTaskId = taskId;
+  preLinkedItemContext = null; // Allow editing the linked item when editing
+  openTaskEditorModal(task, 'Edit Task');
+}
+
+// ============================================================
+// UNIFIED ITEM TASKS MODAL (for icons, reminders, subtasks)
+// Shows existing linked tasks as pills and allows adding new tasks
+// ============================================================
+
+let currentItemTasksContext = null;
+
+// --- Open the item tasks modal for any item type
+export function openItemTasksModal(itemType, itemKey, sectionId, subtitle) {
+  currentItemTasksContext = { type: itemType, key: itemKey, sectionId, subtitle };
+
+  let modal = $('#item-tasks-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'item-tasks-modal';
+    modal.className = 'item-tasks-modal';
+    modal.innerHTML = `
+      <div class="item-tasks-backdrop"></div>
+      <div class="item-tasks-dialog">
+        <div class="item-tasks-header">
+          <h4 id="item-tasks-title">Linked Tasks</h4>
+          <button type="button" class="item-tasks-close-btn" title="Close">&times;</button>
+        </div>
+        <div class="item-tasks-content">
+          <div id="item-tasks-pills" class="item-tasks-pills"></div>
+          <button type="button" id="item-tasks-add-btn" class="btn-add-task">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="12" y1="5" x2="12" y2="19"></line>
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+            Add Task
+          </button>
+        </div>
+        <div class="item-tasks-actions">
+          <button type="button" id="item-tasks-close" class="btn-primary">Done</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+
+    modal.querySelector('.item-tasks-backdrop').addEventListener('click', closeItemTasksModal);
+    modal.querySelector('.item-tasks-close-btn').addEventListener('click', closeItemTasksModal);
+    $('#item-tasks-close').addEventListener('click', closeItemTasksModal);
+    $('#item-tasks-add-btn').addEventListener('click', () => {
+      if (currentItemTasksContext) {
+        // Save context before closing modal (closing clears it)
+        const contextToPass = { ...currentItemTasksContext };
+        closeItemTasksModal();
+        openAddTaskModal(contextToPass);
+      }
+    });
+  }
+
+  renderItemTasksPills();
   modal.hidden = false;
 }
 
-// --- Render tasks summary content (separated for re-render on reorder)
-function renderTasksSummaryContent() {
-  const content = $('#tasks-summary-content');
-  if (!content) return;
+// --- Render the task pills for the current item
+function renderItemTasksPills() {
+  const pillsContainer = $('#item-tasks-pills');
+  if (!pillsContainer || !currentItemTasksContext) return;
 
-  content.innerHTML = '';
-  const data = currentData();
+  pillsContainer.innerHTML = '';
 
-  // Collect all groups
-  let groups = collectTaskGroups();
+  // Query central store for tasks linked to this item
+  const linkedTasks = getTasksForItem(
+    currentItemTasksContext.type,
+    currentItemTasksContext.key,
+    currentItemTasksContext.sectionId
+  );
 
-  if (groups.length === 0) {
-    content.innerHTML = '<div class="tasks-summary-empty">No tasks found</div>';
-    return;
+  if (linkedTasks.length === 0) {
+    const emptyMsg = document.createElement('div');
+    emptyMsg.className = 'item-tasks-empty';
+    emptyMsg.textContent = 'No tasks linked to this item';
+    pillsContainer.appendChild(emptyMsg);
+  } else {
+    linkedTasks.forEach(task => {
+      const pill = document.createElement('div');
+      pill.className = `item-task-pill task-bubble-${task.color}`;
+      pill.dataset.taskId = task.id;
+
+      const titleSpan = document.createElement('span');
+      titleSpan.className = 'item-task-pill-title';
+      titleSpan.textContent = task.title || 'Untitled Task';
+      pill.appendChild(titleSpan);
+
+      const colorLabel = document.createElement('span');
+      colorLabel.className = 'item-task-pill-color';
+      colorLabel.textContent = COLOR_LABELS[task.color];
+      pill.appendChild(colorLabel);
+
+      // Click to edit
+      pill.addEventListener('click', () => {
+        closeItemTasksModal();
+        openEditTaskModal(task.id);
+      });
+
+      pillsContainer.appendChild(pill);
+    });
+  }
+}
+
+// --- Close item tasks modal
+function closeItemTasksModal() {
+  const modal = $('#item-tasks-modal');
+  if (modal) modal.hidden = true;
+  currentItemTasksContext = null;
+}
+
+// --- Refresh the item tasks modal (called after task changes)
+export function refreshItemTasksModal() {
+  const modal = $('#item-tasks-modal');
+  if (modal && !modal.hidden) {
+    renderItemTasksPills();
+  }
+}
+
+// --- Open the task editor modal (shared for add/edit)
+function openTaskEditorModal(taskData, titleText) {
+  let modal = $('#task-editor-modal');
+
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'task-editor-modal';
+    modal.className = 'task-editor-modal';
+    modal.innerHTML = `
+      <div class="task-editor-backdrop"></div>
+      <div class="task-editor-dialog">
+        <div class="task-editor-header">
+          <h4 id="task-editor-title">Add Task</h4>
+          <button type="button" class="task-editor-close-btn" title="Close">&times;</button>
+        </div>
+        <div class="task-editor-content">
+          <div class="task-editor-field">
+            <label for="task-editor-name">Task Name</label>
+            <input type="text" id="task-editor-name" placeholder="Enter task name..." />
+          </div>
+          <div class="task-editor-field">
+            <label>Priority</label>
+            <div class="task-editor-colors" id="task-editor-colors"></div>
+          </div>
+          <div class="task-editor-field">
+            <label>Link to Item (Optional)</label>
+            <div class="task-editor-item-selector" id="task-editor-item-selector">
+              <span class="task-editor-item-text">No item selected</span>
+              <button type="button" class="task-editor-item-btn">Select Item</button>
+            </div>
+          </div>
+        </div>
+        <div class="task-editor-actions">
+          ${currentEditingTaskId ? '<button type="button" id="task-editor-delete" class="btn-danger">Delete</button>' : ''}
+          <div class="task-editor-actions-right">
+            <button type="button" id="task-editor-cancel" class="btn-secondary">Cancel</button>
+            <button type="button" id="task-editor-save" class="btn-primary">Save</button>
+          </div>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+
+    // Close on backdrop click
+    modal.querySelector('.task-editor-backdrop').addEventListener('click', closeTaskEditorModal);
+    modal.querySelector('.task-editor-close-btn').addEventListener('click', closeTaskEditorModal);
   }
 
-  // Sort by saved order
-  const order = data.tasksSummaryOrder || [];
-  groups = sortGroupsByOrder(groups, order);
+  // Update title
+  $('#task-editor-title').textContent = titleText;
 
-  // Render each group
-  groups.forEach((group, index) => {
-    renderTaskSummaryGroup(content, group, index, groups.length);
-  });
-}
+  // Populate name field
+  const nameInput = $('#task-editor-name');
+  nameInput.value = taskData.title || '';
 
-// --- Render a task group in the summary modal
-function renderTaskSummaryGroup(container, group, index, totalGroups) {
-  const { id, title, tasks, itemType, itemKey, sectionId, subtitle } = group;
+  // Render color buttons
+  const colorsContainer = $('#task-editor-colors');
+  colorsContainer.innerHTML = '';
+  let selectedColor = taskData.color || 'blue';
 
-  const groupDiv = document.createElement('div');
-  groupDiv.className = 'tasks-summary-group';
-  groupDiv.dataset.groupId = id;
+  COLOR_CYCLE.forEach(color => {
+    const colorBtn = document.createElement('button');
+    colorBtn.type = 'button';
+    colorBtn.className = `task-editor-color-btn task-color-btn ${color}${selectedColor === color ? ' active' : ''}`;
+    colorBtn.dataset.color = color;
+    colorBtn.title = COLOR_LABELS[color];
 
-  // Title row with chevrons
-  const titleRow = document.createElement('div');
-  titleRow.className = 'tasks-summary-group-title-row';
-
-  const titleDiv = document.createElement('div');
-  titleDiv.className = 'tasks-summary-group-title';
-  titleDiv.textContent = title;
-
-  // Chevron buttons container
-  const chevronsDiv = document.createElement('div');
-  chevronsDiv.className = 'tasks-summary-chevrons';
-
-  // Up chevron
-  const upBtn = document.createElement('button');
-  upBtn.type = 'button';
-  upBtn.className = 'tasks-summary-chevron-btn';
-  upBtn.disabled = index === 0;
-  upBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-    <polyline points="18 15 12 9 6 15"></polyline>
-  </svg>`;
-  upBtn.title = 'Move up';
-  upBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    moveTaskSummaryGroup(id, -1);
-  });
-
-  // Down chevron
-  const downBtn = document.createElement('button');
-  downBtn.type = 'button';
-  downBtn.className = 'tasks-summary-chevron-btn';
-  downBtn.disabled = index === totalGroups - 1;
-  downBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-    <polyline points="6 9 12 15 18 9"></polyline>
-  </svg>`;
-  downBtn.title = 'Move down';
-  downBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    moveTaskSummaryGroup(id, 1);
-  });
-
-  chevronsDiv.appendChild(upBtn);
-  chevronsDiv.appendChild(downBtn);
-
-  titleRow.appendChild(titleDiv);
-  titleRow.appendChild(chevronsDiv);
-  groupDiv.appendChild(titleRow);
-
-  const bubblesDiv = document.createElement('div');
-  bubblesDiv.className = 'tasks-summary-bubbles';
-
-  tasks.forEach((task, taskIndex) => {
-    const rowDiv = document.createElement('div');
-    rowDiv.className = 'tasks-summary-row';
-
-    const bubble = document.createElement('div');
-    bubble.className = `tasks-summary-bubble task-bubble-${task.color}`;
-    bubble.textContent = task.title || 'Task';
-    bubble.dataset.index = taskIndex;
-    bubble.dataset.itemType = itemType;
-    bubble.dataset.itemKey = itemKey;
-    bubble.dataset.sectionId = sectionId;
-
-    // Click to cycle color
-    bubble.addEventListener('click', (e) => {
-      e.stopPropagation();
-      e.preventDefault();
-      cycleTaskColorInSummary(bubble, itemType, itemKey, sectionId, taskIndex, subtitle);
+    colorBtn.addEventListener('click', () => {
+      colorsContainer.querySelectorAll('.task-editor-color-btn').forEach(btn => btn.classList.remove('active'));
+      colorBtn.classList.add('active');
+      selectedColor = color;
     });
 
-    // Arrow button to navigate to source
-    const arrowBtn = document.createElement('button');
-    arrowBtn.type = 'button';
-    arrowBtn.className = 'tasks-summary-goto-btn';
-    arrowBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M5 12h14M12 5l7 7-7 7"/>
-    </svg>`;
-    arrowBtn.title = 'Go to item';
-    arrowBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      e.preventDefault();
-      navigateToTaskSource(itemType, itemKey, sectionId);
-    });
-
-    rowDiv.appendChild(bubble);
-    rowDiv.appendChild(arrowBtn);
-    bubblesDiv.appendChild(rowDiv);
+    colorsContainer.appendChild(colorBtn);
   });
 
-  groupDiv.appendChild(bubblesDiv);
-  container.appendChild(groupDiv);
-}
+  // Item selector - hide if opened from an item context
+  const itemSelectorField = $('#task-editor-item-selector')?.closest('.task-editor-field');
+  const itemSelector = $('#task-editor-item-selector');
+  let selectedLinkedItem = taskData.linkedItem ? { ...taskData.linkedItem } : null;
 
-// --- Move a task summary group up or down
-function moveTaskSummaryGroup(groupId, direction) {
-  const data = currentData();
+  if (preLinkedItemContext) {
+    // Hide the item selector when adding from an item
+    if (itemSelectorField) itemSelectorField.style.display = 'none';
+  } else {
+    // Show the item selector
+    if (itemSelectorField) itemSelectorField.style.display = '';
+    const itemText = itemSelector.querySelector('.task-editor-item-text');
+    const itemBtn = itemSelector.querySelector('.task-editor-item-btn');
 
-  // Collect current groups and their order
-  let groups = collectTaskGroups();
-  const currentOrder = data.tasksSummaryOrder || [];
-  groups = sortGroupsByOrder(groups, currentOrder);
+    updateItemSelectorText(itemText, selectedLinkedItem);
 
-  // Find current index
-  const currentIndex = groups.findIndex(g => g.id === groupId);
-  if (currentIndex === -1) return;
-
-  const newIndex = currentIndex + direction;
-  if (newIndex < 0 || newIndex >= groups.length) return;
-
-  // Build new order array
-  const newOrder = groups.map(g => g.id);
-  [newOrder[currentIndex], newOrder[newIndex]] = [newOrder[newIndex], newOrder[currentIndex]];
-
-  // Save to both model and working copy (if in edit mode)
-  model.tasksSummaryOrder = newOrder;
-  if (editState.working) {
-    editState.working.tasksSummaryOrder = newOrder;
+    itemBtn.onclick = () => {
+      openItemSelectorModal((item) => {
+        selectedLinkedItem = item;
+        updateItemSelectorText(itemText, selectedLinkedItem);
+      });
+    };
   }
-  saveModel();
 
-  // Re-render
-  renderTasksSummaryContent();
+  // Wire up buttons
+  const cancelBtn = $('#task-editor-cancel');
+  cancelBtn.onclick = closeTaskEditorModal;
+
+  const saveBtn = $('#task-editor-save');
+  saveBtn.onclick = () => {
+    const title = nameInput.value.trim();
+    if (!title) {
+      showToast('Please enter a task name');
+      nameInput.focus();
+      return;
+    }
+
+    if (currentEditingTaskId) {
+      // Update existing task
+      updateTask(currentEditingTaskId, {
+        title,
+        color: selectedColor,
+        linkedItem: selectedLinkedItem
+      });
+      showToast('Task updated');
+    } else {
+      // Create new task
+      createTask(title, selectedColor, selectedLinkedItem);
+      showToast('Task created');
+    }
+
+    closeTaskEditorModal();
+    renderEisenhowerMatrix();
+    // Refresh main view to update task indicators
+    if (window.renderAllSections) window.renderAllSections();
+  };
+
+  // Delete button (only for edit mode)
+  const deleteBtn = $('#task-editor-delete');
+  if (deleteBtn) {
+    deleteBtn.onclick = () => {
+      if (confirm('Are you sure you want to delete this task?')) {
+        deleteTask(currentEditingTaskId);
+        showToast('Task deleted');
+        closeTaskEditorModal();
+        renderEisenhowerMatrix();
+        // Refresh main view to update task indicators
+        if (window.renderAllSections) window.renderAllSections();
+      }
+    };
+  }
+
+  modal.hidden = false;
+  nameInput.focus();
 }
 
-// --- Navigate to the source reminder/subtask
-function navigateToTaskSource(itemType, itemKey, sectionId) {
+// --- Update item selector display text
+function updateItemSelectorText(textEl, linkedItem) {
+  if (!linkedItem) {
+    textEl.textContent = 'No item selected';
+    textEl.classList.remove('has-item');
+  } else {
+    // Try to find the item to get its title
+    const item = findItemByReference(linkedItem);
+    let displayText = linkedItem.type;
+
+    if (item) {
+      if (linkedItem.type === 'icon') {
+        displayText = item.title || extractDomainFromUrl(item.url) || 'Icon';
+      } else if (linkedItem.type === 'reminder') {
+        displayText = item.title || 'Reminder';
+      } else if (linkedItem.type === 'subtask') {
+        displayText = item.text || 'Subtask';
+      }
+    }
+
+    textEl.textContent = displayText;
+    textEl.classList.add('has-item');
+  }
+}
+
+// --- Close task editor modal
+function closeTaskEditorModal() {
+  const modal = $('#task-editor-modal');
+  if (modal) {
+    modal.hidden = true;
+  }
+  currentEditingTaskId = null;
+  preLinkedItemContext = null;
+}
+
+// ============================================================
+// ITEM SELECTOR MODAL
+// ============================================================
+
+// --- Open item selector modal
+export function openItemSelectorModal(onSelect) {
+  currentItemSelectorCallback = onSelect;
+
+  let modal = $('#item-selector-modal');
+
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'item-selector-modal';
+    modal.className = 'item-selector-modal';
+    modal.innerHTML = `
+      <div class="item-selector-backdrop"></div>
+      <div class="item-selector-dialog">
+        <div class="item-selector-header">
+          <h4>Select Item</h4>
+          <button type="button" class="item-selector-close-btn" title="Close">&times;</button>
+        </div>
+        <div class="item-selector-search">
+          <input type="text" id="item-selector-search-input" placeholder="Search items..." />
+        </div>
+        <div class="item-selector-categories" id="item-selector-categories">
+          <!-- Populated dynamically -->
+        </div>
+        <div class="item-selector-footer">
+          <button type="button" id="item-selector-clear" class="btn-secondary">Clear Selection</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+
+    modal.querySelector('.item-selector-backdrop').addEventListener('click', closeItemSelectorModal);
+    modal.querySelector('.item-selector-close-btn').addEventListener('click', closeItemSelectorModal);
+
+    // Search input
+    const searchInput = $('#item-selector-search-input');
+    searchInput.addEventListener('input', (e) => {
+      renderItemSelectorCategories(e.target.value.trim().toLowerCase());
+    });
+
+    // Clear button
+    $('#item-selector-clear').addEventListener('click', () => {
+      if (currentItemSelectorCallback) {
+        currentItemSelectorCallback(null);
+      }
+      closeItemSelectorModal();
+    });
+  }
+
+  // Clear search and render
+  const searchInput = $('#item-selector-search-input');
+  searchInput.value = '';
+  renderItemSelectorCategories('');
+
+  modal.hidden = false;
+  searchInput.focus();
+}
+
+// --- Render item selector categories
+function renderItemSelectorCategories(filterQuery) {
+  const container = $('#item-selector-categories');
+  if (!container) return;
+
+  container.innerHTML = '';
+
+  const items = collectLinkableItems();
+  const filteredItems = filterLinkableItems(items, filterQuery);
+
+  // Render Icons
+  if (filteredItems.icons.length > 0) {
+    const category = createItemSelectorCategory('Icons', filteredItems.icons, 'icon');
+    container.appendChild(category);
+  }
+
+  // Render Reminders
+  if (filteredItems.reminders.length > 0) {
+    const category = createItemSelectorCategory('Reminders', filteredItems.reminders, 'reminder');
+    container.appendChild(category);
+  }
+
+  // Render Subtasks (Links)
+  if (filteredItems.subtasks.length > 0) {
+    const category = createItemSelectorCategory('Links', filteredItems.subtasks, 'subtask');
+    container.appendChild(category);
+  }
+
+  if (filteredItems.icons.length === 0 && filteredItems.reminders.length === 0 && filteredItems.subtasks.length === 0) {
+    container.innerHTML = '<div class="item-selector-empty">No items found</div>';
+  }
+}
+
+// --- Create a category section in item selector
+function createItemSelectorCategory(title, items, type) {
+  const categoryDiv = document.createElement('div');
+  categoryDiv.className = 'item-selector-category';
+
+  const headerDiv = document.createElement('div');
+  headerDiv.className = 'item-selector-category-title';
+  headerDiv.textContent = title;
+  categoryDiv.appendChild(headerDiv);
+
+  const itemsDiv = document.createElement('div');
+  itemsDiv.className = 'item-selector-items';
+
+  items.forEach(item => {
+    const itemEl = document.createElement('div');
+    itemEl.className = 'item-selector-item';
+
+    const titleEl = document.createElement('span');
+    titleEl.className = 'item-selector-item-title';
+    titleEl.textContent = item.title;
+    itemEl.appendChild(titleEl);
+
+    const breadcrumbEl = document.createElement('span');
+    breadcrumbEl.className = 'item-selector-item-breadcrumb';
+    breadcrumbEl.textContent = item.breadcrumb;
+    itemEl.appendChild(breadcrumbEl);
+
+    itemEl.addEventListener('click', () => {
+      if (currentItemSelectorCallback) {
+        currentItemSelectorCallback({
+          type: type,
+          key: item.key,
+          sectionId: item.sectionId,
+          subtitle: item.subtitle
+        });
+      }
+      closeItemSelectorModal();
+    });
+
+    itemsDiv.appendChild(itemEl);
+  });
+
+  categoryDiv.appendChild(itemsDiv);
+  return categoryDiv;
+}
+
+// --- Collect all linkable items (icons, reminders, subtasks - NOT copy-paste or notes)
+export function collectLinkableItems() {
+  const data = currentData();
+  const sections = currentSections();
+  const items = {
+    icons: [],
+    reminders: [],
+    subtasks: []
+  };
+
+  sections.forEach(section => {
+    const cardData = data[section.id];
+    if (!cardData) return;
+
+    const cardTitle = data.sectionTitles?.[section.id] || section.title || 'Untitled Card';
+
+    Object.entries(cardData).forEach(([subtitle, subtitleData]) => {
+      if (!subtitleData) return;
+
+      const breadcrumb = subtitle !== '_default' ? `${cardTitle} > ${subtitle}` : cardTitle;
+
+      // Collect icons (exclude dividers)
+      if (subtitleData.icons) {
+        subtitleData.icons.forEach(icon => {
+          if (!icon.isDivider) {
+            items.icons.push({
+              type: 'icon',
+              key: icon.key,
+              title: icon.title || extractDomainFromUrl(icon.url) || 'Icon',
+              sectionId: section.id,
+              subtitle,
+              breadcrumb
+            });
+          }
+        });
+      }
+
+      // Collect reminders
+      if (subtitleData.reminders) {
+        subtitleData.reminders.forEach(rem => {
+          items.reminders.push({
+            type: 'reminder',
+            key: rem.key,
+            title: rem.title || 'Reminder',
+            sectionId: section.id,
+            subtitle,
+            breadcrumb
+          });
+        });
+      }
+
+      // Collect subtasks
+      if (subtitleData.subtasks) {
+        subtitleData.subtasks.forEach(sub => {
+          items.subtasks.push({
+            type: 'subtask',
+            key: sub.key,
+            title: sub.text || 'Link',
+            sectionId: section.id,
+            subtitle,
+            breadcrumb
+          });
+        });
+      }
+    });
+  });
+
+  return items;
+}
+
+// --- Filter linkable items by search query
+function filterLinkableItems(items, query) {
+  if (!query) return items;
+
+  const q = query.toLowerCase();
+  return {
+    icons: items.icons.filter(i => i.title?.toLowerCase().includes(q) || i.breadcrumb?.toLowerCase().includes(q)),
+    reminders: items.reminders.filter(i => i.title?.toLowerCase().includes(q) || i.breadcrumb?.toLowerCase().includes(q)),
+    subtasks: items.subtasks.filter(i => i.title?.toLowerCase().includes(q) || i.breadcrumb?.toLowerCase().includes(q))
+  };
+}
+
+// --- Extract domain name from URL (e.g., telcobridges.atlassian.com -> "Telcobridges Atlassian")
+function extractDomainFromUrl(url) {
+  if (!url) return '';
+  try {
+    // Remove protocol and www
+    let domain = url.replace(/^(https?:\/\/)?(www\.)?/i, '');
+    // Get just the domain part (before any path)
+    domain = domain.split('/')[0];
+    // Split by dots
+    const parts = domain.split('.');
+    // Remove common TLDs from the end
+    const tlds = ['com', 'org', 'net', 'io', 'co', 'edu', 'gov', 'app', 'dev', 'me', 'info', 'biz', 'xyz', 'ai'];
+    while (parts.length > 1 && tlds.includes(parts[parts.length - 1].toLowerCase())) {
+      parts.pop();
+    }
+    // Also remove country TLDs if followed by a common TLD (e.g., .co.uk, .com.au)
+    const countryTlds = ['uk', 'au', 'ca', 'de', 'fr', 'jp', 'cn', 'in', 'br', 'ru', 'nl', 'it', 'es'];
+    if (parts.length > 1 && countryTlds.includes(parts[parts.length - 1].toLowerCase())) {
+      parts.pop();
+    }
+    // Capitalize each remaining part and join with space
+    return parts.map(part => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase()).join(' ');
+  } catch (e) {
+    return '';
+  }
+}
+
+// --- Close item selector modal
+function closeItemSelectorModal() {
+  const modal = $('#item-selector-modal');
+  if (modal) {
+    modal.hidden = true;
+  }
+  currentItemSelectorCallback = null;
+}
+
+// --- Navigate to the source item
+export function navigateToTaskSource(linkedItem) {
+  if (!linkedItem) return;
+
   // Close the modal first
   closeTasksSummaryModal();
 
@@ -1295,89 +2023,23 @@ function navigateToTaskSource(itemType, itemKey, sectionId) {
   setTimeout(() => {
     let targetElement = null;
 
-    if (itemType === 'reminder') {
-      // Look for reminder item with this key (unified or legacy)
-      targetElement = document.querySelector(`.unified-reminder-item[data-key="${itemKey}"]`);
+    if (linkedItem.type === 'icon') {
+      targetElement = document.querySelector(`.icon-btn[data-key="${linkedItem.key}"]`);
+    } else if (linkedItem.type === 'reminder') {
+      targetElement = document.querySelector(`.unified-reminder-item[data-key="${linkedItem.key}"]`);
       if (!targetElement) {
-        targetElement = document.querySelector(`.reminder-item[data-key="${itemKey}"]`);
+        targetElement = document.querySelector(`.reminder-item[data-key="${linkedItem.key}"]`);
       }
-    } else if (itemType === 'subtask') {
-      // Look for subtask item with this key
-      targetElement = document.querySelector(`.unified-subtask-item[data-key="${itemKey}"]`);
+    } else if (linkedItem.type === 'subtask') {
+      targetElement = document.querySelector(`.unified-subtask-item[data-key="${linkedItem.key}"]`);
     }
 
     if (targetElement) {
-      // Scroll to the element
       targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-
-      // Add a brief highlight effect
       targetElement.classList.add('task-highlight');
       setTimeout(() => {
         targetElement.classList.remove('task-highlight');
       }, 2000);
     }
   }, 100);
-}
-
-// --- Cycle task color from summary modal
-function cycleTaskColorInSummary(bubbleEl, itemType, itemKey, sectionId, taskIndex, subtitle) {
-  const data = currentData();
-  const cardData = data[sectionId];
-  if (!cardData) return;
-
-  let actualItem = null;
-
-  // Use subtitle directly if provided
-  if (subtitle && cardData[subtitle]) {
-    const subtitleData = cardData[subtitle];
-    if (itemType === 'reminder' && subtitleData.reminders) {
-      actualItem = subtitleData.reminders.find(r => r.key === itemKey);
-    } else if (itemType === 'subtask' && subtitleData.subtasks) {
-      actualItem = subtitleData.subtasks.find(s => s.key === itemKey);
-    }
-  }
-
-  // Fallback: search all subtitles if not found with direct subtitle access
-  if (!actualItem) {
-    for (const [sub, subtitleData] of Object.entries(cardData)) {
-      if (!subtitleData) continue;
-
-      if (itemType === 'reminder' && subtitleData.reminders) {
-        const found = subtitleData.reminders.find(r => r.key === itemKey);
-        if (found) {
-          actualItem = found;
-          break;
-        }
-      } else if (itemType === 'subtask' && subtitleData.subtasks) {
-        const found = subtitleData.subtasks.find(s => s.key === itemKey);
-        if (found) {
-          actualItem = found;
-          break;
-        }
-      }
-    }
-  }
-
-  if (!actualItem || !actualItem.tasks || !actualItem.tasks[taskIndex]) return;
-
-  const actualTask = actualItem.tasks[taskIndex];
-  const currentColorIndex = COLOR_CYCLE.indexOf(actualTask.color);
-  const nextIndex = (currentColorIndex + 1) % COLOR_CYCLE.length;
-  const newColor = COLOR_CYCLE[nextIndex];
-
-  actualTask.color = newColor;
-
-  // Update bubble class in summary modal
-  bubbleEl.className = `tasks-summary-bubble task-bubble-${newColor}`;
-
-  // Save the change
-  saveModel();
-}
-
-// --- Close tasks summary modal
-export function closeTasksSummaryModal() {
-  const modal = $('#tasks-summary-modal');
-  if (modal) {
-    modal.hidden = true;
-  }
 }

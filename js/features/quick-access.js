@@ -273,11 +273,15 @@ export function isItemSelected(itemData, data) {
     );
   } else if (itemData.type === 'list') {
     return data.quickAccessItems.listItems.some(item =>
-      item.text === itemData.text && item.url === itemData.url && !item.copyText
+      item.type === 'list' && item.text === itemData.text && item.url === itemData.url && !item.copyText
     );
   } else if (itemData.type === 'copyPaste') {
     return data.quickAccessItems.listItems.some(item =>
       item.text === itemData.text && item.copyText === itemData.copyText
+    );
+  } else if (itemData.type === 'reminder') {
+    return data.quickAccessItems.listItems.some(item =>
+      item.type === 'reminder' && item.text === itemData.text && item.url === itemData.url
     );
   }
   return false;
@@ -295,23 +299,38 @@ export function toggleItemQuickAccess(itemData) {
   if (!data.quickAccessItems.listItems) {
     data.quickAccessItems.listItems = [];
   }
+  if (!data.quickAccessItems.icons) {
+    data.quickAccessItems.icons = [];
+  }
 
   const isSelected = isItemSelected(itemData, data);
 
   if (isSelected) {
     // Remove from quick access
-    if (itemData.type === 'list') {
+    if (itemData.type === 'icon') {
+      data.quickAccessItems.icons = data.quickAccessItems.icons.filter(item =>
+        !(item.icon === itemData.icon && item.url === itemData.url)
+      );
+    } else if (itemData.type === 'list') {
       data.quickAccessItems.listItems = data.quickAccessItems.listItems.filter(item =>
-        !(item.text === itemData.text && item.url === itemData.url && !item.copyText)
+        !(item.type === 'list' && item.text === itemData.text && item.url === itemData.url && !item.copyText)
       );
     } else if (itemData.type === 'copyPaste') {
       data.quickAccessItems.listItems = data.quickAccessItems.listItems.filter(item =>
         !(item.text === itemData.text && item.copyText === itemData.copyText)
       );
+    } else if (itemData.type === 'reminder') {
+      data.quickAccessItems.listItems = data.quickAccessItems.listItems.filter(item =>
+        !(item.type === 'reminder' && item.text === itemData.text && item.url === itemData.url)
+      );
     }
   } else {
     // Add to quick access
-    data.quickAccessItems.listItems.push(itemData);
+    if (itemData.type === 'icon') {
+      data.quickAccessItems.icons.push(itemData);
+    } else {
+      data.quickAccessItems.listItems.push(itemData);
+    }
   }
 
   // Re-render quick access if panel is open

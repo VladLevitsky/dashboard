@@ -223,7 +223,29 @@ import {
   toggleListItemTasks,
   closeAllListItemTasks,
   openTasksSummaryModal,
-  closeTasksSummaryModal
+  toggleTasksSummary,
+  closeTasksSummaryModal,
+  // New Eisenhower Matrix functions
+  generateTaskId,
+  getAllTasks,
+  getTaskById,
+  getTasksByColor,
+  getTasksForItem,
+  createTask,
+  updateTask,
+  deleteTask,
+  moveTaskToColor,
+  reorderTaskWithinColor,
+  openAddTaskModal,
+  openEditTaskModal,
+  openItemTasksModal,
+  openItemSelectorModal,
+  collectLinkableItems,
+  navigateToTaskSource,
+  toggleIconTasks,
+  closeAllIconTasks,
+  openIconTasksModal,
+  cleanupTasksForItem
 } from './features/tasks.js';
 
 import {
@@ -483,7 +505,29 @@ window.saveListItemTasksModal = saveListItemTasksModal;
 window.toggleListItemTasks = toggleListItemTasks;
 window.closeAllListItemTasks = closeAllListItemTasks;
 window.openTasksSummaryModal = openTasksSummaryModal;
+window.toggleTasksSummary = toggleTasksSummary;
 window.closeTasksSummaryModal = closeTasksSummaryModal;
+// Eisenhower Matrix task functions
+window.generateTaskId = generateTaskId;
+window.getAllTasks = getAllTasks;
+window.getTaskById = getTaskById;
+window.getTasksByColor = getTasksByColor;
+window.getTasksForItem = getTasksForItem;
+window.createTask = createTask;
+window.updateTask = updateTask;
+window.deleteTask = deleteTask;
+window.moveTaskToColor = moveTaskToColor;
+window.reorderTaskWithinColor = reorderTaskWithinColor;
+window.openAddTaskModal = openAddTaskModal;
+window.openEditTaskModal = openEditTaskModal;
+window.openItemTasksModal = openItemTasksModal;
+window.openItemSelectorModal = openItemSelectorModal;
+window.collectLinkableItems = collectLinkableItems;
+window.navigateToTaskSource = navigateToTaskSource;
+window.toggleIconTasks = toggleIconTasks;
+window.closeAllIconTasks = closeAllIconTasks;
+window.openIconTasksModal = openIconTasksModal;
+window.cleanupTasksForItem = cleanupTasksForItem;
 
 // Image Editor
 window.openImageEditor = openImageEditor;

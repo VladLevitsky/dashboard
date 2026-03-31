@@ -196,6 +196,13 @@ export function openEditPopover(targetEl, values, onDone, cursorPos) {
     editState.currentIconSubtitle = showIconLinks ? values.iconSubtitle : null;
   }
 
+  // Icon tasks button shows if allowIconTasks is true
+  const iconTasksBtn = $('#edit-icon-tasks');
+  if (iconTasksBtn) {
+    const showIconTasks = values.allowIconTasks === true;
+    iconTasksBtn.hidden = !showIconTasks;
+  }
+
   // Make visible to measure height, then position
   pop.hidden = false;
   const popWidth = pop.offsetWidth || 320;

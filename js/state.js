@@ -46,6 +46,9 @@ export const model = {
   collapsedSubtitles: {},  // Track collapsed state of subtitles: { "sectionId:subtitle": true }
   cardNotes: {},  // Notes for each card: { "sectionId": "note text" }
   collapsedCards: {},  // Track collapsed state of cards: { "sectionId": true }
+  // Centralized task storage (Eisenhower Matrix)
+  // Each task: { id, title, color: 'blue'|'yellow'|'orange'|'red', linkedItem: { type, key, sectionId, subtitle }, order }
+  tasks: [],
   header: {
     companyLogoSrc: 'assets/icons/placeholder-logo.svg',
     companyLogoZoom: 1,

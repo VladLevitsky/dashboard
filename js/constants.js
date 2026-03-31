@@ -62,3 +62,12 @@ export const TASKS_ICON_SVG = `
     <circle cx="4.6" cy="5.1" r="1.6"/>
   </svg>
 `;
+
+// Task colors for Eisenhower Matrix (4-quadrant priority system)
+export const TASK_COLORS = ['blue', 'yellow', 'orange', 'red'];
+export const TASK_COLOR_LABELS = {
+  blue: 'Not Urgent & Not Important',
+  yellow: 'Not Urgent & Important',
+  orange: 'Urgent & Not Important',
+  red: 'Urgent & Important'
+};
