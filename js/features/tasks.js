@@ -4,7 +4,7 @@
 
 import { model, editState, currentData, currentSections } from '../state.js';
 import { $, showToast } from '../utils.js';
-import { markDirtyAndSave } from './edit-mode.js';
+import { markDirtyAndSave, handleEditorInput } from './edit-mode.js';
 import { saveModel } from '../core/storage.js';
 import { TASK_COLORS, TASK_COLOR_LABELS, ANIMATION_DELAY_MS, CARD_HIDE_DELAY_MS } from '../constants.js';
 
@@ -1662,6 +1662,9 @@ export function refreshItemTasksModal() {
   }
 }
 
+// --- Description editor state
+let descriptionEditing = false;
+
 // --- Open the task editor modal (shared for add/edit)
 function openTaskEditorModal(taskData, titleText) {
   let modal = $('#task-editor-modal');
@@ -1677,29 +1680,73 @@ function openTaskEditorModal(taskData, titleText) {
           <h4 id="task-editor-title">Add Task</h4>
           <button type="button" class="task-editor-close-btn" title="Close">&times;</button>
         </div>
-        <div class="task-editor-content">
-          <div class="task-editor-field">
-            <label for="task-editor-name">Task Name</label>
-            <input type="text" id="task-editor-name" placeholder="Enter task name..." />
+        <div class="task-editor-body">
+          <div class="task-editor-content">
+            <div class="task-editor-field">
+              <label for="task-editor-name">Task Name</label>
+              <input type="text" id="task-editor-name" placeholder="Enter task name..." />
+            </div>
+            <div class="task-editor-field">
+              <label>Priority</label>
+              <div class="task-editor-colors" id="task-editor-colors"></div>
+            </div>
+            <div class="task-editor-field">
+              <label for="task-editor-link">Task Link (Optional)</label>
+              <input type="url" id="task-editor-link" placeholder="https://example.com" />
+            </div>
+            <div class="task-editor-field">
+              <label>Link to Item (Optional)</label>
+              <div class="task-editor-item-selector" id="task-editor-item-selector">
+                <span class="task-editor-item-text">No item selected</span>
+                <button type="button" class="task-editor-item-btn">Select Item</button>
+              </div>
+            </div>
           </div>
-          <div class="task-editor-field">
-            <label>Priority</label>
-            <div class="task-editor-colors" id="task-editor-colors"></div>
-          </div>
-          <div class="task-editor-field">
-            <label for="task-editor-link">Task Link (Optional)</label>
-            <input type="url" id="task-editor-link" placeholder="https://example.com" />
-          </div>
-          <div class="task-editor-field">
-            <label>Link to Item (Optional)</label>
-            <div class="task-editor-item-selector" id="task-editor-item-selector">
-              <span class="task-editor-item-text">No item selected</span>
-              <button type="button" class="task-editor-item-btn">Select Item</button>
+          <div class="task-editor-description">
+            <label>Description</label>
+            <div class="task-desc-view" id="task-desc-view">
+              <div class="task-desc-view-content" id="task-desc-view-content"></div>
+              <div class="task-desc-view-empty">No description</div>
+            </div>
+            <button type="button" class="task-desc-edit-btn" id="task-desc-edit-btn" title="Edit description">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+              </svg>
+              Edit
+            </button>
+            <div class="task-desc-editor-wrap" id="task-desc-editor-wrap" hidden>
+              <div class="task-desc-toolbar">
+                <button type="button" class="task-desc-toolbar-btn" data-cmd="bold" title="Bold"><strong>B</strong></button>
+                <button type="button" class="task-desc-toolbar-btn" data-cmd="italic" title="Italic"><em>I</em></button>
+                <button type="button" class="task-desc-toolbar-btn" data-cmd="underline" title="Underline"><u>U</u></button>
+                <div class="task-desc-toolbar-divider"></div>
+                <button type="button" class="task-desc-toolbar-btn" data-cmd="insertUnorderedList" title="Bullet List">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3" cy="6" r="1.5" fill="currentColor" stroke="none"/><circle cx="3" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="3" cy="18" r="1.5" fill="currentColor" stroke="none"/></svg>
+                </button>
+                <button type="button" class="task-desc-toolbar-btn" data-cmd="insertOrderedList" title="Numbered List">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><line x1="10" y1="6" x2="21" y2="6"/><line x1="10" y1="12" x2="21" y2="12"/><line x1="10" y1="18" x2="21" y2="18"/><text x="1" y="8" font-size="8" fill="currentColor" stroke="none" font-family="sans-serif">1</text><text x="1" y="14" font-size="8" fill="currentColor" stroke="none" font-family="sans-serif">2</text><text x="1" y="20" font-size="8" fill="currentColor" stroke="none" font-family="sans-serif">3</text></svg>
+                </button>
+              </div>
+              <div id="task-desc-editor" class="task-desc-editor" contenteditable="true"></div>
+              <div class="task-desc-editor-actions">
+                <button type="button" id="task-desc-cancel" class="task-desc-icon-btn" title="Cancel">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+                <button type="button" id="task-desc-save" class="task-desc-icon-btn task-desc-save-btn" title="Save">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                </button>
+              </div>
             </div>
           </div>
         </div>
         <div class="task-editor-actions">
-          ${currentEditingTaskId ? '<button type="button" id="task-editor-delete" class="btn-danger">Delete</button>' : ''}
+          <button type="button" id="task-editor-delete" class="task-editor-delete-btn" hidden title="Delete task">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="3 6 5 6 21 6"></polyline>
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                </svg>
+              </button>
           <div class="task-editor-actions-right">
             <button type="button" id="task-editor-cancel" class="btn-secondary">Cancel</button>
             <button type="button" id="task-editor-save" class="btn-primary">Save</button>
@@ -1712,6 +1759,35 @@ function openTaskEditorModal(taskData, titleText) {
     // Close on backdrop click
     modal.querySelector('.task-editor-backdrop').addEventListener('click', closeTaskEditorModal);
     modal.querySelector('.task-editor-close-btn').addEventListener('click', closeTaskEditorModal);
+
+    // Description toolbar commands
+    modal.querySelectorAll('.task-desc-toolbar-btn').forEach(btn => {
+      btn.addEventListener('mousedown', (e) => e.preventDefault()); // Keep focus in editor
+      btn.addEventListener('click', () => {
+        const cmd = btn.dataset.cmd;
+        document.execCommand(cmd, false, null);
+        $('#task-desc-editor').focus();
+      });
+    });
+
+    // Markdown auto-convert in description editor (reuse Card Notes handler)
+    const descEditor = modal.querySelector('#task-desc-editor');
+    descEditor.addEventListener('input', handleEditorInput);
+
+    // Description edit button
+    $('#task-desc-edit-btn').addEventListener('click', () => {
+      enterDescriptionEditMode();
+    });
+
+    // Description save button
+    $('#task-desc-save').addEventListener('click', () => {
+      saveDescriptionFromEditor();
+    });
+
+    // Description cancel button
+    $('#task-desc-cancel').addEventListener('click', () => {
+      exitDescriptionEditMode();
+    });
   }
 
   // Update title
@@ -1745,6 +1821,32 @@ function openTaskEditorModal(taskData, titleText) {
 
     colorsContainer.appendChild(colorBtn);
   });
+
+  // Populate description - auto-enter edit mode if empty
+  descriptionEditing = false;
+  const descViewContent = $('#task-desc-view-content');
+  const descView = $('#task-desc-view');
+  const descEditBtn = $('#task-desc-edit-btn');
+  const descEditorWrap = $('#task-desc-editor-wrap');
+  const hasDescription = normalizeDescHtml(taskData.description || '');
+  descViewContent.innerHTML = taskData.description || '';
+
+  if (hasDescription) {
+    // Has content: show view mode
+    descView.hidden = false;
+    descEditBtn.hidden = false;
+    descEditorWrap.hidden = true;
+  } else {
+    // Empty: start in edit mode directly
+    descView.hidden = true;
+    descEditBtn.hidden = true;
+    descEditorWrap.hidden = false;
+    descriptionEditing = true;
+    const editor = $('#task-desc-editor');
+    editor.innerHTML = '';
+    // Focus after modal is visible
+    requestAnimationFrame(() => editor.focus());
+  }
 
   // Item selector - hide if opened from an item context
   const itemSelectorField = $('#task-editor-item-selector')?.closest('.task-editor-field');
@@ -1785,18 +1887,29 @@ function openTaskEditorModal(taskData, titleText) {
 
     const link = linkInput.value.trim() || null;
 
+    // Get description - from editor if editing, from view if not
+    const rawDesc = descriptionEditing
+      ? $('#task-desc-editor').innerHTML
+      : $('#task-desc-view-content').innerHTML;
+    const descContent = normalizeDescHtml(rawDesc);
+    const description = descContent || null;
+
     if (currentEditingTaskId) {
       // Update existing task
       updateTask(currentEditingTaskId, {
         title,
         color: selectedColor,
         linkedItem: selectedLinkedItem,
-        link: link
+        link: link,
+        description: description
       });
       showToast('Task updated');
     } else {
       // Create new task
-      createTask(title, selectedColor, selectedLinkedItem, link);
+      const task = createTask(title, selectedColor, selectedLinkedItem, link);
+      if (task && description) {
+        updateTask(task.id, { description });
+      }
       showToast('Task created');
     }
 
@@ -1806,9 +1919,10 @@ function openTaskEditorModal(taskData, titleText) {
     if (window.renderAllSections) window.renderAllSections();
   };
 
-  // Delete button (only for edit mode)
+  // Delete button (show only when editing existing task)
   const deleteBtn = $('#task-editor-delete');
   if (deleteBtn) {
+    deleteBtn.hidden = !currentEditingTaskId;
     deleteBtn.onclick = () => {
       if (confirm('Are you sure you want to delete this task?')) {
         deleteTask(currentEditingTaskId);
@@ -1850,6 +1964,56 @@ function updateItemSelectorText(textEl, linkedItem) {
   }
 }
 
+// --- Normalize contenteditable HTML (strip lone <br>, whitespace-only)
+function normalizeDescHtml(html) {
+  if (!html) return '';
+  const trimmed = html.trim();
+  return (trimmed === '<br>' || trimmed === '') ? '' : trimmed;
+}
+
+// --- Description editor helpers
+function enterDescriptionEditMode() {
+  descriptionEditing = true;
+  const viewContent = $('#task-desc-view-content');
+  const editor = $('#task-desc-editor');
+  const descView = $('#task-desc-view');
+  const descEditBtn = $('#task-desc-edit-btn');
+  const descEditorWrap = $('#task-desc-editor-wrap');
+
+  // Copy current content to editor
+  editor.innerHTML = viewContent.innerHTML || '';
+  descView.hidden = true;
+  descEditBtn.hidden = true;
+  descEditorWrap.hidden = false;
+  editor.focus();
+}
+
+function saveDescriptionFromEditor() {
+  const editor = $('#task-desc-editor');
+  const viewContent = $('#task-desc-view-content');
+  const descView = $('#task-desc-view');
+  const descEditBtn = $('#task-desc-edit-btn');
+  const descEditorWrap = $('#task-desc-editor-wrap');
+
+  // Save editor content to view (normalize empty contenteditable output)
+  viewContent.innerHTML = normalizeDescHtml(editor.innerHTML);
+  descriptionEditing = false;
+  descView.hidden = false;
+  descEditBtn.hidden = false;
+  descEditorWrap.hidden = true;
+}
+
+function exitDescriptionEditMode() {
+  descriptionEditing = false;
+  const descView = $('#task-desc-view');
+  const descEditBtn = $('#task-desc-edit-btn');
+  const descEditorWrap = $('#task-desc-editor-wrap');
+
+  descView.hidden = false;
+  descEditBtn.hidden = false;
+  descEditorWrap.hidden = true;
+}
+
 // --- Close task editor modal
 function closeTaskEditorModal() {
   const modal = $('#task-editor-modal');
@@ -1858,6 +2022,7 @@ function closeTaskEditorModal() {
   }
   currentEditingTaskId = null;
   preLinkedItemContext = null;
+  descriptionEditing = false;
 }
 
 // ============================================================

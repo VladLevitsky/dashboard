@@ -31,7 +31,9 @@
       "Bash(git push:*)",
       "Bash(powershell -Command \"\\(Get-Content ''C:\\\\Users\\\\vlevitsky\\\\Documents\\\\Personal Dashboard - New\\\\CLAUDE.md'' -Raw\\).Length\")",
       "Bash(tail:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "WebSearch",
+      "Bash(start:*)"
     ],
     "deny": [],
     "ask": []

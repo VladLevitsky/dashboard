@@ -2138,10 +2138,10 @@ function updateToolbarState() {
 }
 
 // --- Handle input in contenteditable to auto-convert markdown patterns
-function handleEditorInput(e) {
+export function handleEditorInput(e) {
   const editor = e.target;
   const selection = window.getSelection();
-  if (!selection.rangeCount) return;
+  if (!selection.rangeCount) { console.log('[DEBUG] no selection range'); return; }
 
   const range = selection.getRangeAt(0);
   let node = range.startContainer;
@@ -2149,13 +2149,14 @@ function handleEditorInput(e) {
   // Only process text nodes
   if (node.nodeType !== Node.TEXT_NODE) return;
 
-  const text = node.textContent;
+  // Normalize non-breaking spaces to regular spaces for pattern matching
+  const text = node.textContent.replace(/\u00A0/g, ' ');
 
   // Check for markdown heading patterns (# ## ### etc. followed by space)
   const headingMatch = text.match(/^(#{1,6}) $/);
   if (headingMatch) {
     const level = headingMatch[1].length;
-    const cursorAtEnd = range.startOffset === text.length;
+    const cursorAtEnd = range.startOffset === node.textContent.length;
     if (cursorAtEnd) {
       convertToHeading(editor, node, level, selection);
       return;
@@ -2165,7 +2166,7 @@ function handleEditorInput(e) {
   // Check for numbered list pattern (1. 2. etc.)
   const numberedMatch = text.match(/^(\d+)\. $/);
   if (numberedMatch && !isInList()) {
-    const cursorAtEnd = range.startOffset === text.length;
+    const cursorAtEnd = range.startOffset === node.textContent.length;
     if (cursorAtEnd) {
       convertToNumberedList(editor, node, selection);
       return;
@@ -2188,7 +2189,7 @@ function handleEditorInput(e) {
   if (blockToReplace === editor) {
     // Text is directly in the editor - only proceed if editor is essentially empty
     // (just contains this "* " text)
-    const editorContent = editor.innerHTML.trim();
+    const editorContent = editor.textContent.replace(/\u00A0/g, ' ').trim();
     if (editorContent !== '* ' && editorContent !== '- ') return;
 
     // Create a new list and replace editor contents
@@ -2215,7 +2216,7 @@ function handleEditorInput(e) {
   }
 
   // Verify this block ONLY contains "* " or "- " (no other content)
-  const blockContent = blockToReplace.textContent;
+  const blockContent = blockToReplace.textContent.replace(/\u00A0/g, ' ');
   if (blockContent !== '* ' && blockContent !== '- ') return;
 
   // Create a new list item
