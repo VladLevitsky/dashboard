@@ -51,10 +51,14 @@ export function getTaskById(taskId) {
   return tasks.find(t => t.id === taskId);
 }
 
-// Get tasks by color
+// Get tasks by color (pinned tasks float to top)
 export function getTasksByColor(color) {
   const tasks = getAllTasks();
-  return tasks.filter(t => t.color === color).sort((a, b) => (a.order || 0) - (b.order || 0));
+  return tasks.filter(t => t.color === color).sort((a, b) => {
+    if (a.pinned && !b.pinned) return -1;
+    if (!a.pinned && b.pinned) return 1;
+    return (a.order || 0) - (b.order || 0);
+  });
 }
 
 // Get tasks for a specific item
@@ -84,6 +88,15 @@ function findItemByReference(linkedItem) {
     return subtitleData.subtasks?.find(s => s.key === linkedItem.key);
   }
   return null;
+}
+
+// Toggle task pinned state. Returns true if now pinned.
+export function toggleTaskPinned(taskId) {
+  const task = getTaskById(taskId);
+  if (!task) return false;
+  task.pinned = !task.pinned;
+  saveModel();
+  return task.pinned;
 }
 
 // Create a new task
@@ -168,6 +181,14 @@ export function deleteTask(taskId) {
     const item = findItemByReference(task.linkedItem);
     if (item?.taskIds) {
       item.taskIds = item.taskIds.filter(id => id !== taskId);
+    }
+  }
+
+  // Remove from quick access if pinned
+  if (task.pinned && window.isItemInQuickAccess) {
+    const taskQAData = { type: 'task', taskId: task.id, text: task.title, color: task.color };
+    if (window.isItemInQuickAccess(taskQAData) && window.toggleItemQuickAccess) {
+      window.toggleItemQuickAccess(taskQAData);
     }
   }
 
@@ -1284,7 +1305,7 @@ function createEisenhowerTaskElement(task, color) {
   if (!task) return document.createElement('div');
 
   const taskEl = document.createElement('div');
-  taskEl.className = `eisenhower-task task-bubble-${color}`;
+  taskEl.className = `eisenhower-task task-bubble-${color}${task.pinned ? ' eisenhower-task-pinned' : ''}`;
   taskEl.dataset.taskId = task.id || '';
   taskEl.draggable = true;
 
@@ -1335,8 +1356,61 @@ function createEisenhowerTaskElement(task, color) {
     taskEl.appendChild(iconsContainer);
   }
 
-  // Click to edit
+  // Long-press detection for pinning (view mode)
+  let longPressTimer = null;
+  let longPressTriggered = false;
+
+  const startLongPress = (e) => {
+    if (e.target.closest('.eisenhower-task-link-btn')) return;
+    longPressTriggered = false;
+    longPressTimer = setTimeout(() => {
+      longPressTriggered = true;
+      const isNowPinned = toggleTaskPinned(task.id);
+
+      // Toggle quick access
+      if (window.toggleItemQuickAccess) {
+        const taskQAData = {
+          type: 'task',
+          taskId: task.id,
+          text: task.title,
+          color: task.color
+        };
+        // Sync: add to QA if pinned, remove if unpinned
+        const isInQA = window.isItemInQuickAccess && window.isItemInQuickAccess(taskQAData);
+        if (isNowPinned && !isInQA) {
+          window.toggleItemQuickAccess(taskQAData);
+        } else if (!isNowPinned && isInQA) {
+          window.toggleItemQuickAccess(taskQAData);
+        }
+      }
+
+      showToast(isNowPinned ? 'Task pinned' : 'Task unpinned');
+      renderEisenhowerMatrix();
+    }, 750);
+  };
+
+  const cancelLongPress = () => {
+    if (longPressTimer) {
+      clearTimeout(longPressTimer);
+      longPressTimer = null;
+    }
+  };
+
+  taskEl.addEventListener('mousedown', startLongPress);
+  taskEl.addEventListener('mouseup', cancelLongPress);
+  taskEl.addEventListener('mouseleave', cancelLongPress);
+  taskEl.addEventListener('touchstart', startLongPress, { passive: true });
+  taskEl.addEventListener('touchend', cancelLongPress);
+  taskEl.addEventListener('touchcancel', cancelLongPress);
+
+  // Click to edit (skip if long press triggered)
   taskEl.addEventListener('click', (e) => {
+    if (longPressTriggered) {
+      e.preventDefault();
+      e.stopPropagation();
+      longPressTriggered = false;
+      return;
+    }
     if (e.target.closest('.eisenhower-task-link-btn')) return;
     e.stopPropagation();
     openEditTaskModal(task.id);
@@ -1344,6 +1418,7 @@ function createEisenhowerTaskElement(task, color) {
 
   // Drag events
   taskEl.addEventListener('dragstart', (e) => {
+    cancelLongPress();
     e.stopPropagation();
     taskEl.classList.add('dragging');
     e.dataTransfer.setData('text/plain', task.id);
@@ -1766,6 +1841,7 @@ function openTaskEditorModal(taskData, titleText) {
       btn.addEventListener('click', () => {
         const cmd = btn.dataset.cmd;
         document.execCommand(cmd, false, null);
+        updateTaskToolbarState();
         $('#task-desc-editor').focus();
       });
     });
@@ -1773,6 +1849,21 @@ function openTaskEditorModal(taskData, titleText) {
     // Markdown auto-convert in description editor (reuse Card Notes handler)
     const descEditor = modal.querySelector('#task-desc-editor');
     descEditor.addEventListener('input', handleEditorInput);
+
+    // Update toolbar on keyboard shortcuts (Ctrl+B, Ctrl+I, Ctrl+U)
+    descEditor.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && ['b', 'i', 'u'].includes(e.key.toLowerCase())) {
+        setTimeout(updateTaskToolbarState, 0);
+      }
+    });
+
+    // Update toolbar on selection change
+    document.addEventListener('selectionchange', () => {
+      const modal = $('#task-editor-modal');
+      if (modal && !modal.hidden) {
+        updateTaskToolbarState();
+      }
+    });
 
     // Description edit button
     $('#task-desc-edit-btn').addEventListener('click', () => {
@@ -2015,6 +2106,17 @@ function exitDescriptionEditMode() {
 }
 
 // --- Close task editor modal
+function updateTaskToolbarState() {
+  const btns = document.querySelectorAll('.task-desc-toolbar-btn');
+  btns.forEach(btn => {
+    const cmd = btn.dataset.cmd;
+    if (cmd) {
+      const isActive = document.queryCommandState(cmd);
+      btn.classList.toggle('active', isActive);
+    }
+  });
+}
+
 function closeTaskEditorModal() {
   const modal = $('#task-editor-modal');
   if (modal) {

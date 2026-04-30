@@ -1822,6 +1822,28 @@ export function editNoteFromViewer() {
   enterNotepadEditMode(noteKey);
 }
 
+// --- Copy note from viewer (preserves rich formatting)
+export function copyNoteFromViewer() {
+  const contentEl = $('#note-viewer-content');
+  if (!contentEl) return;
+
+  const htmlContent = contentEl.innerHTML;
+  const plainText = contentEl.innerText;
+
+  if (navigator.clipboard && window.ClipboardItem) {
+    const htmlBlob = new Blob([htmlContent], { type: 'text/html' });
+    const textBlob = new Blob([plainText], { type: 'text/plain' });
+    navigator.clipboard.write([
+      new ClipboardItem({ 'text/html': htmlBlob, 'text/plain': textBlob })
+    ]).then(() => showToast('Note copied'))
+      .catch(() => {
+        navigator.clipboard.writeText(plainText).then(() => showToast('Note copied as text'));
+      });
+  } else {
+    navigator.clipboard.writeText(plainText).then(() => showToast('Note copied as text'));
+  }
+}
+
 // --- Delete note from viewer
 export function deleteNoteFromViewer() {
   const noteKey = currentNoteKey;
@@ -1940,6 +1962,10 @@ export function wireNotepadEvents() {
   }
   if (viewerDeleteBtn) {
     viewerDeleteBtn.addEventListener('click', deleteNoteFromViewer);
+  }
+  const viewerCopyBtn = $('#note-viewer-copy');
+  if (viewerCopyBtn) {
+    viewerCopyBtn.addEventListener('click', copyNoteFromViewer);
   }
   if (viewerBackdrop) {
     viewerBackdrop.addEventListener('click', closeNoteViewer);
@@ -2174,10 +2200,12 @@ export function handleEditorInput(e) {
   }
 
   // Check for bullet list patterns (* or -)
-  if (text !== '* ' && text !== '- ') return;
+  const bulletMatch = text.match(/^[*\-] $/);
+  if (!bulletMatch) return;
 
-  // Cursor must be at the end (position 2)
-  if (range.startOffset !== 2) return;
+  // Cursor must be at the end
+  const cursorAtEndBullet = range.startOffset === node.textContent.length;
+  if (!cursorAtEndBullet) return;
 
   // Check if we're not already in a list
   if (isInList()) return;
@@ -2190,7 +2218,7 @@ export function handleEditorInput(e) {
     // Text is directly in the editor - only proceed if editor is essentially empty
     // (just contains this "* " text)
     const editorContent = editor.textContent.replace(/\u00A0/g, ' ').trim();
-    if (editorContent !== '* ' && editorContent !== '- ') return;
+    if (!/^[*\-]$/.test(editorContent)) return;
 
     // Create a new list and replace editor contents
     const ul = document.createElement('ul');
@@ -2217,7 +2245,7 @@ export function handleEditorInput(e) {
 
   // Verify this block ONLY contains "* " or "- " (no other content)
   const blockContent = blockToReplace.textContent.replace(/\u00A0/g, ' ');
-  if (blockContent !== '* ' && blockContent !== '- ') return;
+  if (!/^[*\-] $/.test(blockContent)) return;
 
   // Create a new list item
   const ul = document.createElement('ul');

@@ -1553,10 +1553,10 @@ h2, h3 { margin: 0 0 16px; }
 /* Persistent pulsating glow for icons in Quick Access */
 @keyframes quickAccessGlow {
   0%, 100% {
-    box-shadow: 0 0 8px 5px rgba(37, 99, 235, 0.1);
+    box-shadow: 0 0 5px 2px rgba(37, 99, 235, 0.18);
   }
   50% {
-    box-shadow: 0 0 14px 9px rgba(37, 99, 235, 0.16);
+    box-shadow: 0 0 10px 4px rgba(37, 99, 235, 0.3);
   }
 }
 
@@ -7192,12 +7192,18 @@ body.stacked-mode .gap-add-btn {
   padding-bottom: 12px;
   border-bottom: 1px solid #e5e7eb;
 }
+.note-viewer-title-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  overflow: hidden;
+}
 .note-viewer-header h4 {
   font-size: 16px;
   font-weight: 600;
   color: var(--text);
   margin: 0;
-  flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -7209,6 +7215,7 @@ body.stacked-mode .gap-add-btn {
 }
 .note-viewer-edit,
 .note-viewer-delete,
+.note-viewer-copy,
 .note-viewer-close {
   background: none;
   border: none;
@@ -7223,6 +7230,7 @@ body.stacked-mode .gap-add-btn {
   border-radius: 4px;
 }
 .note-viewer-edit:hover,
+.note-viewer-copy:hover,
 .note-viewer-close:hover {
   opacity: 1;
 }
@@ -7231,7 +7239,8 @@ body.stacked-mode .gap-add-btn {
   color: var(--danger);
 }
 .note-viewer-edit svg,
-.note-viewer-delete svg {
+.note-viewer-delete svg,
+.note-viewer-copy svg {
   width: 16px;
   height: 16px;
 }
@@ -7866,6 +7875,95 @@ body[data-theme="dark"][data-style="glass"][data-glass-theme="sunset"] .tasks-su
   display: block;
 }
 
+/* Pinned task styling - lighter card shade + tighter pulsating glow */
+@keyframes pinnedTaskGlow-blue {
+  0%, 100% { box-shadow: 0 0 6px 2px rgba(59, 130, 246, 0.1); }
+  50% { box-shadow: 0 0 12px 5px rgba(59, 130, 246, 0.2); }
+}
+@keyframes pinnedTaskGlow-yellow {
+  0%, 100% { box-shadow: 0 0 6px 2px rgba(234, 179, 8, 0.1); }
+  50% { box-shadow: 0 0 12px 5px rgba(234, 179, 8, 0.2); }
+}
+@keyframes pinnedTaskGlow-orange {
+  0%, 100% { box-shadow: 0 0 6px 2px rgba(249, 115, 22, 0.1); }
+  50% { box-shadow: 0 0 12px 5px rgba(249, 115, 22, 0.2); }
+}
+@keyframes pinnedTaskGlow-red {
+  0%, 100% { box-shadow: 0 0 6px 2px rgba(239, 68, 68, 0.1); }
+  50% { box-shadow: 0 0 12px 5px rgba(239, 68, 68, 0.2); }
+}
+
+.eisenhower-priority-card-blue .eisenhower-task-pinned {
+  background: #e8f2ff;
+  border-color: rgba(59, 130, 246, 0.3);
+  animation: pinnedTaskGlow-blue 3s ease-in-out infinite;
+}
+.eisenhower-priority-card-yellow .eisenhower-task-pinned {
+  background: #fef8e1;
+  border-color: rgba(234, 179, 8, 0.3);
+  animation: pinnedTaskGlow-yellow 3s ease-in-out infinite;
+}
+.eisenhower-priority-card-orange .eisenhower-task-pinned {
+  background: #fff4ea;
+  border-color: rgba(249, 115, 22, 0.3);
+  animation: pinnedTaskGlow-orange 3s ease-in-out infinite;
+}
+.eisenhower-priority-card-red .eisenhower-task-pinned {
+  background: #feeced;
+  border-color: rgba(239, 68, 68, 0.3);
+  animation: pinnedTaskGlow-red 3s ease-in-out infinite;
+}
+
+[data-theme="dark"] .eisenhower-priority-card-blue .eisenhower-task-pinned {
+  background: #243f6a;
+  border-color: rgba(59, 130, 246, 0.4);
+}
+[data-theme="dark"] .eisenhower-priority-card-yellow .eisenhower-task-pinned {
+  background: #4d2a0c;
+  border-color: rgba(234, 179, 8, 0.4);
+}
+[data-theme="dark"] .eisenhower-priority-card-orange .eisenhower-task-pinned {
+  background: #4e1c0e;
+  border-color: rgba(249, 115, 22, 0.4);
+}
+[data-theme="dark"] .eisenhower-priority-card-red .eisenhower-task-pinned {
+  background: #511212;
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+.eisenhower-task-pinned:hover {
+  animation-play-state: paused;
+}
+
+/* Quick Access task items */
+.quick-access-task {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.quick-access-task:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+[data-theme="dark"] .quick-access-task:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+.quick-access-task-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.quick-access-task-blue .quick-access-task-dot { background: #3b82f6; }
+.quick-access-task-yellow .quick-access-task-dot { background: #eab308; }
+.quick-access-task-orange .quick-access-task-dot { background: #f97316; }
+.quick-access-task-red .quick-access-task-dot { background: #ef4444; }
+
 /* Task Link Bubble */
 .task-link-bubble {
   position: fixed;
@@ -8304,6 +8402,11 @@ body[data-theme="dark"][data-style="glass"][data-glass-theme="sunset"] .tasks-su
 .task-desc-toolbar-btn:hover {
   background: rgba(0, 0, 0, 0.06);
   color: var(--text);
+}
+
+.task-desc-toolbar-btn.active {
+  background: var(--brand);
+  color: white;
 }
 
 [data-theme="dark"] .task-desc-toolbar-btn:hover {

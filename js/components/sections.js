@@ -1928,7 +1928,7 @@ function createUnifiedIconButton(item, sectionId, subtitle, subtitleColor) {
           window.showToast(isNowInQuickAccess ? 'Added to Quick Access' : 'Removed from Quick Access');
         }
       }
-    }, 1500);
+    }, 750);
   };
 
   const cancelLongPress = () => {

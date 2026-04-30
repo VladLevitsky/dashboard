@@ -45,6 +45,7 @@ import {
   closeNoteViewer,
   editNoteFromViewer,
   deleteNoteFromViewer,
+  copyNoteFromViewer,
   openNoteColorPicker,
   wireMoveButtonEvents
 } from './features/edit-mode.js';
@@ -245,7 +246,8 @@ import {
   toggleIconTasks,
   closeAllIconTasks,
   openIconTasksModal,
-  cleanupTasksForItem
+  cleanupTasksForItem,
+  toggleTaskPinned
 } from './features/tasks.js';
 
 import {
@@ -528,6 +530,7 @@ window.toggleIconTasks = toggleIconTasks;
 window.closeAllIconTasks = closeAllIconTasks;
 window.openIconTasksModal = openIconTasksModal;
 window.cleanupTasksForItem = cleanupTasksForItem;
+window.toggleTaskPinned = toggleTaskPinned;
 
 // Image Editor
 window.openImageEditor = openImageEditor;
@@ -552,6 +555,7 @@ window.openNoteViewer = openNoteViewer;
 window.closeNoteViewer = closeNoteViewer;
 window.editNoteFromViewer = editNoteFromViewer;
 window.deleteNoteFromViewer = deleteNoteFromViewer;
+window.copyNoteFromViewer = copyNoteFromViewer;
 window.openNoteColorPicker = openNoteColorPicker;
 window.wireMoveButtonEvents = wireMoveButtonEvents;
 
