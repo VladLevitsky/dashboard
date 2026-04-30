@@ -63,7 +63,8 @@ import {
   openTasksSummaryModal,
   toggleTasksSummary,
   closeTasksSummaryModal,
-  openAddTaskModal
+  openAddTaskModal,
+  openIdeasModal
 } from '../features/tasks.js';
 import {
   renderBreakdownRows,
@@ -1098,6 +1099,12 @@ export function wireUI() {
   const addTaskBtn = $('#add-task-btn');
   if (addTaskBtn) {
     addTaskBtn.addEventListener('click', () => openAddTaskModal());
+  }
+
+  // Ideas button in Eisenhower card header
+  const ideasBtn = $('#ideas-btn');
+  if (ideasBtn) {
+    ideasBtn.addEventListener('click', openIdeasModal);
   }
 
   // Quick access event handlers

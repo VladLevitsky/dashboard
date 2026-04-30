@@ -2128,6 +2128,299 @@ function closeTaskEditorModal() {
 }
 
 // ============================================================
+// IDEAS MODAL - Quick idea capture with title + description
+// ============================================================
+
+let ideasEditingId = null;
+
+// Get all ideas from model
+function getAllIdeas() {
+  const data = currentData();
+  return data.ideas || [];
+}
+
+// Create a new idea
+function createIdea(title, description) {
+  const data = currentData();
+  data.ideas = data.ideas || [];
+  const idea = {
+    id: 'idea-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9),
+    title: title || '',
+    description: description || ''
+  };
+  data.ideas.push(idea);
+  saveModel();
+  return idea;
+}
+
+// Update an idea
+function updateIdea(ideaId, updates) {
+  const ideas = getAllIdeas();
+  const idea = ideas.find(i => i.id === ideaId);
+  if (!idea) return null;
+  Object.assign(idea, updates);
+  saveModel();
+  return idea;
+}
+
+// Delete an idea
+function deleteIdea(ideaId) {
+  const data = currentData();
+  const ideas = data.ideas || [];
+  const idx = ideas.findIndex(i => i.id === ideaId);
+  if (idx === -1) return false;
+  ideas.splice(idx, 1);
+  saveModel();
+  return true;
+}
+
+// Update toolbar active states for ideas editor
+function updateIdeasToolbarState() {
+  const modal = $('#ideas-modal');
+  if (!modal || modal.hidden) return;
+  modal.querySelectorAll('.ideas-toolbar-btn').forEach(btn => {
+    const cmd = btn.dataset.cmd;
+    if (cmd) {
+      btn.classList.toggle('active', document.queryCommandState(cmd));
+    }
+  });
+}
+
+export function openIdeasModal() {
+  let modal = $('#ideas-modal');
+
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'ideas-modal';
+    modal.className = 'ideas-modal';
+    modal.innerHTML = `
+      <div class="ideas-backdrop"></div>
+      <div class="ideas-dialog">
+        <div class="ideas-header">
+          <h4 id="ideas-title">Ideas</h4>
+          <button type="button" class="ideas-close-btn" title="Close">&times;</button>
+        </div>
+        <div class="ideas-items" id="ideas-items"></div>
+        <div class="ideas-editor-section" id="ideas-editor-section">
+          <div class="ideas-editor-field">
+            <input type="text" id="ideas-title-input" class="ideas-title-input" placeholder="Idea title..." />
+          </div>
+          <div class="ideas-editor-toolbar">
+            <button type="button" class="ideas-toolbar-btn" data-cmd="bold" title="Bold"><strong>B</strong></button>
+            <button type="button" class="ideas-toolbar-btn" data-cmd="italic" title="Italic"><em>I</em></button>
+            <button type="button" class="ideas-toolbar-btn" data-cmd="underline" title="Underline"><u>U</u></button>
+            <div class="task-desc-toolbar-divider"></div>
+            <button type="button" class="ideas-toolbar-btn" data-cmd="insertUnorderedList" title="Bullet List">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3" cy="6" r="1.5" fill="currentColor" stroke="none"/><circle cx="3" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="3" cy="18" r="1.5" fill="currentColor" stroke="none"/></svg>
+            </button>
+            <button type="button" class="ideas-toolbar-btn" data-cmd="insertOrderedList" title="Numbered List">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><line x1="10" y1="6" x2="21" y2="6"/><line x1="10" y1="12" x2="21" y2="12"/><line x1="10" y1="18" x2="21" y2="18"/><text x="1" y="8" font-size="8" fill="currentColor" stroke="none" font-family="sans-serif">1</text><text x="1" y="14" font-size="8" fill="currentColor" stroke="none" font-family="sans-serif">2</text><text x="1" y="20" font-size="8" fill="currentColor" stroke="none" font-family="sans-serif">3</text></svg>
+            </button>
+          </div>
+          <div id="ideas-editor" class="ideas-editor" contenteditable="true"></div>
+          <div class="ideas-editor-actions">
+            <div class="ideas-editor-actions-right">
+              <button type="button" id="ideas-save-btn" class="btn-primary">Save</button>
+            </div>
+          </div>
+        </div>
+        <div class="ideas-view-section" id="ideas-view-section" hidden>
+          <h3 class="ideas-view-title" id="ideas-view-title"></h3>
+          <div class="ideas-view-content" id="ideas-view-content"></div>
+          <div class="ideas-view-actions">
+            <button type="button" id="ideas-view-edit" class="ideas-view-icon-btn" title="Edit">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+              </svg>
+            </button>
+            <button type="button" id="ideas-view-copy" class="ideas-view-icon-btn" title="Copy">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+              </svg>
+            </button>
+            <button type="button" id="ideas-view-delete" class="ideas-view-icon-btn ideas-view-icon-danger" title="Delete">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="3 6 5 6 21 6"></polyline>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+              </svg>
+            </button>
+            <button type="button" id="ideas-view-close" class="ideas-view-icon-btn" title="Close">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+
+    modal.querySelector('.ideas-backdrop').addEventListener('click', closeIdeasModal);
+    modal.querySelector('.ideas-close-btn').addEventListener('click', closeIdeasModal);
+
+    // Toolbar commands
+    modal.querySelectorAll('.ideas-toolbar-btn').forEach(btn => {
+      btn.addEventListener('mousedown', (e) => e.preventDefault());
+      btn.addEventListener('click', () => {
+        const cmd = btn.dataset.cmd;
+        document.execCommand(cmd, false, null);
+        updateIdeasToolbarState();
+        $('#ideas-editor').focus();
+      });
+    });
+
+    // Markdown auto-convert + toolbar state update
+    const editorEl = modal.querySelector('#ideas-editor');
+    editorEl.addEventListener('input', handleEditorInput);
+    editorEl.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && ['b', 'i', 'u'].includes(e.key.toLowerCase())) {
+        setTimeout(updateIdeasToolbarState, 0);
+      }
+    });
+
+    // Update toolbar on selection change
+    document.addEventListener('selectionchange', updateIdeasToolbarState);
+
+    $('#ideas-save-btn').addEventListener('click', saveCurrentIdea);
+
+    // View mode buttons
+    $('#ideas-view-edit').addEventListener('click', () => {
+      const idea = getAllIdeas().find(i => i.id === ideasEditingId);
+      if (idea) showIdeasEditorView(idea);
+    });
+
+    $('#ideas-view-copy').addEventListener('click', () => {
+      const title = $('#ideas-view-title').textContent || '';
+      const content = $('#ideas-view-content').innerText || '';
+      const text = title + (content ? '\n\n' + content : '');
+      navigator.clipboard.writeText(text).then(() => {
+        showToast('Copied to clipboard');
+      });
+    });
+
+    $('#ideas-view-delete').addEventListener('click', () => {
+      if (ideasEditingId && confirm('Delete this idea?')) {
+        deleteIdea(ideasEditingId);
+        ideasEditingId = null;
+        showToast('Idea deleted');
+        showIdeasMainView();
+      }
+    });
+
+    $('#ideas-view-close').addEventListener('click', () => {
+      ideasEditingId = null;
+      showIdeasMainView();
+    });
+  }
+
+  ideasEditingId = null;
+  showIdeasMainView();
+  modal.hidden = false;
+}
+
+// Main view: list of saved ideas + editor for new idea below
+function showIdeasMainView() {
+  $('#ideas-items').hidden = false;
+  $('#ideas-editor-section').hidden = false;
+  $('#ideas-view-section').hidden = true;
+  $('#ideas-title').textContent = 'Ideas';
+
+  // Clear editor for new idea
+  $('#ideas-title-input').value = '';
+  $('#ideas-editor').innerHTML = '';
+  ideasEditingId = null;
+
+  renderIdeasList();
+}
+
+// View mode: replaces entire modal content with read-only idea
+function showIdeasViewMode(idea) {
+  if (!idea) return;
+  ideasEditingId = idea.id;
+
+  $('#ideas-items').hidden = true;
+  $('#ideas-editor-section').hidden = true;
+  $('#ideas-view-section').hidden = false;
+  $('#ideas-title').textContent = 'Ideas';
+
+  $('#ideas-view-title').textContent = idea.title || 'Untitled';
+  $('#ideas-view-content').innerHTML = idea.description || '<span style="color:var(--muted)">No description</span>';
+}
+
+// Editor view for editing an existing idea
+function showIdeasEditorView(idea) {
+  $('#ideas-items').hidden = false;
+  $('#ideas-editor-section').hidden = false;
+  $('#ideas-view-section').hidden = true;
+
+  ideasEditingId = idea.id;
+  $('#ideas-title').textContent = 'Ideas';
+  $('#ideas-title-input').value = idea.title || '';
+  $('#ideas-editor').innerHTML = idea.description || '';
+
+  renderIdeasList();
+  requestAnimationFrame(() => $('#ideas-title-input').focus());
+}
+
+function saveCurrentIdea() {
+  const titleInput = $('#ideas-title-input');
+  const title = titleInput.value.trim();
+  if (!title) {
+    showToast('Please enter a title');
+    titleInput.focus();
+    return;
+  }
+
+  const editor = $('#ideas-editor');
+  const desc = normalizeDescHtml(editor.innerHTML);
+
+  if (ideasEditingId) {
+    updateIdea(ideasEditingId, { title, description: desc });
+    showToast('Idea updated');
+  } else {
+    createIdea(title, desc);
+    showToast('Idea saved');
+  }
+
+  ideasEditingId = null;
+  showIdeasMainView();
+}
+
+function renderIdeasList() {
+  const container = $('#ideas-items');
+  if (!container) return;
+  container.innerHTML = '';
+
+  const ideas = getAllIdeas();
+  if (ideas.length === 0) return;
+
+  ideas.forEach(idea => {
+    const item = document.createElement('div');
+    item.className = 'ideas-item';
+
+    const titleSpan = document.createElement('span');
+    titleSpan.className = 'ideas-item-title';
+    titleSpan.textContent = idea.title || 'Untitled';
+    item.appendChild(titleSpan);
+
+    item.addEventListener('click', () => {
+      showIdeasViewMode(idea);
+    });
+
+    container.appendChild(item);
+  });
+}
+
+function closeIdeasModal() {
+  const modal = $('#ideas-modal');
+  if (modal) modal.hidden = true;
+  ideasEditingId = null;
+}
+
+// ============================================================
 // ITEM SELECTOR MODAL
 // ============================================================
 

@@ -428,6 +428,7 @@ export function saveModel() {
     quickAccessItems: data.quickAccessItems,
     displayMode: data.displayMode,
     tasks: data.tasks || [],
+    ideas: data.ideas || [],
   };
 
   // Add ALL sections - all are now unified format
@@ -582,6 +583,11 @@ export async function restoreModel() {
     // Restore centralized tasks (Eisenhower Matrix)
     if (saved.tasks && Array.isArray(saved.tasks)) {
       model.tasks = saved.tasks;
+    }
+
+    // Restore ideas
+    if (saved.ideas && Array.isArray(saved.ideas)) {
+      model.ideas = saved.ideas;
     }
 
     // Restore ALL section data (all are now unified format after migration)
@@ -784,6 +790,9 @@ export function deepMergeModel(target, source) {
   }
   if (source.tasks && Array.isArray(source.tasks)) {
     target.tasks = JSON.parse(JSON.stringify(source.tasks));
+  }
+  if (source.ideas && Array.isArray(source.ideas)) {
+    target.ideas = JSON.parse(JSON.stringify(source.ideas));
   }
 
   // Handle ALL section data (unified format - objects keyed by section ID)
