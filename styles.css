@@ -1550,22 +1550,9 @@ h2, h3 { margin: 0 0 16px; }
   height: 48px;
 }
 
-/* Persistent pulsating glow for icons in Quick Access */
-@keyframes quickAccessGlow {
-  0%, 100% {
-    box-shadow: 0 0 5px 2px rgba(37, 99, 235, 0.18);
-  }
-  50% {
-    box-shadow: 0 0 10px 4px rgba(37, 99, 235, 0.3);
-  }
-}
-
+/* Icons in Quick Access get SVG border via JS */
 .icon-button.icon-in-quick-access {
-  animation: quickAccessGlow 3s ease-in-out infinite;
-}
-
-[data-theme="dark"] .icon-button.icon-in-quick-access {
-  animation: quickAccessGlow 3s ease-in-out infinite;
+  border-color: transparent;
 }
 
 .section-icon img { width: 66px; height: 66px; }
@@ -8049,35 +8036,35 @@ body[data-theme="dark"][data-style="glass"][data-glass-theme="sunset"] .tasks-su
 }
 
 .eisenhower-priority-card-blue {
-  background: #dbeafe;
+  background: #c4d9fc;
 }
 
 .eisenhower-priority-card-yellow {
-  background: #fef3c7;
+  background: #fce9a0;
 }
 
 .eisenhower-priority-card-orange {
-  background: #ffedd5;
+  background: #fdddb3;
 }
 
 .eisenhower-priority-card-red {
-  background: #fee2e2;
+  background: #fccece;
 }
 
 [data-theme="dark"] .eisenhower-priority-card-blue {
-  background: #1e3a5f;
+  background: #17305a;
 }
 
 [data-theme="dark"] .eisenhower-priority-card-yellow {
-  background: #422006;
+  background: #3d1c04;
 }
 
 [data-theme="dark"] .eisenhower-priority-card-orange {
-  background: #431407;
+  background: #3c1105;
 }
 
 [data-theme="dark"] .eisenhower-priority-card-red {
-  background: #450a0a;
+  background: #3f0808;
 }
 
 .eisenhower-card-header {
@@ -8187,64 +8174,41 @@ body[data-theme="dark"][data-style="glass"][data-glass-theme="sunset"] .tasks-su
   display: block;
 }
 
-/* Pinned task styling - lighter card shade + tighter pulsating glow */
-@keyframes pinnedTaskGlow-blue {
-  0%, 100% { box-shadow: 0 0 4px 1px rgba(59, 130, 246, 0.1); }
-  50% { box-shadow: 0 0 8px 3px rgba(59, 130, 246, 0.2); }
-}
-@keyframes pinnedTaskGlow-yellow {
-  0%, 100% { box-shadow: 0 0 4px 1px rgba(234, 179, 8, 0.1); }
-  50% { box-shadow: 0 0 8px 3px rgba(234, 179, 8, 0.2); }
-}
-@keyframes pinnedTaskGlow-orange {
-  0%, 100% { box-shadow: 0 0 4px 1px rgba(249, 115, 22, 0.1); }
-  50% { box-shadow: 0 0 8px 3px rgba(249, 115, 22, 0.2); }
-}
-@keyframes pinnedTaskGlow-red {
-  0%, 100% { box-shadow: 0 0 4px 1px rgba(239, 68, 68, 0.1); }
-  50% { box-shadow: 0 0 8px 3px rgba(239, 68, 68, 0.2); }
+/* Pinned task backgrounds */
+.eisenhower-task-pinned { border-color: transparent; }
+.eisenhower-priority-card-blue .eisenhower-task-pinned { background: #dceafd; }
+.eisenhower-priority-card-yellow .eisenhower-task-pinned { background: #fcf1c8; }
+.eisenhower-priority-card-orange .eisenhower-task-pinned { background: #fee8d3; }
+.eisenhower-priority-card-red .eisenhower-task-pinned { background: #fddede; }
+
+[data-theme="dark"] .eisenhower-priority-card-blue .eisenhower-task-pinned { background: #243f6a; }
+[data-theme="dark"] .eisenhower-priority-card-yellow .eisenhower-task-pinned { background: #4d2a0c; }
+[data-theme="dark"] .eisenhower-priority-card-orange .eisenhower-task-pinned { background: #4e1c0e; }
+[data-theme="dark"] .eisenhower-priority-card-red .eisenhower-task-pinned { background: #511212; }
+
+/* SVG animated border */
+.animated-border-svg {
+  position: absolute;
+  inset: -1.25px;
+  width: calc(100% + 2.5px);
+  height: calc(100% + 2.5px);
+  pointer-events: none;
+  overflow: visible;
 }
 
-.eisenhower-priority-card-blue .eisenhower-task-pinned {
-  background: #e8f2ff;
-  border-color: rgba(59, 130, 246, 0.3);
-  animation: pinnedTaskGlow-blue 3s ease-in-out infinite;
-}
-.eisenhower-priority-card-yellow .eisenhower-task-pinned {
-  background: #fef8e1;
-  border-color: rgba(234, 179, 8, 0.3);
-  animation: pinnedTaskGlow-yellow 3s ease-in-out infinite;
-}
-.eisenhower-priority-card-orange .eisenhower-task-pinned {
-  background: #fff4ea;
-  border-color: rgba(249, 115, 22, 0.3);
-  animation: pinnedTaskGlow-orange 3s ease-in-out infinite;
-}
-.eisenhower-priority-card-red .eisenhower-task-pinned {
-  background: #feeced;
-  border-color: rgba(239, 68, 68, 0.3);
-  animation: pinnedTaskGlow-red 3s ease-in-out infinite;
+.animated-border-light {
+  fill: none;
+  stroke-linecap: round;
 }
 
-[data-theme="dark"] .eisenhower-priority-card-blue .eisenhower-task-pinned {
-  background: #243f6a;
-  border-color: rgba(59, 130, 246, 0.4);
-}
-[data-theme="dark"] .eisenhower-priority-card-yellow .eisenhower-task-pinned {
-  background: #4d2a0c;
-  border-color: rgba(234, 179, 8, 0.4);
-}
-[data-theme="dark"] .eisenhower-priority-card-orange .eisenhower-task-pinned {
-  background: #4e1c0e;
-  border-color: rgba(249, 115, 22, 0.4);
-}
-[data-theme="dark"] .eisenhower-priority-card-red .eisenhower-task-pinned {
-  background: #511212;
-  border-color: rgba(239, 68, 68, 0.4);
-}
-
-.eisenhower-task-pinned:hover {
-  animation-play-state: paused;
+@keyframes borderDashTravel {
+  0% { stroke-dashoffset: 0; }
+  30% { stroke-dashoffset: -6; }
+  55% { stroke-dashoffset: -14; }
+  70% { stroke-dashoffset: -24; }
+  82% { stroke-dashoffset: -44; }
+  90% { stroke-dashoffset: -62; }
+  100% { stroke-dashoffset: -100; }
 }
 
 /* Quick Access task items */

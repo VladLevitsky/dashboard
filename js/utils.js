@@ -35,6 +35,57 @@ export function generateKey(prefix, collection) {
   return newKey;
 }
 
+// --- SVG animated border for pinned/quick-access items
+// Uses real SVG stroke (not CSS pseudo-elements) for perfectly uniform borders
+export function createAnimatedBorder(borderColor, lightColor, cornerRadius, strokeWidth = 2.5) {
+  const ns = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(ns, 'svg');
+  svg.setAttribute('class', 'animated-border-svg');
+  svg.setAttribute('preserveAspectRatio', 'none');
+
+  // Base border - solid stroke
+  const baseRect = document.createElementNS(ns, 'rect');
+  baseRect.setAttribute('x', strokeWidth / 2);
+  baseRect.setAttribute('y', strokeWidth / 2);
+  baseRect.setAttribute('width', `calc(100% - ${strokeWidth}px)`);
+  baseRect.setAttribute('height', `calc(100% - ${strokeWidth}px)`);
+  baseRect.setAttribute('rx', cornerRadius);
+  baseRect.setAttribute('ry', cornerRadius);
+  baseRect.setAttribute('fill', 'none');
+  baseRect.setAttribute('stroke', borderColor);
+  baseRect.setAttribute('stroke-width', strokeWidth);
+  baseRect.setAttribute('pathLength', '100');
+  // Use CSS for calc-based dimensions
+  baseRect.style.width = `calc(100% - ${strokeWidth}px)`;
+  baseRect.style.height = `calc(100% - ${strokeWidth}px)`;
+  baseRect.style.x = `${strokeWidth / 2}px`;
+  baseRect.style.y = `${strokeWidth / 2}px`;
+
+  // Light traveling stroke - dashed, animated
+  const lightRect = document.createElementNS(ns, 'rect');
+  lightRect.setAttribute('x', strokeWidth / 2);
+  lightRect.setAttribute('y', strokeWidth / 2);
+  lightRect.setAttribute('rx', cornerRadius);
+  lightRect.setAttribute('ry', cornerRadius);
+  lightRect.setAttribute('fill', 'none');
+  lightRect.setAttribute('stroke', lightColor);
+  lightRect.setAttribute('stroke-width', strokeWidth);
+  lightRect.setAttribute('stroke-linecap', 'round');
+  lightRect.setAttribute('pathLength', '100');
+  lightRect.setAttribute('stroke-dasharray', '15 85');
+  lightRect.setAttribute('class', 'animated-border-light');
+  lightRect.style.width = `calc(100% - ${strokeWidth}px)`;
+  lightRect.style.height = `calc(100% - ${strokeWidth}px)`;
+  lightRect.style.x = `${strokeWidth / 2}px`;
+  lightRect.style.y = `${strokeWidth / 2}px`;
+  lightRect.style.animation = 'borderDashTravel 3s linear infinite';
+
+  svg.appendChild(baseRect);
+  svg.appendChild(lightRect);
+
+  return svg;
+}
+
 // --- Toast notification
 export function showToast(message, duration = 2500) {
   const toast = $('#toast');

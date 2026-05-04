@@ -3,7 +3,7 @@
 // Tasks are color-coded (blue/yellow/orange/red) representing urgency and importance
 
 import { model, editState, currentData, currentSections } from '../state.js';
-import { $, showToast } from '../utils.js';
+import { $, showToast, createAnimatedBorder } from '../utils.js';
 import { markDirtyAndSave, handleEditorInput } from './edit-mode.js';
 import { saveModel } from '../core/storage.js';
 import { TASK_COLORS, TASK_COLOR_LABELS, ANIMATION_DELAY_MS, CARD_HIDE_DELAY_MS } from '../constants.js';
@@ -1301,6 +1301,14 @@ function createEisenhowerCard(color) {
 }
 
 // --- Create a task element within an Eisenhower card
+// Border/light color pairs per Eisenhower color
+const PINNED_BORDER_COLORS = {
+  blue:   { border: '#5b91f5', light: '#8ebcff' },
+  yellow: { border: '#c9a21e', light: '#f2d44a' },
+  orange: { border: '#ec8a3a', light: '#fcbe82' },
+  red:    { border: '#eb5252', light: '#ff9696' }
+};
+
 function createEisenhowerTaskElement(task, color) {
   if (!task) return document.createElement('div');
 
@@ -1308,6 +1316,13 @@ function createEisenhowerTaskElement(task, color) {
   taskEl.className = `eisenhower-task task-bubble-${color}${task.pinned ? ' eisenhower-task-pinned' : ''}`;
   taskEl.dataset.taskId = task.id || '';
   taskEl.draggable = true;
+
+  // Add SVG animated border for pinned tasks
+  if (task.pinned) {
+    const colors = PINNED_BORDER_COLORS[color] || PINNED_BORDER_COLORS.blue;
+    const svgBorder = createAnimatedBorder(colors.border, colors.light, 8);
+    taskEl.appendChild(svgBorder);
+  }
 
   // Task title
   const titleSpan = document.createElement('span');

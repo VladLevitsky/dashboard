@@ -2,7 +2,7 @@
 // Handles all section rendering (icons, lists, reminders, copy-paste)
 
 import { editState, model, currentData, currentSections } from '../state.js';
-import { $, $$, openUrl, generateKey, getSectionDataKey, getColorForCurrentMode, darkenColor, lightenAndDesaturateColor, colorToGlassRgba, isGlassModeActive, isColorCode, getContrastTextColor } from '../utils.js';
+import { $, $$, openUrl, generateKey, getSectionDataKey, getColorForCurrentMode, darkenColor, lightenAndDesaturateColor, colorToGlassRgba, isGlassModeActive, isColorCode, getContrastTextColor, createAnimatedBorder } from '../utils.js';
 import { PLACEHOLDER_URL, icons, LINK_ICON_SVG, TASKS_ICON_SVG } from '../constants.js';
 import { markDirtyAndSave, openEditPopover, openSubtitleColorPicker } from '../features/edit-mode.js';
 import { saveModel } from '../core/storage.js';
@@ -1843,6 +1843,8 @@ function createUnifiedIconButton(item, sectionId, subtitle, subtitleColor) {
   const isInQuickAccess = !editState.enabled && window.isItemInQuickAccess && window.isItemInQuickAccess(iconQAData);
   if (isInQuickAccess) {
     btn.classList.add('icon-in-quick-access');
+    const svgBorder = createAnimatedBorder('#7da6f5', '#8ebcff', 12);
+    btn.appendChild(svgBorder);
   }
 
   // Check if icon is emoji or image URL
