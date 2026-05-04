@@ -1303,10 +1303,10 @@ function createEisenhowerCard(color) {
 // --- Create a task element within an Eisenhower card
 // Border/light color pairs per Eisenhower color
 const PINNED_BORDER_COLORS = {
-  blue:   { border: '#5b91f5', light: '#8ebcff' },
-  yellow: { border: '#c9a21e', light: '#f2d44a' },
-  orange: { border: '#ec8a3a', light: '#fcbe82' },
-  red:    { border: '#eb5252', light: '#ff9696' }
+  blue:   { border: '#4478e0', light: '#a8cfff' },
+  yellow: { border: '#a88615', light: '#f8e06a' },
+  orange: { border: '#d06e1e', light: '#fdd4a0' },
+  red:    { border: '#d03030', light: '#ffb0b0' }
 };
 
 function createEisenhowerTaskElement(task, color) {

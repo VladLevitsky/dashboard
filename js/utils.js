@@ -36,52 +36,92 @@ export function generateKey(prefix, collection) {
 }
 
 // --- SVG animated border for pinned/quick-access items
-// Uses real SVG stroke (not CSS pseudo-elements) for perfectly uniform borders
+// Uses real SVG stroke for perfectly uniform borders
+// Gaussian blur on the light dash creates a smooth feathered glow
 export function createAnimatedBorder(borderColor, lightColor, cornerRadius, strokeWidth = 2.5) {
   const ns = 'http://www.w3.org/2000/svg';
   const svg = document.createElementNS(ns, 'svg');
   svg.setAttribute('class', 'animated-border-svg');
   svg.setAttribute('preserveAspectRatio', 'none');
 
+  const halfStroke = strokeWidth / 2;
+  const cssW = `calc(100% - ${strokeWidth}px)`;
+  const cssH = `calc(100% - ${strokeWidth}px)`;
+  const filterId = 'glow-' + Math.random().toString(36).substr(2, 6);
+
+  // Helper to create a rect with common attributes
+  function makeRect() {
+    const r = document.createElementNS(ns, 'rect');
+    r.setAttribute('rx', cornerRadius);
+    r.setAttribute('ry', cornerRadius);
+    r.setAttribute('fill', 'none');
+    r.setAttribute('pathLength', '100');
+    r.setAttribute('stroke-width', strokeWidth);
+    r.style.width = cssW;
+    r.style.height = cssH;
+    r.style.x = `${halfStroke}px`;
+    r.style.y = `${halfStroke}px`;
+    return r;
+  }
+
   // Base border - solid stroke
-  const baseRect = document.createElementNS(ns, 'rect');
-  baseRect.setAttribute('x', strokeWidth / 2);
-  baseRect.setAttribute('y', strokeWidth / 2);
-  baseRect.setAttribute('width', `calc(100% - ${strokeWidth}px)`);
-  baseRect.setAttribute('height', `calc(100% - ${strokeWidth}px)`);
-  baseRect.setAttribute('rx', cornerRadius);
-  baseRect.setAttribute('ry', cornerRadius);
-  baseRect.setAttribute('fill', 'none');
+  const baseRect = makeRect();
   baseRect.setAttribute('stroke', borderColor);
-  baseRect.setAttribute('stroke-width', strokeWidth);
-  baseRect.setAttribute('pathLength', '100');
-  // Use CSS for calc-based dimensions
-  baseRect.style.width = `calc(100% - ${strokeWidth}px)`;
-  baseRect.style.height = `calc(100% - ${strokeWidth}px)`;
-  baseRect.style.x = `${strokeWidth / 2}px`;
-  baseRect.style.y = `${strokeWidth / 2}px`;
-
-  // Light traveling stroke - dashed, animated
-  const lightRect = document.createElementNS(ns, 'rect');
-  lightRect.setAttribute('x', strokeWidth / 2);
-  lightRect.setAttribute('y', strokeWidth / 2);
-  lightRect.setAttribute('rx', cornerRadius);
-  lightRect.setAttribute('ry', cornerRadius);
-  lightRect.setAttribute('fill', 'none');
-  lightRect.setAttribute('stroke', lightColor);
-  lightRect.setAttribute('stroke-width', strokeWidth);
-  lightRect.setAttribute('stroke-linecap', 'round');
-  lightRect.setAttribute('pathLength', '100');
-  lightRect.setAttribute('stroke-dasharray', '15 85');
-  lightRect.setAttribute('class', 'animated-border-light');
-  lightRect.style.width = `calc(100% - ${strokeWidth}px)`;
-  lightRect.style.height = `calc(100% - ${strokeWidth}px)`;
-  lightRect.style.x = `${strokeWidth / 2}px`;
-  lightRect.style.y = `${strokeWidth / 2}px`;
-  lightRect.style.animation = 'borderDashTravel 3s linear infinite';
-
   svg.appendChild(baseRect);
-  svg.appendChild(lightRect);
+
+  // Generate smooth gradient glow with many crisp layers
+  // Each layer gets its own keyframes with centering offset baked in
+  const steps = 18;
+  const maxDash = 40;
+  const minDash = 2;
+  const uid = Math.random().toString(36).substr(2, 6);
+
+  // Base keyframe values (acceleration curve)
+  const keyStops = [
+    { pct: 0,   val: 0 },
+    { pct: 30,  val: -6 },
+    { pct: 55,  val: -14 },
+    { pct: 70,  val: -24 },
+    { pct: 82,  val: -44 },
+    { pct: 90,  val: -62 },
+    { pct: 100, val: -100 }
+  ];
+
+  // Inject per-layer keyframes into SVG <style>
+  const defs = document.createElementNS(ns, 'defs');
+  const styleEl = document.createElementNS(ns, 'style');
+  let css = '';
+
+  for (let i = 0; i < steps; i++) {
+    const t = i / (steps - 1);
+    const dash = maxDash - (maxDash - minDash) * t;
+    const offset = (dash - minDash) / 2;
+    const name = `bdt-${uid}-${i}`;
+
+    const frames = keyStops.map(s =>
+      `${s.pct}% { stroke-dashoffset: ${(s.val + offset).toFixed(1)}; }`
+    ).join(' ');
+    css += `@keyframes ${name} { ${frames} }\n`;
+  }
+
+  styleEl.textContent = css;
+  defs.appendChild(styleEl);
+  svg.appendChild(defs);
+
+  for (let i = 0; i < steps; i++) {
+    const t = i / (steps - 1);
+    const dash = maxDash - (maxDash - minDash) * t;
+    const opacity = t * t * t * 0.85 + 0.04;
+    const name = `bdt-${uid}-${i}`;
+
+    const r = makeRect();
+    r.setAttribute('stroke', lightColor);
+    r.setAttribute('stroke-linecap', 'round');
+    r.setAttribute('stroke-dasharray', `${dash.toFixed(1)} ${(100 - dash).toFixed(1)}`);
+    r.setAttribute('opacity', opacity.toFixed(3));
+    r.style.animation = `${name} 3s linear infinite`;
+    svg.appendChild(r);
+  }
 
   return svg;
 }

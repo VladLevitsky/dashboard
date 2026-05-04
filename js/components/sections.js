@@ -1843,7 +1843,7 @@ function createUnifiedIconButton(item, sectionId, subtitle, subtitleColor) {
   const isInQuickAccess = !editState.enabled && window.isItemInQuickAccess && window.isItemInQuickAccess(iconQAData);
   if (isInQuickAccess) {
     btn.classList.add('icon-in-quick-access');
-    const svgBorder = createAnimatedBorder('#7da6f5', '#8ebcff', 12);
+    const svgBorder = createAnimatedBorder('#4478e0', '#a8cfff', 12);
     btn.appendChild(svgBorder);
   }
 
