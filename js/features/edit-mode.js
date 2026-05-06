@@ -1813,6 +1813,7 @@ export function closeNoteViewer() {
   if (modal) {
     modal.hidden = true;
   }
+  currentNoteKey = null;
 }
 
 // --- Edit note from viewer
