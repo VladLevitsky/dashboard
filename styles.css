@@ -7652,7 +7652,7 @@ body[data-theme="dark"][data-style="glass"][data-glass-theme="sunset"] .tasks-su
 }
 
 .eisenhower-card.active {
-  max-height: 2000px;
+  max-height: 20000px;
   margin: 0 auto 40px auto !important;
   opacity: 1;
   padding: 28.8px 40.32px 48.384px 40.32px !important;
