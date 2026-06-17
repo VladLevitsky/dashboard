@@ -67,6 +67,9 @@ import {
   openIdeasModal
 } from '../features/tasks.js';
 import {
+  openMeetingsModal
+} from '../features/meetings.js';
+import {
   renderBreakdownRows,
   updateBreakdownSum,
   cancelBreakdownModal,
@@ -838,10 +841,11 @@ export function openDisplayModeModal() {
   document.body.appendChild(container);
   toggleBtn._displayModeContainer = container;
 
-  // Position above the toggle button
+  // Position below the toggle button
   const btnRect = toggleBtn.getBoundingClientRect();
   container.style.left = `${btnRect.left + btnRect.width / 2}px`;
-  container.style.bottom = `${window.innerHeight - btnRect.top + 10}px`;
+  container.style.top = `${btnRect.bottom + 10}px`;
+  container.style.bottom = 'auto';
 
   // Trigger animation
   requestAnimationFrame(() => {
@@ -1088,6 +1092,12 @@ export function wireUI() {
 
   // Display mode toggle
   $('#display-mode-toggle').addEventListener('click', openDisplayModeModal);
+
+  // Meetings toggle
+  const meetingsToggle = $('#meetings-toggle');
+  if (meetingsToggle) {
+    meetingsToggle.addEventListener('click', openMeetingsModal);
+  }
 
   // Tasks summary toggle (Eisenhower Matrix slide-out card)
   const tasksSummaryToggle = $('#tasks-summary-toggle');

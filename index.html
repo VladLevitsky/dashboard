@@ -26,6 +26,13 @@
           <input type="text" id="dashboard-search" class="search-input" placeholder="Search dashboard..." autocomplete="off" />
           <button type="button" id="search-clear" class="search-clear" title="Clear search" hidden>&times;</button>
         </div>
+        <button id="display-mode-toggle" class="display-mode-toggle" title="Toggle display mode" aria-label="Toggle display mode">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="20" height="20" fill="none" stroke="currentColor" stroke-width="27" stroke-miterlimit="10">
+            <rect x="29.96" y="45.23" width="340.09" height="237.96" rx="21.96" ry="21.96"/>
+            <line x1="29.96" y1="354.77" x2="370.04" y2="354.77"/>
+            <line x1="200" y1="288.6" x2="200" y2="342.77"/>
+          </svg>
+        </button>
       </div>
       <div class="header-right">
         <div class="profile-photo-container">
@@ -43,11 +50,13 @@
           <circle cx="4.6" cy="5.1" r="1.6"/>
         </svg>
       </button>
-      <button id="display-mode-toggle" class="display-mode-toggle" title="Toggle display mode" aria-label="Toggle display mode">
+      <button id="meetings-toggle" class="meetings-toggle" title="Meetings" aria-label="Meetings">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="20" height="20" fill="none" stroke="currentColor" stroke-width="27" stroke-miterlimit="10">
           <rect x="29.96" y="45.23" width="340.09" height="237.96" rx="21.96" ry="21.96"/>
           <line x1="29.96" y1="354.77" x2="370.04" y2="354.77"/>
           <line x1="200" y1="288.6" x2="200" y2="342.77"/>
+          <circle cx="200" cy="135" r="32" stroke-width="22"/>
+          <path d="M138 230 c0-35 28-62 62-62 s62 27 62 62" stroke-width="22" stroke-linecap="round"/>
         </svg>
       </button>
       <button id="quick-access-toggle" class="quick-access-toggle" title="Toggle quick access" aria-label="Toggle quick access">

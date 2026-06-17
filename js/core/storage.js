@@ -429,6 +429,7 @@ export function saveModel() {
     displayMode: data.displayMode,
     tasks: data.tasks || [],
     ideas: data.ideas || [],
+    meetings: data.meetings || [],
   };
 
   // Add ALL sections - all are now unified format
@@ -590,6 +591,11 @@ export async function restoreModel() {
       model.ideas = saved.ideas;
     }
 
+    // Restore meetings
+    if (saved.meetings && Array.isArray(saved.meetings)) {
+      model.meetings = saved.meetings;
+    }
+
     // Restore ALL section data (all are now unified format after migration)
     if (saved.sections) {
       saved.sections.forEach(section => {
@@ -664,6 +670,9 @@ export function deepMergeModel(target, source) {
   }
   if (Array.isArray(source.timers)) {
     target.timers = [...source.timers];
+  }
+  if (Array.isArray(source.meetings)) {
+    target.meetings = [...source.meetings];
   }
 
   // Handle objects - merge them

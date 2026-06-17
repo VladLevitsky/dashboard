@@ -49,6 +49,8 @@ export const model = {
   // Centralized task storage (Eisenhower Matrix)
   // Each task: { id, title, color: 'blue'|'yellow'|'orange'|'red', linkedItem: { type, key, sectionId, subtitle }, order }
   tasks: [],
+  ideas: [],
+  meetings: [],
   header: {
     companyLogoSrc: 'assets/icons/placeholder-logo.svg',
     companyLogoZoom: 1,

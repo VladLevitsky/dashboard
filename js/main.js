@@ -251,6 +251,11 @@ import {
 } from './features/tasks.js';
 
 import {
+  openMeetingsModal,
+  closeMeetingsModal
+} from './features/meetings.js';
+
+import {
   openImageEditor,
   closeImageEditor,
   applyProfilePhotoTransform,
@@ -531,6 +536,10 @@ window.closeAllIconTasks = closeAllIconTasks;
 window.openIconTasksModal = openIconTasksModal;
 window.cleanupTasksForItem = cleanupTasksForItem;
 window.toggleTaskPinned = toggleTaskPinned;
+
+// Meetings
+window.openMeetingsModal = openMeetingsModal;
+window.closeMeetingsModal = closeMeetingsModal;
 
 // Image Editor
 window.openImageEditor = openImageEditor;
