@@ -8055,8 +8055,33 @@ body[data-theme="dark"][data-style="glass"][data-glass-theme="sunset"] .tasks-su
 /* Horizontal 4-card grid */
 .eisenhower-grid {
   display: flex;
-  gap: 16px;
+  flex-direction: column;
+  gap: 0;
   padding: 0;
+}
+
+/* Section headings (Important / Secondary) */
+.eisenhower-section {
+  margin-bottom: 24px;
+}
+
+.eisenhower-section:last-child {
+  margin-bottom: 0;
+}
+
+.eisenhower-section-heading {
+  font-size: 15px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--muted);
+  margin: 0 0 14px 4px;
+}
+
+/* Columns grid (the 4 Eisenhower cards) */
+.eisenhower-columns-grid {
+  display: flex;
+  gap: 16px;
   overflow-x: auto;
 }
 
@@ -8313,7 +8338,7 @@ body[data-theme="dark"][data-style="glass"][data-glass-theme="sunset"] .tasks-su
 
 /* Mobile: stack vertically */
 @media (max-width: 768px) {
-  .eisenhower-grid {
+  .eisenhower-columns-grid {
     flex-direction: column;
   }
   .eisenhower-priority-card {
@@ -8881,6 +8906,293 @@ body[data-theme="dark"][data-style="glass"][data-glass-theme="sunset"] .tasks-su
     border-left: none;
     border-top-color: #475569;
   }
+}
+
+/* ============================================================
+   SUBTASKS (within task editor)
+   ============================================================ */
+
+.task-subtasks-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.task-subtask-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.task-subtask-title-wrap {
+  flex: 1;
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.task-subtask-title-input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font-size: 13px;
+  background: var(--bg);
+  color: var(--text);
+  transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+}
+
+.task-editor-field .task-subtask-title-input.locked {
+  background: var(--card);
+  cursor: pointer;
+}
+
+.task-subtask-title-input:not(.locked) {
+  padding-right: 32px;
+}
+
+.task-subtask-title-input:not(.locked):focus {
+  outline: none;
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px rgba(44, 123, 229, 0.1);
+}
+
+.task-subtask-title-input.locked:focus {
+  outline: none;
+}
+
+[data-theme="dark"] .task-subtask-title-input {
+  border-color: #475569;
+}
+
+.task-subtask-confirm-btn {
+  position: absolute;
+  right: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+
+.task-subtask-confirm-btn:hover {
+  background: rgba(34, 197, 94, 0.1);
+}
+
+.task-subtask-confirm-btn[hidden] {
+  display: none;
+}
+
+.task-subtask-desc-btn,
+.task-subtask-delete-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+
+.task-subtask-desc-btn:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--brand);
+}
+
+.task-subtask-desc-btn.has-content {
+  color: var(--brand);
+  opacity: 0.8;
+}
+
+.task-subtask-desc-btn.has-content:hover {
+  opacity: 1;
+}
+
+[data-theme="dark"] .task-subtask-desc-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.task-subtask-delete-btn:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--danger);
+}
+
+[data-theme="dark"] .task-subtask-delete-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.task-subtasks-add-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  margin-top: 4px;
+  border: 1.5px dashed #d1d5db;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.task-subtasks-add-btn:hover {
+  border-color: var(--brand);
+  color: var(--brand);
+}
+
+[data-theme="dark"] .task-subtasks-add-btn {
+  border-color: #475569;
+}
+
+[data-theme="dark"] .task-subtasks-add-btn:hover {
+  border-color: var(--brand);
+}
+
+/* Subtask description modal */
+.subtask-desc-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 2002;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.subtask-desc-modal[hidden] {
+  display: none;
+}
+
+.subtask-desc-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.subtask-desc-dialog {
+  position: relative;
+  width: 560px;
+  max-width: 90vw;
+  max-height: 80vh;
+  background: var(--card);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+}
+
+.subtask-desc-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+[data-theme="dark"] .subtask-desc-header {
+  border-bottom-color: #475569;
+}
+
+.subtask-desc-header h4 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.subtask-desc-close-btn {
+  width: 28px;
+  height: 28px;
+  background: transparent;
+  color: var(--danger);
+  border: none;
+  cursor: pointer;
+  font-size: 18px;
+  font-weight: 300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.7;
+  transition: all 0.2s ease;
+}
+
+.subtask-desc-close-btn:hover {
+  opacity: 1;
+  transform: scale(1.15);
+}
+
+.subtask-desc-body {
+  padding: 20px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.subtask-desc-body .task-desc-toolbar {
+  margin-bottom: 8px;
+}
+
+.subtask-desc-body .task-desc-editor {
+  min-height: 180px;
+  flex: 1;
+}
+
+.subtask-desc-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 12px 20px;
+  border-top: 1px solid #e5e7eb;
+}
+
+[data-theme="dark"] .subtask-desc-actions {
+  border-top-color: #475569;
+}
+
+/* Reuse toolbar button styles for subtask modal */
+.subtask-toolbar-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-size: 14px;
+}
+
+.subtask-toolbar-btn:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--text);
+}
+
+.subtask-toolbar-btn.active {
+  background: var(--brand);
+  color: white;
+}
+
+[data-theme="dark"] .subtask-toolbar-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
 }
 
 /* ============================================================

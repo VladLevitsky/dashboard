@@ -1247,22 +1247,57 @@ export function openTasksSummaryModal() {
   }
 }
 
-// --- Render Eisenhower Matrix with 4 cards
+// --- Render Eisenhower Matrix with Important section + 4 cards
 function renderEisenhowerMatrix() {
   const grid = $('#eisenhower-grid');
   if (!grid) return;
 
   grid.innerHTML = '';
 
-  // Render 4 cards in order: Blue, Yellow, Orange, Red
+  // --- Important section (pinned tasks only, same 4-column layout) ---
+  const importantSection = document.createElement('div');
+  importantSection.className = 'eisenhower-section';
+
+  const importantHeading = document.createElement('h4');
+  importantHeading.className = 'eisenhower-section-heading';
+  importantHeading.textContent = 'Important';
+  importantSection.appendChild(importantHeading);
+
+  const importantColumnsGrid = document.createElement('div');
+  importantColumnsGrid.className = 'eisenhower-columns-grid';
+
   COLOR_CYCLE.forEach(color => {
-    const card = createEisenhowerCard(color);
-    grid.appendChild(card);
+    const card = createEisenhowerCard(color, true);
+    importantColumnsGrid.appendChild(card);
   });
+
+  importantSection.appendChild(importantColumnsGrid);
+  grid.appendChild(importantSection);
+
+  // --- Secondary section (non-pinned tasks only) ---
+  const secondarySection = document.createElement('div');
+  secondarySection.className = 'eisenhower-section';
+
+  const secondaryHeading = document.createElement('h4');
+  secondaryHeading.className = 'eisenhower-section-heading';
+  secondaryHeading.textContent = 'Secondary';
+  secondarySection.appendChild(secondaryHeading);
+
+  const columnsGrid = document.createElement('div');
+  columnsGrid.className = 'eisenhower-columns-grid';
+
+  COLOR_CYCLE.forEach(color => {
+    const card = createEisenhowerCard(color, false);
+    columnsGrid.appendChild(card);
+  });
+
+  secondarySection.appendChild(columnsGrid);
+  grid.appendChild(secondarySection);
 }
 
 // --- Create a single Eisenhower card for a color
-function createEisenhowerCard(color) {
+// pinnedOnly: true = show only pinned (Important), false = show only non-pinned (Secondary)
+function createEisenhowerCard(color, pinnedOnly) {
   const card = document.createElement('div');
   card.className = `eisenhower-priority-card eisenhower-priority-card-${color}`;
   card.dataset.color = color;
@@ -1278,8 +1313,9 @@ function createEisenhowerCard(color) {
   tasksContainer.className = 'eisenhower-card-tasks';
   tasksContainer.dataset.dropzone = color;
 
-  // Get tasks for this color
-  const tasks = getTasksByColor(color);
+  // Get tasks for this color, filtered by pinned state
+  const allTasks = getTasksByColor(color);
+  const tasks = allTasks.filter(t => pinnedOnly ? t.pinned : !t.pinned);
 
   if (tasks.length === 0) {
     const emptyMsg = document.createElement('div');
@@ -1293,8 +1329,10 @@ function createEisenhowerCard(color) {
     });
   }
 
-  // Enable drop zone for drag-drop
-  initEisenhowerDropZone(tasksContainer, color);
+  // Enable drop zone for drag-drop (only on Secondary cards)
+  if (!pinnedOnly) {
+    initEisenhowerDropZone(tasksContainer, color);
+  }
 
   card.appendChild(tasksContainer);
   return card;
@@ -1316,13 +1354,6 @@ function createEisenhowerTaskElement(task, color) {
   taskEl.className = `eisenhower-task task-bubble-${color}${task.pinned ? ' eisenhower-task-pinned' : ''}`;
   taskEl.dataset.taskId = task.id || '';
   taskEl.draggable = true;
-
-  // Add SVG animated border for pinned tasks
-  if (task.pinned) {
-    const colors = PINNED_BORDER_COLORS[color] || PINNED_BORDER_COLORS.blue;
-    const svgBorder = createAnimatedBorder(colors.border, colors.light, 8);
-    taskEl.appendChild(svgBorder);
-  }
 
   // Task title
   const titleSpan = document.createElement('span');
@@ -1791,6 +1822,16 @@ function openTaskEditorModal(taskData, titleText) {
                 <button type="button" class="task-editor-item-btn">Select Item</button>
               </div>
             </div>
+            <div class="task-editor-field">
+              <label>Subtasks</label>
+              <div class="task-subtasks-list" id="task-subtasks-list"></div>
+              <button type="button" id="task-subtasks-add-btn" class="task-subtasks-add-btn">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="12" y1="5" x2="12" y2="19"></line>
+                  <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+              </button>
+            </div>
           </div>
           <div class="task-editor-description">
             <label>Description</label>
@@ -1894,6 +1935,11 @@ function openTaskEditorModal(taskData, titleText) {
     $('#task-desc-cancel').addEventListener('click', () => {
       exitDescriptionEditMode();
     });
+
+    // Subtasks add button
+    $('#task-subtasks-add-btn').addEventListener('click', () => {
+      addSubtaskToEditor();
+    });
   }
 
   // Update title
@@ -1978,6 +2024,10 @@ function openTaskEditorModal(taskData, titleText) {
     };
   }
 
+  // Populate subtasks
+  editorSubtasks = (taskData.subtasks || []).map(s => ({ ...s }));
+  renderEditorSubtasks();
+
   // Wire up buttons
   const cancelBtn = $('#task-editor-cancel');
   cancelBtn.onclick = closeTaskEditorModal;
@@ -2000,6 +2050,9 @@ function openTaskEditorModal(taskData, titleText) {
     const descContent = normalizeDescHtml(rawDesc);
     const description = descContent || null;
 
+    // Clean up subtasks (remove empty titles)
+    const subtasks = editorSubtasks.filter(s => s.title && s.title.trim());
+
     if (currentEditingTaskId) {
       // Update existing task
       updateTask(currentEditingTaskId, {
@@ -2007,14 +2060,18 @@ function openTaskEditorModal(taskData, titleText) {
         color: selectedColor,
         linkedItem: selectedLinkedItem,
         link: link,
-        description: description
+        description: description,
+        subtasks: subtasks.length > 0 ? subtasks : null
       });
       showToast('Task updated');
     } else {
       // Create new task
       const task = createTask(title, selectedColor, selectedLinkedItem, link);
-      if (task && description) {
-        updateTask(task.id, { description });
+      const updates = {};
+      if (description) updates.description = description;
+      if (subtasks.length > 0) updates.subtasks = subtasks;
+      if (Object.keys(updates).length > 0) {
+        updateTask(task.id, updates);
       }
       showToast('Task created');
     }
@@ -2120,6 +2177,224 @@ function exitDescriptionEditMode() {
   descEditorWrap.hidden = true;
 }
 
+// ============================================================
+// SUBTASK EDITOR (within task editor modal)
+// ============================================================
+
+// Editor-local subtask list (committed on save)
+let editorSubtasks = [];
+
+function generateSubtaskId() {
+  return 'subtask-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+}
+
+function addSubtaskToEditor() {
+  editorSubtasks.push({ id: generateSubtaskId(), title: '', description: '' });
+  renderEditorSubtasks();
+  // Focus the new input
+  const inputs = document.querySelectorAll('#task-subtasks-list .task-subtask-title-input');
+  if (inputs.length > 0) inputs[inputs.length - 1].focus();
+}
+
+function renderEditorSubtasks() {
+  const list = $('#task-subtasks-list');
+  if (!list) return;
+  list.innerHTML = '';
+
+  editorSubtasks.forEach((subtask, index) => {
+    const row = document.createElement('div');
+    row.className = 'task-subtask-row';
+
+    const isNew = !subtask.title;
+
+    const titleWrap = document.createElement('div');
+    titleWrap.className = 'task-subtask-title-wrap';
+
+    const titleInput = document.createElement('input');
+    titleInput.type = 'text';
+    titleInput.className = 'task-subtask-title-input';
+    titleInput.placeholder = 'Subtask title';
+    titleInput.value = subtask.title || '';
+    titleInput.readOnly = !isNew;
+    if (!isNew) titleInput.classList.add('locked');
+
+    titleInput.addEventListener('input', (e) => {
+      subtask.title = e.target.value;
+    });
+
+    // Confirm button (green check) — inside the input wrapper
+    const confirmBtn = document.createElement('button');
+    confirmBtn.type = 'button';
+    confirmBtn.className = 'task-subtask-confirm-btn';
+    confirmBtn.title = 'Confirm';
+    confirmBtn.innerHTML = `
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="20 6 9 17 4 12"></polyline>
+      </svg>`;
+    if (!isNew) confirmBtn.hidden = true;
+
+    titleWrap.appendChild(titleInput);
+    titleWrap.appendChild(confirmBtn);
+
+    // Click input to enter edit mode
+    titleInput.addEventListener('click', () => {
+      if (titleInput.readOnly) {
+        titleInput.readOnly = false;
+        titleInput.classList.remove('locked');
+        confirmBtn.hidden = false;
+        titleInput.focus();
+      }
+    });
+
+    // Confirm locks it back
+    confirmBtn.addEventListener('click', () => {
+      titleInput.readOnly = true;
+      titleInput.classList.add('locked');
+      confirmBtn.hidden = true;
+    });
+
+    // Description indicator / edit button
+    const descBtn = document.createElement('button');
+    descBtn.type = 'button';
+    descBtn.className = 'task-subtask-desc-btn';
+    const hasDesc = normalizeDescHtml(subtask.description || '');
+    descBtn.title = hasDesc ? 'Edit description' : 'Add description';
+    descBtn.innerHTML = `
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+        <polyline points="14 2 14 8 20 8"></polyline>
+        <line x1="16" y1="13" x2="8" y2="13"></line>
+        <line x1="16" y1="17" x2="8" y2="17"></line>
+      </svg>`;
+    if (hasDesc) descBtn.classList.add('has-content');
+    descBtn.addEventListener('click', () => {
+      openSubtaskDescriptionModal(subtask);
+    });
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.type = 'button';
+    deleteBtn.className = 'task-subtask-delete-btn';
+    deleteBtn.title = 'Remove subtask';
+    deleteBtn.innerHTML = `
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+        <line x1="18" y1="6" x2="6" y2="18"></line>
+        <line x1="6" y1="6" x2="18" y2="18"></line>
+      </svg>`;
+    deleteBtn.addEventListener('click', () => {
+      editorSubtasks.splice(index, 1);
+      renderEditorSubtasks();
+    });
+
+    row.appendChild(titleWrap);
+    row.appendChild(descBtn);
+    row.appendChild(deleteBtn);
+    list.appendChild(row);
+  });
+}
+
+// --- Subtask description modal (separate overlay on top of task editor)
+function openSubtaskDescriptionModal(subtask) {
+  let modal = $('#subtask-desc-modal');
+
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'subtask-desc-modal';
+    modal.className = 'subtask-desc-modal';
+    modal.innerHTML = `
+      <div class="subtask-desc-backdrop"></div>
+      <div class="subtask-desc-dialog">
+        <div class="subtask-desc-header">
+          <h4 id="subtask-desc-title">Subtask Description</h4>
+          <button type="button" class="subtask-desc-close-btn" title="Close">&times;</button>
+        </div>
+        <div class="subtask-desc-body">
+          <div class="task-desc-toolbar">
+            <button type="button" class="subtask-toolbar-btn" data-cmd="bold" title="Bold"><strong>B</strong></button>
+            <button type="button" class="subtask-toolbar-btn" data-cmd="italic" title="Italic"><em>I</em></button>
+            <button type="button" class="subtask-toolbar-btn" data-cmd="underline" title="Underline"><u>U</u></button>
+            <div class="task-desc-toolbar-divider"></div>
+            <button type="button" class="subtask-toolbar-btn" data-cmd="insertUnorderedList" title="Bullet List">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3" cy="6" r="1.5" fill="currentColor" stroke="none"/><circle cx="3" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="3" cy="18" r="1.5" fill="currentColor" stroke="none"/></svg>
+            </button>
+            <button type="button" class="subtask-toolbar-btn" data-cmd="insertOrderedList" title="Numbered List">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><line x1="10" y1="6" x2="21" y2="6"/><line x1="10" y1="12" x2="21" y2="12"/><line x1="10" y1="18" x2="21" y2="18"/><text x="1" y="8" font-size="8" fill="currentColor" stroke="none" font-family="sans-serif">1</text><text x="1" y="14" font-size="8" fill="currentColor" stroke="none" font-family="sans-serif">2</text><text x="1" y="20" font-size="8" fill="currentColor" stroke="none" font-family="sans-serif">3</text></svg>
+            </button>
+          </div>
+          <div id="subtask-desc-editor" class="task-desc-editor" contenteditable="true"></div>
+        </div>
+        <div class="subtask-desc-actions">
+          <button type="button" id="subtask-desc-cancel" class="btn-secondary">Cancel</button>
+          <button type="button" id="subtask-desc-save" class="btn-primary">Save</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+
+    modal.querySelector('.subtask-desc-backdrop').addEventListener('click', () => {
+      modal.hidden = true;
+    });
+    modal.querySelector('.subtask-desc-close-btn').addEventListener('click', () => {
+      modal.hidden = true;
+    });
+
+    // Toolbar commands
+    modal.querySelectorAll('.subtask-toolbar-btn').forEach(btn => {
+      btn.addEventListener('mousedown', (e) => e.preventDefault());
+      btn.addEventListener('click', () => {
+        const cmd = btn.dataset.cmd;
+        document.execCommand(cmd, false, null);
+        updateSubtaskToolbarState();
+        $('#subtask-desc-editor').focus();
+      });
+    });
+
+    // Markdown auto-convert
+    const editorEl = modal.querySelector('#subtask-desc-editor');
+    editorEl.addEventListener('input', handleEditorInput);
+
+    editorEl.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && ['b', 'i', 'u'].includes(e.key.toLowerCase())) {
+        setTimeout(updateSubtaskToolbarState, 0);
+      }
+    });
+
+    document.addEventListener('selectionchange', () => {
+      const m = $('#subtask-desc-modal');
+      if (m && !m.hidden) {
+        updateSubtaskToolbarState();
+      }
+    });
+  }
+
+  // Set title
+  $('#subtask-desc-title').textContent = subtask.title ? `Subtask: ${subtask.title}` : 'Subtask Description';
+
+  // Populate editor
+  const editor = $('#subtask-desc-editor');
+  editor.innerHTML = subtask.description || '';
+  modal.hidden = false;
+  requestAnimationFrame(() => editor.focus());
+
+  // Wire save/cancel
+  $('#subtask-desc-cancel').onclick = () => { modal.hidden = true; };
+  $('#subtask-desc-save').onclick = () => {
+    subtask.description = normalizeDescHtml(editor.innerHTML) || '';
+    modal.hidden = true;
+    renderEditorSubtasks(); // Update indicator
+  };
+}
+
+function updateSubtaskToolbarState() {
+  const modal = $('#subtask-desc-modal');
+  if (!modal) return;
+  modal.querySelectorAll('.subtask-toolbar-btn').forEach(btn => {
+    const cmd = btn.dataset.cmd;
+    if (cmd) {
+      btn.classList.toggle('active', document.queryCommandState(cmd));
+    }
+  });
+}
+
 // --- Close task editor modal
 function updateTaskToolbarState() {
   const btns = document.querySelectorAll('.task-desc-toolbar-btn');
@@ -2137,9 +2412,14 @@ function closeTaskEditorModal() {
   if (modal) {
     modal.hidden = true;
   }
+  // Also close subtask description modal if open
+  const subtaskModal = $('#subtask-desc-modal');
+  if (subtaskModal) subtaskModal.hidden = true;
+
   currentEditingTaskId = null;
   preLinkedItemContext = null;
   descriptionEditing = false;
+  editorSubtasks = [];
 }
 
 // ============================================================
