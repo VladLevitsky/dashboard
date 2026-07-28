@@ -2189,7 +2189,7 @@ function generateSubtaskId() {
 }
 
 function addSubtaskToEditor() {
-  editorSubtasks.push({ id: generateSubtaskId(), title: '', description: '' });
+  editorSubtasks.push({ id: generateSubtaskId(), title: '', description: '', completed: false });
   renderEditorSubtasks();
   // Focus the new input
   const inputs = document.querySelectorAll('#task-subtasks-list .task-subtask-title-input');
@@ -2217,6 +2217,7 @@ function renderEditorSubtasks() {
     titleInput.value = subtask.title || '';
     titleInput.readOnly = !isNew;
     if (!isNew) titleInput.classList.add('locked');
+    if (subtask.completed) titleInput.classList.add('subtask-completed');
 
     titleInput.addEventListener('input', (e) => {
       subtask.title = e.target.value;
@@ -2271,6 +2272,25 @@ function renderEditorSubtasks() {
       openSubtaskDescriptionModal(subtask);
     });
 
+    // Complete toggle button
+    const completeBtn = document.createElement('button');
+    completeBtn.type = 'button';
+    completeBtn.className = 'task-subtask-complete-btn' + (subtask.completed ? ' is-completed' : '');
+    completeBtn.title = subtask.completed ? 'Mark incomplete' : 'Mark complete';
+    completeBtn.innerHTML = `
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="20 6 9 17 4 12"></polyline>
+      </svg>`;
+    completeBtn.addEventListener('click', () => {
+      subtask.completed = !subtask.completed;
+      // Persist immediately so completed state survives refresh
+      if (currentEditingTaskId) {
+        const cleanSubtasks = editorSubtasks.filter(s => s.title && s.title.trim());
+        updateTask(currentEditingTaskId, { subtasks: cleanSubtasks.length > 0 ? cleanSubtasks : null });
+      }
+      renderEditorSubtasks();
+    });
+
     const deleteBtn = document.createElement('button');
     deleteBtn.type = 'button';
     deleteBtn.className = 'task-subtask-delete-btn';
@@ -2281,12 +2301,14 @@ function renderEditorSubtasks() {
         <line x1="6" y1="6" x2="18" y2="18"></line>
       </svg>`;
     deleteBtn.addEventListener('click', () => {
+      if (!confirm('Delete this subtask?')) return;
       editorSubtasks.splice(index, 1);
       renderEditorSubtasks();
     });
 
     row.appendChild(titleWrap);
     row.appendChild(descBtn);
+    row.appendChild(completeBtn);
     row.appendChild(deleteBtn);
     list.appendChild(row);
   });

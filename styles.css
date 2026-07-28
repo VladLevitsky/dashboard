@@ -8991,6 +8991,48 @@ body[data-theme="dark"][data-style="glass"][data-glass-theme="sunset"] .tasks-su
   display: none;
 }
 
+/* Completed subtask styling */
+.task-subtask-title-input.subtask-completed,
+.task-editor-field .task-subtask-title-input.subtask-completed,
+[data-theme="dark"] .task-subtask-title-input.subtask-completed {
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.task-subtask-complete-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+
+.task-subtask-complete-btn:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--accent);
+}
+
+.task-subtask-complete-btn.is-completed {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.task-subtask-complete-btn.is-completed:hover {
+  opacity: 0.8;
+}
+
+[data-theme="dark"] .task-subtask-complete-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
 .task-subtask-desc-btn,
 .task-subtask-delete-btn {
   display: flex;
