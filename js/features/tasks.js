@@ -1293,6 +1293,9 @@ function renderEisenhowerMatrix() {
 
   secondarySection.appendChild(columnsGrid);
   grid.appendChild(secondarySection);
+
+  // Initialize delete drop zone
+  initDeleteDropZone();
 }
 
 // --- Create a single Eisenhower card for a color
@@ -1329,10 +1332,8 @@ function createEisenhowerCard(color, pinnedOnly) {
     });
   }
 
-  // Enable drop zone for drag-drop (only on Secondary cards)
-  if (!pinnedOnly) {
-    initEisenhowerDropZone(tasksContainer, color);
-  }
+  // Enable drop zone for drag-drop (both Important and Secondary cards)
+  initEisenhowerDropZone(tasksContainer, color, pinnedOnly);
 
   card.appendChild(tasksContainer);
   return card;
@@ -1545,7 +1546,8 @@ function toggleTaskLinkBubble(taskEl, task) {
 }
 
 // --- Initialize drop zone for Eisenhower card
-function initEisenhowerDropZone(container, targetColor) {
+// targetPinned: true = Important section, false = Secondary section
+function initEisenhowerDropZone(container, targetColor, targetPinned) {
   container.addEventListener('dragover', (e) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
@@ -1601,18 +1603,76 @@ function initEisenhowerDropZone(container, targetColor) {
       newOrder = tasks.indexOf(afterElement);
     }
 
-    // Move task to new color/position
+    // Move task to new color/position and update pinned state
     const task = getTaskById(taskId);
     if (task) {
-      if (task.color !== targetColor) {
-        // Moving to different color - update color and order
+      const pinnedChanged = task.pinned !== targetPinned;
+      const colorChanged = task.color !== targetColor;
+
+      if (colorChanged) {
         moveTaskToColor(taskId, targetColor, newOrder);
       } else {
-        // Same color - just reorder
         reorderTaskWithinColor(taskId, newOrder);
       }
-      // Re-render the matrix
+
+      // Toggle pinned state if moving between Important and Secondary
+      if (pinnedChanged) {
+        task.pinned = targetPinned;
+
+        // Sync with Quick Access
+        if (window.toggleItemQuickAccess) {
+          const taskQAData = {
+            type: 'task',
+            taskId: task.id,
+            text: task.title,
+            color: task.color
+          };
+          const isInQA = window.isItemInQuickAccess && window.isItemInQuickAccess(taskQAData);
+          if (targetPinned && !isInQA) {
+            window.toggleItemQuickAccess(taskQAData);
+          } else if (!targetPinned && isInQA) {
+            window.toggleItemQuickAccess(taskQAData);
+          }
+        }
+
+        saveModel();
+        showToast(targetPinned ? 'Task pinned' : 'Task unpinned');
+      }
+
       renderEisenhowerMatrix();
+    }
+  });
+}
+
+// --- Initialize delete drop zone (checkmark icon in header)
+function initDeleteDropZone() {
+  const dropTarget = $('#delete-task-drop');
+  if (!dropTarget) return;
+
+  dropTarget.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    dropTarget.classList.add('drag-hover');
+  });
+
+  dropTarget.addEventListener('dragleave', () => {
+    dropTarget.classList.remove('drag-hover');
+  });
+
+  dropTarget.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropTarget.classList.remove('drag-hover');
+    const taskId = e.dataTransfer.getData('text/plain');
+    if (!taskId) return;
+
+    const task = getTaskById(taskId);
+    if (!task) return;
+
+    if (confirm(`Are you sure you want to delete "${task.title}"?`)) {
+      deleteTask(taskId);
+      showToast('Task deleted');
+      renderEisenhowerMatrix();
+      if (window.renderAllSections) window.renderAllSections();
     }
   });
 }

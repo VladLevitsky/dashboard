@@ -7710,6 +7710,39 @@ body[data-theme="dark"][data-style="glass"][data-glass-theme="sunset"] .tasks-su
   font-size: 24px;
 }
 
+.btn-delete-task-drop {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: #22c55e;
+  color: #fff;
+  border: 2px solid #16a34a;
+  border-radius: 50%;
+  transition: all 0.2s ease;
+}
+
+.btn-delete-task-drop.drag-hover {
+  transform: scale(1.15);
+  box-shadow: 0 0 12px rgba(34, 197, 94, 0.5);
+  animation: delete-drop-pulse 0.8s ease-in-out infinite;
+}
+
+@keyframes delete-drop-pulse {
+  0%, 100% { transform: scale(1.15); box-shadow: 0 0 12px rgba(34, 197, 94, 0.5); }
+  50% { transform: scale(1.25); box-shadow: 0 0 20px rgba(34, 197, 94, 0.7); }
+}
+
+[data-theme="dark"] .btn-delete-task-drop {
+  background: #16a34a;
+  border-color: #15803d;
+}
+
+[data-theme="dark"] .btn-delete-task-drop.drag-hover {
+  box-shadow: 0 0 12px rgba(34, 197, 94, 0.4);
+}
+
 .btn-add-task-header {
   display: flex;
   align-items: center;
