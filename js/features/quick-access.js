@@ -200,17 +200,6 @@ export function renderQuickAccess() {
   if (listItems.length > 0) {
     html += '<div class="quick-access-lists">';
     listItems.forEach(item => {
-      if (item.type === 'task') {
-        const escapedText = (item.text || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-        const colorClass = item.color || 'blue';
-        html += `
-          <div class="quick-access-task quick-access-task-${colorClass}" data-qa-task-id="${item.taskId || ''}">
-            <span class="quick-access-task-dot"></span>
-            <span>${escapedText}</span>
-          </div>
-        `;
-        return;
-      }
       if (item.copyText) {
         const escapedCopyText = (item.copyText || '').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
         const escapedText = (item.text || item.name || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -271,17 +260,6 @@ export function renderQuickAccess() {
       return;
     }
 
-    // Handle task click - scroll to tasks panel
-    const taskItem = e.target.closest('.quick-access-task');
-    if (taskItem) {
-      e.preventDefault();
-      const tasksSummary = document.getElementById('tasks-summary-panel');
-      if (tasksSummary && !tasksSummary.hidden) {
-        tasksSummary.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      } else if (window.toggleTasksSummary) {
-        window.toggleTasksSummary();
-      }
-    }
   };
 
   content._quickAccessClickHandler = clickHandler;
@@ -306,10 +284,6 @@ export function isItemSelected(itemData, data) {
   } else if (itemData.type === 'reminder') {
     return data.quickAccessItems.listItems.some(item =>
       item.type === 'reminder' && item.text === itemData.text && item.url === itemData.url
-    );
-  } else if (itemData.type === 'task') {
-    return data.quickAccessItems.listItems.some(item =>
-      item.type === 'task' && item.taskId === itemData.taskId
     );
   }
   return false;
@@ -350,10 +324,6 @@ export function toggleItemQuickAccess(itemData) {
     } else if (itemData.type === 'reminder') {
       data.quickAccessItems.listItems = data.quickAccessItems.listItems.filter(item =>
         !(item.type === 'reminder' && item.text === itemData.text && item.url === itemData.url)
-      );
-    } else if (itemData.type === 'task') {
-      data.quickAccessItems.listItems = data.quickAccessItems.listItems.filter(item =>
-        !(item.type === 'task' && item.taskId === itemData.taskId)
       );
     }
   } else {

@@ -945,10 +945,10 @@ body {
 /* Pulsating animation for selector mode */
 @keyframes pulsate {
   0%, 100% {
-    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7);
+    box-shadow: 0 0 0 0 rgba(78, 173, 107, 0.7);
   }
   50% {
-    box-shadow: 0 0 0 10px rgba(34, 197, 94, 0);
+    box-shadow: 0 0 0 10px rgba(78, 173, 107, 0);
   }
 }
 
@@ -960,7 +960,7 @@ body {
 }
 
 .selectable-item.selected {
-  box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.6);
+  box-shadow: 0 0 0 2px rgba(78, 173, 107, 0.6);
 }
 
 /* Quick Link Modal */
@@ -2599,7 +2599,7 @@ h2, h3 { margin: 0 0 16px; }
   height: 3px;
   background: var(--accent);
   border-radius: 2px;
-  box-shadow: 0 0 8px rgba(34, 197, 94, 0.5);
+  box-shadow: 0 0 8px rgba(78, 173, 107, 0.5);
   animation: pulse-item-horizontal 0.8s ease-in-out infinite;
 }
 
@@ -2608,7 +2608,7 @@ h2, h3 { margin: 0 0 16px; }
   height: 100%;
   background: var(--accent);
   border-radius: 2px;
-  box-shadow: 0 0 8px rgba(34, 197, 94, 0.5);
+  box-shadow: 0 0 8px rgba(78, 173, 107, 0.5);
   animation: pulse-item-vertical 0.8s ease-in-out infinite;
 }
 
@@ -4470,7 +4470,7 @@ body.stacked-mode .icon-link-indicator {
 
 /* Glass mode variant */
 [data-style="glass"] .icon-task-indicator {
-  border-color: rgba(34, 197, 94, 0.8) transparent transparent transparent;
+  border-color: rgba(78, 173, 107, 0.8) transparent transparent transparent;
 }
 
 [data-style="glass"] .icon-task-indicator:hover {
@@ -7716,15 +7716,16 @@ body[data-theme="dark"][data-style="glass"][data-glass-theme="sunset"] .tasks-su
   justify-content: center;
   width: 32px;
   height: 32px;
-  background: #22c55e;
+  background: rgba(78, 173, 107, 0.8);
   color: #fff;
-  border: 2px solid #16a34a;
+  border: none;
   border-radius: 50%;
   transition: all 0.2s ease;
 }
 
 .btn-delete-task-drop.drag-hover {
   transform: scale(1.15);
+  background: #22c55e;
   box-shadow: 0 0 12px rgba(34, 197, 94, 0.5);
   animation: delete-drop-pulse 0.8s ease-in-out infinite;
 }
@@ -7735,11 +7736,11 @@ body[data-theme="dark"][data-style="glass"][data-glass-theme="sunset"] .tasks-su
 }
 
 [data-theme="dark"] .btn-delete-task-drop {
-  background: #16a34a;
-  border-color: #15803d;
+  background: rgba(61, 148, 89, 0.8);
 }
 
 [data-theme="dark"] .btn-delete-task-drop.drag-hover {
+  background: #16a34a;
   box-shadow: 0 0 12px rgba(34, 197, 94, 0.4);
 }
 
@@ -8304,35 +8305,6 @@ body[data-theme="dark"][data-style="glass"][data-glass-theme="sunset"] .tasks-su
   90% { stroke-dashoffset: -62; }
   100% { stroke-dashoffset: -100; }
 }
-
-/* Quick Access task items */
-.quick-access-task {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  border-radius: 8px;
-  font-size: 13px;
-  color: var(--text);
-  cursor: pointer;
-  transition: background 0.2s;
-}
-.quick-access-task:hover {
-  background: rgba(0, 0, 0, 0.05);
-}
-[data-theme="dark"] .quick-access-task:hover {
-  background: rgba(255, 255, 255, 0.05);
-}
-.quick-access-task-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-.quick-access-task-blue .quick-access-task-dot { background: #3b82f6; }
-.quick-access-task-yellow .quick-access-task-dot { background: #eab308; }
-.quick-access-task-orange .quick-access-task-dot { background: #f97316; }
-.quick-access-task-red .quick-access-task-dot { background: #ef4444; }
 
 /* Task Link Bubble */
 .task-link-bubble {
@@ -9017,7 +8989,7 @@ body[data-theme="dark"][data-style="glass"][data-glass-theme="sunset"] .tasks-su
 }
 
 .task-subtask-confirm-btn:hover {
-  background: rgba(34, 197, 94, 0.1);
+  background: rgba(78, 173, 107, 0.1);
 }
 
 .task-subtask-confirm-btn[hidden] {
@@ -9614,9 +9586,8 @@ body[data-theme="dark"][data-style="glass"][data-glass-theme="sunset"] .tasks-su
   background: var(--card);
   border-radius: 16px;
   box-shadow: 0 20px 60px rgba(0,0,0,0.2);
-  width: 700px;
-  max-width: 90vw;
-  max-height: 80vh;
+  width: 95vw;
+  height: 92vh;
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -9650,17 +9621,29 @@ body[data-theme="dark"][data-style="glass"][data-glass-theme="sunset"] .tasks-su
   color: var(--text);
 }
 
-.meetings-columns {
+.meetings-body {
   display: flex;
-  gap: 24px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.meetings-sidebar {
+  width: 30%;
+  min-width: 200px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
   padding: 0 24px 16px;
   overflow-y: auto;
-  flex: 1;
-  min-height: 200px;
+  border-right: 1px solid #e5e7eb;
+}
+
+[data-theme="dark"] .meetings-sidebar {
+  border-right-color: #374151;
 }
 
 .meetings-column {
-  flex: 1;
   min-width: 0;
 }
 
@@ -9721,41 +9704,37 @@ body[data-theme="dark"][data-style="glass"][data-glass-theme="sunset"] .tasks-su
   padding: 8px 0;
 }
 
-.meetings-add-btn-container {
-  padding: 12px 24px 20px;
-  border-top: 1px solid #e5e7eb;
+.meetings-header-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
-[data-theme="dark"] .meetings-add-btn-container {
-  border-top-color: #374151;
-}
-
-.meetings-add-btn {
-  width: 100%;
-  padding: 10px 16px;
-  border: 2px dashed #d1d5db;
-  border-radius: 10px;
-  background: transparent;
-  color: var(--muted);
-  font-size: 14px;
-  font-weight: 500;
+.meetings-add-circle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: rgba(78, 173, 107, 0.8);
+  color: #fff;
+  border: none;
+  border-radius: 50%;
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
-.meetings-add-btn:hover {
-  border-color: var(--brand);
-  color: var(--brand);
-  background: rgba(44, 123, 229, 0.04);
+.meetings-add-circle:hover {
+  background: #22c55e;
+  transform: scale(1.1);
 }
 
-[data-theme="dark"] .meetings-add-btn {
-  border-color: #4b5563;
+[data-theme="dark"] .meetings-add-circle {
+  background: rgba(61, 148, 89, 0.8);
 }
 
-[data-theme="dark"] .meetings-add-btn:hover {
-  border-color: var(--brand);
-  color: var(--brand);
+[data-theme="dark"] .meetings-add-circle:hover {
+  background: #16a34a;
 }
 
 /* Meeting Editor Modal */
@@ -10008,17 +9987,9 @@ body[data-theme="dark"][data-style="glass"][data-glass-theme="sunset"] .tasks-su
 
 /* Meeting view - card within card */
 .meetings-view-section {
-  margin: 0 24px 16px;
-  padding: 20px;
-  background: rgba(0, 0, 0, 0.055);
-  border-radius: 14px;
+  flex: 1;
+  padding: 20px 28px;
   overflow-y: auto;
-  box-shadow: 4px 6px 14px rgba(0, 0, 0, 0.12);
-}
-
-[data-theme="dark"] .meetings-view-section {
-  background: rgba(255, 255, 255, 0.07);
-  box-shadow: 4px 6px 14px rgba(0, 0, 0, 0.35);
 }
 
 .meetings-view-section[hidden] {

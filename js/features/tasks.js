@@ -184,14 +184,6 @@ export function deleteTask(taskId) {
     }
   }
 
-  // Remove from quick access if pinned
-  if (task.pinned && window.isItemInQuickAccess) {
-    const taskQAData = { type: 'task', taskId: task.id, text: task.title, color: task.color };
-    if (window.isItemInQuickAccess(taskQAData) && window.toggleItemQuickAccess) {
-      window.toggleItemQuickAccess(taskQAData);
-    }
-  }
-
   tasks.splice(taskIndex, 1);
   saveModel();
   return true;
@@ -1414,23 +1406,6 @@ function createEisenhowerTaskElement(task, color) {
       longPressTriggered = true;
       const isNowPinned = toggleTaskPinned(task.id);
 
-      // Toggle quick access
-      if (window.toggleItemQuickAccess) {
-        const taskQAData = {
-          type: 'task',
-          taskId: task.id,
-          text: task.title,
-          color: task.color
-        };
-        // Sync: add to QA if pinned, remove if unpinned
-        const isInQA = window.isItemInQuickAccess && window.isItemInQuickAccess(taskQAData);
-        if (isNowPinned && !isInQA) {
-          window.toggleItemQuickAccess(taskQAData);
-        } else if (!isNowPinned && isInQA) {
-          window.toggleItemQuickAccess(taskQAData);
-        }
-      }
-
       showToast(isNowPinned ? 'Task pinned' : 'Task unpinned');
       renderEisenhowerMatrix();
     }, 750);
@@ -1618,22 +1593,6 @@ function initEisenhowerDropZone(container, targetColor, targetPinned) {
       // Toggle pinned state if moving between Important and Secondary
       if (pinnedChanged) {
         task.pinned = targetPinned;
-
-        // Sync with Quick Access
-        if (window.toggleItemQuickAccess) {
-          const taskQAData = {
-            type: 'task',
-            taskId: task.id,
-            text: task.title,
-            color: task.color
-          };
-          const isInQA = window.isItemInQuickAccess && window.isItemInQuickAccess(taskQAData);
-          if (targetPinned && !isInQA) {
-            window.toggleItemQuickAccess(taskQAData);
-          } else if (!targetPinned && isInQA) {
-            window.toggleItemQuickAccess(taskQAData);
-          }
-        }
 
         saveModel();
         showToast(targetPinned ? 'Task pinned' : 'Task unpinned');

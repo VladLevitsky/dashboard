@@ -76,19 +76,28 @@ export function openMeetingsModal() {
       <div class="meetings-dialog">
         <div class="meetings-header">
           <h4 id="meetings-title">Meetings</h4>
-          <button type="button" class="meetings-close-btn" title="Close">&times;</button>
-        </div>
-        <div class="meetings-columns" id="meetings-columns">
-          <div class="meetings-column">
-            <div class="meetings-column-title">One-Time</div>
-            <div class="meetings-column-items" id="meetings-onetime-items"></div>
-          </div>
-          <div class="meetings-column">
-            <div class="meetings-column-title">Recurring</div>
-            <div class="meetings-column-items" id="meetings-recurring-items"></div>
+          <div class="meetings-header-controls">
+            <button type="button" class="meetings-add-circle" id="meetings-add-btn" title="Add new meeting">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 5v14"></path>
+                <path d="M5 12h14"></path>
+              </svg>
+            </button>
+            <button type="button" class="meetings-close-btn" title="Close">&times;</button>
           </div>
         </div>
-        <div class="meetings-view-section" id="meetings-view-section" hidden>
+        <div class="meetings-body">
+          <div class="meetings-sidebar" id="meetings-columns">
+            <div class="meetings-column">
+              <div class="meetings-column-title">One-Time</div>
+              <div class="meetings-column-items" id="meetings-onetime-items"></div>
+            </div>
+            <div class="meetings-column">
+              <div class="meetings-column-title">Recurring</div>
+              <div class="meetings-column-items" id="meetings-recurring-items"></div>
+            </div>
+          </div>
+          <div class="meetings-view-section" id="meetings-view-section" hidden>
           <div class="meetings-view-type" id="meetings-view-type"></div>
           <h3 class="meetings-view-title" id="meetings-view-title"></h3>
           <div class="meetings-view-content" id="meetings-view-content"></div>
@@ -114,8 +123,6 @@ export function openMeetingsModal() {
             </button>
           </div>
         </div>
-        <div class="meetings-add-btn-container" id="meetings-add-btn-container">
-          <button type="button" class="meetings-add-btn" id="meetings-add-btn">Add New Meeting</button>
         </div>
       </div>
     `;
@@ -160,7 +167,7 @@ export function openMeetingsModal() {
 function showMeetingsMainView() {
   $('#meetings-columns').hidden = false;
   $('#meetings-view-section').hidden = true;
-  $('#meetings-add-btn-container').hidden = false;
+
   $('#meetings-title').textContent = 'Meetings';
   // Clear active highlight
   const items = document.querySelectorAll('#meetings-modal .meetings-item');
@@ -175,7 +182,7 @@ function showMeetingsViewMode(meeting) {
   // Keep columns visible, show view section below
   $('#meetings-columns').hidden = false;
   $('#meetings-view-section').hidden = false;
-  $('#meetings-add-btn-container').hidden = true;
+
   $('#meetings-title').textContent = 'Meetings';
 
   // Highlight the selected item
