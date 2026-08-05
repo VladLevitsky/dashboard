@@ -9,7 +9,6 @@ import { saveModel } from '../core/storage.js';
 
 // Module state
 let meetingsEditingId = null;
-let meetingDescriptionEditing = false;
 
 // ============================================================
 // MEETINGS CRUD
@@ -60,11 +59,19 @@ function normalizeDescHtml(html) {
   return (trimmed === '<br>' || trimmed === '') ? '' : trimmed;
 }
 
+function escapeAttr(str) {
+  return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
 // ============================================================
-// MEETINGS LIST MODAL
+// MEETINGS MODAL
 // ============================================================
 
 export function openMeetingsModal() {
+  // Clean up old editor modal if it exists from previous version
+  const oldEditor = $('#meeting-editor-modal');
+  if (oldEditor) oldEditor.remove();
+
   let modal = $('#meetings-modal');
 
   if (!modal) {
@@ -97,32 +104,7 @@ export function openMeetingsModal() {
               <div class="meetings-column-items" id="meetings-recurring-items"></div>
             </div>
           </div>
-          <div class="meetings-view-section" id="meetings-view-section" hidden>
-          <div class="meetings-view-type" id="meetings-view-type"></div>
-          <h3 class="meetings-view-title" id="meetings-view-title"></h3>
-          <div class="meetings-view-content" id="meetings-view-content"></div>
-          <div class="meetings-view-links" id="meetings-view-links"></div>
-          <div class="meetings-view-actions">
-            <button type="button" id="meetings-view-edit" class="meetings-view-icon-btn" title="Edit">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-              </svg>
-            </button>
-            <button type="button" id="meetings-view-delete" class="meetings-view-icon-btn meetings-view-icon-danger" title="Delete">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="3 6 5 6 21 6"></polyline>
-                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-              </svg>
-            </button>
-            <button type="button" id="meetings-view-close" class="meetings-view-icon-btn" title="Back to list">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <line x1="18" y1="6" x2="6" y2="18"></line>
-                <line x1="6" y1="6" x2="18" y2="18"></line>
-              </svg>
-            </button>
-          </div>
-        </div>
+          <div class="meetings-view-section" id="meetings-view-section" hidden></div>
         </div>
       </div>
     `;
@@ -132,30 +114,15 @@ export function openMeetingsModal() {
     modal.querySelector('.meetings-close-btn').addEventListener('click', closeMeetingsModal);
 
     $('#meetings-add-btn').addEventListener('click', () => {
-      openMeetingEditorModal({}, 'Add A Meeting');
+      showMeetingsEditMode(null);
     });
 
-    // View mode buttons
-    $('#meetings-view-edit').addEventListener('click', () => {
-      const meeting = getAllMeetings().find(m => m.id === meetingsEditingId);
-      if (meeting) {
-        closeMeetingsModal();
-        openMeetingEditorModal(meeting, 'Edit Meeting');
+    // Track toolbar state for inline description editor
+    document.addEventListener('selectionchange', () => {
+      const editor = $('#meetings-inline-desc-editor');
+      if (editor && modal && !modal.hidden) {
+        updateInlineToolbarState();
       }
-    });
-
-    $('#meetings-view-delete').addEventListener('click', () => {
-      if (meetingsEditingId && confirm('Delete this meeting?')) {
-        deleteMeeting(meetingsEditingId);
-        meetingsEditingId = null;
-        showToast('Meeting deleted');
-        showMeetingsMainView();
-      }
-    });
-
-    $('#meetings-view-close').addEventListener('click', () => {
-      meetingsEditingId = null;
-      showMeetingsMainView();
     });
   }
 
@@ -164,40 +131,72 @@ export function openMeetingsModal() {
   modal.hidden = false;
 }
 
+export function closeMeetingsModal() {
+  const modal = $('#meetings-modal');
+  if (modal) modal.hidden = true;
+  meetingsEditingId = null;
+}
+
+// ============================================================
+// MAIN VIEW (list only, no detail)
+// ============================================================
+
 function showMeetingsMainView() {
   $('#meetings-columns').hidden = false;
   $('#meetings-view-section').hidden = true;
-
   $('#meetings-title').textContent = 'Meetings';
-  // Clear active highlight
+
   const items = document.querySelectorAll('#meetings-modal .meetings-item');
   items.forEach(el => el.classList.remove('active'));
   renderMeetingsList();
 }
 
+// ============================================================
+// VIEW MODE (read-only detail in right panel)
+// ============================================================
+
 function showMeetingsViewMode(meeting) {
   if (!meeting) return;
   meetingsEditingId = meeting.id;
 
-  // Keep columns visible, show view section below
   $('#meetings-columns').hidden = false;
-  $('#meetings-view-section').hidden = false;
-
   $('#meetings-title').textContent = 'Meetings';
 
-  // Highlight the selected item
+  // Highlight selected item
   const items = document.querySelectorAll('#meetings-modal .meetings-item');
-  items.forEach(el => {
-    el.classList.toggle('active', el.dataset.meetingId === meeting.id);
-  });
+  items.forEach(el => el.classList.toggle('active', el.dataset.meetingId === meeting.id));
 
-  $('#meetings-view-type').textContent = meeting.type === 'routine' ? 'Recurring' : 'One-Time';
-  $('#meetings-view-title').textContent = meeting.title || 'Untitled';
-  $('#meetings-view-content').innerHTML = meeting.description || '<span style="color:var(--muted)">No description</span>';
+  const viewSection = $('#meetings-view-section');
+  viewSection.hidden = false;
+  viewSection.innerHTML = `
+    <div class="meetings-view-type">${meeting.type === 'routine' ? 'Recurring' : 'One-Time'}</div>
+    <h3 class="meetings-view-title">${escapeAttr(meeting.title || 'Untitled')}</h3>
+    <div class="meetings-view-content">${meeting.description || '<span style="color:var(--muted)">No description</span>'}</div>
+    <div class="meetings-view-links" id="meetings-view-links"></div>
+    <div class="meetings-view-actions">
+      <button type="button" class="meetings-view-icon-btn" id="meetings-view-edit" title="Edit">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+        </svg>
+      </button>
+      <button type="button" class="meetings-view-icon-btn meetings-view-icon-danger" id="meetings-view-delete" title="Delete">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="3 6 5 6 21 6"></polyline>
+          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+        </svg>
+      </button>
+      <button type="button" class="meetings-view-icon-btn" id="meetings-view-close" title="Back to list">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </button>
+    </div>
+  `;
 
   // Render links
   const linksContainer = $('#meetings-view-links');
-  linksContainer.innerHTML = '';
   const links = meeting.links || [];
   if (links.length > 0) {
     links.forEach(link => {
@@ -212,12 +211,202 @@ function showMeetingsViewMode(meeting) {
           <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
           <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
         </svg>
-        ${link.title || link.url}
+        ${escapeAttr(link.title || link.url)}
       `;
       linksContainer.appendChild(a);
     });
   }
+
+  // Wire view mode buttons
+  $('#meetings-view-edit').addEventListener('click', () => {
+    const m = getAllMeetings().find(x => x.id === meetingsEditingId);
+    if (m) showMeetingsEditMode(m);
+  });
+
+  $('#meetings-view-delete').addEventListener('click', () => {
+    if (meetingsEditingId && confirm('Delete this meeting?')) {
+      deleteMeeting(meetingsEditingId);
+      meetingsEditingId = null;
+      showToast('Meeting deleted');
+      showMeetingsMainView();
+    }
+  });
+
+  $('#meetings-view-close').addEventListener('click', () => {
+    meetingsEditingId = null;
+    showMeetingsMainView();
+  });
 }
+
+// ============================================================
+// EDIT / ADD MODE (inline form in right panel)
+// ============================================================
+
+function showMeetingsEditMode(meeting) {
+  const isNew = !meeting;
+  const meetingData = meeting || {};
+  meetingsEditingId = meetingData.id || null;
+
+  $('#meetings-columns').hidden = false;
+  $('#meetings-title').textContent = isNew ? 'Add A Meeting' : 'Meetings';
+
+  // Highlight selected item
+  const items = document.querySelectorAll('#meetings-modal .meetings-item');
+  items.forEach(el => el.classList.toggle('active', !isNew && el.dataset.meetingId === meetingData.id));
+
+  const viewSection = $('#meetings-view-section');
+  viewSection.hidden = false;
+  viewSection.innerHTML = `
+    <div class="meeting-editor-field">
+      <label for="meetings-inline-name">Meeting Name</label>
+      <input type="text" id="meetings-inline-name" placeholder="Enter meeting name..." />
+    </div>
+    <div class="meeting-editor-field" style="margin-top: 16px;">
+      <label for="meetings-inline-type">Type</label>
+      <select id="meetings-inline-type">
+        <option value="one-time">One-Time</option>
+        <option value="routine">Recurring</option>
+      </select>
+    </div>
+    <div class="meeting-links-section">
+      <label>Links</label>
+      <div class="meeting-link-rows" id="meetings-inline-link-rows"></div>
+      <button type="button" class="meeting-add-link-btn" id="meetings-inline-add-link">+ Add Link</button>
+    </div>
+    <div class="meeting-editor-description">
+      <label>Description</label>
+      <div class="task-desc-editor-wrap" id="meetings-inline-desc-wrap">
+        <div class="task-desc-toolbar" id="meetings-inline-toolbar">
+          <button type="button" class="task-desc-toolbar-btn meetings-inline-toolbar-btn" data-cmd="bold" title="Bold"><strong>B</strong></button>
+          <button type="button" class="task-desc-toolbar-btn meetings-inline-toolbar-btn" data-cmd="italic" title="Italic"><em>I</em></button>
+          <button type="button" class="task-desc-toolbar-btn meetings-inline-toolbar-btn" data-cmd="underline" title="Underline"><u>U</u></button>
+          <div class="task-desc-toolbar-divider"></div>
+          <button type="button" class="task-desc-toolbar-btn meetings-inline-toolbar-btn" data-cmd="insertUnorderedList" title="Bullet List">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3" cy="6" r="1.5" fill="currentColor" stroke="none"/><circle cx="3" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="3" cy="18" r="1.5" fill="currentColor" stroke="none"/></svg>
+          </button>
+          <button type="button" class="task-desc-toolbar-btn meetings-inline-toolbar-btn" data-cmd="insertOrderedList" title="Numbered List">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><line x1="10" y1="6" x2="21" y2="6"/><line x1="10" y1="12" x2="21" y2="12"/><line x1="10" y1="18" x2="21" y2="18"/><text x="1" y="8" font-size="8" fill="currentColor" stroke="none" font-family="sans-serif">1</text><text x="1" y="14" font-size="8" fill="currentColor" stroke="none" font-family="sans-serif">2</text><text x="1" y="20" font-size="8" fill="currentColor" stroke="none" font-family="sans-serif">3</text></svg>
+          </button>
+        </div>
+        <div id="meetings-inline-desc-editor" class="task-desc-editor" contenteditable="true"></div>
+      </div>
+    </div>
+    <div class="meetings-view-actions meetings-edit-actions">
+      ${!isNew ? `<button type="button" id="meetings-inline-delete" class="meetings-view-icon-btn meetings-view-icon-danger" title="Delete">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="3 6 5 6 21 6"></polyline>
+          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+        </svg>
+      </button>` : '<div></div>'}
+      <div class="meetings-edit-actions-right">
+        <button type="button" id="meetings-inline-cancel" class="btn-secondary">Cancel</button>
+        <button type="button" id="meetings-inline-save" class="btn-primary">Save</button>
+      </div>
+    </div>
+  `;
+
+  // Populate fields
+  $('#meetings-inline-name').value = meetingData.title || '';
+  $('#meetings-inline-type').value = meetingData.type || 'one-time';
+
+  // Populate links
+  (meetingData.links || []).forEach(link => addInlineLinkRow(link.title, link.url));
+
+  // Populate description
+  $('#meetings-inline-desc-editor').innerHTML = meetingData.description || '';
+
+  // Wire toolbar buttons
+  viewSection.querySelectorAll('.meetings-inline-toolbar-btn').forEach(btn => {
+    btn.addEventListener('mousedown', e => e.preventDefault());
+    btn.addEventListener('click', () => {
+      document.execCommand(btn.dataset.cmd, false, null);
+      updateInlineToolbarState();
+      $('#meetings-inline-desc-editor').focus();
+    });
+  });
+
+  // Markdown auto-convert
+  const descEditor = $('#meetings-inline-desc-editor');
+  descEditor.addEventListener('input', handleEditorInput);
+  descEditor.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && ['b', 'i', 'u'].includes(e.key.toLowerCase())) {
+      setTimeout(updateInlineToolbarState, 0);
+    }
+  });
+
+  // Add link button
+  $('#meetings-inline-add-link').addEventListener('click', () => addInlineLinkRow());
+
+  // Delete button
+  const deleteBtn = $('#meetings-inline-delete');
+  if (deleteBtn) {
+    deleteBtn.addEventListener('click', () => {
+      if (confirm('Delete this meeting?')) {
+        deleteMeeting(meetingsEditingId);
+        meetingsEditingId = null;
+        showToast('Meeting deleted');
+        showMeetingsMainView();
+      }
+    });
+  }
+
+  // Cancel button
+  $('#meetings-inline-cancel').addEventListener('click', () => {
+    if (isNew) {
+      showMeetingsMainView();
+    } else {
+      const m = getAllMeetings().find(x => x.id === meetingsEditingId);
+      if (m) showMeetingsViewMode(m);
+      else showMeetingsMainView();
+    }
+  });
+
+  // Save button
+  $('#meetings-inline-save').addEventListener('click', () => {
+    const nameInput = $('#meetings-inline-name');
+    const title = nameInput.value.trim();
+    if (!title) {
+      showToast('Please enter a meeting name');
+      nameInput.focus();
+      return;
+    }
+
+    const type = $('#meetings-inline-type').value;
+
+    // Collect links
+    const linkRows = document.querySelectorAll('#meetings-inline-link-rows .meeting-link-row');
+    const meetingLinks = [];
+    linkRows.forEach(row => {
+      const t = row.querySelector('.meeting-link-title');
+      const u = row.querySelector('.meeting-link-url');
+      const linkTitle = t ? t.value.trim() : '';
+      const linkUrl = u ? u.value.trim() : '';
+      if (linkUrl) meetingLinks.push({ title: linkTitle || linkUrl, url: linkUrl });
+    });
+
+    const description = normalizeDescHtml($('#meetings-inline-desc-editor').innerHTML) || null;
+
+    let savedMeeting;
+    if (meetingsEditingId) {
+      savedMeeting = updateMeeting(meetingsEditingId, { title, type, description, links: meetingLinks });
+      showToast('Meeting updated');
+    } else {
+      savedMeeting = createMeeting(title, type, description, meetingLinks);
+      showToast('Meeting created');
+    }
+
+    // Re-render list and show saved meeting in view mode
+    renderMeetingsList();
+    if (savedMeeting) showMeetingsViewMode(savedMeeting);
+  });
+
+  // Focus name input
+  requestAnimationFrame(() => $('#meetings-inline-name').focus());
+}
+
+// ============================================================
+// HELPERS
+// ============================================================
 
 function renderMeetingsList() {
   const onetimeContainer = $('#meetings-onetime-items');
@@ -258,7 +447,6 @@ function createMeetingListItem(meeting) {
   titleSpan.textContent = meeting.title || 'Untitled';
   item.appendChild(titleSpan);
 
-  // Highlight if currently viewing
   if (meetingsEditingId === meeting.id) {
     item.classList.add('active');
   }
@@ -270,274 +458,8 @@ function createMeetingListItem(meeting) {
   return item;
 }
 
-export function closeMeetingsModal() {
-  const modal = $('#meetings-modal');
-  if (modal) modal.hidden = true;
-  meetingsEditingId = null;
-}
-
-// ============================================================
-// MEETING EDITOR MODAL
-// ============================================================
-
-function openMeetingEditorModal(meetingData, titleText) {
-  let modal = $('#meeting-editor-modal');
-
-  if (!modal) {
-    modal = document.createElement('div');
-    modal.id = 'meeting-editor-modal';
-    modal.className = 'meeting-editor-modal';
-    modal.innerHTML = `
-      <div class="meeting-editor-backdrop"></div>
-      <div class="meeting-editor-dialog">
-        <div class="meeting-editor-header">
-          <h4 id="meeting-editor-title">Add A Meeting</h4>
-          <button type="button" class="meeting-editor-close-btn" title="Close">&times;</button>
-        </div>
-        <div class="meeting-editor-body">
-          <div class="meeting-editor-content">
-            <div class="meeting-editor-field">
-              <label for="meeting-editor-name">Meeting Name</label>
-              <input type="text" id="meeting-editor-name" placeholder="Enter meeting name..." />
-            </div>
-            <div class="meeting-editor-field">
-              <label for="meeting-editor-type">Type</label>
-              <select id="meeting-editor-type">
-                <option value="one-time">One-Time</option>
-                <option value="routine">Recurring</option>
-              </select>
-            </div>
-          </div>
-          <div class="meeting-links-section">
-            <label>Links</label>
-            <div class="meeting-link-rows" id="meeting-link-rows"></div>
-            <button type="button" class="meeting-add-link-btn" id="meeting-add-link-btn">+ Add Link</button>
-          </div>
-          <div class="meeting-editor-description">
-            <label>Description</label>
-            <div class="task-desc-view" id="meeting-desc-view">
-              <div class="task-desc-view-content" id="meeting-desc-view-content"></div>
-              <div class="task-desc-view-empty">No description</div>
-            </div>
-            <button type="button" class="task-desc-edit-btn" id="meeting-desc-edit-btn" title="Edit description">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-              </svg>
-              Edit
-            </button>
-            <div class="task-desc-editor-wrap" id="meeting-desc-editor-wrap" hidden>
-              <div class="task-desc-toolbar" id="meeting-desc-toolbar">
-                <button type="button" class="task-desc-toolbar-btn meeting-toolbar-btn" data-cmd="bold" title="Bold"><strong>B</strong></button>
-                <button type="button" class="task-desc-toolbar-btn meeting-toolbar-btn" data-cmd="italic" title="Italic"><em>I</em></button>
-                <button type="button" class="task-desc-toolbar-btn meeting-toolbar-btn" data-cmd="underline" title="Underline"><u>U</u></button>
-                <div class="task-desc-toolbar-divider"></div>
-                <button type="button" class="task-desc-toolbar-btn meeting-toolbar-btn" data-cmd="insertUnorderedList" title="Bullet List">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3" cy="6" r="1.5" fill="currentColor" stroke="none"/><circle cx="3" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="3" cy="18" r="1.5" fill="currentColor" stroke="none"/></svg>
-                </button>
-                <button type="button" class="task-desc-toolbar-btn meeting-toolbar-btn" data-cmd="insertOrderedList" title="Numbered List">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><line x1="10" y1="6" x2="21" y2="6"/><line x1="10" y1="12" x2="21" y2="12"/><line x1="10" y1="18" x2="21" y2="18"/><text x="1" y="8" font-size="8" fill="currentColor" stroke="none" font-family="sans-serif">1</text><text x="1" y="14" font-size="8" fill="currentColor" stroke="none" font-family="sans-serif">2</text><text x="1" y="20" font-size="8" fill="currentColor" stroke="none" font-family="sans-serif">3</text></svg>
-                </button>
-              </div>
-              <div id="meeting-desc-editor" class="task-desc-editor" contenteditable="true"></div>
-              <div class="task-desc-editor-actions">
-                <button type="button" id="meeting-desc-cancel" class="task-desc-icon-btn" title="Cancel">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                </button>
-                <button type="button" id="meeting-desc-save" class="task-desc-icon-btn task-desc-save-btn" title="Save">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="meeting-editor-actions">
-          <button type="button" id="meeting-editor-delete" class="meeting-editor-delete-btn" hidden title="Delete meeting">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="3 6 5 6 21 6"></polyline>
-              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-            </svg>
-          </button>
-          <div class="meeting-editor-actions-right">
-            <button type="button" id="meeting-editor-cancel" class="btn-secondary">Cancel</button>
-            <button type="button" id="meeting-editor-save" class="btn-primary">Save</button>
-          </div>
-        </div>
-      </div>
-    `;
-    document.body.appendChild(modal);
-
-    modal.querySelector('.meeting-editor-backdrop').addEventListener('click', closeMeetingEditorModal);
-    modal.querySelector('.meeting-editor-close-btn').addEventListener('click', closeMeetingEditorModal);
-
-    // Description toolbar commands
-    modal.querySelectorAll('.meeting-toolbar-btn').forEach(btn => {
-      btn.addEventListener('mousedown', (e) => e.preventDefault());
-      btn.addEventListener('click', () => {
-        const cmd = btn.dataset.cmd;
-        document.execCommand(cmd, false, null);
-        updateMeetingToolbarState();
-        $('#meeting-desc-editor').focus();
-      });
-    });
-
-    // Markdown auto-convert in description editor
-    const descEditor = modal.querySelector('#meeting-desc-editor');
-    descEditor.addEventListener('input', handleEditorInput);
-
-    descEditor.addEventListener('keydown', (e) => {
-      if ((e.ctrlKey || e.metaKey) && ['b', 'i', 'u'].includes(e.key.toLowerCase())) {
-        setTimeout(updateMeetingToolbarState, 0);
-      }
-    });
-
-    document.addEventListener('selectionchange', () => {
-      const m = $('#meeting-editor-modal');
-      if (m && !m.hidden) {
-        updateMeetingToolbarState();
-      }
-    });
-
-    // Description edit button
-    $('#meeting-desc-edit-btn').addEventListener('click', () => {
-      enterMeetingDescEditMode();
-    });
-
-    // Description save button
-    $('#meeting-desc-save').addEventListener('click', () => {
-      saveMeetingDescFromEditor();
-    });
-
-    // Description cancel button
-    $('#meeting-desc-cancel').addEventListener('click', () => {
-      exitMeetingDescEditMode();
-    });
-
-    // Add link button
-    $('#meeting-add-link-btn').addEventListener('click', () => {
-      addMeetingLinkRow();
-    });
-  }
-
-  // Update title
-  $('#meeting-editor-title').textContent = titleText;
-
-  // Populate name
-  const nameInput = $('#meeting-editor-name');
-  nameInput.value = meetingData.title || '';
-
-  // Populate type
-  const typeSelect = $('#meeting-editor-type');
-  typeSelect.value = meetingData.type || 'one-time';
-
-  // Populate links
-  const linkRowsContainer = $('#meeting-link-rows');
-  linkRowsContainer.innerHTML = '';
-  const links = meetingData.links || [];
-  if (links.length > 0) {
-    links.forEach(link => addMeetingLinkRow(link.title, link.url));
-  }
-
-  // Populate description
-  meetingDescriptionEditing = false;
-  const descViewContent = $('#meeting-desc-view-content');
-  const descView = $('#meeting-desc-view');
-  const descEditBtn = $('#meeting-desc-edit-btn');
-  const descEditorWrap = $('#meeting-desc-editor-wrap');
-  const hasDescription = normalizeDescHtml(meetingData.description || '');
-  descViewContent.innerHTML = meetingData.description || '';
-
-  if (hasDescription) {
-    descView.hidden = false;
-    descEditBtn.hidden = false;
-    descEditorWrap.hidden = true;
-  } else {
-    descView.hidden = true;
-    descEditBtn.hidden = true;
-    descEditorWrap.hidden = false;
-    meetingDescriptionEditing = true;
-    const editor = $('#meeting-desc-editor');
-    editor.innerHTML = '';
-    requestAnimationFrame(() => editor.focus());
-  }
-
-  // Determine if editing
-  const isEditing = !!meetingData.id;
-  meetingsEditingId = meetingData.id || null;
-
-  // Delete button
-  const deleteBtn = $('#meeting-editor-delete');
-  if (deleteBtn) {
-    deleteBtn.hidden = !isEditing;
-    deleteBtn.onclick = () => {
-      if (confirm('Are you sure you want to delete this meeting?')) {
-        deleteMeeting(meetingsEditingId);
-        showToast('Meeting deleted');
-        closeMeetingEditorModal();
-        // Reopen list
-        openMeetingsModal();
-      }
-    };
-  }
-
-  // Cancel button
-  $('#meeting-editor-cancel').onclick = closeMeetingEditorModal;
-
-  // Save button
-  $('#meeting-editor-save').onclick = () => {
-    const title = nameInput.value.trim();
-    if (!title) {
-      showToast('Please enter a meeting name');
-      nameInput.focus();
-      return;
-    }
-
-    const type = typeSelect.value;
-
-    // Collect links
-    const linkRows = linkRowsContainer.querySelectorAll('.meeting-link-row');
-    const meetingLinks = [];
-    linkRows.forEach(row => {
-      const titleInput = row.querySelector('.meeting-link-title');
-      const urlInput = row.querySelector('.meeting-link-url');
-      const linkTitle = titleInput ? titleInput.value.trim() : '';
-      const linkUrl = urlInput ? urlInput.value.trim() : '';
-      if (linkUrl) {
-        meetingLinks.push({ title: linkTitle || linkUrl, url: linkUrl });
-      }
-    });
-
-    // Get description
-    const rawDesc = meetingDescriptionEditing
-      ? $('#meeting-desc-editor').innerHTML
-      : $('#meeting-desc-view-content').innerHTML;
-    const description = normalizeDescHtml(rawDesc) || null;
-
-    if (meetingsEditingId) {
-      updateMeeting(meetingsEditingId, { title, type, description, links: meetingLinks });
-      showToast('Meeting updated');
-    } else {
-      createMeeting(title, type, description, meetingLinks);
-      showToast('Meeting created');
-    }
-
-    closeMeetingEditorModal();
-    openMeetingsModal();
-  };
-
-  modal.hidden = false;
-  nameInput.focus();
-}
-
-function closeMeetingEditorModal() {
-  const modal = $('#meeting-editor-modal');
-  if (modal) modal.hidden = true;
-  meetingDescriptionEditing = false;
-}
-
-// Link row helpers
-function addMeetingLinkRow(title, url) {
-  const container = $('#meeting-link-rows');
+function addInlineLinkRow(title, url) {
+  const container = $('#meetings-inline-link-rows');
   if (!container) return;
 
   const row = document.createElement('div');
@@ -548,64 +470,14 @@ function addMeetingLinkRow(title, url) {
     <button type="button" class="meeting-link-remove" title="Remove link">&times;</button>
   `;
 
-  row.querySelector('.meeting-link-remove').addEventListener('click', () => {
-    row.remove();
-  });
-
+  row.querySelector('.meeting-link-remove').addEventListener('click', () => row.remove());
   container.appendChild(row);
 }
 
-function escapeAttr(str) {
-  return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
-
-// Description edit helpers
-function updateMeetingToolbarState() {
-  const btns = document.querySelectorAll('.meeting-toolbar-btn');
+function updateInlineToolbarState() {
+  const btns = document.querySelectorAll('.meetings-inline-toolbar-btn');
   btns.forEach(btn => {
     const cmd = btn.dataset.cmd;
-    if (cmd) {
-      btn.classList.toggle('active', document.queryCommandState(cmd));
-    }
+    if (cmd) btn.classList.toggle('active', document.queryCommandState(cmd));
   });
-}
-
-function enterMeetingDescEditMode() {
-  meetingDescriptionEditing = true;
-  const viewContent = $('#meeting-desc-view-content');
-  const editor = $('#meeting-desc-editor');
-  const descView = $('#meeting-desc-view');
-  const descEditBtn = $('#meeting-desc-edit-btn');
-  const descEditorWrap = $('#meeting-desc-editor-wrap');
-
-  editor.innerHTML = viewContent.innerHTML || '';
-  descView.hidden = true;
-  descEditBtn.hidden = true;
-  descEditorWrap.hidden = false;
-  editor.focus();
-}
-
-function saveMeetingDescFromEditor() {
-  const editor = $('#meeting-desc-editor');
-  const viewContent = $('#meeting-desc-view-content');
-  const descView = $('#meeting-desc-view');
-  const descEditBtn = $('#meeting-desc-edit-btn');
-  const descEditorWrap = $('#meeting-desc-editor-wrap');
-
-  viewContent.innerHTML = normalizeDescHtml(editor.innerHTML);
-  meetingDescriptionEditing = false;
-  descView.hidden = false;
-  descEditBtn.hidden = false;
-  descEditorWrap.hidden = true;
-}
-
-function exitMeetingDescEditMode() {
-  meetingDescriptionEditing = false;
-  const descView = $('#meeting-desc-view');
-  const descEditBtn = $('#meeting-desc-edit-btn');
-  const descEditorWrap = $('#meeting-desc-editor-wrap');
-
-  descView.hidden = false;
-  descEditBtn.hidden = false;
-  descEditorWrap.hidden = true;
 }
