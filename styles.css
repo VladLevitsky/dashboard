@@ -8493,6 +8493,56 @@ body[data-theme="dark"][data-style="glass"][data-glass-theme="sunset"] .tasks-su
   box-shadow: 0 0 0 3px var(--brand);
 }
 
+.task-editor-primary-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  user-select: none;
+}
+
+.task-editor-primary-label input[type="checkbox"] {
+  display: none;
+}
+
+.task-editor-primary-box {
+  width: 18px;
+  height: 18px;
+  border: 2px solid #d1d5db;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.task-editor-primary-label:hover .task-editor-primary-box {
+  border-color: var(--brand);
+}
+
+.task-editor-primary-label input:checked + .task-editor-primary-box {
+  background: var(--brand);
+  border-color: var(--brand);
+}
+
+.task-editor-primary-label input:checked + .task-editor-primary-box::after {
+  content: '';
+  width: 5px;
+  height: 9px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg) translateY(-1px);
+}
+
+[data-theme="dark"] .task-editor-primary-box {
+  border-color: #4b5563;
+}
+
 .task-editor-item-selector {
   display: flex;
   align-items: center;

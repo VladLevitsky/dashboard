@@ -1252,7 +1252,7 @@ function renderEisenhowerMatrix() {
 
   const importantHeading = document.createElement('h4');
   importantHeading.className = 'eisenhower-section-heading';
-  importantHeading.textContent = 'Important';
+  importantHeading.textContent = 'Primary';
   importantSection.appendChild(importantHeading);
 
   const importantColumnsGrid = document.createElement('div');
@@ -1829,6 +1829,11 @@ function openTaskEditorModal(taskData, titleText) {
             <div class="task-editor-field">
               <label>Priority</label>
               <div class="task-editor-colors" id="task-editor-colors"></div>
+              <label class="task-editor-primary-label" id="task-editor-primary-label">
+                <input type="checkbox" id="task-editor-primary-checkbox" />
+                <span class="task-editor-primary-box"></span>
+                <span>Primary</span>
+              </label>
             </div>
             <div class="task-editor-field">
               <label for="task-editor-link">Task Link (Optional)</label>
@@ -1993,6 +1998,10 @@ function openTaskEditorModal(taskData, titleText) {
     colorsContainer.appendChild(colorBtn);
   });
 
+  // Primary checkbox
+  const primaryCheckbox = $('#task-editor-primary-checkbox');
+  primaryCheckbox.checked = !!taskData.pinned;
+
   // Populate description - auto-enter edit mode if empty
   descriptionEditing = false;
   const descViewContent = $('#task-desc-view-content');
@@ -2080,18 +2089,17 @@ function openTaskEditorModal(taskData, titleText) {
         linkedItem: selectedLinkedItem,
         link: link,
         description: description,
-        subtasks: subtasks.length > 0 ? subtasks : null
+        subtasks: subtasks.length > 0 ? subtasks : null,
+        pinned: primaryCheckbox.checked
       });
       showToast('Task updated');
     } else {
       // Create new task
       const task = createTask(title, selectedColor, selectedLinkedItem, link);
-      const updates = {};
+      const updates = { pinned: isPrimary };
       if (description) updates.description = description;
       if (subtasks.length > 0) updates.subtasks = subtasks;
-      if (Object.keys(updates).length > 0) {
-        updateTask(task.id, updates);
-      }
+      updateTask(task.id, updates);
       showToast('Task created');
     }
 
