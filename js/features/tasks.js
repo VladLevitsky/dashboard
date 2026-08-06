@@ -2096,7 +2096,7 @@ function openTaskEditorModal(taskData, titleText) {
     } else {
       // Create new task
       const task = createTask(title, selectedColor, selectedLinkedItem, link);
-      const updates = { pinned: isPrimary };
+      const updates = { pinned: primaryCheckbox.checked };
       if (description) updates.description = description;
       if (subtasks.length > 0) updates.subtasks = subtasks;
       updateTask(task.id, updates);
