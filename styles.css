@@ -35,12 +35,59 @@ body {
 .card {
   background: var(--card);
   border-radius: var(--radius);
-  box-shadow: var(--shadow);
   padding: 28.8px 40.32px 48.384px 40.32px; /* reduced bottom by 20% for all cards except top (overridden) */
   margin: 0 16px 40px 16px; /* consistent 40px vertical spacing, standard side gutters */
   position: relative;
   transition: all 0.3s ease;
   overflow: hidden;
+  border: none;
+  box-shadow:
+    0 8px 30px rgba(0,0,0,0.07),
+    inset 0 0 0 2px rgba(255,255,255,0.5),
+    inset 0 6px 20px rgba(255,255,255,0.5),
+    inset 0 -6px 20px rgba(0,0,0,0.04),
+    inset 6px 0 20px rgba(255,255,255,0.15),
+    inset -6px 0 20px rgba(255,255,255,0.15);
+}
+/* Subtle glass shine on cards — just a hint, borders do the heavy lifting */
+.card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background:
+    linear-gradient(
+      165deg,
+      rgba(255,255,255,0.12) 0%,
+      rgba(255,255,255,0.03) 15%,
+      transparent 35%
+    );
+  pointer-events: none;
+  z-index: 0;
+}
+/* Dark mode cards */
+[data-theme="dark"] .card {
+  box-shadow:
+    0 8px 30px rgba(0,0,0,0.35),
+    inset 0 0 0 2px rgba(255,255,255,0.09),
+    inset 0 6px 20px rgba(255,255,255,0.08),
+    inset 0 -6px 20px rgba(0,0,0,0.15),
+    inset 6px 0 20px rgba(255,255,255,0.04),
+    inset -6px 0 20px rgba(255,255,255,0.04);
+}
+[data-theme="dark"] .card::before {
+  background:
+    linear-gradient(
+      165deg,
+      rgba(255,255,255,0.04) 0%,
+      rgba(255,255,255,0.01) 15%,
+      transparent 35%
+    );
+}
+/* Elevate card content above glass shine */
+.card > * {
+  position: relative;
+  z-index: 1;
 }
 
 
@@ -95,9 +142,17 @@ body {
 .profile-title { color: var(--muted); font-size: 22px; }
 
 /* Search bar in header */
+.header-search-row {
+  position: absolute;
+  bottom: 20px;
+  left: 103px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .search-container {
   position: relative;
-  margin-top: 12px;
   width: 260px;
 }
 
@@ -435,9 +490,6 @@ body {
 
 /* Display mode toggle button - left side, aligned with right-side buttons */
 .display-mode-toggle {
-  position: absolute;
-  bottom: 20px;
-  left: 103px;
   width: 30px;
   height: 30px;
   background: transparent;
@@ -447,6 +499,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
   transition: all 0.2s ease;
   z-index: 10;
   padding: 0;
@@ -1834,28 +1887,71 @@ h2, h3 { margin: 0 0 16px; }
 }
 .fab-group:not([hidden]) { display: flex; }
 .fab {
-  width: 48px; height: 48px; border-radius: 999px; border: none; box-shadow: var(--shadow);
+  width: 48px; height: 48px; border-radius: 999px; border: none;
   cursor: pointer; font-weight: 900; font-size: 20px; display: grid; place-items: center;
   transition: all 0.2s ease;
+  position: relative;
+  box-shadow:
+    0 4px 16px rgba(0,0,0,0.1),
+    inset 0 0 0 1.5px rgba(255,255,255,0.5),
+    inset 0 2px 6px rgba(255,255,255,0.6),
+    inset 0 -3px 8px rgba(0,0,0,0.05),
+    inset 3px 0 6px rgba(255,255,255,0.15),
+    inset -3px 0 6px rgba(255,255,255,0.15);
+}
+.fab::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background:
+    radial-gradient(ellipse 50% 50% at 35% 20%, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0.1) 50%, transparent 80%),
+    linear-gradient(155deg, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.05) 30%, transparent 55%);
+  pointer-events: none;
+  z-index: 0;
 }
 .fab:hover { transform: scale(1.1); }
-.fab-accept { 
-  background: #d1fae5; 
-  color: #065f46; 
+.fab-accept {
+  background: #6ee7b7;
+  color: #064e3b;
   font-size: 20px;
   font-weight: 900;
   position: relative;
 }
 .fab-accept[data-checkmark="true"]::after {
-  content: '✓';
+  content: '';
   position: absolute;
-  top: 50%;
+  top: 46%;
   left: 50%;
-  transform: translate(-50%, -50%);
-  font-size: 20px;
-  font-weight: 900;
+  width: 14px;
+  height: 6px;
+  border-left: 3px solid currentColor;
+  border-bottom: 3px solid currentColor;
+  transform: translate(-50%, -50%) rotate(-45deg);
 }
-.fab-cancel { background: #fee2e2; color: #7f1d1d; }
+.fab-cancel { background: #fca5a5; color: #7f1d1d; }
+[data-theme="dark"] .fab-accept {
+  background: #064e3b;
+  color: #a7f3d0;
+}
+[data-theme="dark"] .fab-cancel {
+  background: #7f1d1d;
+  color: #fecaca;
+}
+[data-theme="dark"] .fab {
+  box-shadow:
+    0 4px 16px rgba(0,0,0,0.3),
+    inset 0 0 0 1.5px rgba(255,255,255,0.1),
+    inset 0 2px 6px rgba(255,255,255,0.1),
+    inset 0 -3px 8px rgba(0,0,0,0.15),
+    inset 3px 0 6px rgba(255,255,255,0.04),
+    inset -3px 0 6px rgba(255,255,255,0.04);
+}
+[data-theme="dark"] .fab::before {
+  background:
+    radial-gradient(ellipse 50% 50% at 35% 20%, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.06) 50%, transparent 80%),
+    linear-gradient(155deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.03) 30%, transparent 55%);
+}
 
 /* Restore FAB (bottom-left) */
 .fab-left {
@@ -2530,8 +2626,8 @@ h2, h3 { margin: 0 0 16px; }
   width: 48px;
   height: 48px;
   border-radius: 50%;
-  background: #d1fae5;
-  color: #065f46;
+  background: #6ee7b7;
+  color: #064e3b;
   border: none;
   cursor: pointer;
   font-size: 24px;
@@ -2539,18 +2635,53 @@ h2, h3 { margin: 0 0 16px; }
   display: none;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
   z-index: 10;
   transition: all 0.2s ease;
-  margin: -10px auto 30px auto; /* Negative top margin counteracts card's 40px bottom margin for centering */
+  margin: -10px auto 30px auto;
+  position: relative;
+  box-shadow:
+    0 4px 12px rgba(0,0,0,0.15),
+    inset 0 0 0 1.5px rgba(255,255,255,0.5),
+    inset 0 2px 6px rgba(255,255,255,0.6),
+    inset 0 -3px 8px rgba(0,0,0,0.05),
+    inset 3px 0 6px rgba(255,255,255,0.15),
+    inset -3px 0 6px rgba(255,255,255,0.15);
 }
-
-
+.gap-add-btn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background:
+    radial-gradient(ellipse 50% 50% at 35% 20%, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0.1) 50%, transparent 80%),
+    linear-gradient(155deg, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.05) 30%, transparent 55%);
+  pointer-events: none;
+}
+[data-theme="dark"] .gap-add-btn {
+  background: #064e3b;
+  color: #a7f3d0;
+  box-shadow:
+    0 4px 12px rgba(0,0,0,0.3),
+    inset 0 0 0 1.5px rgba(255,255,255,0.1),
+    inset 0 2px 6px rgba(255,255,255,0.1),
+    inset 0 -3px 8px rgba(0,0,0,0.15),
+    inset 3px 0 6px rgba(255,255,255,0.04),
+    inset -3px 0 6px rgba(255,255,255,0.04);
+}
+[data-theme="dark"] .gap-add-btn::before {
+  background:
+    radial-gradient(ellipse 50% 50% at 35% 20%, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.06) 50%, transparent 80%),
+    linear-gradient(155deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.03) 30%, transparent 55%);
+}
 
 .gap-add-btn:hover {
   background: #a7f3d0;
   transform: scale(1.1);
-  box-shadow: 0 6px 16px rgba(0,0,0,0.2);
+  box-shadow:
+    0 6px 16px rgba(0,0,0,0.2),
+    inset 0 0 0 1.5px rgba(255,255,255,0.5),
+    inset 0 2px 6px rgba(255,255,255,0.6),
+    inset 0 -3px 8px rgba(0,0,0,0.05);
 }
 
 /* Hide old card add buttons */
@@ -4208,8 +4339,14 @@ body[data-style="glass"] .app-header.card {
   background: rgba(255, 255, 255, 0.7) !important;
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.3) !important;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  border: none !important;
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.1),
+    inset 0 0 0 2px rgba(255,255,255,0.5),
+    inset 0 6px 20px rgba(255,255,255,0.5),
+    inset 0 -6px 20px rgba(0,0,0,0.04),
+    inset 6px 0 20px rgba(255,255,255,0.15),
+    inset -6px 0 20px rgba(255,255,255,0.15) !important;
 }
 
 body[data-style="glass"] .unified-icon-btn,
@@ -4280,8 +4417,14 @@ body[data-theme="dark"][data-style="glass"] .app-header.card {
   background: rgba(30, 41, 59, 0.7) !important;
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(71, 85, 105, 0.3) !important;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  border: none !important;
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.3),
+    inset 0 0 0 2px rgba(255,255,255,0.09),
+    inset 0 6px 20px rgba(255,255,255,0.08),
+    inset 0 -6px 20px rgba(0,0,0,0.15),
+    inset 6px 0 20px rgba(255,255,255,0.04),
+    inset -6px 0 20px rgba(255,255,255,0.04) !important;
 }
 
 body[data-theme="dark"][data-style="glass"] .unified-icon-btn,
@@ -5485,7 +5628,7 @@ body.stacked-mode .icon-task-indicator {
   animation: linkBubbleOut 0.25s ease forwards;
 }
 
-/* Individual task bubble - color-coded */
+/* Individual task bubble - color-coded with glass effect */
 .reminder-task-bubble {
   display: inline-block;
   padding: 8px 16px;
@@ -5499,87 +5642,144 @@ body.stacked-mode .icon-task-indicator {
   transform: translateX(-20px) scale(0.5);
   white-space: nowrap;
   max-width: fit-content;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  position: relative;
+  z-index: 0;
+  isolation: isolate;
+  box-shadow:
+    0 4px 12px rgba(0, 0, 0, 0.15),
+    inset 0 1px 2px rgba(255,255,255,0.9),
+    inset 0 -2px 6px rgba(0,0,0,0.03);
+}
+/* Glass shine overlay for task bubbles */
+.reminder-task-bubble::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background:
+    radial-gradient(ellipse 25% 70% at 12% 30%, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0.18) 40%, transparent 70%),
+    radial-gradient(ellipse 90% 50% at 50% -10%, rgba(255,255,255,0.65) 0%, rgba(255,255,255,0.3) 35%, rgba(255,255,255,0.06) 60%, transparent 80%),
+    linear-gradient(160deg, rgba(255,255,255,0.45) 0%, rgba(255,255,255,0.15) 25%, transparent 50%, rgba(255,255,255,0.02) 75%, rgba(255,255,255,0.08) 100%);
+  pointer-events: none;
+  z-index: -1;
+}
+/* Glass rim for task bubbles */
+.reminder-task-bubble::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow:
+    inset 0 0 0 1px rgba(255,255,255,0.4),
+    inset 0 2px 4px rgba(255,255,255,0.55),
+    inset 0 -2px 4px rgba(0,0,0,0.04),
+    inset 2px 0 4px rgba(255,255,255,0.1),
+    inset -2px 0 4px rgba(255,255,255,0.1);
+  pointer-events: none;
+  z-index: -1;
 }
 
 .reminder-task-bubble:hover {
   filter: brightness(0.95);
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
+  box-shadow:
+    0 6px 16px rgba(0, 0, 0, 0.2),
+    inset 0 1px 2px rgba(255,255,255,0.9),
+    inset 0 -2px 6px rgba(0,0,0,0.03);
 }
 
 .reminder-task-bubble:active {
   transform: scale(0.95);
 }
 
-/* Task bubble color variants - Light mode (vibrant colors) */
+/* Task bubble color variants - Light mode */
 .task-bubble-red {
   background: #fecaca;
-  border: 2px solid #f87171;
+  border: 2px solid rgba(248, 113, 113, 0.5);
   color: #991b1b;
 }
 
 .task-bubble-yellow {
   background: #fde68a;
-  border: 2px solid #fbbf24;
+  border: 2px solid rgba(251, 191, 36, 0.5);
   color: #92400e;
 }
 
 .task-bubble-green {
   background: #a7f3d0;
-  border: 2px solid #34d399;
+  border: 2px solid rgba(52, 211, 153, 0.5);
   color: #065f46;
 }
 
 .task-bubble-orange {
   background: #fed7aa;
-  border: 2px solid #fb923c;
+  border: 2px solid rgba(251, 146, 60, 0.5);
   color: #9a3412;
 }
 
 .task-bubble-blue {
   background: #bfdbfe;
-  border: 2px solid #60a5fa;
+  border: 2px solid rgba(96, 165, 250, 0.5);
   color: #1e40af;
 }
 
-/* Task bubble color variants - Dark mode (vibrant muted colors) */
+/* Task bubble color variants - Dark mode */
 [data-theme="dark"] .task-bubble-red {
   background: #7f1d1d;
-  border-color: #f87171;
+  border-color: rgba(248, 113, 113, 0.4);
   color: #fecaca;
 }
 
 [data-theme="dark"] .task-bubble-yellow {
   background: #78350f;
-  border-color: #fbbf24;
+  border-color: rgba(251, 191, 36, 0.4);
   color: #fef08a;
 }
 
 [data-theme="dark"] .task-bubble-green {
   background: #064e3b;
-  border-color: #34d399;
+  border-color: rgba(52, 211, 153, 0.4);
   color: #a7f3d0;
 }
 
 [data-theme="dark"] .task-bubble-orange {
   background: #7c2d12;
-  border-color: #fb923c;
+  border-color: rgba(251, 146, 60, 0.4);
   color: #fed7aa;
 }
 
 [data-theme="dark"] .task-bubble-blue {
   background: #1e3a5f;
-  border-color: #60a5fa;
+  border-color: rgba(96, 165, 250, 0.4);
   color: #bfdbfe;
 }
 
 [data-theme="dark"] .reminder-task-bubble {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  box-shadow:
+    0 4px 12px rgba(0, 0, 0, 0.4),
+    inset 0 1px 2px rgba(255,255,255,0.1),
+    inset 0 -2px 6px rgba(0,0,0,0.12);
+}
+[data-theme="dark"] .reminder-task-bubble::before {
+  background:
+    radial-gradient(ellipse 25% 70% at 12% 30%, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.07) 40%, transparent 70%),
+    radial-gradient(ellipse 90% 50% at 50% -10%, rgba(255,255,255,0.25) 0%, rgba(255,255,255,0.1) 35%, rgba(255,255,255,0.02) 60%, transparent 80%),
+    linear-gradient(160deg, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0.05) 25%, transparent 50%, rgba(0,0,0,0.04) 75%, rgba(255,255,255,0.04) 100%);
+}
+[data-theme="dark"] .reminder-task-bubble::after {
+  box-shadow:
+    inset 0 0 0 1px rgba(255,255,255,0.1),
+    inset 0 2px 4px rgba(255,255,255,0.15),
+    inset 0 -2px 4px rgba(0,0,0,0.18),
+    inset 2px 0 4px rgba(255,255,255,0.04),
+    inset -2px 0 4px rgba(255,255,255,0.04);
 }
 
 [data-theme="dark"] .reminder-task-bubble:hover {
   filter: brightness(1.1);
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5);
+  box-shadow:
+    0 6px 16px rgba(0, 0, 0, 0.5),
+    inset 0 1px 2px rgba(255,255,255,0.1),
+    inset 0 -2px 6px rgba(0,0,0,0.12);
 }
 
 /* Drag styling for task bubbles */
@@ -8885,7 +9085,7 @@ body[data-theme="dark"][data-style="glass"][data-glass-theme="sunset"] .tasks-su
   position: relative;
   cursor: pointer;
   padding: 10px 14px;
-  border-radius: 8px;
+  border-radius: 12px;
   font-size: 14px;
   transition: all 0.15s ease;
   display: flex;
@@ -8894,22 +9094,88 @@ body[data-theme="dark"][data-style="glass"][data-glass-theme="sunset"] .tasks-su
   gap: 8px;
   background: rgba(255, 255, 255, 0.85);
   color: var(--text);
-  border: 1px solid rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  box-shadow:
+    0 4px 16px rgba(0,0,0,0.06),
+    0 8px 30px rgba(0,0,0,0.04),
+    inset 0 1px 2px rgba(255,255,255,0.95),
+    inset 0 -3px 8px rgba(0,0,0,0.03);
+}
+/* Glass shine */
+.eisenhower-task::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background:
+    radial-gradient(ellipse 30% 60% at 10% 30%, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0.18) 40%, transparent 70%),
+    radial-gradient(ellipse 85% 50% at 50% -10%, rgba(255,255,255,0.65) 0%, rgba(255,255,255,0.3) 35%, rgba(255,255,255,0.06) 60%, transparent 80%),
+    linear-gradient(160deg, rgba(255,255,255,0.45) 0%, rgba(255,255,255,0.15) 25%, transparent 50%, rgba(255,255,255,0.02) 75%, rgba(255,255,255,0.08) 100%);
+  pointer-events: none;
+  z-index: 1;
+}
+/* Glass rim */
+.eisenhower-task::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow:
+    inset 0 0 0 1px rgba(255,255,255,0.4),
+    inset 0 2px 4px rgba(255,255,255,0.55),
+    inset 0 -2px 4px rgba(0,0,0,0.04),
+    inset 2px 0 4px rgba(255,255,255,0.1),
+    inset -2px 0 4px rgba(255,255,255,0.1);
+  pointer-events: none;
+  z-index: 2;
+}
+/* Elevate content above glass */
+.eisenhower-task > * {
+  position: relative;
+  z-index: 3;
 }
 
 [data-theme="dark"] .eisenhower-task {
   background: rgba(30, 41, 59, 0.85);
-  border-color: rgba(255, 255, 255, 0.1);
+  border-color: rgba(148, 163, 184, 0.1);
+  box-shadow:
+    0 4px 16px rgba(0,0,0,0.25),
+    0 8px 30px rgba(0,0,0,0.15),
+    inset 0 1px 2px rgba(255,255,255,0.1),
+    inset 0 -3px 8px rgba(0,0,0,0.12);
+}
+[data-theme="dark"] .eisenhower-task::before {
+  background:
+    radial-gradient(ellipse 30% 60% at 10% 30%, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.07) 40%, transparent 70%),
+    radial-gradient(ellipse 85% 50% at 50% -10%, rgba(255,255,255,0.25) 0%, rgba(255,255,255,0.1) 35%, rgba(255,255,255,0.02) 60%, transparent 80%),
+    linear-gradient(160deg, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0.05) 25%, transparent 50%, rgba(0,0,0,0.04) 75%, rgba(255,255,255,0.04) 100%);
+}
+[data-theme="dark"] .eisenhower-task::after {
+  box-shadow:
+    inset 0 0 0 1px rgba(255,255,255,0.1),
+    inset 0 2px 4px rgba(255,255,255,0.15),
+    inset 0 -2px 4px rgba(0,0,0,0.18),
+    inset 2px 0 4px rgba(255,255,255,0.04),
+    inset -2px 0 4px rgba(255,255,255,0.04);
 }
 
 .eisenhower-task:hover {
   transform: translateX(4px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   background: rgba(255, 255, 255, 0.95);
+  box-shadow:
+    0 6px 20px rgba(0,0,0,0.08),
+    0 10px 35px rgba(0,0,0,0.05),
+    inset 0 1px 2px rgba(255,255,255,0.95),
+    inset 0 -3px 8px rgba(0,0,0,0.03);
 }
 
 [data-theme="dark"] .eisenhower-task:hover {
   background: rgba(30, 41, 59, 0.95);
+  box-shadow:
+    0 6px 20px rgba(0,0,0,0.3),
+    0 10px 35px rgba(0,0,0,0.2),
+    inset 0 1px 2px rgba(255,255,255,0.1),
+    inset 0 -3px 8px rgba(0,0,0,0.12);
 }
 
 .eisenhower-task.dragging {
