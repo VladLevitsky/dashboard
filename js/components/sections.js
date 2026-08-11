@@ -1843,7 +1843,7 @@ function createUnifiedIconButton(item, sectionId, subtitle, subtitleColor) {
   const isInQuickAccess = !editState.enabled && window.isItemInQuickAccess && window.isItemInQuickAccess(iconQAData);
   if (isInQuickAccess) {
     btn.classList.add('icon-in-quick-access');
-    const svgBorder = createAnimatedBorder('#4478e0', '#a8cfff', 12);
+    const svgBorder = createAnimatedBorder('#4478e0', '#a8cfff', 14);
     btn.appendChild(svgBorder);
   }
 
@@ -2410,6 +2410,31 @@ function createUnifiedReminderItem(rem, sectionId, subtitle, subtitleColor) {
             div.style.setProperty('--progress-width', '100%');
           } else {
             div.style.setProperty('--progress-width', `${progress.percentage}%`);
+          }
+
+          // Dark mode only: darken the unfilled area so the progress bar is visible
+          const isDark = document.body.getAttribute('data-theme') === 'dark';
+          const currentBg = div.style.background || div.style.backgroundColor;
+          if (isDark && currentBg) {
+            // Parse the current color and darken it significantly
+            const tempEl = document.createElement('div');
+            tempEl.style.color = currentBg;
+            document.body.appendChild(tempEl);
+            const computed = getComputedStyle(tempEl).color;
+            document.body.removeChild(tempEl);
+            const match = computed.match(/(\d+),\s*(\d+),\s*(\d+)/);
+            if (match) {
+              const factor = 0.45; // darken to 45% of original brightness
+              let r = parseInt(match[1]) * factor;
+              let g = parseInt(match[2]) * factor;
+              let b = parseInt(match[3]) * factor;
+              // Desaturate by 10% — pull each channel toward the gray average
+              const gray = (r + g + b) / 3;
+              r = Math.round(r + (gray - r) * 0.1);
+              g = Math.round(g + (gray - g) * 0.1);
+              b = Math.round(b + (gray - b) * 0.1);
+              div.style.background = `rgb(${r}, ${g}, ${b})`;
+            }
           }
         }
       } catch (e) {

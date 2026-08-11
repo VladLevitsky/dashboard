@@ -399,8 +399,8 @@ function adjustFontSize(body) {
   const container = body.parentElement;
   const maxHeight = container.offsetHeight - body.offsetTop;
 
-  // Start with base font size (21px after 15% scaling twice)
-  let fontSize = 21;
+  // Start with base font size
+  let fontSize = 16;
   body.style.fontSize = fontSize + 'px';
 
   // Shrink font until content fits (minimum 10px)
