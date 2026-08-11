@@ -256,6 +256,62 @@ export function darkenColor(hexColor) {
   return '#' + toHex(r2) + toHex(g2) + toHex(b2);
 }
 
+// Compensate a dark mode color for glass overlay: slightly brighter + more saturated
+// so the final result (after white glass overlay) reads as the intended color
+export function glassCompensateColor(hexColor) {
+  hexColor = hexColor.replace('#', '');
+  let r = parseInt(hexColor.substr(0, 2), 16);
+  let g = parseInt(hexColor.substr(2, 2), 16);
+  let b = parseInt(hexColor.substr(4, 2), 16);
+
+  // Boost saturation by 15%: push channels away from the average
+  const avg = (r + g + b) / 3;
+  r = Math.round(r + (r - avg) * 0.15);
+  g = Math.round(g + (g - avg) * 0.15);
+  b = Math.round(b + (b - avg) * 0.15);
+
+  // Darken slightly (8%) to counteract the white overlay brightening
+  const darken = 0.92;
+  r = Math.min(255, Math.max(0, Math.round(r * darken)));
+  g = Math.min(255, Math.max(0, Math.round(g * darken)));
+  b = Math.min(255, Math.max(0, Math.round(b * darken)));
+
+  const toHex = (x) => { const h = x.toString(16); return h.length === 1 ? '0' + h : h; };
+  return '#' + toHex(r) + toHex(g) + toHex(b);
+}
+
+// Create a lighter, more saturated glow color for dark mode priority items
+// Returns an rgba string for use in box-shadow
+export function makePriorityGlowColor(color) {
+  if (!color) return 'rgba(100,160,255,0.35)';
+
+  let r, g, b;
+  if (color.startsWith('rgb')) {
+    const m = color.match(/\d+\.?\d*/g);
+    if (m && m.length >= 3) { r = parseInt(m[0]); g = parseInt(m[1]); b = parseInt(m[2]); }
+    else return 'rgba(100,160,255,0.35)';
+  } else if (color.startsWith('#')) {
+    let hex = color.slice(1);
+    if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
+    r = parseInt(hex.substr(0, 2), 16);
+    g = parseInt(hex.substr(2, 2), 16);
+    b = parseInt(hex.substr(4, 2), 16);
+  } else return 'rgba(100,160,255,0.35)';
+
+  // Lighten by 40%: blend toward white
+  r = Math.round(r + (255 - r) * 0.4);
+  g = Math.round(g + (255 - g) * 0.4);
+  b = Math.round(b + (255 - b) * 0.4);
+
+  // Boost saturation by 20%: push channels away from average
+  const avg = (r + g + b) / 3;
+  r = Math.min(255, Math.max(0, Math.round(r + (r - avg) * 0.2)));
+  g = Math.min(255, Math.max(0, Math.round(g + (g - avg) * 0.2)));
+  b = Math.min(255, Math.max(0, Math.round(b + (b - avg) * 0.2)));
+
+  return `rgba(${r}, ${g}, ${b}, 0.45)`;
+}
+
 // Convert a light color to a dark mode equivalent
 export function convertToDarkModeColor(hexColor) {
   hexColor = hexColor.replace('#', '');

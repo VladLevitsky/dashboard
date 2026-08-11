@@ -2084,15 +2084,22 @@ function createUnifiedSubtaskItem(item, sectionId, subtitle, subtitleColor) {
     ? getColorForCurrentMode(subtitleColor, defaultColorLight, defaultColorDark)
     : (window.model && window.model.darkMode ? defaultColorDark : defaultColorLight);
 
-  // Make color more vibrant if prioritized
-  if (isPrioritized && window.makeColorMoreVibrant) {
+  const isDarkMode = window.model && window.model.darkMode;
+
+  // Make color more vibrant if prioritized (light mode only)
+  if (isPrioritized && !isDarkMode && window.makeColorMoreVibrant) {
     effectiveColor = window.makeColorMoreVibrant(effectiveColor);
   }
 
   // Store original color for toggle functionality
   div.dataset.originalColor = subtitleColor
     ? getColorForCurrentMode(subtitleColor, defaultColorLight, defaultColorDark)
-    : (window.model && window.model.darkMode ? defaultColorDark : defaultColorLight);
+    : (isDarkMode ? defaultColorDark : defaultColorLight);
+
+  // In dark mode, compensate color for glass overlay
+  if (isDarkMode && window.glassCompensateColor) {
+    effectiveColor = window.glassCompensateColor(effectiveColor);
+  }
 
   // Apply glass mode transparency if active
   if (isGlassModeActive()) {
@@ -2101,6 +2108,13 @@ function createUnifiedSubtaskItem(item, sectionId, subtitle, subtitleColor) {
     div.style.webkitBackdropFilter = 'blur(8px)';
   } else {
     div.style.background = effectiveColor;
+  }
+
+  // Dark mode prioritized: soft glow around the pill edge
+  if (isPrioritized && isDarkMode) {
+    const glowColor = window.makePriorityGlowColor ? window.makePriorityGlowColor(effectiveColor) : effectiveColor;
+    const outerGlow = glowColor.replace(/[\d.]+\)$/, '0.25)');
+      div.style.boxShadow = `0 0 8px 4px ${outerGlow}, inset 0 0 6px 2px ${glowColor}`;
   }
 
   const a = document.createElement('a');
@@ -2219,14 +2233,25 @@ function createUnifiedSubtaskItem(item, sectionId, subtitle, subtitleColor) {
 
         // Apply or remove vibrant color inline
         const originalColor = div.dataset.originalColor;
-        if (nowActive && window.makeColorMoreVibrant) {
-          const vibrantColor = window.makeColorMoreVibrant(originalColor);
-          if (isGlassModeActive()) {
-            div.style.background = colorToGlassRgba(vibrantColor, 0.55);
-          } else {
-            div.style.background = vibrantColor;
+        const isDark = window.model && window.model.darkMode;
+        if (nowActive) {
+          if (isDark) {
+            // Dark mode: add glow instead of vibrant color
+            const glowColor = window.makePriorityGlowColor ? window.makePriorityGlowColor(originalColor) : originalColor;
+            const outerGlow = glowColor.replace(/[\d.]+\)$/, '0.25)');
+      div.style.boxShadow = `0 0 8px 4px ${outerGlow}, inset 0 0 6px 2px ${glowColor}`;
+          } else if (window.makeColorMoreVibrant) {
+            const vibrantColor = window.makeColorMoreVibrant(originalColor);
+            if (isGlassModeActive()) {
+              div.style.background = colorToGlassRgba(vibrantColor, 0.55);
+            } else {
+              div.style.background = vibrantColor;
+            }
           }
         } else {
+          if (isDark) {
+            div.style.boxShadow = '';
+          }
           if (isGlassModeActive()) {
             div.style.background = colorToGlassRgba(originalColor, 0.55);
           } else {
@@ -2299,7 +2324,12 @@ function createUnifiedReminderItem(rem, sectionId, subtitle, subtitleColor) {
   if (subtitleColor) {
     const defaultColorLight = '#f7fafc';
     const defaultColorDark = '#334155';
-    const effectiveColor = getColorForCurrentMode(subtitleColor, defaultColorLight, defaultColorDark);
+    let effectiveColor = getColorForCurrentMode(subtitleColor, defaultColorLight, defaultColorDark);
+    // In dark mode, compensate color for glass overlay
+    const isDarkMode = window.model && window.model.darkMode;
+    if (isDarkMode && window.glassCompensateColor) {
+      effectiveColor = window.glassCompensateColor(effectiveColor);
+    }
     // Apply glass mode transparency if active
     if (isGlassModeActive()) {
       div.style.background = colorToGlassRgba(effectiveColor, 0.55);
@@ -2652,15 +2682,22 @@ function createUnifiedCopyPasteItem(item, sectionId, subtitle, subtitleColor) {
       ? getColorForCurrentMode(subtitleColor, defaultColorLight, defaultColorDark)
       : (window.model && window.model.darkMode ? defaultColorDark : defaultColorLight);
 
-    // Make color more vibrant if prioritized
-    if (isPrioritized && window.makeColorMoreVibrant) {
+    const isDarkMode = window.model && window.model.darkMode;
+
+    // Make color more vibrant if prioritized (light mode only)
+    if (isPrioritized && !isDarkMode && window.makeColorMoreVibrant) {
       effectiveColor = window.makeColorMoreVibrant(effectiveColor);
+    }
+
+    // In dark mode, compensate color for glass overlay
+    if (isDarkMode && window.glassCompensateColor) {
+      effectiveColor = window.glassCompensateColor(effectiveColor);
     }
 
     // Store original color for toggle functionality
     div.dataset.originalColor = subtitleColor
       ? getColorForCurrentMode(subtitleColor, defaultColorLight, defaultColorDark)
-      : (window.model && window.model.darkMode ? defaultColorDark : defaultColorLight);
+      : (isDarkMode ? defaultColorDark : defaultColorLight);
 
     // Apply glass mode transparency if active
     if (isGlassModeActive()) {
@@ -2671,6 +2708,13 @@ function createUnifiedCopyPasteItem(item, sectionId, subtitle, subtitleColor) {
     } else {
       div.style.background = effectiveColor;
       div.style.borderColor = darkenColor(effectiveColor);
+    }
+
+    // Dark mode prioritized: soft glow around the pill edge
+    if (isPrioritized && isDarkMode) {
+      const glowColor = window.makePriorityGlowColor ? window.makePriorityGlowColor(effectiveColor) : effectiveColor;
+      const outerGlow = glowColor.replace(/[\d.]+\)$/, '0.25)');
+      div.style.boxShadow = `0 0 8px 4px ${outerGlow}, inset 0 0 6px 2px ${glowColor}`;
     }
   }
 
@@ -2768,16 +2812,26 @@ function createUnifiedCopyPasteItem(item, sectionId, subtitle, subtitleColor) {
 
         // Apply or remove vibrant color inline
         const originalColor = div.dataset.originalColor;
-        if (nowActive && window.makeColorMoreVibrant) {
-          const vibrantColor = window.makeColorMoreVibrant(originalColor);
-          if (isGlassModeActive()) {
-            div.style.background = colorToGlassRgba(vibrantColor, 0.55);
-            div.style.borderColor = colorToGlassRgba(darkenColor(vibrantColor), 0.5);
-          } else {
-            div.style.background = vibrantColor;
-            div.style.borderColor = darkenColor(vibrantColor);
+        const isDark = window.model && window.model.darkMode;
+        if (nowActive) {
+          if (isDark) {
+            const glowColor = window.makePriorityGlowColor ? window.makePriorityGlowColor(originalColor) : originalColor;
+            const outerGlow = glowColor.replace(/[\d.]+\)$/, '0.25)');
+      div.style.boxShadow = `0 0 8px 4px ${outerGlow}, inset 0 0 6px 2px ${glowColor}`;
+          } else if (window.makeColorMoreVibrant) {
+            const vibrantColor = window.makeColorMoreVibrant(originalColor);
+            if (isGlassModeActive()) {
+              div.style.background = colorToGlassRgba(vibrantColor, 0.55);
+              div.style.borderColor = colorToGlassRgba(darkenColor(vibrantColor), 0.5);
+            } else {
+              div.style.background = vibrantColor;
+              div.style.borderColor = darkenColor(vibrantColor);
+            }
           }
         } else {
+          if (isDark) {
+            div.style.boxShadow = '';
+          }
           if (isGlassModeActive()) {
             div.style.background = colorToGlassRgba(originalColor, 0.55);
             div.style.borderColor = colorToGlassRgba(darkenColor(originalColor), 0.5);

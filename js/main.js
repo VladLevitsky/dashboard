@@ -4,7 +4,7 @@
 // Import core modules
 import { model, editState, dragState, currentData, currentSections, ensureSectionInBothArrays, removeSectionFromBothArrays } from './state.js';
 import { PLACEHOLDER_URL, icons, LINK_ICON_SVG, TASKS_ICON_SVG, TIMER_UPDATE_INTERVAL_MS, ANIMATION_DELAY_MS, CARD_HIDE_DELAY_MS, APP_VERSION, STORAGE_KEY, MEDIA_STORAGE_KEY, LINKS_FILE_PATH, MEDIA_MANIFEST_PATH } from './constants.js';
-import { $, $$, openUrl, deepClone, generateKey, showToast, getColorForCurrentMode, setColorForCurrentMode, lightenAndDesaturateColor, darkenColor, convertToDarkModeColor, makeColorMoreVibrant, lightenColorBy20Percent, colorToGlassRgba, isGlassModeActive, getSectionDataKey, generateSectionId, generateUniqueCardTitle, fileToDataURL, copyToClipboard } from './utils.js';
+import { $, $$, openUrl, deepClone, generateKey, showToast, getColorForCurrentMode, setColorForCurrentMode, lightenAndDesaturateColor, darkenColor, glassCompensateColor, makePriorityGlowColor, convertToDarkModeColor, makeColorMoreVibrant, lightenColorBy20Percent, colorToGlassRgba, isGlassModeActive, getSectionDataKey, generateSectionId, generateUniqueCardTitle, fileToDataURL, copyToClipboard } from './utils.js';
 import { saveModel, restoreModel, exportBackupFile, deepMergeModel, cleanupOldBackups } from './core/storage.js';
 
 // Import feature modules
@@ -303,6 +303,8 @@ window.getColorForCurrentMode = getColorForCurrentMode;
 window.setColorForCurrentMode = setColorForCurrentMode;
 window.lightenAndDesaturateColor = lightenAndDesaturateColor;
 window.darkenColor = darkenColor;
+window.glassCompensateColor = glassCompensateColor;
+window.makePriorityGlowColor = makePriorityGlowColor;
 window.convertToDarkModeColor = convertToDarkModeColor;
 window.lightenColorBy20Percent = lightenColorBy20Percent;
 window.makeColorMoreVibrant = makeColorMoreVibrant;
