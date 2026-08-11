@@ -7039,18 +7039,22 @@ body.stacked-mode .gap-add-btn {
   background: #fecaca;
 }
 
-/* Progress bar colors - dark theme (opaque for consistency) */
+/* Progress bar colors - dark theme with subtle glow */
 [data-theme="dark"] .unified-reminder-item[data-progress-state="green"]::before {
-  background: #166534;
+  background: #1a7a3d;
+  box-shadow: 0 0 12px rgba(34, 197, 94, 0.25), inset 0 0 8px rgba(34, 197, 94, 0.1);
 }
 [data-theme="dark"] .unified-reminder-item[data-progress-state="yellow"]::before {
-  background: #a16207;
+  background: #c89b18;
+  box-shadow: 0 0 12px rgba(234, 179, 8, 0.25), inset 0 0 8px rgba(234, 179, 8, 0.1);
 }
 [data-theme="dark"] .unified-reminder-item[data-progress-state="orange"]::before {
-  background: #c2410c;
+  background: #d4520e;
+  box-shadow: 0 0 12px rgba(249, 115, 22, 0.25), inset 0 0 8px rgba(249, 115, 22, 0.1);
 }
 [data-theme="dark"] .unified-reminder-item[data-progress-state="red"]::before {
-  background: #b91c1c;
+  background: #c82020;
+  box-shadow: 0 0 12px rgba(239, 68, 68, 0.25), inset 0 0 8px rgba(239, 68, 68, 0.1);
 }
 
 
