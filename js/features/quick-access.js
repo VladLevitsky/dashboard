@@ -6,12 +6,39 @@ import { $, openUrl, copyToClipboard } from '../utils.js';
 import { ANIMATION_DELAY_MS, CARD_HIDE_DELAY_MS } from '../constants.js';
 import { saveModel } from '../core/storage.js';
 
+// --- Close quick access panel (without toggle)
+export function closeQuickAccess() {
+  const card = $('#quick-access-card');
+  if (!card) return;
+  const data = currentData();
+  if (!data.quickAccessExpanded) return;
+
+  data.quickAccessExpanded = false;
+  card.classList.remove('active');
+  setTimeout(() => card.hidden = true, CARD_HIDE_DELAY_MS);
+
+  if (!editState.enabled) {
+    saveModel();
+  }
+}
+
 // --- Toggle quick access panel
 export function toggleQuickAccess() {
   const card = $('#quick-access-card');
   if (!card) return;
 
   const data = currentData();
+
+  // If opening, close other slide-out panels first (abort if user cancels)
+  if (!data.quickAccessExpanded) {
+    if (window.closeTasksSummaryModal) window.closeTasksSummaryModal();
+    if (window.closeMeetingsModal) {
+      window.closeMeetingsModal();
+      // If meetings modal didn't close (user cancelled unsaved changes), abort
+      const meetingsModal = document.querySelector('#meetings-modal');
+      if (meetingsModal && !meetingsModal.hidden) return;
+    }
+  }
 
   data.quickAccessExpanded = !data.quickAccessExpanded;
 
@@ -173,13 +200,7 @@ export function renderQuickAccess() {
     data.quickAccessItems.listItems = dedupedListItems;
     if (!editState.enabled) saveModel();
   }
-  const listItems = dedupedListItems.filter(item => {
-    if (item.type === 'list' && item.name && window.getTasksForItem) {
-      const linkedTasks = window.getTasksForItem('subtask', item.name, item.sectionType);
-      if (linkedTasks && linkedTasks.length > 0) return false;
-    }
-    return true;
-  });
+  const listItems = dedupedListItems;
 
   if (quickLinks.length === 0 && icons.length === 0 && listItems.length === 0) {
     content.innerHTML = '<div class="quick-access-empty">No quick links yet. Click the link button above to add quick links.</div>';

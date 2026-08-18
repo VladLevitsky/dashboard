@@ -9,6 +9,8 @@ import { saveModel } from '../core/storage.js';
 
 // Module state
 let meetingsEditingId = null;
+let meetingsInitialState = null; // For unsaved changes detection
+let meetingsInEditMode = false; // Whether the edit/add form is showing
 
 // ============================================================
 // MEETINGS CRUD
@@ -114,6 +116,11 @@ export function openMeetingsModal() {
     modal.querySelector('.meetings-close-btn').addEventListener('click', closeMeetingsModal);
 
     $('#meetings-add-btn').addEventListener('click', () => {
+      if (meetingsHasChanges()) {
+        if (!confirm('You have unsaved changes. Are you sure you want to close it?')) {
+          return;
+        }
+      }
       showMeetingsEditMode(null);
     });
 
@@ -126,15 +133,46 @@ export function openMeetingsModal() {
     });
   }
 
+  // Close other slide-out panels
+  if (window.closeQuickAccess) window.closeQuickAccess();
+  if (window.closeTasksSummaryModal) window.closeTasksSummaryModal();
+
   meetingsEditingId = null;
   showMeetingsMainView();
   modal.hidden = false;
 }
 
-export function closeMeetingsModal() {
+// --- Check if meetings edit form has unsaved changes
+function meetingsHasChanges() {
+  if (!meetingsInEditMode || !meetingsInitialState) return false;
+  const name = ($('#meetings-inline-name')?.value || '').trim();
+  const type = $('#meetings-inline-type')?.value || 'one-time';
+  const desc = normalizeDescHtml($('#meetings-inline-desc-editor')?.innerHTML || '') || '';
+  const linkRows = document.querySelectorAll('#meetings-inline-link-rows .meeting-link-row');
+  const links = [];
+  linkRows.forEach(row => {
+    const t = row.querySelector('.meeting-link-title');
+    const u = row.querySelector('.meeting-link-url');
+    links.push({ title: (t?.value || '').trim(), url: (u?.value || '').trim() });
+  });
+  if (name !== meetingsInitialState.name) return true;
+  if (type !== meetingsInitialState.type) return true;
+  if (desc !== meetingsInitialState.description) return true;
+  if (JSON.stringify(links) !== JSON.stringify(meetingsInitialState.links)) return true;
+  return false;
+}
+
+export function closeMeetingsModal(force) {
+  if (!force && meetingsHasChanges()) {
+    if (!confirm('You have unsaved changes. Are you sure you want to close it?')) {
+      return;
+    }
+  }
   const modal = $('#meetings-modal');
   if (modal) modal.hidden = true;
   meetingsEditingId = null;
+  meetingsInEditMode = false;
+  meetingsInitialState = null;
 }
 
 // ============================================================
@@ -142,6 +180,8 @@ export function closeMeetingsModal() {
 // ============================================================
 
 function showMeetingsMainView() {
+  meetingsInEditMode = false;
+  meetingsInitialState = null;
   $('#meetings-columns').hidden = false;
   $('#meetings-view-section').hidden = true;
   $('#meetings-title').textContent = 'Meetings';
@@ -157,6 +197,8 @@ function showMeetingsMainView() {
 
 function showMeetingsViewMode(meeting) {
   if (!meeting) return;
+  meetingsInEditMode = false;
+  meetingsInitialState = null;
   meetingsEditingId = meeting.id;
 
   $('#meetings-columns').hidden = false;
@@ -352,6 +394,11 @@ function showMeetingsEditMode(meeting) {
 
   // Cancel button
   $('#meetings-inline-cancel').addEventListener('click', () => {
+    if (meetingsHasChanges()) {
+      if (!confirm('You have unsaved changes. Are you sure you want to close it?')) {
+        return;
+      }
+    }
     if (isNew) {
       showMeetingsMainView();
     } else {
@@ -399,6 +446,16 @@ function showMeetingsEditMode(meeting) {
     renderMeetingsList();
     if (savedMeeting) showMeetingsViewMode(savedMeeting);
   });
+
+  // Mark edit mode and capture initial state for unsaved changes detection
+  meetingsInEditMode = true;
+  const initialLinks = (meetingData.links || []).map(l => ({ title: (l.title || '').trim(), url: (l.url || '').trim() }));
+  meetingsInitialState = {
+    name: meetingData.title || '',
+    type: meetingData.type || 'one-time',
+    description: normalizeDescHtml(meetingData.description || '') || '',
+    links: initialLinks
+  };
 
   // Focus name input
   requestAnimationFrame(() => $('#meetings-inline-name').focus());
@@ -452,6 +509,11 @@ function createMeetingListItem(meeting) {
   }
 
   item.addEventListener('click', () => {
+    if (meetingsHasChanges()) {
+      if (!confirm('You have unsaved changes. Are you sure you want to close it?')) {
+        return;
+      }
+    }
     showMeetingsViewMode(meeting);
   });
 

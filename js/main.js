@@ -80,6 +80,7 @@ import {
 } from './features/timers.js';
 
 import {
+  closeQuickAccess,
   toggleQuickAccess,
   openQuickLinkModal,
   removeQuickLink,
@@ -247,13 +248,26 @@ import {
   closeAllIconTasks,
   openIconTasksModal,
   cleanupTasksForItem,
-  toggleTaskPinned
+  toggleTaskPinned,
+  completeTask,
+  getCompletedTasks,
+  deleteCompletedTask,
+  clearCompletedTasks,
+  openAddTaskModalWithCallback
 } from './features/tasks.js';
 
 import {
   openMeetingsModal,
   closeMeetingsModal
 } from './features/meetings.js';
+
+import {
+  openProjectsModal,
+  closeProjectsModal,
+  removeProjectTaskHighlight,
+  markProjectTaskHighlightCompleted,
+  refreshProjectHighlights
+} from './features/projects.js';
 
 import {
   openImageEditor,
@@ -378,6 +392,7 @@ window.clearTimerInterval = clearTimerInterval;
 window.startTimerInterval = startTimerInterval;
 
 // Quick Access
+window.closeQuickAccess = closeQuickAccess;
 window.toggleQuickAccess = toggleQuickAccess;
 window.openQuickLinkModal = openQuickLinkModal;
 window.removeQuickLink = removeQuickLink;
@@ -538,6 +553,18 @@ window.closeAllIconTasks = closeAllIconTasks;
 window.openIconTasksModal = openIconTasksModal;
 window.cleanupTasksForItem = cleanupTasksForItem;
 window.toggleTaskPinned = toggleTaskPinned;
+window.completeTask = completeTask;
+window.getCompletedTasks = getCompletedTasks;
+window.deleteCompletedTask = deleteCompletedTask;
+window.clearCompletedTasks = clearCompletedTasks;
+window.openAddTaskModalWithCallback = openAddTaskModalWithCallback;
+
+// Projects
+window.openProjectsModal = openProjectsModal;
+window.closeProjectsModal = closeProjectsModal;
+window.removeProjectTaskHighlight = removeProjectTaskHighlight;
+window.markProjectTaskHighlightCompleted = markProjectTaskHighlightCompleted;
+window.refreshProjectHighlights = refreshProjectHighlights;
 
 // Meetings
 window.openMeetingsModal = openMeetingsModal;

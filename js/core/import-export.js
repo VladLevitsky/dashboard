@@ -145,7 +145,12 @@ export function extractUrlOverrides() {
   obj.displayMode = data.displayMode || 'normal';
   obj.quickAccessItems = data.quickAccessItems || { icons: [], listItems: [] };
   obj.timers = data.timers || [];
+  obj.tasks = data.tasks || [];
   obj.tasksSummaryOrder = data.tasksSummaryOrder || null;
+  obj.completedTasks = data.completedTasks || [];
+  obj.projects = data.projects || [];
+  obj.ideas = data.ideas || [];
+  obj.meetings = data.meetings || [];
 
   // Metadata
   obj._metadata = {
@@ -850,6 +855,31 @@ export function applyUrlOverrides(data) {
     current.tasksSummaryOrder = data.tasksSummaryOrder;
   }
 
+  // Apply centralized tasks (Eisenhower Matrix)
+  if (data.tasks && Array.isArray(data.tasks)) {
+    current.tasks = data.tasks;
+  }
+
+  // Apply completed tasks archive
+  if (data.completedTasks && Array.isArray(data.completedTasks)) {
+    current.completedTasks = data.completedTasks;
+  }
+
+  // Apply projects
+  if (data.projects && Array.isArray(data.projects)) {
+    current.projects = data.projects;
+  }
+
+  // Apply ideas
+  if (data.ideas && Array.isArray(data.ideas)) {
+    current.ideas = data.ideas;
+  }
+
+  // Apply meetings
+  if (data.meetings && Array.isArray(data.meetings)) {
+    current.meetings = data.meetings;
+  }
+
   // Synchronize editState.working if in edit mode
   if (editState.enabled && editState.working) {
     editState.working = JSON.parse(JSON.stringify(model));
@@ -881,6 +911,11 @@ export function applyUrlOverrides(data) {
       quickAccessItems: current.quickAccessItems,
       displayMode: current.displayMode,
       tasksSummaryOrder: current.tasksSummaryOrder,
+      tasks: current.tasks || [],
+      completedTasks: current.completedTasks || [],
+      projects: current.projects || [],
+      ideas: current.ideas || [],
+      meetings: current.meetings || [],
     };
 
     // Add ALL sections - all are now unified format

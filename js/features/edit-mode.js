@@ -1269,6 +1269,7 @@ function saveSubtitleOrder() {
 // Track current notepad state
 let currentNotepadSectionId = null;
 let currentNoteKey = null; // Key of the note being edited (null = new note)
+let notepadInitialState = null; // For unsaved changes detection
 
 // --- Generate unique key for notes
 function generateNoteKey() {
@@ -1573,6 +1574,9 @@ export function openNotepad(sectionId, cursorPos) {
   pop.style.left = `${leftPos}px`;
   pop.style.top = `${topPos}px`;
 
+  // Capture initial state for unsaved changes detection
+  notepadInitialState = { title: '', content: '' };
+
   // Focus title input
   setTimeout(() => {
     const titleInput = $('#notepad-title');
@@ -1596,6 +1600,12 @@ export function enterNotepadEditMode(noteKey) {
   // Load HTML directly (content is now stored as HTML)
   if (editor) editor.innerHTML = note.content || '';
 
+  // Capture initial state for unsaved changes detection
+  notepadInitialState = {
+    title: note.title || '',
+    content: sanitizeHtml(note.content || '').trim()
+  };
+
   // Set current color for editing
   currentNoteColor = note.color || null;
   updateNoteColorPreview();
@@ -1613,14 +1623,30 @@ export function enterNotepadEditMode(noteKey) {
   }, 50);
 }
 
+// --- Check if notepad has unsaved changes
+function notepadHasChanges() {
+  if (!notepadInitialState) return false;
+  const titleInput = $('#notepad-title');
+  const editor = $('#notepad-editor');
+  const currentTitle = titleInput?.value || '';
+  const currentContent = sanitizeHtml(editor?.innerHTML || '').trim();
+  return currentTitle !== notepadInitialState.title || currentContent !== notepadInitialState.content;
+}
+
 // --- Close Notepad Popover
-export function closeNotepad() {
+export function closeNotepad(force) {
+  if (!force && notepadHasChanges()) {
+    if (!confirm('You have unsaved changes. Are you sure you want to close it?')) {
+      return;
+    }
+  }
   const pop = $('#notepad-popover');
   if (pop) {
     pop.hidden = true;
   }
   currentNotepadSectionId = null;
   currentNoteKey = null;
+  notepadInitialState = null;
 }
 
 // --- Convert contenteditable HTML back to plain text
@@ -1761,6 +1787,7 @@ export function saveNote() {
   // Clear editor and refresh saved notes list
   clearNotepadEditor();
   currentNoteColor = null;
+  notepadInitialState = { title: '', content: '' };
   renderSavedNotesList();
 
   showToast('Note saved');
@@ -1934,7 +1961,7 @@ export function wireNotepadEvents() {
     }
   });
 
-  // Close on click outside (but not when clicking in the note viewer modal or color picker)
+  // Click outside notepad: prompt for unsaved changes instead of auto-closing
   document.addEventListener('click', (e) => {
     const pop = $('#notepad-popover');
     if (!pop || pop.hidden) return;
@@ -2190,8 +2217,8 @@ export function handleEditorInput(e) {
     }
   }
 
-  // Check for numbered list pattern (1. 2. etc.)
-  const numberedMatch = text.match(/^(\d+)\. $/);
+  // Check for numbered list pattern (only "1. " triggers conversion)
+  const numberedMatch = text.match(/^1\. $/);
   if (numberedMatch && !isInList()) {
     const cursorAtEnd = range.startOffset === node.textContent.length;
     if (cursorAtEnd) {

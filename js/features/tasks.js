@@ -158,12 +158,19 @@ export function updateTask(taskId, updates) {
   }
 
   // If changing color, update order to be last in new color group
-  if (updates.color && updates.color !== task.color) {
+  const colorChanging = updates.color && updates.color !== task.color;
+  if (colorChanging) {
     updates.order = getTasksByColor(updates.color).length;
   }
 
   Object.assign(task, updates);
   saveModel();
+
+  // If color changed and task has a project highlight, refresh it
+  if (colorChanging && task.projectHighlight && window.refreshProjectHighlights) {
+    window.refreshProjectHighlights();
+  }
+
   return task;
 }
 
@@ -184,9 +191,86 @@ export function deleteTask(taskId) {
     }
   }
 
+  // Remove project highlight link (revert to plain text, keep text)
+  if (task.projectHighlight) {
+    removeProjectHighlight(task.projectHighlight.projectId, taskId);
+  }
+
   tasks.splice(taskIndex, 1);
   saveModel();
   return true;
+}
+
+// Complete a task (move to completed archive)
+export function completeTask(taskId) {
+  const data = currentData();
+  const tasks = data.tasks || [];
+  const taskIndex = tasks.findIndex(t => t.id === taskId);
+  if (taskIndex === -1) return false;
+
+  const task = tasks[taskIndex];
+
+  // Remove reference from linked item
+  if (task.linkedItem) {
+    const item = findItemByReference(task.linkedItem);
+    if (item?.taskIds) {
+      item.taskIds = item.taskIds.filter(id => id !== taskId);
+    }
+  }
+
+  // Mark project highlight as completed (turns green, link released)
+  if (task.projectHighlight) {
+    markProjectHighlightCompleted(task.projectHighlight.projectId, taskId);
+  }
+
+  // Move to completed archive
+  task.completed = true;
+  task.completedAt = Date.now();
+  data.completedTasks = data.completedTasks || [];
+  data.completedTasks.push(task);
+
+  // Remove from active tasks
+  tasks.splice(taskIndex, 1);
+  saveModel();
+  return true;
+}
+
+// Get all completed tasks
+export function getCompletedTasks() {
+  const data = currentData();
+  return (data.completedTasks || []).sort((a, b) => (b.completedAt || 0) - (a.completedAt || 0));
+}
+
+// Delete a completed task permanently (does NOT affect project highlights - they stay green)
+export function deleteCompletedTask(taskId) {
+  const data = currentData();
+  data.completedTasks = data.completedTasks || [];
+  const idx = data.completedTasks.findIndex(t => t.id === taskId);
+  if (idx === -1) return false;
+  data.completedTasks.splice(idx, 1);
+  saveModel();
+  return true;
+}
+
+// Clear all completed tasks permanently
+export function clearCompletedTasks() {
+  const data = currentData();
+  data.completedTasks = [];
+  saveModel();
+}
+
+// Helper: remove project highlight (called when deleting a task)
+function removeProjectHighlight(projectId, taskId) {
+  if (window.removeProjectTaskHighlight) {
+    window.removeProjectTaskHighlight(projectId, taskId);
+  }
+}
+
+// Helper: mark project highlight as completed (called when completing a task)
+function markProjectHighlightCompleted(projectId, taskId) {
+  if (window.markProjectTaskHighlightCompleted) {
+    window.markProjectTaskHighlightCompleted(projectId, taskId);
+  }
 }
 
 // Move task to a different color (for drag-drop between Eisenhower cards)
@@ -1223,6 +1307,17 @@ export function toggleTasksSummary() {
   tasksSummaryExpanded = !tasksSummaryExpanded;
 
   if (tasksSummaryExpanded) {
+    // Close other slide-out panels (abort if user cancels unsaved changes)
+    if (window.closeQuickAccess) window.closeQuickAccess();
+    if (window.closeMeetingsModal) {
+      window.closeMeetingsModal();
+      const meetingsModal = document.querySelector('#meetings-modal');
+      if (meetingsModal && !meetingsModal.hidden) {
+        tasksSummaryExpanded = false;
+        return;
+      }
+    }
+
     renderEisenhowerMatrix();
     card.hidden = false;
     setTimeout(() => card.classList.add('active'), ANIMATION_DELAY_MS);
@@ -1285,6 +1380,20 @@ function renderEisenhowerMatrix() {
 
   secondarySection.appendChild(columnsGrid);
   grid.appendChild(secondarySection);
+
+  // --- Completed Tasks button ---
+  const completedTasks = getCompletedTasks();
+  const completedBtn = document.createElement('button');
+  completedBtn.type = 'button';
+  completedBtn.className = 'eisenhower-completed-btn';
+  completedBtn.innerHTML = `
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M20 6L9 17l-5-5"></path>
+    </svg>
+    Completed Tasks${completedTasks.length > 0 ? ` (${completedTasks.length})` : ''}
+  `;
+  completedBtn.addEventListener('click', openCompletedTasksModal);
+  grid.appendChild(completedBtn);
 
   // Initialize delete drop zone
   initDeleteDropZone();
@@ -1627,15 +1736,11 @@ function initDeleteDropZone() {
     const task = getTaskById(taskId);
     if (!task) return;
 
-    if (confirm(`Are you sure you want to delete "${task.title}"?`)) {
-      deleteTask(taskId);
-      showToast('Task deleted');
-      renderEisenhowerMatrix();
-      if (window.renderAllSections) window.renderAllSections();
-    } else {
-      // Re-render to restore task visual state after cancelled drag
-      renderEisenhowerMatrix();
-    }
+    completeTask(taskId);
+    showToast('Task completed');
+    renderEisenhowerMatrix();
+    if (window.renderAllSections) window.renderAllSections();
+    if (window.refreshProjectHighlights) window.refreshProjectHighlights();
   });
 }
 
@@ -1666,14 +1771,31 @@ export function closeTasksSummaryModal() {
 // ADD/EDIT TASK MODAL
 // ============================================================
 
+// Callback after task creation (used by Projects module)
+let taskCreationCallback = null;
+
 // --- Open modal to add a new task (optionally with a pre-linked item)
 export function openAddTaskModal(preLinkedItem = null) {
+  taskCreationCallback = null;
   currentEditingTaskId = null;
   preLinkedItemContext = preLinkedItem;
   openTaskEditorModal({
     title: '',
     color: 'blue',
     linkedItem: preLinkedItem
+  }, 'Add Task');
+}
+
+// --- Open modal to add a new task with a callback on creation
+// Used by Projects module to link highlights after task creation
+export function openAddTaskModalWithCallback(prefillTitle, callback) {
+  taskCreationCallback = callback;
+  currentEditingTaskId = null;
+  preLinkedItemContext = null;
+  openTaskEditorModal({
+    title: prefillTitle || '',
+    color: 'blue',
+    linkedItem: null
   }, 'Add Task');
 }
 
@@ -1808,6 +1930,9 @@ export function refreshItemTasksModal() {
 // --- Description editor state
 let descriptionEditing = false;
 
+// --- Track initial state for unsaved changes detection
+let taskEditorInitialState = null;
+
 // --- Open the task editor modal (shared for add/edit)
 function openTaskEditorModal(taskData, titleText) {
   let modal = $('#task-editor-modal');
@@ -1847,6 +1972,16 @@ function openTaskEditorModal(taskData, titleText) {
               <div class="task-editor-item-selector" id="task-editor-item-selector">
                 <span class="task-editor-item-text">No item selected</span>
                 <button type="button" class="task-editor-item-btn">Select Item</button>
+              </div>
+            </div>
+            <div class="task-editor-field" id="task-editor-project-link-field" hidden>
+              <label>Linked Project</label>
+              <div class="task-editor-project-link" id="task-editor-project-link">
+                <label class="task-editor-project-link-check">
+                  <input type="checkbox" id="task-editor-project-linked-cb" checked />
+                  <span class="task-editor-project-link-box"></span>
+                </label>
+                <a href="#" class="task-editor-project-link-text" id="task-editor-project-link-text"></a>
               </div>
             </div>
             <div class="task-editor-field">
@@ -1899,12 +2034,19 @@ function openTaskEditorModal(taskData, titleText) {
           </div>
         </div>
         <div class="task-editor-actions">
-          <button type="button" id="task-editor-delete" class="task-editor-delete-btn" hidden title="Delete task">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <polyline points="3 6 5 6 21 6"></polyline>
-                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                </svg>
-              </button>
+          <div class="task-editor-actions-left">
+            <button type="button" id="task-editor-delete" class="task-editor-delete-btn" hidden title="Delete task">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="3 6 5 6 21 6"></polyline>
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                  </svg>
+            </button>
+            <button type="button" id="task-editor-complete" class="task-editor-complete-btn" hidden title="Mark as completed">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M20 6L9 17l-5-5"></path>
+                  </svg>
+            </button>
+          </div>
           <div class="task-editor-actions-right">
             <button type="button" id="task-editor-cancel" class="btn-secondary">Cancel</button>
             <button type="button" id="task-editor-save" class="btn-primary">Save</button>
@@ -2055,6 +2197,59 @@ function openTaskEditorModal(taskData, titleText) {
     };
   }
 
+  // Project link field - show if task has a project highlight
+  const projectLinkField = $('#task-editor-project-link-field');
+  const projectLinkText = $('#task-editor-project-link-text');
+  const projectLinkedCb = $('#task-editor-project-linked-cb');
+
+  if (taskData.projectHighlight && taskData.projectHighlight.projectId) {
+    const projectId = taskData.projectHighlight.projectId;
+    // Find project title
+    const data = currentData();
+    const projects = data.projects || [];
+    const project = projects.find(p => p.id === projectId);
+    const projectTitle = project ? project.title : 'Unknown Project';
+
+    projectLinkField.hidden = false;
+    projectLinkText.textContent = projectTitle;
+    projectLinkedCb.checked = true;
+
+    // Click link to open project
+    projectLinkText.onclick = (e) => {
+      e.preventDefault();
+      if (window.openProjectsModal) {
+        closeTaskEditorModal(true);
+        window.openProjectsModal(projectId);
+      }
+    };
+
+    // Uncheck to unlink
+    projectLinkedCb.onchange = () => {
+      if (!projectLinkedCb.checked) {
+        if (confirm('Unlink this task from its project? The highlighted text will revert to plain text.')) {
+          // Remove highlight from project
+          if (window.removeProjectTaskHighlight) {
+            window.removeProjectTaskHighlight(projectId, taskData.id);
+          }
+          // Remove projectHighlight from task
+          if (currentEditingTaskId) {
+            const task = getTaskById(currentEditingTaskId);
+            if (task) {
+              delete task.projectHighlight;
+              saveModel();
+            }
+          }
+          projectLinkField.hidden = true;
+          showToast('Task unlinked from project');
+        } else {
+          projectLinkedCb.checked = true;
+        }
+      }
+    };
+  } else {
+    projectLinkField.hidden = true;
+  }
+
   // Populate subtasks
   editorSubtasks = (taskData.subtasks || []).map(s => ({ ...s }));
   renderEditorSubtasks();
@@ -2104,9 +2299,15 @@ function openTaskEditorModal(taskData, titleText) {
       if (subtasks.length > 0) updates.subtasks = subtasks;
       updateTask(task.id, updates);
       showToast('Task created');
+
+      // Fire callback for Projects module (two-way task linking)
+      if (taskCreationCallback) {
+        taskCreationCallback(task);
+        taskCreationCallback = null;
+      }
     }
 
-    closeTaskEditorModal();
+    closeTaskEditorModal(true);
     renderEisenhowerMatrix();
     // Refresh main view to update task indicators
     if (window.renderAllSections) window.renderAllSections();
@@ -2120,16 +2321,61 @@ function openTaskEditorModal(taskData, titleText) {
       if (confirm('Are you sure you want to delete this task?')) {
         deleteTask(currentEditingTaskId);
         showToast('Task deleted');
-        closeTaskEditorModal();
+        closeTaskEditorModal(true);
         renderEisenhowerMatrix();
-        // Refresh main view to update task indicators
         if (window.renderAllSections) window.renderAllSections();
       }
     };
   }
 
+  // Complete button (show only when editing existing task)
+  const completeBtn = $('#task-editor-complete');
+  if (completeBtn) {
+    completeBtn.hidden = !currentEditingTaskId;
+    completeBtn.onclick = () => {
+      completeTask(currentEditingTaskId);
+      showToast('Task completed');
+      closeTaskEditorModal(true);
+      renderEisenhowerMatrix();
+      if (window.renderAllSections) window.renderAllSections();
+      if (window.refreshProjectHighlights) window.refreshProjectHighlights();
+    };
+  }
+
   modal.hidden = false;
   nameInput.focus();
+
+  // Capture initial state for unsaved changes detection
+  taskEditorInitialState = {
+    title: taskData.title || '',
+    color: taskData.color || 'blue',
+    link: taskData.link || '',
+    pinned: !!taskData.pinned,
+    description: taskData.description || '',
+    subtasks: JSON.stringify(taskData.subtasks || [])
+  };
+}
+
+// --- Check if task editor has unsaved changes
+function taskEditorHasChanges() {
+  if (!taskEditorInitialState) return false;
+  const nameInput = $('#task-editor-name');
+  const linkInput = $('#task-editor-link');
+  const primaryCheckbox = $('#task-editor-primary-checkbox');
+  const colorsContainer = $('#task-editor-colors');
+  const activeColor = colorsContainer?.querySelector('.task-editor-color-btn.active');
+  const rawDesc = descriptionEditing
+    ? ($('#task-desc-editor')?.innerHTML || '')
+    : ($('#task-desc-view-content')?.innerHTML || '');
+  const desc = normalizeDescHtml(rawDesc) || '';
+
+  if ((nameInput?.value || '') !== taskEditorInitialState.title) return true;
+  if ((linkInput?.value || '') !== taskEditorInitialState.link) return true;
+  if ((activeColor?.dataset.color || 'blue') !== taskEditorInitialState.color) return true;
+  if ((primaryCheckbox?.checked || false) !== taskEditorInitialState.pinned) return true;
+  if (desc !== taskEditorInitialState.description) return true;
+  if (JSON.stringify(editorSubtasks.filter(s => s.title && s.title.trim())) !== taskEditorInitialState.subtasks) return true;
+  return false;
 }
 
 // --- Update item selector display text
@@ -2512,7 +2758,12 @@ function updateTaskToolbarState() {
   });
 }
 
-function closeTaskEditorModal() {
+function closeTaskEditorModal(force) {
+  if (!force && taskEditorHasChanges()) {
+    if (!confirm('You have unsaved changes. Are you sure you want to close it?')) {
+      return;
+    }
+  }
   const modal = $('#task-editor-modal');
   if (modal) {
     modal.hidden = true;
@@ -2525,6 +2776,9 @@ function closeTaskEditorModal() {
   preLinkedItemContext = null;
   descriptionEditing = false;
   editorSubtasks = [];
+  taskEditorInitialState = null;
+  taskCreationCallback = null;
+  window._projectTaskPending = null;
 }
 
 // ============================================================
@@ -3076,6 +3330,100 @@ function closeItemSelectorModal() {
     modal.hidden = true;
   }
   currentItemSelectorCallback = null;
+}
+
+// ============================================================
+// COMPLETED TASKS ARCHIVE MODAL
+// ============================================================
+
+function openCompletedTasksModal() {
+  let modal = $('#completed-tasks-modal');
+
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'completed-tasks-modal';
+    modal.className = 'completed-tasks-modal';
+    modal.innerHTML = `
+      <div class="completed-tasks-backdrop"></div>
+      <div class="completed-tasks-dialog">
+        <div class="completed-tasks-header">
+          <h4>Completed Tasks</h4>
+          <button type="button" class="completed-tasks-close-btn" title="Close">&times;</button>
+        </div>
+        <div class="completed-tasks-list" id="completed-tasks-list"></div>
+        <div class="completed-tasks-actions">
+          <button type="button" id="completed-tasks-clear-all" class="btn-secondary completed-tasks-danger-btn">Clear All</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+
+    modal.querySelector('.completed-tasks-backdrop').addEventListener('click', () => { modal.hidden = true; });
+    modal.querySelector('.completed-tasks-close-btn').addEventListener('click', () => { modal.hidden = true; });
+
+    $('#completed-tasks-clear-all').addEventListener('click', () => {
+      if (confirm('Permanently delete all completed tasks?')) {
+        clearCompletedTasks();
+        renderCompletedTasksList();
+        renderEisenhowerMatrix();
+        showToast('All completed tasks cleared');
+      }
+    });
+  }
+
+  renderCompletedTasksList();
+  modal.hidden = false;
+}
+
+function renderCompletedTasksList() {
+  const list = $('#completed-tasks-list');
+  if (!list) return;
+
+  const tasks = getCompletedTasks();
+
+  if (tasks.length === 0) {
+    list.innerHTML = '<div class="completed-tasks-empty">No completed tasks</div>';
+    return;
+  }
+
+  list.innerHTML = '';
+  tasks.forEach(task => {
+    const row = document.createElement('div');
+    row.className = `completed-task-row task-bubble-${task.color}`;
+
+    const title = document.createElement('span');
+    title.className = 'completed-task-title';
+    title.textContent = task.title || 'Untitled';
+
+    const date = document.createElement('span');
+    date.className = 'completed-task-date';
+    if (task.completedAt) {
+      const d = new Date(task.completedAt);
+      date.textContent = d.toLocaleDateString();
+    }
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.type = 'button';
+    deleteBtn.className = 'completed-task-delete';
+    deleteBtn.title = 'Delete permanently';
+    deleteBtn.innerHTML = `
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="18" y1="6" x2="6" y2="18"></line>
+        <line x1="6" y1="6" x2="18" y2="18"></line>
+      </svg>
+    `;
+    deleteBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      deleteCompletedTask(task.id);
+      renderCompletedTasksList();
+      renderEisenhowerMatrix();
+    });
+
+    row.appendChild(title);
+    row.appendChild(date);
+    row.appendChild(deleteBtn);
+    list.appendChild(row);
+  });
 }
 
 // --- Navigate to the source item

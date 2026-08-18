@@ -430,6 +430,8 @@ export function saveModel() {
     tasks: data.tasks || [],
     ideas: data.ideas || [],
     meetings: data.meetings || [],
+    completedTasks: data.completedTasks || [],
+    projects: data.projects || [],
   };
 
   // Add ALL sections - all are now unified format
@@ -594,6 +596,16 @@ export async function restoreModel() {
     // Restore meetings
     if (saved.meetings && Array.isArray(saved.meetings)) {
       model.meetings = saved.meetings;
+    }
+
+    // Restore completed tasks archive
+    if (saved.completedTasks && Array.isArray(saved.completedTasks)) {
+      model.completedTasks = saved.completedTasks;
+    }
+
+    // Restore projects
+    if (saved.projects && Array.isArray(saved.projects)) {
+      model.projects = saved.projects;
     }
 
     // Restore ALL section data (all are now unified format after migration)

@@ -70,6 +70,9 @@ import {
   openMeetingsModal
 } from '../features/meetings.js';
 import {
+  openProjectsModal
+} from '../features/projects.js';
+import {
   renderBreakdownRows,
   updateBreakdownSum,
   cancelBreakdownModal,
@@ -1115,6 +1118,12 @@ export function wireUI() {
   const ideasBtn = $('#ideas-btn');
   if (ideasBtn) {
     ideasBtn.addEventListener('click', openIdeasModal);
+  }
+
+  // Projects button in Eisenhower card header
+  const projectsBtn = $('#projects-btn');
+  if (projectsBtn) {
+    projectsBtn.addEventListener('click', openProjectsModal);
   }
 
   // Quick access event handlers
