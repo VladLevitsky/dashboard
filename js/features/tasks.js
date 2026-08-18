@@ -1632,6 +1632,9 @@ function initDeleteDropZone() {
       showToast('Task deleted');
       renderEisenhowerMatrix();
       if (window.renderAllSections) window.renderAllSections();
+    } else {
+      // Re-render to restore task visual state after cancelled drag
+      renderEisenhowerMatrix();
     }
   });
 }
@@ -2216,11 +2219,22 @@ function generateSubtaskId() {
 }
 
 function addSubtaskToEditor() {
-  editorSubtasks.push({ id: generateSubtaskId(), title: '', description: '', completed: false });
+  editorSubtasks.push({ id: generateSubtaskId(), title: '', description: '', completed: false, important: false });
   renderEditorSubtasks();
   // Focus the new input
   const inputs = document.querySelectorAll('#task-subtasks-list .task-subtask-title-input');
   if (inputs.length > 0) inputs[inputs.length - 1].focus();
+}
+
+function sortEditorSubtasks() {
+  // Sort: completed first, then important, then regular
+  editorSubtasks.sort((a, b) => {
+    if (a.completed && !b.completed) return -1;
+    if (!a.completed && b.completed) return 1;
+    if (a.important && !b.important) return -1;
+    if (!a.important && b.important) return 1;
+    return 0;
+  });
 }
 
 function renderEditorSubtasks() {
@@ -2228,11 +2242,22 @@ function renderEditorSubtasks() {
   if (!list) return;
   list.innerHTML = '';
 
+  // Sort before rendering
+  sortEditorSubtasks();
+
   editorSubtasks.forEach((subtask, index) => {
     const row = document.createElement('div');
     row.className = 'task-subtask-row';
 
     const isNew = !subtask.title;
+    const isLocked = !isNew;
+
+    // When locked, add glass-effect bubble class to the row
+    if (isLocked) {
+      row.classList.add('subtask-bubble');
+      if (subtask.completed) row.classList.add('subtask-bubble-completed');
+      if (subtask.important) row.classList.add('subtask-bubble-important');
+    }
 
     const titleWrap = document.createElement('div');
     titleWrap.className = 'task-subtask-title-wrap';
@@ -2242,8 +2267,8 @@ function renderEditorSubtasks() {
     titleInput.className = 'task-subtask-title-input';
     titleInput.placeholder = 'Subtask title';
     titleInput.value = subtask.title || '';
-    titleInput.readOnly = !isNew;
-    if (!isNew) titleInput.classList.add('locked');
+    titleInput.readOnly = isLocked;
+    if (isLocked) titleInput.classList.add('locked');
     if (subtask.completed) titleInput.classList.add('subtask-completed');
 
     titleInput.addEventListener('input', (e) => {
@@ -2259,26 +2284,32 @@ function renderEditorSubtasks() {
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <polyline points="20 6 9 17 4 12"></polyline>
       </svg>`;
-    if (!isNew) confirmBtn.hidden = true;
+    if (isLocked) confirmBtn.hidden = true;
 
     titleWrap.appendChild(titleInput);
     titleWrap.appendChild(confirmBtn);
 
-    // Click input to enter edit mode
+    // Click input to enter edit mode — removes bubble class while editing
     titleInput.addEventListener('click', () => {
       if (titleInput.readOnly) {
         titleInput.readOnly = false;
         titleInput.classList.remove('locked');
         confirmBtn.hidden = false;
+        row.classList.remove('subtask-bubble', 'subtask-bubble-completed', 'subtask-bubble-important');
         titleInput.focus();
       }
     });
 
-    // Confirm locks it back
+    // Confirm locks it back — restores bubble class
     confirmBtn.addEventListener('click', () => {
       titleInput.readOnly = true;
       titleInput.classList.add('locked');
       confirmBtn.hidden = true;
+      if (subtask.title) {
+        row.classList.add('subtask-bubble');
+        if (subtask.completed) row.classList.add('subtask-bubble-completed');
+        if (subtask.important) row.classList.add('subtask-bubble-important');
+      }
     });
 
     // Description indicator / edit button
@@ -2310,7 +2341,31 @@ function renderEditorSubtasks() {
       </svg>`;
     completeBtn.addEventListener('click', () => {
       subtask.completed = !subtask.completed;
+      // If marking as complete, remove important status
+      if (subtask.completed) subtask.important = false;
       // Persist immediately so completed state survives refresh
+      if (currentEditingTaskId) {
+        const cleanSubtasks = editorSubtasks.filter(s => s.title && s.title.trim());
+        updateTask(currentEditingTaskId, { subtasks: cleanSubtasks.length > 0 ? cleanSubtasks : null });
+      }
+      renderEditorSubtasks();
+    });
+
+    // Important toggle button
+    const importantBtn = document.createElement('button');
+    importantBtn.type = 'button';
+    importantBtn.className = 'task-subtask-important-btn' + (subtask.important ? ' is-important' : '');
+    importantBtn.title = subtask.important ? 'Remove importance' : 'Mark as important';
+    importantBtn.innerHTML = `
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="12" y1="2" x2="12" y2="16"></line>
+        <circle cx="12" cy="20" r="1" fill="currentColor" stroke="none"></circle>
+      </svg>`;
+    importantBtn.addEventListener('click', () => {
+      subtask.important = !subtask.important;
+      // If marking as important, remove completed status
+      if (subtask.important) subtask.completed = false;
+      // Persist immediately
       if (currentEditingTaskId) {
         const cleanSubtasks = editorSubtasks.filter(s => s.title && s.title.trim());
         updateTask(currentEditingTaskId, { subtasks: cleanSubtasks.length > 0 ? cleanSubtasks : null });
@@ -2336,6 +2391,7 @@ function renderEditorSubtasks() {
     row.appendChild(titleWrap);
     row.appendChild(descBtn);
     row.appendChild(completeBtn);
+    row.appendChild(importantBtn);
     row.appendChild(deleteBtn);
     list.appendChild(row);
   });

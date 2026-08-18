@@ -9337,7 +9337,7 @@ body[data-theme="dark"][data-style="glass"][data-glass-theme="sunset"] .tasks-su
 
 .task-editor-dialog {
   position: relative;
-  width: 850px;
+  width: 1020px;
   max-width: 90vw;
   max-height: 90vh;
   background: var(--card);
@@ -10120,6 +10120,170 @@ body[data-theme="dark"][data-style="glass"][data-glass-theme="sunset"] .tasks-su
 
 [data-theme="dark"] .task-subtasks-add-btn:hover {
   border-color: var(--brand);
+}
+
+/* ---- Subtask bubble (glass-like row when locked) ---- */
+.task-subtask-row.subtask-bubble {
+  background: #e8edf4;
+  border: 1.5px solid rgba(148, 163, 184, 0.3);
+  border-radius: 12px;
+  padding: 4px 8px;
+  position: relative;
+  z-index: 0;
+  isolation: isolate;
+  transition: background 0.3s ease, box-shadow 0.4s ease, border-color 0.3s ease;
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.08),
+    inset 0 1px 2px rgba(255,255,255,0.7),
+    inset 0 -1px 4px rgba(0,0,0,0.02);
+}
+
+/* Glass shine overlay */
+.task-subtask-row.subtask-bubble::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background:
+    radial-gradient(ellipse 25% 70% at 12% 30%, rgba(255,255,255,0.45) 0%, rgba(255,255,255,0.15) 40%, transparent 70%),
+    radial-gradient(ellipse 90% 50% at 50% -10%, rgba(255,255,255,0.5) 0%, rgba(255,255,255,0.2) 35%, transparent 80%),
+    linear-gradient(160deg, rgba(255,255,255,0.35) 0%, rgba(255,255,255,0.1) 25%, transparent 50%);
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* Glass rim */
+.task-subtask-row.subtask-bubble::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow:
+    inset 0 0 0 1px rgba(255,255,255,0.3),
+    inset 0 1px 3px rgba(255,255,255,0.45),
+    inset 0 -1px 3px rgba(0,0,0,0.03);
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* Locked input inside bubble is transparent */
+.task-subtask-row.subtask-bubble .task-subtask-title-input.locked {
+  background: transparent;
+  border-color: transparent;
+  font-weight: 500;
+}
+
+/* Completed bubble — green glow */
+.task-subtask-row.subtask-bubble-completed {
+  background: #d1fae5;
+  border-color: rgba(34, 197, 94, 0.35);
+  box-shadow:
+    0 0 10px 2px rgba(34, 197, 94, 0.15),
+    0 2px 8px rgba(0, 0, 0, 0.06),
+    inset 0 1px 2px rgba(255,255,255,0.7);
+}
+
+.task-subtask-row.subtask-bubble-completed .task-subtask-title-input.locked {
+  color: #166534;
+  font-weight: 700;
+}
+
+/* Important bubble — orange glow */
+.task-subtask-row.subtask-bubble-important {
+  background: #ffedd5;
+  border-color: rgba(249, 115, 22, 0.35);
+  box-shadow:
+    0 0 10px 2px rgba(249, 115, 22, 0.15),
+    0 2px 8px rgba(0, 0, 0, 0.06),
+    inset 0 1px 2px rgba(255,255,255,0.7);
+}
+
+.task-subtask-row.subtask-bubble-important .task-subtask-title-input.locked {
+  color: #9a3412;
+  font-weight: 600;
+}
+
+/* Important button */
+.task-subtask-important-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+
+.task-subtask-important-btn:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: #f97316;
+}
+
+.task-subtask-important-btn.is-important {
+  color: #f97316;
+}
+
+.task-subtask-important-btn.is-important:hover {
+  opacity: 0.8;
+}
+
+/* ---- Dark mode subtask bubbles ---- */
+[data-theme="dark"] .task-subtask-row.subtask-bubble {
+  background: #293548;
+  border-color: rgba(100, 116, 139, 0.4);
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.2),
+    inset 0 1px 2px rgba(255,255,255,0.08),
+    inset 0 -1px 4px rgba(0,0,0,0.1);
+}
+
+[data-theme="dark"] .task-subtask-row.subtask-bubble::before {
+  background:
+    radial-gradient(ellipse 25% 70% at 12% 30%, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.03) 40%, transparent 70%),
+    radial-gradient(ellipse 90% 50% at 50% -10%, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.04) 35%, transparent 80%);
+}
+
+[data-theme="dark"] .task-subtask-row.subtask-bubble::after {
+  box-shadow:
+    inset 0 0 0 1px rgba(255,255,255,0.06),
+    inset 0 1px 3px rgba(255,255,255,0.08),
+    inset 0 -1px 3px rgba(0,0,0,0.1);
+}
+
+[data-theme="dark"] .task-subtask-row.subtask-bubble-completed {
+  background: #1a3a2a;
+  border-color: rgba(34, 197, 94, 0.3);
+  box-shadow:
+    0 0 10px 2px rgba(34, 197, 94, 0.1),
+    0 2px 8px rgba(0, 0, 0, 0.15),
+    inset 0 1px 2px rgba(255,255,255,0.06);
+}
+
+[data-theme="dark"] .task-subtask-row.subtask-bubble-completed .task-subtask-title-input.locked {
+  color: #4ade80;
+}
+
+[data-theme="dark"] .task-subtask-row.subtask-bubble-important {
+  background: #3a2a1a;
+  border-color: rgba(249, 115, 22, 0.3);
+  box-shadow:
+    0 0 10px 2px rgba(249, 115, 22, 0.1),
+    0 2px 8px rgba(0, 0, 0, 0.15),
+    inset 0 1px 2px rgba(255,255,255,0.06);
+}
+
+[data-theme="dark"] .task-subtask-row.subtask-bubble-important .task-subtask-title-input.locked {
+  color: #fb923c;
+}
+
+[data-theme="dark"] .task-subtask-important-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
 }
 
 /* Subtask description modal */

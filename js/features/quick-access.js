@@ -159,7 +159,27 @@ export function renderQuickAccess() {
 
   const quickLinks = data.quickAccessItems.quickLinks || [];
   const icons = data.quickAccessItems.icons || [];
-  const listItems = data.quickAccessItems.listItems || [];
+  // Deduplicate list items by name/key, then filter out items with linked tasks
+  const allListItems = data.quickAccessItems.listItems || [];
+  const seenKeys = new Set();
+  const dedupedListItems = allListItems.filter(item => {
+    const key = item.name || `${item.text}::${item.copyText || ''}`;
+    if (seenKeys.has(key)) return false;
+    seenKeys.add(key);
+    return true;
+  });
+  // Update source array if duplicates were removed
+  if (dedupedListItems.length < allListItems.length) {
+    data.quickAccessItems.listItems = dedupedListItems;
+    if (!editState.enabled) saveModel();
+  }
+  const listItems = dedupedListItems.filter(item => {
+    if (item.type === 'list' && item.name && window.getTasksForItem) {
+      const linkedTasks = window.getTasksForItem('subtask', item.name, item.sectionType);
+      if (linkedTasks && linkedTasks.length > 0) return false;
+    }
+    return true;
+  });
 
   if (quickLinks.length === 0 && icons.length === 0 && listItems.length === 0) {
     content.innerHTML = '<div class="quick-access-empty">No quick links yet. Click the link button above to add quick links.</div>';
@@ -279,7 +299,8 @@ export function isItemSelected(itemData, data) {
     );
   } else if (itemData.type === 'copyPaste') {
     return data.quickAccessItems.listItems.some(item =>
-      item.text === itemData.text && item.copyText === itemData.copyText
+      (item.name && itemData.name && item.name === itemData.name) ||
+      (item.text === itemData.text && item.copyText === itemData.copyText)
     );
   } else if (itemData.type === 'reminder') {
     return data.quickAccessItems.listItems.some(item =>
@@ -319,7 +340,8 @@ export function toggleItemQuickAccess(itemData) {
       );
     } else if (itemData.type === 'copyPaste') {
       data.quickAccessItems.listItems = data.quickAccessItems.listItems.filter(item =>
-        !(item.text === itemData.text && item.copyText === itemData.copyText)
+        !((item.name && itemData.name && item.name === itemData.name) ||
+          (item.text === itemData.text && item.copyText === itemData.copyText))
       );
     } else if (itemData.type === 'reminder') {
       data.quickAccessItems.listItems = data.quickAccessItems.listItems.filter(item =>

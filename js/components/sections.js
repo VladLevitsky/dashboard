@@ -2202,7 +2202,10 @@ function createUnifiedSubtaskItem(item, sectionId, subtitle, subtitleColor) {
 
     div.appendChild(leftContainer);
 
-    // Priority toggle button (Quick Access integration)
+    // Priority toggle button (Quick Access integration) — skip if item has linked tasks
+    if (linkedTasks.length > 0) {
+      // Items with linked tasks should not appear in Quick Access
+    } else {
     const itemData = {
       type: 'list',
       text: item.text,
@@ -2262,6 +2265,7 @@ function createUnifiedSubtaskItem(item, sectionId, subtitle, subtitleColor) {
     });
     div.appendChild(priorityBtn);
   }
+  } // end: skip priority toggle for items with linked tasks
 
   div.addEventListener('click', (e) => {
     if (!editState.enabled) {
