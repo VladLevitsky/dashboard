@@ -6,6 +6,7 @@ import { currentData } from '../state.js';
 import { $, showToast } from '../utils.js';
 import { handleEditorInput } from './edit-mode.js';
 import { saveModel } from '../core/storage.js';
+import { HIGHLIGHT_COLORS, HIGHLIGHT_BORDER_COLORS, hyperlinkSelection, canHyperlink } from './projects.js';
 
 // Module state
 let meetingsEditingId = null;
@@ -329,6 +330,21 @@ function showMeetingsEditMode(meeting) {
           <button type="button" class="task-desc-toolbar-btn meetings-inline-toolbar-btn" data-cmd="insertOrderedList" title="Numbered List">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><line x1="10" y1="6" x2="21" y2="6"/><line x1="10" y1="12" x2="21" y2="12"/><line x1="10" y1="18" x2="21" y2="18"/><text x="1" y="8" font-size="8" fill="currentColor" stroke="none" font-family="sans-serif">1</text><text x="1" y="14" font-size="8" fill="currentColor" stroke="none" font-family="sans-serif">2</text><text x="1" y="20" font-size="8" fill="currentColor" stroke="none" font-family="sans-serif">3</text></svg>
           </button>
+          <div class="task-desc-toolbar-divider"></div>
+          <button type="button" class="meeting-hyperlink-btn" id="meeting-hyperlink-btn" title="Select text, then click to add a hyperlink" disabled>
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+            </svg>
+          </button>
+          <button type="button" class="meeting-convert-task-btn" id="meeting-convert-btn" title="Select text, then click to convert into a linked task" disabled>
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="12" y1="18" x2="12" y2="12"></line>
+              <line x1="9" y1="15" x2="15" y2="15"></line>
+            </svg>
+          </button>
         </div>
         <div id="meetings-inline-desc-editor" class="task-desc-editor" contenteditable="true"></div>
       </div>
@@ -367,8 +383,51 @@ function showMeetingsEditMode(meeting) {
     });
   });
 
-  // Markdown auto-convert
+  // Hyperlink button
+  const hyperlinkBtn = $('#meeting-hyperlink-btn');
+  if (hyperlinkBtn) {
+    hyperlinkBtn.addEventListener('mousedown', e => e.preventDefault());
+    hyperlinkBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      hyperlinkSelection($('#meetings-inline-desc-editor'));
+    });
+  }
+
+  // Convert-to-task button
+  const convertBtn = $('#meeting-convert-btn');
+  if (convertBtn) {
+    convertBtn.addEventListener('mousedown', e => e.preventDefault());
+    convertBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      convertMeetingSelectionToTask(meetingsEditingId);
+    });
+  }
+
+  // Selection change → enable/disable hyperlink + convert buttons
+  const meetingSelHandler = () => {
+    const editor = $('#meetings-inline-desc-editor');
+    if (!editor) return;
+    const hasSelection = canHyperlink(editor);
+    if (hyperlinkBtn) hyperlinkBtn.disabled = !hasSelection;
+    if (convertBtn) convertBtn.disabled = !hasSelection;
+  };
+  document.addEventListener('selectionchange', meetingSelHandler);
+  // Store handler ref to clean up if needed
+  viewSection._selHandler = meetingSelHandler;
+
+  // Click on highlights to open linked task
   const descEditor = $('#meetings-inline-desc-editor');
+  descEditor.addEventListener('click', (e) => {
+    const highlight = e.target.closest('span.project-task-highlight');
+    if (highlight && !highlight.classList.contains('completed')) {
+      const taskId = highlight.dataset.taskId;
+      if (taskId && window.openEditTaskModal) {
+        window.openEditTaskModal(taskId);
+      }
+    }
+  });
+
+  // Markdown auto-convert
   descEditor.addEventListener('input', handleEditorInput);
   descEditor.addEventListener('keydown', (e) => {
     if ((e.ctrlKey || e.metaKey) && ['b', 'i', 'u'].includes(e.key.toLowerCase())) {
@@ -541,5 +600,88 @@ function updateInlineToolbarState() {
   btns.forEach(btn => {
     const cmd = btn.dataset.cmd;
     if (cmd) btn.classList.toggle('active', document.queryCommandState(cmd));
+  });
+}
+
+// ============================================================
+// CONVERT MEETING SELECTION TO TASK (two-way linking)
+// ============================================================
+
+function moveCursorAfterNode(node) {
+  const sel = window.getSelection();
+  if (!sel) return;
+  const spacer = document.createTextNode('\u200B');
+  if (node.nextSibling) {
+    node.parentNode.insertBefore(spacer, node.nextSibling);
+  } else {
+    node.parentNode.appendChild(spacer);
+  }
+  const range = document.createRange();
+  range.setStartAfter(spacer);
+  range.collapse(true);
+  sel.removeAllRanges();
+  sel.addRange(range);
+}
+
+function convertMeetingSelectionToTask(meetingId) {
+  if (!meetingId) return;
+  const editor = $('#meetings-inline-desc-editor');
+  if (!editor) return;
+
+  const sel = window.getSelection();
+  if (!sel || sel.isCollapsed || sel.rangeCount === 0) return;
+  const range = sel.getRangeAt(0);
+  if (!editor.contains(range.commonAncestorContainer)) return;
+
+  const selectedText = sel.toString().trim();
+  if (!selectedText) return;
+
+  const savedRange = range.cloneRange();
+
+  if (!window.openAddTaskModalWithCallback) return;
+
+  window.openAddTaskModalWithCallback(selectedText, (task) => {
+    if (!task) return;
+
+    try {
+      const span = document.createElement('span');
+      span.className = 'project-task-highlight';
+      span.dataset.taskId = task.id;
+      span.dataset.highlightColor = task.color;
+      span.style.backgroundColor = HIGHLIGHT_COLORS[task.color];
+      span.style.borderBottom = `2px solid ${HIGHLIGHT_BORDER_COLORS[task.color]}`;
+      span.style.cursor = 'pointer';
+      span.contentEditable = 'false';
+
+      savedRange.surroundContents(span);
+      moveCursorAfterNode(span);
+    } catch (e) {
+      const contents = savedRange.extractContents();
+      const span = document.createElement('span');
+      span.className = 'project-task-highlight';
+      span.dataset.taskId = task.id;
+      span.dataset.highlightColor = task.color;
+      span.style.backgroundColor = HIGHLIGHT_COLORS[task.color];
+      span.style.borderBottom = `2px solid ${HIGHLIGHT_BORDER_COLORS[task.color]}`;
+      span.style.cursor = 'pointer';
+      span.contentEditable = 'false';
+      span.appendChild(contents);
+      savedRange.insertNode(span);
+      moveCursorAfterNode(span);
+    }
+
+    // Store meeting reference on the task
+    if (window.updateTask) {
+      window.updateTask(task.id, {
+        meetingHighlight: { meetingId }
+      });
+    }
+
+    // Save the updated description to the meeting
+    const meeting = getAllMeetings().find(m => m.id === meetingId);
+    if (meeting) {
+      meeting.description = editor.innerHTML;
+      saveModel();
+    }
   });
 }

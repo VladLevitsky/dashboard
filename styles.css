@@ -11308,6 +11308,31 @@ body[data-theme="dark"][data-style="glass"][data-glass-theme="sunset"] .tasks-su
   min-height: 120px;
 }
 
+/* Meeting toolbar: hyperlink + convert-to-task buttons */
+.meeting-hyperlink-btn,
+.meeting-convert-task-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 4px;
+  color: var(--muted);
+  transition: all 0.15s ease;
+}
+.meeting-hyperlink-btn:hover:not(:disabled),
+.meeting-convert-task-btn:hover:not(:disabled) {
+  color: var(--brand);
+  background: rgba(44, 123, 229, 0.08);
+}
+.meeting-hyperlink-btn:disabled,
+.meeting-convert-task-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
 /* ============================================================
    PROJECTS BUTTON (in Eisenhower header)
    ============================================================ */
@@ -11828,27 +11853,28 @@ body[data-theme="dark"][data-style="glass"][data-glass-theme="sunset"] .tasks-su
   background: none;
 }
 
-/* Convert-to-task toolbar button */
+/* Hyperlink + Convert-to-task toolbar buttons (icon-only) */
+.project-hyperlink-btn,
 .project-convert-task-btn {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 5px 12px;
-  background: var(--brand);
-  color: #fff;
+  justify-content: center;
+  background: none;
   border: none;
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 600;
   cursor: pointer;
-  white-space: nowrap;
+  padding: 4px 6px;
+  border-radius: 4px;
+  color: var(--muted);
   transition: all 0.15s ease;
 }
+.project-hyperlink-btn:hover:not(:disabled),
 .project-convert-task-btn:hover:not(:disabled) {
-  background: #1d4ed8;
+  color: var(--brand);
+  background: rgba(44, 123, 229, 0.08);
 }
+.project-hyperlink-btn:disabled,
 .project-convert-task-btn:disabled {
-  opacity: 0.4;
+  opacity: 0.3;
   cursor: default;
 }
 

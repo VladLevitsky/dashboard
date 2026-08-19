@@ -266,7 +266,9 @@ import {
   closeProjectsModal,
   removeProjectTaskHighlight,
   markProjectTaskHighlightCompleted,
-  refreshProjectHighlights
+  refreshProjectHighlights,
+  removeMeetingTaskHighlight,
+  markMeetingTaskHighlightCompleted
 } from './features/projects.js';
 
 import {
@@ -565,6 +567,8 @@ window.closeProjectsModal = closeProjectsModal;
 window.removeProjectTaskHighlight = removeProjectTaskHighlight;
 window.markProjectTaskHighlightCompleted = markProjectTaskHighlightCompleted;
 window.refreshProjectHighlights = refreshProjectHighlights;
+window.removeMeetingTaskHighlight = removeMeetingTaskHighlight;
+window.markMeetingTaskHighlightCompleted = markMeetingTaskHighlightCompleted;
 
 // Meetings
 window.openMeetingsModal = openMeetingsModal;

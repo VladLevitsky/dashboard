@@ -166,9 +166,14 @@ export function updateTask(taskId, updates) {
   Object.assign(task, updates);
   saveModel();
 
-  // If color changed and task has a project highlight, refresh it
-  if (colorChanging && task.projectHighlight && window.refreshProjectHighlights) {
-    window.refreshProjectHighlights();
+  // If color changed and task has a highlight, refresh it
+  if (colorChanging) {
+    if (task.projectHighlight && window.refreshProjectHighlights) {
+      window.refreshProjectHighlights();
+    }
+    if (task.meetingHighlight && window.refreshMeetingHighlights) {
+      window.refreshMeetingHighlights(task.meetingHighlight.meetingId, task.id, task.color);
+    }
   }
 
   return task;
@@ -191,9 +196,12 @@ export function deleteTask(taskId) {
     }
   }
 
-  // Remove project highlight link (revert to plain text, keep text)
+  // Remove highlight links (revert to plain text, keep text)
   if (task.projectHighlight) {
     removeProjectHighlight(task.projectHighlight.projectId, taskId);
+  }
+  if (task.meetingHighlight) {
+    removeMeetingHighlight(task.meetingHighlight.meetingId, taskId);
   }
 
   tasks.splice(taskIndex, 1);
@@ -218,9 +226,12 @@ export function completeTask(taskId) {
     }
   }
 
-  // Mark project highlight as completed (turns green, link released)
+  // Mark highlights as completed (turns green, link released)
   if (task.projectHighlight) {
     markProjectHighlightCompleted(task.projectHighlight.projectId, taskId);
+  }
+  if (task.meetingHighlight) {
+    markMeetingHighlightCompleted(task.meetingHighlight.meetingId, taskId);
   }
 
   // Move to completed archive
@@ -270,6 +281,20 @@ function removeProjectHighlight(projectId, taskId) {
 function markProjectHighlightCompleted(projectId, taskId) {
   if (window.markProjectTaskHighlightCompleted) {
     window.markProjectTaskHighlightCompleted(projectId, taskId);
+  }
+}
+
+// Helper: remove meeting highlight (called when deleting a task)
+function removeMeetingHighlight(meetingId, taskId) {
+  if (window.removeMeetingTaskHighlight) {
+    window.removeMeetingTaskHighlight(meetingId, taskId);
+  }
+}
+
+// Helper: mark meeting highlight as completed
+function markMeetingHighlightCompleted(meetingId, taskId) {
+  if (window.markMeetingTaskHighlightCompleted) {
+    window.markMeetingTaskHighlightCompleted(meetingId, taskId);
   }
 }
 
@@ -2241,6 +2266,46 @@ function openTaskEditorModal(taskData, titleText) {
           }
           projectLinkField.hidden = true;
           showToast('Task unlinked from project');
+        } else {
+          projectLinkedCb.checked = true;
+        }
+      }
+    };
+  } else if (taskData.meetingHighlight && taskData.meetingHighlight.meetingId) {
+    const meetingId = taskData.meetingHighlight.meetingId;
+    const data = currentData();
+    const meetings = data.meetings || [];
+    const meeting = meetings.find(m => m.id === meetingId);
+    const meetingTitle = meeting ? (meeting.title || 'Untitled Meeting') : 'Unknown Meeting';
+
+    projectLinkField.hidden = false;
+    projectLinkField.querySelector('label').textContent = 'Linked Meeting';
+    projectLinkText.textContent = meetingTitle;
+    projectLinkedCb.checked = true;
+
+    projectLinkText.onclick = (e) => {
+      e.preventDefault();
+      if (window.openMeetingsModal) {
+        closeTaskEditorModal(true);
+        window.openMeetingsModal();
+      }
+    };
+
+    projectLinkedCb.onchange = () => {
+      if (!projectLinkedCb.checked) {
+        if (confirm('Unlink this task from its meeting? The highlighted text will revert to plain text.')) {
+          if (window.removeMeetingTaskHighlight) {
+            window.removeMeetingTaskHighlight(meetingId, taskData.id);
+          }
+          if (currentEditingTaskId) {
+            const task = getTaskById(currentEditingTaskId);
+            if (task) {
+              delete task.meetingHighlight;
+              saveModel();
+            }
+          }
+          projectLinkField.hidden = true;
+          showToast('Task unlinked from meeting');
         } else {
           projectLinkedCb.checked = true;
         }

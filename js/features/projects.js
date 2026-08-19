@@ -60,8 +60,8 @@ function deleteProject(projectId) {
 // HIGHLIGHT MANAGEMENT (two-way task links)
 // ============================================================
 
-// Color mapping for highlights
-const HIGHLIGHT_COLORS = {
+// Color mapping for highlights (exported for meetings module)
+export const HIGHLIGHT_COLORS = {
   blue: 'rgba(59, 130, 246, 0.25)',
   yellow: 'rgba(234, 179, 8, 0.25)',
   orange: 'rgba(249, 115, 22, 0.25)',
@@ -69,7 +69,7 @@ const HIGHLIGHT_COLORS = {
   completed: 'rgba(34, 197, 94, 0.3)'
 };
 
-const HIGHLIGHT_BORDER_COLORS = {
+export const HIGHLIGHT_BORDER_COLORS = {
   blue: 'rgba(59, 130, 246, 0.6)',
   yellow: 'rgba(234, 179, 8, 0.6)',
   orange: 'rgba(249, 115, 22, 0.6)',
@@ -212,14 +212,19 @@ export function openProjectsModal(openToProjectId) {
                   <path d="M20 6L9 17l-5-5"></path>
                 </svg>
               </button>
-              <button type="button" class="project-convert-task-btn" id="project-convert-btn" title="Select text in the editor, then click to convert it into a linked task" disabled>
+              <button type="button" class="project-hyperlink-btn" id="project-hyperlink-btn" title="Hyperlink selected text" disabled>
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+                  <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+                </svg>
+              </button>
+              <button type="button" class="project-convert-task-btn" id="project-convert-btn" title="Convert selected text to a linked task" disabled>
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
                   <polyline points="14 2 14 8 20 8"></polyline>
                   <line x1="12" y1="18" x2="12" y2="12"></line>
                   <line x1="9" y1="15" x2="15" y2="15"></line>
                 </svg>
-                Convert to two-way task
               </button>
             </div>
             <div id="project-editor" class="project-editor" contenteditable="true"></div>
@@ -248,6 +253,15 @@ export function openProjectsModal(openToProjectId) {
     saveBtn.addEventListener('click', () => {
       if (autoSaveTimer) { clearTimeout(autoSaveTimer); autoSaveTimer = null; }
       doSaveAndFlash();
+    });
+
+    // Hyperlink button
+    const hyperlinkBtn = modal.querySelector('#project-hyperlink-btn');
+    hyperlinkBtn.addEventListener('mousedown', e => e.preventDefault());
+    hyperlinkBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      hyperlinkSelection($('#project-editor'));
+      markProjectDirty();
     });
 
     // Convert-to-task button (persistent in toolbar)
@@ -533,6 +547,10 @@ function updateConvertButtonState() {
 
   const selectedText = selection.toString().trim();
   btn.disabled = !selectedText;
+
+  // Also update hyperlink button
+  const hlBtn = $('#project-hyperlink-btn');
+  if (hlBtn) hlBtn.disabled = !selectedText;
 }
 
 // ============================================================
@@ -644,4 +662,122 @@ function convertSelectionToTask() {
       saveCurrentProject();
     }
   });
+}
+
+// ============================================================
+// HYPERLINK (shared utility for projects + meetings)
+// ============================================================
+
+// Wraps the current selection in an <a> tag. `editor` is the contenteditable element.
+export function hyperlinkSelection(editor) {
+  if (!editor) return;
+  const sel = window.getSelection();
+  if (!sel || sel.isCollapsed || sel.rangeCount === 0) return;
+  const range = sel.getRangeAt(0);
+  if (!editor.contains(range.commonAncestorContainer)) return;
+
+  const selectedText = sel.toString().trim();
+  if (!selectedText) return;
+
+  // Check if already inside a link
+  let node = range.startContainer;
+  while (node && node !== editor) {
+    if (node.tagName === 'A') {
+      // Already a link — offer to remove
+      const remove = confirm('This text is already a link. Remove the hyperlink?');
+      if (remove) {
+        const text = document.createTextNode(node.textContent);
+        node.parentNode.replaceChild(text, node);
+      }
+      return;
+    }
+    node = node.parentNode;
+  }
+
+  const url = prompt('Enter URL:', 'https://');
+  if (!url || url === 'https://') return;
+
+  const a = document.createElement('a');
+  a.href = url;
+  a.target = '_blank';
+  a.rel = 'noopener noreferrer';
+
+  try {
+    range.surroundContents(a);
+  } catch (e) {
+    const contents = range.extractContents();
+    a.appendChild(contents);
+    range.insertNode(a);
+  }
+
+  // Move cursor after the link
+  moveCursorAfterNode(a);
+}
+
+// Check if selection is valid for hyperlinking inside a given editor
+export function canHyperlink(editor) {
+  if (!editor) return false;
+  const sel = window.getSelection();
+  if (!sel || sel.isCollapsed || sel.rangeCount === 0) return false;
+  const range = sel.getRangeAt(0);
+  if (!editor.contains(range.commonAncestorContainer)) return false;
+  return !!sel.toString().trim();
+}
+
+// ============================================================
+// MEETING HIGHLIGHT MANAGEMENT (parallel to project highlights)
+// ============================================================
+
+function getMeetingById(id) {
+  const data = currentData();
+  return (data.meetings || []).find(m => m.id === id);
+}
+
+export function removeMeetingTaskHighlight(meetingId, taskId) {
+  const meeting = getMeetingById(meetingId);
+  if (!meeting || !meeting.description) return;
+
+  const temp = document.createElement('div');
+  temp.innerHTML = meeting.description;
+  temp.querySelectorAll(`span.project-task-highlight[data-task-id="${taskId}"]`).forEach(span => {
+    const text = document.createTextNode(span.textContent);
+    span.parentNode.replaceChild(text, span);
+  });
+  meeting.description = temp.innerHTML;
+  saveModel();
+
+  // Update live editor if this meeting is currently being edited
+  const liveEditor = document.querySelector('#meetings-inline-desc-editor');
+  if (liveEditor) {
+    liveEditor.querySelectorAll(`span.project-task-highlight[data-task-id="${taskId}"]`).forEach(span => {
+      const text = document.createTextNode(span.textContent);
+      span.parentNode.replaceChild(text, span);
+    });
+  }
+}
+
+export function markMeetingTaskHighlightCompleted(meetingId, taskId) {
+  const meeting = getMeetingById(meetingId);
+  if (!meeting || !meeting.description) return;
+
+  const temp = document.createElement('div');
+  temp.innerHTML = meeting.description;
+  temp.querySelectorAll(`span.project-task-highlight[data-task-id="${taskId}"]`).forEach(span => {
+    span.dataset.highlightColor = 'completed';
+    span.style.backgroundColor = HIGHLIGHT_COLORS.completed;
+    span.style.borderBottomColor = HIGHLIGHT_BORDER_COLORS.completed;
+    span.classList.add('completed');
+  });
+  meeting.description = temp.innerHTML;
+  saveModel();
+
+  const liveEditor = document.querySelector('#meetings-inline-desc-editor');
+  if (liveEditor) {
+    liveEditor.querySelectorAll(`span.project-task-highlight[data-task-id="${taskId}"]`).forEach(span => {
+      span.dataset.highlightColor = 'completed';
+      span.style.backgroundColor = HIGHLIGHT_COLORS.completed;
+      span.style.borderBottomColor = HIGHLIGHT_BORDER_COLORS.completed;
+      span.classList.add('completed');
+    });
+  }
 }
