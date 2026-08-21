@@ -1,9 +1,10 @@
 // Personal Dashboard - Storage Module
 // Handles saving and restoring the model to/from localStorage
 
-import { STORAGE_KEY, PLACEHOLDER_URL, APP_VERSION } from '../constants.js';
+import { PLACEHOLDER_URL, APP_VERSION } from '../constants.js';
 import { model, currentData } from '../state.js';
 import { showToast } from '../utils.js';
+import { getActiveStorageKey, markCloudDirty } from './sync.js';
 
 // --- Migrate legacy card types to unified card structure (schemaVersion 3)
 // This converts:
@@ -441,15 +442,16 @@ export function saveModel() {
     }
   });
 
+  const storageKey = getActiveStorageKey();
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+    localStorage.setItem(storageKey, JSON.stringify(payload));
   } catch (error) {
     if (error.name === 'QuotaExceededError') {
       try {
         const keys = Object.keys(localStorage);
         const backupKeys = keys.filter(key => key.includes('__backup__'));
         backupKeys.forEach(key => localStorage.removeItem(key));
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+        localStorage.setItem(storageKey, JSON.stringify(payload));
       } catch (retryError) {
         console.error('Failed to save even after cleanup:', retryError);
         showToast('Error: Unable to save data. Storage quota exceeded.');
@@ -462,16 +464,23 @@ export function saveModel() {
     }
   }
 
+  // Mark cloud sync as needed (skip during initial load / restore)
+  if (!window.isInitialLoad) {
+    markCloudDirty();
+  }
+
   return true;
 }
 
 // --- Restore model from localStorage
 export async function restoreModel() {
   try {
-    let raw = localStorage.getItem(STORAGE_KEY);
+    const storageKey = getActiveStorageKey();
+    let raw = localStorage.getItem(storageKey);
     let saved = raw ? JSON.parse(raw) : null;
 
     if (!saved) {
+      // Fallback: try legacy v1 key
       const rawV1 = localStorage.getItem('personal_dashboard_model_v1');
       if (rawV1) saved = JSON.parse(rawV1);
     }
@@ -646,9 +655,10 @@ export async function restoreModel() {
 export function exportBackupFile() {
   const now = new Date();
   const ts = now.toISOString().replace(/[:.]/g, '-');
-  const key = `${STORAGE_KEY}__backup__${ts}`;
+  const storageKey = getActiveStorageKey();
+  const key = `${storageKey}__backup__${ts}`;
   try {
-    const data = localStorage.getItem(STORAGE_KEY);
+    const data = localStorage.getItem(storageKey);
     if (data) localStorage.setItem(key, data);
   } catch {}
 }

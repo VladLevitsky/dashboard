@@ -6,8 +6,9 @@
 // future migration. The window.* exports allow gradual transition.
 
 import { model, editState, currentData } from '../state.js';
-import { PLACEHOLDER_URL, APP_VERSION, STORAGE_KEY, LINKS_FILE_PATH } from '../constants.js';
+import { PLACEHOLDER_URL, APP_VERSION, LINKS_FILE_PATH } from '../constants.js';
 import { saveModel, cleanupOldBackups, migrateToUnifiedCards, migrateToHalfWidthCards } from './storage.js';
+import { getActiveStorageKey, markCloudDirty } from './sync.js';
 
 // --- Helper to convert reminder from internal format to JSON for export
 // Exports in the same format as the internal model (compatible with old app)
@@ -925,18 +926,21 @@ export function applyUrlOverrides(data) {
       }
     });
 
+    const storageKey = getActiveStorageKey();
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+      localStorage.setItem(storageKey, JSON.stringify(payload));
     } catch (error) {
       if (error.name === 'QuotaExceededError') {
         // Emergency cleanup - remove ALL backup entries
         cleanupOldBackups();
         // Try again
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+        localStorage.setItem(storageKey, JSON.stringify(payload));
       } else {
         throw error;
       }
     }
+    // Mark for cloud sync after import
+    markCloudDirty();
   } else {
     saveModel();
   }

@@ -2,8 +2,8 @@
 // This file bootstraps the application and imports all necessary modules
 
 // Import core modules
-import { model, editState, dragState, currentData, currentSections, ensureSectionInBothArrays, removeSectionFromBothArrays } from './state.js';
-import { PLACEHOLDER_URL, icons, LINK_ICON_SVG, TASKS_ICON_SVG, TIMER_UPDATE_INTERVAL_MS, ANIMATION_DELAY_MS, CARD_HIDE_DELAY_MS, APP_VERSION, STORAGE_KEY, MEDIA_STORAGE_KEY, LINKS_FILE_PATH, MEDIA_MANIFEST_PATH } from './constants.js';
+import { model, editState, dragState, currentData, currentSections, ensureSectionInBothArrays, removeSectionFromBothArrays, resetModel } from './state.js';
+import { PLACEHOLDER_URL, icons, LINK_ICON_SVG, TASKS_ICON_SVG, TIMER_UPDATE_INTERVAL_MS, ANIMATION_DELAY_MS, CARD_HIDE_DELAY_MS, APP_VERSION, STORAGE_KEY, MEDIA_STORAGE_KEY, LINKS_FILE_PATH, MEDIA_MANIFEST_PATH, API_BASE, TURNSTILE_SITE_KEY, AUTH_TOKEN_KEY, AUTH_USERNAME_KEY, SCOPED_KEY_PREFIX, SYNC_INTERVAL_MS } from './constants.js';
 import { $, $$, openUrl, deepClone, generateKey, showToast, getColorForCurrentMode, setColorForCurrentMode, lightenAndDesaturateColor, darkenColor, glassCompensateColor, makePriorityGlowColor, convertToDarkModeColor, makeColorMoreVibrant, lightenColorBy20Percent, colorToGlassRgba, isGlassModeActive, getSectionDataKey, generateSectionId, generateUniqueCardTitle, fileToDataURL, copyToClipboard } from './utils.js';
 import { saveModel, restoreModel, exportBackupFile, deepMergeModel, cleanupOldBackups } from './core/storage.js';
 
@@ -284,6 +284,35 @@ import {
   clearAllStickyNotes
 } from './features/sticky-notes.js';
 
+import {
+  initAuth,
+  isLoggedIn,
+  getUsername,
+  login,
+  register,
+  logout
+} from './core/auth.js';
+
+import {
+  getActiveStorageKey,
+  migrateToScopedStorage,
+  markCloudDirty,
+  cloudSave,
+  cloudLoad,
+  immediateCloudSave,
+  syncOnLogin,
+  startSyncTimer,
+  stopSyncTimer,
+  isCloudDirty
+} from './core/sync.js';
+
+import {
+  renderAuthUI,
+  wireAuthEvents,
+  initAuthOnStartup,
+  postRestoreAuthSync
+} from './features/auth-ui.js';
+
 // Make key functions available globally for the transition period
 // This allows app.js to still work while we gradually migrate
 window.model = model;
@@ -293,6 +322,7 @@ window.currentData = currentData;
 window.currentSections = currentSections;
 window.ensureSectionInBothArrays = ensureSectionInBothArrays;
 window.removeSectionFromBothArrays = removeSectionFromBothArrays;
+window.resetModel = resetModel;
 
 // Constants
 window.PLACEHOLDER_URL = PLACEHOLDER_URL;
@@ -584,6 +614,32 @@ window.applyLogoTransform = applyLogoTransform;
 window.initStickyNotes = initStickyNotes;
 window.updateStickyButtonVisibility = updateStickyButtonVisibility;
 window.clearAllStickyNotes = clearAllStickyNotes;
+
+// Auth
+window.initAuth = initAuth;
+window.isLoggedIn = isLoggedIn;
+window.getUsername = getUsername;
+window.login = login;
+window.register = register;
+window.logout = logout;
+
+// Cloud Sync
+window.getActiveStorageKey = getActiveStorageKey;
+window.migrateToScopedStorage = migrateToScopedStorage;
+window.markCloudDirty = markCloudDirty;
+window.cloudSave = cloudSave;
+window.cloudLoad = cloudLoad;
+window.immediateCloudSave = immediateCloudSave;
+window.syncOnLogin = syncOnLogin;
+window.startSyncTimer = startSyncTimer;
+window.stopSyncTimer = stopSyncTimer;
+window.isCloudDirty = isCloudDirty;
+
+// Auth UI
+window.renderAuthUI = renderAuthUI;
+window.wireAuthEvents = wireAuthEvents;
+window.initAuthOnStartup = initAuthOnStartup;
+window.postRestoreAuthSync = postRestoreAuthSync;
 
 // Notepad
 window.openNotepad = openNotepad;

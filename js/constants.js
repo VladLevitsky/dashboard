@@ -12,6 +12,14 @@ export const APP_VERSION = '3.1'; // Current app version for exports
 // Storage keys
 export const STORAGE_KEY = 'personal_dashboard_model_v2';
 export const MEDIA_STORAGE_KEY = 'personal_dashboard_media_library_v1';
+
+// Auth & Cloud Sync
+export const API_BASE = 'https://personal-dashboard-api.levitskyvladislav.workers.dev';
+export const TURNSTILE_SITE_KEY = '0x4AAAAAAEW_CVqSbx8-0wny';
+export const AUTH_TOKEN_KEY = 'pd_auth_token';
+export const AUTH_USERNAME_KEY = 'pd_auth_username';
+export const SCOPED_KEY_PREFIX = 'pd_user_';
+export const SYNC_INTERVAL_MS = 20 * 60 * 1000; // 20 minutes
 export const LINKS_FILE_PATH = 'data/user_links.json';
 export const MEDIA_MANIFEST_PATH = 'Media Library/media.json';
 

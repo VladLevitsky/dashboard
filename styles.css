@@ -11878,3 +11878,184 @@ body[data-theme="dark"][data-style="glass"][data-glass-theme="sunset"] .tasks-su
   cursor: default;
 }
 
+/* ===== AUTH UI ===== */
+
+/* Auth toggle button in header */
+.auth-toggle {
+  position: absolute;
+  bottom: 20px;
+  right: 180px;
+  width: 30px;
+  height: 30px;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  z-index: 10;
+  padding: 0;
+}
+.auth-toggle:hover { color: var(--brand); transform: scale(1.1); }
+.auth-toggle.logged-in { color: var(--accent); }
+.auth-toggle.logged-in:hover { color: var(--brand); }
+
+[data-theme="dark"] .auth-toggle { color: var(--muted); }
+[data-theme="dark"] .auth-toggle:hover { color: var(--brand); }
+[data-theme="dark"] .auth-toggle.logged-in { color: var(--accent); }
+
+/* Auth Modal */
+.auth-modal { position: fixed; inset: 0; display: none; z-index: 2000; }
+.auth-modal[hidden] { display: none; }
+.auth-modal:not([hidden]) { display: flex; align-items: center; justify-content: center; }
+.auth-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,0.4); }
+.auth-dialog {
+  position: relative;
+  width: 360px;
+  background: var(--card);
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+  border: 1px solid #e5e7eb;
+  z-index: 1;
+  animation: auth-slide-in 0.2s ease;
+}
+@keyframes auth-slide-in {
+  from { opacity: 0; transform: translateY(-10px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.auth-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 20px; border-bottom: 1px solid #e5e7eb;
+}
+.auth-header h4 { margin: 0; font-size: 18px; font-weight: 600; color: var(--text); }
+.auth-body { padding: 20px; }
+
+.auth-field { margin-bottom: 14px; }
+.auth-field label {
+  display: block; font-size: 13px; font-weight: 500;
+  color: var(--muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px;
+}
+.auth-field input {
+  width: 100%; padding: 10px 12px;
+  border: 2px solid #e5e7eb; border-radius: 8px;
+  font-size: 14px; font-weight: 500;
+  background: #f8fafc; color: var(--text);
+  transition: border-color 0.2s ease;
+  box-sizing: border-box;
+}
+.auth-field input:focus { outline: none; border-color: var(--brand); }
+
+.auth-turnstile-container { margin: 16px 0; display: flex; justify-content: center; }
+
+.auth-error {
+  background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px;
+  padding: 10px 14px; margin-bottom: 14px;
+  font-size: 13px; color: #dc2626; line-height: 1.4;
+}
+
+.auth-submit-btn {
+  width: 100%; padding: 12px;
+  background: var(--brand); color: #fff;
+  border: none; border-radius: 10px;
+  font-size: 15px; font-weight: 600;
+  cursor: pointer; transition: all 0.2s ease;
+}
+.auth-submit-btn:hover:not(:disabled) { opacity: 0.9; transform: translateY(-1px); }
+.auth-submit-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.auth-footer {
+  text-align: center; margin-top: 16px; padding-top: 14px;
+  border-top: 1px solid #f1f5f9;
+  font-size: 13px; color: var(--muted);
+}
+.auth-link-btn {
+  background: none; border: none;
+  color: var(--brand); cursor: pointer;
+  font-size: 13px; font-weight: 500;
+  padding: 0; margin-left: 4px;
+  text-decoration: underline;
+}
+.auth-link-btn:hover { opacity: 0.8; }
+
+.auth-disclaimer {
+  text-align: center; font-size: 11px;
+  color: var(--muted); margin: 12px 0 0;
+  opacity: 0.8;
+}
+
+/* Auth User Popover (logged-in state) */
+.auth-user-popover {
+  position: fixed; z-index: 1500;
+  background: var(--card);
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.15);
+  padding: 14px 16px;
+  min-width: 200px;
+  animation: auth-slide-in 0.15s ease;
+}
+.auth-user-popover[hidden] { display: none; }
+
+.auth-user-info {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 14px; font-weight: 500; color: var(--text);
+  margin-bottom: 8px;
+}
+.auth-user-info svg { color: var(--muted); flex-shrink: 0; }
+
+.auth-sync-status {
+  font-size: 12px; color: var(--muted);
+  margin-bottom: 12px; padding-bottom: 10px;
+  border-bottom: 1px solid #f1f5f9;
+}
+.auth-sync-status:empty { display: none; }
+
+.auth-logout-btn {
+  width: 100%; padding: 8px 12px;
+  background: transparent; border: 1px solid #e5e7eb;
+  border-radius: 8px; font-size: 13px; font-weight: 500;
+  color: var(--text); cursor: pointer;
+  transition: all 0.15s ease;
+}
+.auth-logout-btn:hover { border-color: var(--danger); color: var(--danger); }
+
+/* Dark mode overrides for auth */
+[data-theme="dark"] .auth-dialog { border-color: #334155; }
+[data-theme="dark"] .auth-header { border-bottom-color: #334155; }
+[data-theme="dark"] .auth-field input { background: #334155; border-color: #475569; }
+[data-theme="dark"] .auth-field input:focus { border-color: var(--brand); }
+[data-theme="dark"] .auth-error { background: #451a1a; border-color: #7f1d1d; color: #fca5a5; }
+[data-theme="dark"] .auth-footer { border-top-color: #334155; }
+[data-theme="dark"] .auth-user-popover { border-color: #334155; }
+[data-theme="dark"] .auth-sync-status { border-bottom-color: #334155; }
+[data-theme="dark"] .auth-logout-btn { border-color: #475569; }
+[data-theme="dark"] .auth-logout-btn:hover { border-color: var(--danger); }
+
+/* Glass mode overrides for auth */
+body.glass-mode .auth-dialog {
+  background: rgba(255,255,255,0.12);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-color: rgba(255,255,255,0.2);
+}
+body.glass-mode .auth-user-popover {
+  background: rgba(255,255,255,0.12);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-color: rgba(255,255,255,0.2);
+}
+body.glass-mode .auth-field input {
+  background: rgba(255,255,255,0.08);
+  border-color: rgba(255,255,255,0.15);
+}
+body.glass-mode[data-theme="dark"] .auth-dialog {
+  background: rgba(30,41,59,0.7);
+  border-color: rgba(255,255,255,0.1);
+}
+body.glass-mode[data-theme="dark"] .auth-user-popover {
+  background: rgba(30,41,59,0.7);
+  border-color: rgba(255,255,255,0.1);
+}
+

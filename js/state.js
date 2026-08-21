@@ -111,6 +111,56 @@ export const dragState = {
   targetSubtitle: null  // Subtitle detected during cross-card drag
 };
 
+// --- Known static keys on the model (everything else is dynamic section data)
+const MODEL_STATIC_KEYS = new Set([
+  'schemaVersion', 'sections', 'sectionsStacked', 'timers',
+  'timeTrackingExpanded', 'quickAccessExpanded', 'selectorModeActive',
+  'displayMode', 'quickAccessItems', 'sectionTitles', 'sectionIcons',
+  'sectionColors', 'subtitleColors', 'collapsedSubtitles', 'cardNotes',
+  'collapsedCards', 'tasks', 'ideas', 'meetings', 'completedTasks', 'projects',
+  'header', 'darkMode', 'glassMode', 'glassTheme', 'glassCursorShadow',
+  'reminders', 'dailyTasks', 'dailyTools', 'contentCreation', 'ads',
+  'analytics', 'tools', 'tasksSummaryOrder'
+]);
+
+// --- Reset model to clean state (removes all dynamic section data)
+// Called before restoreModel to prevent data leaking between users
+export function resetModel() {
+  // Remove dynamic section data keys (user cards like 'new-card-1234')
+  for (const key of Object.keys(model)) {
+    if (!MODEL_STATIC_KEYS.has(key)) {
+      delete model[key];
+    }
+  }
+  // Reset collection properties to defaults
+  model.sections = [];
+  model.sectionsStacked = null;
+  model.sectionTitles = {};
+  model.sectionIcons = {};
+  model.sectionColors = {};
+  model.subtitleColors = {};
+  model.collapsedSubtitles = {};
+  model.cardNotes = {};
+  model.collapsedCards = {};
+  model.tasks = [];
+  model.ideas = [];
+  model.meetings = [];
+  model.completedTasks = [];
+  model.projects = [];
+  model.quickAccessItems = { icons: [], listItems: [], quickLinks: [] };
+  model.timers = [
+    { id: 'timer-1', title: 'Task 1', elapsed: 0, isRunning: false, lastTick: null },
+    { id: 'timer-2', title: 'Task 2', elapsed: 0, isRunning: false, lastTick: null },
+  ];
+  model.header = {
+    companyLogoSrc: 'assets/icons/placeholder-logo.svg',
+    companyLogoZoom: 1, companyLogoXPercent: 0, companyLogoYPercent: 0,
+    profilePhotoSrc: 'assets/icons/placeholder-profile.svg',
+    profileName: 'Your Name', profileTitle: 'Your Title',
+    profilePhotoZoom: 1, profilePhotoXPercent: 0, profilePhotoYPercent: 0,
+  };
+}
+
 // --- Helper to get current active data (working copy in edit mode, or main model)
 export function currentData() {
   return editState.working || model;

@@ -82,6 +82,9 @@ import {
 } from '../features/reminders.js';
 import { ensureSectionPlusButtons } from '../features/cards.js';
 import { initStickyNotes } from '../features/sticky-notes.js';
+import { initAuthOnStartup, postRestoreAuthSync } from '../features/auth-ui.js';
+import { immediateCloudSave } from '../core/sync.js';
+import { isLoggedIn } from '../core/auth.js';
 
 // Module state
 let cardsCollapsed = false;
@@ -718,6 +721,9 @@ export { clearSearch };
 // ===== INITIALIZATION =====
 
 export async function init() {
+  // Initialize auth state BEFORE restoreModel so scoped storage key is set correctly
+  const wasLoggedIn = await initAuthOnStartup();
+
   await restoreModel();
 
   applyDarkMode();
@@ -767,6 +773,10 @@ export async function init() {
     }
   }
 
+  // Cloud sync: reconcile with server after local render (async, non-blocking)
+  if (wasLoggedIn) {
+    postRestoreAuthSync();
+  }
 }
 
 // ===== DISPLAY MODE =====
@@ -1210,6 +1220,9 @@ export function wireUI() {
       // Also create a timestamped backup file for longevity
       try { exportBackupFile(); } catch {}
       // Skip file persistence to avoid triggering Edge file system access
+
+      // Immediate cloud save on edit confirm (async, non-blocking)
+      immediateCloudSave();
     }
 
     toggleEditMode();
@@ -1571,12 +1584,19 @@ export function wireUI() {
   setupCardCollapseExpand();
 }
 
-// Cleanup timer interval on page unload to prevent memory leak
+// Cleanup on page unload
 window.addEventListener('pagehide', () => {
   const timerInterval = getTimerInterval();
   if (timerInterval) {
     clearInterval(timerInterval);
     clearTimerInterval();
+  }
+});
+
+// When coming back online, sync any pending changes
+window.addEventListener('online', () => {
+  if (isLoggedIn()) {
+    immediateCloudSave();
   }
 });
 
