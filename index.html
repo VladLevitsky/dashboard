@@ -11,6 +11,8 @@
   <link rel="stylesheet" href="styles.css?v=2026-01-14">
   <!-- Emoji Picker Element - Web Component -->
   <script type="module" src="https://cdn.jsdelivr.net/npm/emoji-picker-element@^1/index.js"></script>
+  <!-- Cloudflare Turnstile (explicit render mode for registration) -->
+  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>
 </head>
   <body>
     <header class="app-header card" id="top-header">
@@ -75,6 +77,12 @@
           <line x1="8" y1="2" x2="16" y2="2"></line>
           <line x1="12" y1="14" x2="12" y2="10"></line>
           <line x1="12" y1="14" x2="15" y2="17"></line>
+        </svg>
+      </button>
+      <button id="auth-toggle" class="auth-toggle" title="Account" aria-label="Account">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+          <circle cx="12" cy="7" r="4"></circle>
         </svg>
       </button>
     </header>
@@ -617,6 +625,50 @@
           <button type="button" id="image-editor-save" class="btn primary">Save</button>
         </div>
       </div>
+    </div>
+
+    <!-- Auth Modal (Login / Register) -->
+    <div id="auth-modal" class="auth-modal" hidden>
+      <div class="auth-backdrop"></div>
+      <div class="auth-dialog">
+        <div class="auth-header">
+          <h4 id="auth-modal-title">Sign In</h4>
+          <button type="button" id="auth-close" class="btn-cancel" title="Close" aria-label="Close">&times;</button>
+        </div>
+        <div class="auth-body">
+          <form id="auth-form" autocomplete="off">
+            <div class="auth-field">
+              <label for="auth-username">Username</label>
+              <input type="text" id="auth-username" minlength="3" maxlength="30" pattern="[a-zA-Z0-9_\-]+" required autocomplete="username" />
+            </div>
+            <div class="auth-field">
+              <label for="auth-password">Password</label>
+              <input type="password" id="auth-password" minlength="10" required autocomplete="current-password" />
+            </div>
+            <div id="auth-turnstile-container" class="auth-turnstile-container" hidden></div>
+            <div id="auth-error" class="auth-error" hidden></div>
+            <button type="submit" id="auth-submit" class="auth-submit-btn">Sign In</button>
+          </form>
+          <div class="auth-footer">
+            <span id="auth-footer-text">Don't have an account?</span>
+            <button type="button" id="auth-toggle-mode" class="auth-link-btn">Create account</button>
+          </div>
+          <p class="auth-disclaimer" id="auth-disclaimer" hidden>Forgotten passwords cannot currently be recovered.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Auth User Popover (shown when logged in and clicking account button) -->
+    <div id="auth-user-popover" class="auth-user-popover" hidden>
+      <div class="auth-user-info">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+          <circle cx="12" cy="7" r="4"></circle>
+        </svg>
+        <span id="auth-user-label"></span>
+      </div>
+      <div id="auth-sync-status" class="auth-sync-status"></div>
+      <button type="button" id="auth-logout-btn" class="auth-logout-btn">Sign Out</button>
     </div>
 
     <!-- ES6 Modules - fully modularized, no app.js dependency -->
