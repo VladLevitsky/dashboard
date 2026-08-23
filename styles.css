@@ -986,8 +986,13 @@ body {
 .quick-access-copy-paste:hover {
   background: #f1f5f9;
   border-color: #cbd5e1;
-  transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  transform: translateY(-1px) !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1) !important;
+}
+/* Disable glass pseudo-element effects on quick access items */
+.quick-access-copy-paste::before,
+.quick-access-copy-paste::after {
+  display: none !important;
 }
 
 .quick-access-copy-paste .copy-paste-text {

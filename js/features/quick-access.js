@@ -364,11 +364,29 @@ export function renderQuickAccess() {
       return;
     }
 
+    // Handle copy-paste item click (clicking anywhere on the item copies text)
+    const copyPasteItem = e.target.closest('.quick-access-copy-paste');
+    if (copyPasteItem) {
+      e.preventDefault();
+      const copyText = copyPasteItem.dataset.qaCopyText;
+      if (copyText) copyToClipboard(copyText);
+      return;
+    }
+
     // Handle icon click
     const icon = e.target.closest('.quick-access-icon');
     if (icon) {
       e.preventDefault();
       const url = icon.dataset.qaUrl;
+      if (url) openUrl(url);
+      return;
+    }
+
+    // Handle list item click (subtask links)
+    const listItem = e.target.closest('.quick-access-list:not(.quick-link-item)');
+    if (listItem) {
+      e.preventDefault();
+      const url = listItem.dataset.qaUrl;
       if (url) openUrl(url);
       return;
     }
