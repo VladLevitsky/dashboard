@@ -35,7 +35,8 @@
       "WebSearch",
       "Bash(start:*)",
       "Bash(grep -n \"\\\\\\\\.slice\\\\|\\\\\\\\.splice\\\\|\\\\\\\\.pop\\\\|\\\\\\\\.shift\\\\|notes\\\\\\\\[0\\\\\\\\]\\\\|notes\\\\\\\\.length\" js/features/edit-mode.js)",
-      "WebFetch(domain:vladlevitsky.github.io)"
+      "WebFetch(domain:vladlevitsky.github.io)",
+      "Bash(grep -v \"//\")"
     ],
     "deny": [],
     "ask": []

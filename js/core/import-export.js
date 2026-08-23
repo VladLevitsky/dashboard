@@ -119,7 +119,7 @@ export function extractUrlOverrides() {
   });
 
   // Schema version for migration support
-  obj.schemaVersion = data.schemaVersion || 4;
+  obj.schemaVersion = data.schemaVersion || 5;
 
   // Structure information
   obj._structure = {
@@ -137,17 +137,15 @@ export function extractUrlOverrides() {
 
   // UI state
   obj.darkMode = data.darkMode || false;
-  obj.glassMode = data.glassMode || false;
+  obj.glassMode = true;
   obj.glassTheme = data.glassTheme || 'classic';
-  obj.glassCursorShadow = data.glassCursorShadow !== false; // Default to true
   obj.timeTrackingExpanded = data.timeTrackingExpanded || false;
   obj.quickAccessExpanded = data.quickAccessExpanded || false;
   obj.selectorModeActive = data.selectorModeActive || false;
   obj.displayMode = data.displayMode || 'normal';
-  obj.quickAccessItems = data.quickAccessItems || { icons: [], listItems: [] };
+  obj.quickAccessItems = data.quickAccessItems || { icons: [], listItems: [], quickLinks: [] };
   obj.timers = data.timers || [];
   obj.tasks = data.tasks || [];
-  obj.tasksSummaryOrder = data.tasksSummaryOrder || null;
   obj.completedTasks = data.completedTasks || [];
   obj.projects = data.projects || [];
   obj.ideas = data.ideas || [];
@@ -381,8 +379,6 @@ function migrateImportedData(data, model) {
     'dailyTasks', 'dailyTools', 'contentCreation', 'ads',
     'analytics', 'tools', 'icon', 'list'
   ];
-  console.log('[Migration] Starting migration. Legacy types:', legacyTypes);
-  console.log('[Migration] Sections to process:', model.sections?.map(s => ({ id: s.id, type: s.type })));
 
   // Helper to extract items from various data formats
   const extractItems = (rawData) => {
@@ -411,15 +407,10 @@ function migrateImportedData(data, model) {
         if (!rawData && data[section.type]) {
           rawData = data[section.type];
           dataKey = section.type;
-          console.log(`[Migration] Found data at type key '${section.type}' instead of id '${sectionId}'`);
         }
 
         // Extract items from various formats
         const oldData = extractItems(rawData);
-        console.log(`[Migration] Processing ${section.type} section: ${sectionId}`);
-        console.log(`[Migration] Raw data for ${dataKey}:`, rawData);
-        console.log(`[Migration] Extracted items:`, oldData);
-
         // Convert the data in the imported JSON to unified format
         if (oldData) {
           switch (section.type) {
@@ -450,7 +441,6 @@ function migrateImportedData(data, model) {
                     copyPaste: []
                   }
                 };
-                console.log(`[Migration] Migrated newCard ${sectionId} with ${oldData.length} icons`);
               }
               break;
 
@@ -470,7 +460,6 @@ function migrateImportedData(data, model) {
                     copyPaste: []
                   }
                 };
-                console.log(`[Migration] Migrated newCardAnalytics ${sectionId} with ${oldData.length} subtasks`);
               }
               break;
 
@@ -496,7 +485,6 @@ function migrateImportedData(data, model) {
                   }
                 });
                 data[sectionId] = migrated;
-                console.log(`[Migration] Migrated copyPaste ${sectionId} with subtitles:`, Object.keys(migrated));
               }
               break;
 
@@ -505,7 +493,6 @@ function migrateImportedData(data, model) {
               if (typeof oldData === 'object' && !Array.isArray(oldData)) {
                 const migrated = {};
                 Object.entries(oldData).forEach(([subtitle, items]) => {
-                  console.log(`[Migration] Processing reminders subtitle "${subtitle}":`, items);
                   if (Array.isArray(items)) {
                     migrated[subtitle] = {
                       icons: [],
@@ -532,15 +519,12 @@ function migrateImportedData(data, model) {
                       subtasks: [],
                       copyPaste: []
                     };
-                    console.log(`[Migration] Migrated ${items.length} reminders for subtitle "${subtitle}"`);
                   } else if (items && typeof items === 'object' && items.reminders) {
                     // Already in unified format - keep it
                     migrated[subtitle] = items;
-                    console.log(`[Migration] Subtitle "${subtitle}" already in unified format`);
                   }
                 });
                 data[sectionId] = migrated;
-                console.log(`[Migration] Final migrated data for ${sectionId}:`, data[sectionId]);
               }
               break;
 
@@ -576,7 +560,6 @@ function migrateImportedData(data, model) {
                     copyPaste: []
                   }
                 };
-                console.log(`[Migration] Migrated icon card ${sectionId} with ${oldData.length} icons`);
               }
               break;
 
@@ -599,22 +582,17 @@ function migrateImportedData(data, model) {
                     copyPaste: []
                   }
                 };
-                console.log(`[Migration] Migrated list card ${sectionId} with ${oldData.length} subtasks`);
               }
               break;
           }
           // If data was at type key (not id key), clean up the old key
           if (dataKey !== sectionId && data[dataKey]) {
             delete data[dataKey];
-            console.log(`[Migration] Cleaned up old data key '${dataKey}'`);
           }
-        } else {
-          console.log(`[Migration] No data found for section ${sectionId}`);
         }
 
         // Update section type to 'unified'
         section.type = 'unified';
-        console.log(`[Migration] Changed section ${sectionId} type to 'unified'`);
       }
     });
   }
@@ -628,20 +606,13 @@ function migrateImportedData(data, model) {
     });
   }
 
-  console.log('[Migration] Migration complete');
 }
 
 // --- Apply URL overrides from imported JSON
 export function applyUrlOverrides(data) {
-  console.log('[Import] applyUrlOverrides called with data:', data);
-  console.log('[Import] Data keys:', Object.keys(data || {}));
-  console.log('[Import] schemaVersion:', data?.schemaVersion);
-  console.log('[Import] _structure:', data?._structure);
-
   if (!data || typeof data !== 'object') return;
   // Don't apply overrides if localStorage has already been restored
   if (window.localStorageRestored) {
-    console.log('[Import] Skipping - localStorage already restored');
     return;
   }
   // Always operate on model, not editState.working
@@ -650,12 +621,9 @@ export function applyUrlOverrides(data) {
   // IMPORTANT: Apply structure FIRST so new sections are recognized before data import
   // Handle both new format (data._structure) and old format (data.sections directly)
   const structure = data._structure || data;
-  console.log('[Import] Using structure:', structure);
-  console.log('[Import] Structure sections:', structure?.sections);
 
   if (structure.sections && Array.isArray(structure.sections)) {
     current.sections = structure.sections;
-    console.log('[Import] Applied sections to model:', current.sections.map(s => ({ id: s.id, type: s.type })));
   }
   // Restore sectionsStacked (separate section order for stacked mode)
   if (structure.sectionsStacked && Array.isArray(structure.sectionsStacked)) {
@@ -724,7 +692,7 @@ export function applyUrlOverrides(data) {
       });
     }
   }
-  current.schemaVersion = 4;
+  current.schemaVersion = 5;
 
   // Apply to ALL sections - all are now unified format
   // Helper function to import unified card data
@@ -735,7 +703,6 @@ export function applyUrlOverrides(data) {
     Object.entries(sectionData).forEach(([subtitle, items]) => {
       // FALLBACK: If items is an array (old format), detect and convert on-the-fly
       if (Array.isArray(items)) {
-        console.log(`[Import] Detected old array format for ${sectionId}/${subtitle}, converting...`);
         const firstItem = items[0];
         if (firstItem) {
           if (firstItem.type === 'days' || firstItem.type === 'interval' || firstItem.schedule !== undefined || (firstItem.title !== undefined && !firstItem.icon)) {
@@ -796,14 +763,11 @@ export function applyUrlOverrides(data) {
     return imported;
   };
 
-  console.log('[Import] Processing ALL sections as unified:', current.sections.map(s => ({ id: s.id, type: s.type })));
   current.sections.forEach(section => {
-    console.log(`[Import] Section ${section.id}: type=${section.type}, hasData=${!!data[section.id]}`);
     if (data[section.id] && typeof data[section.id] === 'object' && !Array.isArray(data[section.id])) {
       const imported = importUnifiedCard(section.id, data[section.id]);
       if (imported) {
         current[section.id] = imported;
-        console.log(`[Import] Applied unified data to ${section.id}`);
       }
     }
   });
@@ -819,9 +783,6 @@ export function applyUrlOverrides(data) {
   }
   if (data.glassTheme) {
     current.glassTheme = data.glassTheme;
-  }
-  if (typeof data.glassCursorShadow === 'boolean') {
-    current.glassCursorShadow = data.glassCursorShadow;
   }
   if (typeof data.timeTrackingExpanded === 'boolean') {
     current.timeTrackingExpanded = data.timeTrackingExpanded;
@@ -842,7 +803,8 @@ export function applyUrlOverrides(data) {
   if (data.quickAccessItems && typeof data.quickAccessItems === 'object') {
     current.quickAccessItems = {
       icons: Array.isArray(data.quickAccessItems.icons) ? data.quickAccessItems.icons : [],
-      listItems: Array.isArray(data.quickAccessItems.listItems) ? data.quickAccessItems.listItems : []
+      listItems: Array.isArray(data.quickAccessItems.listItems) ? data.quickAccessItems.listItems : [],
+      quickLinks: Array.isArray(data.quickAccessItems.quickLinks) ? data.quickAccessItems.quickLinks : []
     };
   }
 
@@ -851,10 +813,6 @@ export function applyUrlOverrides(data) {
     current.timers = data.timers;
   }
 
-  // Apply tasks summary order
-  if (data.tasksSummaryOrder && Array.isArray(data.tasksSummaryOrder)) {
-    current.tasksSummaryOrder = data.tasksSummaryOrder;
-  }
 
   // Apply centralized tasks (Eisenhower Matrix)
   if (data.tasks && Array.isArray(data.tasks)) {
@@ -891,7 +849,7 @@ export function applyUrlOverrides(data) {
   if (window.isImporting) {
     // During import, only save to localStorage without triggering JSON file save
     const payload = {
-      schemaVersion: current.schemaVersion || 4,
+      schemaVersion: current.schemaVersion || 5,
       sections: current.sections,
       sectionsStacked: current.sectionsStacked,
       sectionTitles: current.sectionTitles,
@@ -911,7 +869,6 @@ export function applyUrlOverrides(data) {
       selectorModeActive: current.selectorModeActive,
       quickAccessItems: current.quickAccessItems,
       displayMode: current.displayMode,
-      tasksSummaryOrder: current.tasksSummaryOrder,
       tasks: current.tasks || [],
       completedTasks: current.completedTasks || [],
       projects: current.projects || [],

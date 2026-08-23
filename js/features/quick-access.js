@@ -177,6 +177,73 @@ export function removeQuickLink(linkKey) {
   }
 }
 
+// --- Reconcile quick access items against current data (remove stale entries)
+function reconcileQuickAccessItems(data) {
+  if (!data.quickAccessItems) return;
+  let changed = false;
+
+  // Build a set of all existing icons and list items across all sections
+  const existingIcons = new Set();
+  const existingListItems = new Set();
+  const sections = data.sections || [];
+
+  sections.forEach(section => {
+    const cardData = data[section.id];
+    if (!cardData || typeof cardData !== 'object') return;
+    Object.values(cardData).forEach(group => {
+      if (!group || typeof group !== 'object') return;
+      if (group.icons) {
+        group.icons.forEach(icon => {
+          if (icon.icon && icon.url) existingIcons.add(`${icon.icon}::${icon.url}`);
+        });
+      }
+      if (group.subtasks) {
+        group.subtasks.forEach(item => {
+          existingListItems.add(`list::${item.text || ''}::${item.url || ''}`);
+        });
+      }
+      if (group.reminders) {
+        group.reminders.forEach(item => {
+          existingListItems.add(`reminder::${item.title || ''}::${item.url || ''}`);
+        });
+      }
+      if (group.copyPaste) {
+        group.copyPaste.forEach(item => {
+          existingListItems.add(`copyPaste::${item.text || ''}::${item.copyText || ''}`);
+        });
+      }
+    });
+  });
+
+  // Filter icons — keep only those that still exist in a card
+  if (data.quickAccessItems.icons) {
+    const before = data.quickAccessItems.icons.length;
+    data.quickAccessItems.icons = data.quickAccessItems.icons.filter(icon =>
+      existingIcons.has(`${icon.icon}::${icon.url}`)
+    );
+    if (data.quickAccessItems.icons.length < before) changed = true;
+  }
+
+  // Filter list items — keep only those that still exist in a card
+  if (data.quickAccessItems.listItems) {
+    const before = data.quickAccessItems.listItems.length;
+    data.quickAccessItems.listItems = data.quickAccessItems.listItems.filter(item => {
+      if (item.copyText) {
+        return existingListItems.has(`copyPaste::${item.text || ''}::${item.copyText || ''}`);
+      } else if (item.type === 'reminder') {
+        return existingListItems.has(`reminder::${item.text || ''}::${item.url || ''}`);
+      } else {
+        return existingListItems.has(`list::${item.text || ''}::${item.url || ''}`);
+      }
+    });
+    if (data.quickAccessItems.listItems.length < before) changed = true;
+  }
+
+  if (changed && !editState.enabled) {
+    saveModel();
+  }
+}
+
 // --- Render quick access panel
 export function renderQuickAccess() {
   const data = currentData();
@@ -184,9 +251,14 @@ export function renderQuickAccess() {
 
   if (!content) return;
 
+  // Reconcile against current data — remove stale items (only when panel is freshly opened)
+  if (data.quickAccessExpanded) {
+    reconcileQuickAccessItems(data);
+  }
+
   const quickLinks = data.quickAccessItems.quickLinks || [];
   const icons = data.quickAccessItems.icons || [];
-  // Deduplicate list items by name/key, then filter out items with linked tasks
+  // Deduplicate list items by name/key
   const allListItems = data.quickAccessItems.listItems || [];
   const seenKeys = new Set();
   const dedupedListItems = allListItems.filter(item => {

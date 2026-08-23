@@ -407,7 +407,7 @@ export function saveModel() {
   const data = model;
 
   const payload = {
-    schemaVersion: data.schemaVersion || 4,
+    schemaVersion: data.schemaVersion || 5,
     sections: data.sections,
     sectionsStacked: data.sectionsStacked,
     sectionTitles: data.sectionTitles,
@@ -421,7 +421,6 @@ export function saveModel() {
     darkMode: data.darkMode,
     glassMode: data.glassMode,
     glassTheme: data.glassTheme,
-    glassCursorShadow: data.glassCursorShadow,
     timers: data.timers,
     timeTrackingExpanded: data.timeTrackingExpanded,
     quickAccessExpanded: data.quickAccessExpanded,
@@ -555,10 +554,6 @@ export async function restoreModel() {
       model.glassTheme = saved.glassTheme;
     }
 
-    if (typeof saved.glassCursorShadow === 'boolean') {
-      model.glassCursorShadow = saved.glassCursorShadow;
-    }
-
     // Note: Legacy reminders/dailyTasks/etc. arrays are now migrated to unified format
     // by migrateToUnifiedCards above, so we restore all section data uniformly
 
@@ -671,24 +666,6 @@ export function deepMergeModel(target, source) {
   }
   if (Array.isArray(source.sectionsStacked)) {
     target.sectionsStacked = [...source.sectionsStacked];
-  }
-  if (Array.isArray(source.dailyTasks)) {
-    target.dailyTasks = [...source.dailyTasks];
-  }
-  if (Array.isArray(source.dailyTools)) {
-    target.dailyTools = [...source.dailyTools];
-  }
-  if (Array.isArray(source.contentCreation)) {
-    target.contentCreation = [...source.contentCreation];
-  }
-  if (Array.isArray(source.ads)) {
-    target.ads = [...source.ads];
-  }
-  if (Array.isArray(source.analytics)) {
-    target.analytics = [...source.analytics];
-  }
-  if (Array.isArray(source.tools)) {
-    target.tools = [...source.tools];
   }
   if (Array.isArray(source.timers)) {
     target.timers = [...source.timers];
@@ -804,9 +781,6 @@ export function deepMergeModel(target, source) {
   if (typeof source.glassTheme !== 'undefined') {
     target.glassTheme = source.glassTheme;
   }
-  if (typeof source.glassCursorShadow !== 'undefined') {
-    target.glassCursorShadow = source.glassCursorShadow;
-  }
   if (typeof source.timeTrackingExpanded !== 'undefined') {
     target.timeTrackingExpanded = source.timeTrackingExpanded;
   }
@@ -824,6 +798,12 @@ export function deepMergeModel(target, source) {
   }
   if (source.ideas && Array.isArray(source.ideas)) {
     target.ideas = JSON.parse(JSON.stringify(source.ideas));
+  }
+  if (source.completedTasks && Array.isArray(source.completedTasks)) {
+    target.completedTasks = JSON.parse(JSON.stringify(source.completedTasks));
+  }
+  if (source.projects && Array.isArray(source.projects)) {
+    target.projects = JSON.parse(JSON.stringify(source.projects));
   }
 
   // Handle ALL section data (unified format - objects keyed by section ID)

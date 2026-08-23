@@ -48,9 +48,6 @@ export function toggleEditMode() {
   if (window.refreshEditingClasses) window.refreshEditingClasses();
   $('#edit-fab-group').hidden = !editState.enabled;
   $('#appearance-toggle').hidden = !editState.enabled;
-
-  $('#override-links').hidden = !editState.enabled;
-  $('#import-links').hidden = !editState.enabled;
   if (window.ensureSectionPlusButtons) window.ensureSectionPlusButtons();
 
   if (!editState.enabled) {
@@ -287,34 +284,16 @@ export function applyDarkMode() {
   document.body.setAttribute('data-theme', isDark ? 'dark' : 'light');
 }
 
-// --- Apply Glass Mode
+// --- Apply Glass Mode (always on)
 export function applyGlassMode() {
-  const isGlass = model.glassMode;
-  document.body.setAttribute('data-style', isGlass ? 'glass' : 'solid');
-
-  // Show/hide glass theme section in modal
-  const glassThemeSection = $('#glass-theme-section');
-  if (glassThemeSection) {
-    glassThemeSection.hidden = !isGlass;
-  }
-
-  // Show/hide cursor shadow section in modal
-  const cursorShadowSection = $('#cursor-shadow-section');
-  if (cursorShadowSection) {
-    cursorShadowSection.hidden = !isGlass;
-  }
+  model.glassMode = true;
+  document.body.setAttribute('data-style', 'glass');
 }
 
 // --- Apply Glass Theme
 export function applyGlassTheme() {
   const theme = model.glassTheme || 'classic';
   document.body.setAttribute('data-glass-theme', theme);
-}
-
-// --- Apply Cursor Shadow setting
-export function applyCursorShadow() {
-  const enabled = model.glassCursorShadow !== false;
-  document.body.setAttribute('data-cursor-shadow', enabled ? 'on' : 'off');
 }
 
 // --- Set Dark Mode (used by appearance modal)
@@ -399,25 +378,12 @@ let appearanceOriginalState = null;
 export function openAppearanceModal() {
   const modal = $('#appearance-modal');
   if (modal) {
-    // Store original state for cancel
     appearanceOriginalState = {
       darkMode: model.darkMode,
-      glassMode: model.glassMode,
-      glassTheme: model.glassTheme,
-      glassCursorShadow: model.glassCursorShadow
+      glassTheme: model.glassTheme
     };
     modal.hidden = false;
     updateAppearanceModalButtons();
-
-    // Show/hide glass-specific sections based on current glass mode
-    const glassThemeSection = $('#glass-theme-section');
-    if (glassThemeSection) {
-      glassThemeSection.hidden = !model.glassMode;
-    }
-    const cursorShadowSection = $('#cursor-shadow-section');
-    if (cursorShadowSection) {
-      cursorShadowSection.hidden = !model.glassMode;
-    }
   }
 }
 
@@ -441,27 +407,17 @@ export function acceptAppearanceChanges() {
 // --- Cancel Appearance Changes (revert and close)
 export function cancelAppearanceChanges() {
   if (appearanceOriginalState) {
-    // Revert to original state
     model.darkMode = appearanceOriginalState.darkMode;
-    model.glassMode = appearanceOriginalState.glassMode;
     model.glassTheme = appearanceOriginalState.glassTheme;
-    model.glassCursorShadow = appearanceOriginalState.glassCursorShadow;
 
-    // Also update working copy if in edit mode
     if (editState.working) {
       editState.working.darkMode = model.darkMode;
-      editState.working.glassMode = model.glassMode;
       editState.working.glassTheme = model.glassTheme;
-      editState.working.glassCursorShadow = model.glassCursorShadow;
     }
 
-    // Apply the reverted states
     applyDarkMode();
-    applyGlassMode();
     applyGlassTheme();
-    applyCursorShadow();
 
-    // Re-render if dark mode changed
     if (window.renderAllSections) {
       window.renderAllSections();
     }
@@ -485,31 +441,10 @@ function updateAppearanceModalButtons() {
     btn.classList.toggle('active', isActive);
   });
 
-  // Update style buttons
-  modal.querySelectorAll('.appearance-option[data-style]').forEach(btn => {
-    const isSolid = btn.dataset.style === 'solid';
-    const isActive = isSolid ? !model.glassMode : model.glassMode;
-    btn.classList.toggle('active', isActive);
-  });
-
-  // Update glass theme dropdown visibility and value
-  const glassThemeSection = $('#glass-theme-section');
+  // Update glass theme dropdown value
   const glassThemeSelect = $('#glass-theme-select');
-  if (glassThemeSection) {
-    glassThemeSection.hidden = !model.glassMode;
-  }
   if (glassThemeSelect) {
     glassThemeSelect.value = model.glassTheme || 'classic';
-  }
-
-  // Update cursor shadow toggle visibility and state
-  const cursorShadowSection = $('#cursor-shadow-section');
-  const cursorShadowToggle = $('#cursor-shadow-toggle');
-  if (cursorShadowSection) {
-    cursorShadowSection.hidden = !model.glassMode;
-  }
-  if (cursorShadowToggle) {
-    cursorShadowToggle.checked = model.glassCursorShadow !== false;
   }
 }
 
@@ -565,21 +500,7 @@ export function wireAppearanceModalEvents() {
     });
   });
 
-  // Style option buttons (apply immediately for preview)
-  modal.querySelectorAll('.appearance-option[data-style]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const isGlass = btn.dataset.style === 'glass';
-      // Apply immediately but don't save yet
-      model.glassMode = isGlass;
-      if (editState.working) {
-        editState.working.glassMode = isGlass;
-      }
-      applyGlassMode();
-      updateAppearanceModalButtons();
-    });
-  });
-
-  // Glass theme dropdown (apply immediately for preview)
+  // Theme dropdown (apply immediately for preview)
   const glassThemeSelect = $('#glass-theme-select');
   if (glassThemeSelect) {
     glassThemeSelect.addEventListener('change', () => {
@@ -592,16 +513,70 @@ export function wireAppearanceModalEvents() {
     });
   }
 
-  // Cursor shadow toggle (apply immediately for preview)
-  const cursorShadowToggle = $('#cursor-shadow-toggle');
-  if (cursorShadowToggle) {
-    cursorShadowToggle.addEventListener('change', () => {
-      const enabled = cursorShadowToggle.checked;
-      model.glassCursorShadow = enabled;
-      if (editState.working) {
-        editState.working.glassCursorShadow = enabled;
+  // JSON File Backup - Download
+  const exportBtn = $('#settings-export-btn');
+  if (exportBtn) {
+    exportBtn.addEventListener('click', () => {
+      try {
+        const currentState = window.extractUrlOverrides ? window.extractUrlOverrides() : {};
+        const json = JSON.stringify(currentState, null, 2);
+        const today = new Date();
+        const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+        const filename = `Personal Dashboard (${dateStr}).json`;
+        const blob = new Blob([json], { type: 'application/json' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 0);
+        showToast(`Backup saved as: ${filename}`);
+      } catch (err) {
+        showToast('Error creating backup file.');
       }
-      applyCursorShadow();
+    });
+  }
+
+  // JSON File Backup - Upload
+  const importBtn = $('#settings-import-btn');
+  const importInput = $('#settings-import-input');
+  if (importBtn && importInput) {
+    importBtn.addEventListener('click', () => importInput.click());
+    importInput.addEventListener('change', async () => {
+      const file = importInput.files && importInput.files[0];
+      if (!file) return;
+
+      if (!confirm('Warning: Uploading a backup will overwrite your entire current profile. All existing data will be replaced.\n\nAre you sure you want to continue?')) {
+        importInput.value = '';
+        return;
+      }
+
+      try {
+        window.isImporting = true;
+        window.skipUrlOverrides = false;
+        window.localStorageRestored = false;
+
+        const text = await file.text();
+        const json = JSON.parse(text);
+
+        if (!json || typeof json !== 'object') {
+          throw new Error('Invalid file format');
+        }
+
+        if (window.applyUrlOverrides) window.applyUrlOverrides(json);
+        if (window.renderAllSections) window.renderAllSections();
+
+        await new Promise(resolve => {
+          requestAnimationFrame(() => requestAnimationFrame(resolve));
+        });
+
+        window.isImporting = false;
+        showToast('Profile restored from backup');
+      } catch (err) {
+        window.isImporting = false;
+        showToast('Error importing backup file.');
+      }
+      importInput.value = '';
     });
   }
 }
@@ -930,8 +905,6 @@ function handleMoveToCard(targetSectionId, targetSubtitle = '_default') {
   const { sectionId: sourceSectionId, subtitle: sourceSubtitle, itemType, itemKey } = currentMoveContext;
   const data = currentData();
 
-  console.log('[MoveToCard] Moving item:', { sourceSectionId, sourceSubtitle, itemType, itemKey, targetSectionId, targetSubtitle });
-
   // Get source collection
   const sourceData = data[sourceSectionId];
   if (!sourceData || !sourceData[sourceSubtitle]) {
@@ -956,12 +929,10 @@ function handleMoveToCard(targetSectionId, targetSubtitle = '_default') {
   }
 
   const [movedItem] = sourceCollection.splice(itemIndex, 1);
-  console.log('[MoveToCard] Removed item from source:', movedItem);
 
   // Ensure target card and subtitle have data structure
   if (!data[targetSectionId]) {
     data[targetSectionId] = {};
-    console.log('[MoveToCard] Created new target section');
   }
   if (!data[targetSectionId][targetSubtitle]) {
     data[targetSectionId][targetSubtitle] = {
@@ -970,19 +941,13 @@ function handleMoveToCard(targetSectionId, targetSubtitle = '_default') {
       subtasks: [],
       copyPaste: []
     };
-    console.log('[MoveToCard] Created new target subtitle structure');
   }
   if (!Array.isArray(data[targetSectionId][targetSubtitle][itemType])) {
     data[targetSectionId][targetSubtitle][itemType] = [];
-    console.log('[MoveToCard] Created new itemType array');
   }
-
-  console.log('[MoveToCard] Target structure before push:', data[targetSectionId][targetSubtitle]);
 
   // Add item to end of target subtitle
   data[targetSectionId][targetSubtitle][itemType].push(movedItem);
-  console.log('[MoveToCard] After push, target collection:', data[targetSectionId][targetSubtitle][itemType]);
-  console.log('[MoveToCard] Full target subtitle data:', JSON.stringify(data[targetSectionId][targetSubtitle], null, 2));
 
   // Save and re-render
   markDirtyAndSave();
@@ -1002,8 +967,6 @@ function handleMoveSubtitleToCard(targetSectionId) {
 
   const { sectionId: sourceSectionId, subtitle: sourceSubtitle } = currentMoveContext;
   const data = currentData();
-
-  console.log('[MoveSubtitle] Moving subtitle:', { sourceSectionId, sourceSubtitle, targetSectionId });
 
   // Get source subtitle data
   const sourceData = data[sourceSectionId];
@@ -1598,7 +1561,15 @@ export function enterNotepadEditMode(noteKey) {
 
   if (titleInput) titleInput.value = note.title || '';
   // Load HTML directly (content is now stored as HTML)
-  if (editor) editor.innerHTML = note.content || '';
+  if (editor) {
+    editor.innerHTML = note.content || '';
+    reconcileTaskHighlights(editor);
+    const reconciled = editor.innerHTML;
+    if (reconciled !== (note.content || '')) {
+      note.content = reconciled;
+      saveModel();
+    }
+  }
 
   // Capture initial state for unsaved changes detection
   notepadInitialState = {
@@ -1813,6 +1784,149 @@ export function deleteNote(noteKey) {
   updateNotepadButtonIndicator(currentNotepadSectionId);
 }
 
+// --- Reconcile all task highlights in a DOM element based on actual task status
+// This is the robust approach: instead of relying on events, check actual state
+export function reconcileTaskHighlights(container) {
+  if (!container) return;
+  const spans = container.querySelectorAll('span.project-task-highlight');
+  if (spans.length === 0) return;
+
+  const allActive = window.getAllTasks ? window.getAllTasks() : [];
+  const allCompleted = window.getCompletedTasks ? window.getCompletedTasks() : [];
+
+  const completedBg = 'rgba(34, 197, 94, 0.3)';
+  const completedBorder = 'rgba(34, 197, 94, 0.6)';
+  const colorBg = {
+    blue: 'rgba(59, 130, 246, 0.25)',
+    yellow: 'rgba(234, 179, 8, 0.25)',
+    orange: 'rgba(249, 115, 22, 0.25)',
+    red: 'rgba(239, 68, 68, 0.25)'
+  };
+  const colorBorder = {
+    blue: 'rgba(59, 130, 246, 0.6)',
+    yellow: 'rgba(234, 179, 8, 0.6)',
+    orange: 'rgba(249, 115, 22, 0.6)',
+    red: 'rgba(239, 68, 68, 0.6)'
+  };
+
+  spans.forEach(span => {
+    const taskId = span.dataset.taskId;
+    if (!taskId) return;
+
+    const activeTask = allActive.find(t => t.id === taskId);
+    const completedTask = allCompleted.find(t => t.id === taskId);
+
+    if (completedTask) {
+      // Task is completed → mark green
+      span.dataset.highlightColor = 'completed';
+      span.style.backgroundColor = completedBg;
+      span.style.borderBottom = `2px solid ${completedBorder}`;
+      span.classList.add('completed');
+      span.style.cursor = 'default';
+    } else if (activeTask) {
+      // Task is active → ensure correct color
+      const color = activeTask.color || 'blue';
+      if (span.dataset.highlightColor === 'completed') {
+        // Was marked completed but task is active again (uncompleted)
+        span.dataset.highlightColor = color;
+        span.style.backgroundColor = colorBg[color] || colorBg.blue;
+        span.style.borderBottom = `2px solid ${colorBorder[color] || colorBorder.blue}`;
+        span.classList.remove('completed');
+        span.style.cursor = 'pointer';
+      }
+    } else {
+      // Task not found (deleted) → revert to plain text
+      const text = document.createTextNode(span.textContent);
+      span.parentNode.replaceChild(text, span);
+    }
+  });
+}
+
+// --- Reconcile highlights in stored HTML string, returns updated HTML
+export function reconcileTaskHighlightsInHtml(html) {
+  if (!html) return html;
+  if (!html.includes('project-task-highlight')) return html;
+  const temp = document.createElement('div');
+  temp.innerHTML = html;
+  reconcileTaskHighlights(temp);
+  return temp.innerHTML;
+}
+
+// --- Remove card note task highlight (revert to plain text, keep text)
+export function removeNoteTaskHighlight(sectionId, taskId) {
+  if (!model.cardNotes || !model.cardNotes[sectionId]) return;
+  const notes = model.cardNotes[sectionId];
+  if (!Array.isArray(notes)) return;
+
+  notes.forEach(note => {
+    if (!note.content) return;
+    const temp = document.createElement('div');
+    temp.innerHTML = note.content;
+    let changed = false;
+    temp.querySelectorAll(`span.project-task-highlight[data-task-id="${taskId}"]`).forEach(span => {
+      const text = document.createTextNode(span.textContent);
+      span.parentNode.replaceChild(text, span);
+      changed = true;
+    });
+    if (changed) {
+      note.content = temp.innerHTML;
+    }
+  });
+
+  saveModel();
+
+  // Update live notepad editor if open
+  const editor = $('#notepad-editor');
+  if (editor) {
+    editor.querySelectorAll(`span.project-task-highlight[data-task-id="${taskId}"]`).forEach(span => {
+      const text = document.createTextNode(span.textContent);
+      span.parentNode.replaceChild(text, span);
+    });
+  }
+}
+
+// --- Mark card note task highlight as completed (turns green)
+export function markNoteTaskHighlightCompleted(sectionId, taskId) {
+  if (!model.cardNotes || !model.cardNotes[sectionId]) return;
+  const notes = model.cardNotes[sectionId];
+  if (!Array.isArray(notes)) return;
+
+  const completedBg = 'rgba(34, 197, 94, 0.3)';
+  const completedBorder = 'rgba(34, 197, 94, 0.6)';
+
+  notes.forEach(note => {
+    if (!note.content) return;
+    const temp = document.createElement('div');
+    temp.innerHTML = note.content;
+    let changed = false;
+    temp.querySelectorAll(`span.project-task-highlight[data-task-id="${taskId}"]`).forEach(span => {
+      span.dataset.highlightColor = 'completed';
+      span.style.backgroundColor = completedBg;
+      span.style.borderBottom = '2px solid ' + completedBorder;
+      span.classList.add('completed');
+      span.style.cursor = 'default';
+      changed = true;
+    });
+    if (changed) {
+      note.content = temp.innerHTML;
+    }
+  });
+
+  saveModel();
+
+  // Update live notepad editor if open
+  const editor = $('#notepad-editor');
+  if (editor) {
+    editor.querySelectorAll(`span.project-task-highlight[data-task-id="${taskId}"]`).forEach(span => {
+      span.dataset.highlightColor = 'completed';
+      span.style.backgroundColor = completedBg;
+      span.style.borderBottom = '2px solid ' + completedBorder;
+      span.classList.add('completed');
+      span.style.cursor = 'default';
+    });
+  }
+}
+
 // --- Open Note Viewer Modal (read-only)
 export function openNoteViewer(noteKey) {
   const modal = $('#note-viewer-modal');
@@ -1830,6 +1944,29 @@ export function openNoteViewer(noteKey) {
   titleEl.textContent = note.title || 'Untitled';
   // Display HTML directly (content is now stored as HTML)
   contentEl.innerHTML = note.content || '';
+
+  // Reconcile highlights based on actual task status (completed → green, deleted → plain text)
+  reconcileTaskHighlights(contentEl);
+
+  // Persist any changes back to the stored note
+  const reconciledHtml = contentEl.innerHTML;
+  if (reconciledHtml !== (note.content || '')) {
+    note.content = reconciledHtml;
+    saveModel();
+  }
+
+  // Click on task highlights in note viewer to open linked task
+  contentEl.querySelectorAll('span.project-task-highlight').forEach(span => {
+    if (!span.classList.contains('completed')) {
+      span.style.cursor = 'pointer';
+      span.addEventListener('click', () => {
+        const taskId = span.dataset.taskId;
+        if (taskId && window.openEditTaskModal) {
+          window.openEditTaskModal(taskId);
+        }
+      });
+    }
+  });
 
   modal.hidden = false;
 }
@@ -1932,6 +2069,45 @@ export function wireNotepadEvents() {
         setTimeout(updateToolbarState, 0);
       }
     });
+    // @ mention autocomplete for linking existing tasks in card notes
+    if (window.attachTaskMention) {
+      window.attachTaskMention(editor, (task) => {
+        if (window.updateTask) {
+          window.updateTask(task.id, {
+            noteHighlight: { sectionId: currentNotepadSectionId }
+          });
+        }
+      });
+    }
+
+    // Highlighter context menu on notepad editor (with Link task)
+    attachHighlighterContextMenu(editor, {
+      linkTask: true,
+      onTaskLinked: (task) => {
+        if (window.updateTask) {
+          window.updateTask(task.id, {
+            noteHighlight: { sectionId: currentNotepadSectionId }
+          });
+        }
+      }
+    });
+
+    // Click on task highlights in notepad editor to open linked task
+    editor.addEventListener('click', (e) => {
+      const highlight = e.target.closest('span.project-task-highlight');
+      if (highlight && !highlight.classList.contains('completed')) {
+        const taskId = highlight.dataset.taskId;
+        if (taskId && window.openEditTaskModal) {
+          window.openEditTaskModal(taskId);
+        }
+      }
+    });
+  }
+
+  // Highlighter button in notepad toolbar
+  const hlSlot = $('#notepad-highlighter-slot');
+  if (hlSlot) {
+    hlSlot.appendChild(createHighlighterButton());
   }
 
   // Toolbar button handlers
@@ -1971,7 +2147,9 @@ export function wireNotepadEvents() {
     const isInsideViewer = e.target.closest('#note-viewer-modal');
     const isInsideColorPicker = e.target.closest('.link-color-popover');
 
-    if (!isInsidePopover && !isNotepadButton && !isInsideViewer && !isInsideColorPicker) {
+    const isInsideHighlighter = e.target.closest('.highlight-context-menu') || e.target.closest('.highlighter-color-dropdown') || e.target.closest('.task-link-picker') || e.target.closest('.task-mention-dropdown');
+
+    if (!isInsidePopover && !isNotepadButton && !isInsideViewer && !isInsideColorPicker && !isInsideHighlighter) {
       closeNotepad();
     }
   });
@@ -2195,7 +2373,7 @@ function updateToolbarState() {
 export function handleEditorInput(e) {
   const editor = e.target;
   const selection = window.getSelection();
-  if (!selection.rangeCount) { console.log('[DEBUG] no selection range'); return; }
+  if (!selection.rangeCount) { return; }
 
   const range = selection.getRangeAt(0);
   let node = range.startContainer;
@@ -2374,4 +2552,429 @@ function convertToNumberedList(editor, textNode, selection) {
   newRange.collapse(true);
   selection.removeAllRanges();
   selection.addRange(newRange);
+}
+
+// ============================================================
+// TEXT HIGHLIGHTER (shared across all rich-text editors)
+// ============================================================
+
+const HIGHLIGHT_PASTEL_COLORS = [
+  { name: 'Yellow', color: 'rgba(253, 230, 138, 0.6)', dark: 'rgba(253, 230, 138, 0.3)' },
+  { name: 'Green',  color: 'rgba(167, 243, 208, 0.6)', dark: 'rgba(167, 243, 208, 0.3)' },
+  { name: 'Blue',   color: 'rgba(191, 219, 254, 0.6)', dark: 'rgba(191, 219, 254, 0.3)' },
+  { name: 'Pink',   color: 'rgba(252, 205, 213, 0.6)', dark: 'rgba(252, 205, 213, 0.3)' },
+  { name: 'Purple', color: 'rgba(221, 204, 255, 0.6)', dark: 'rgba(221, 204, 255, 0.3)' }
+];
+
+let activeHighlightColor = HIGHLIGHT_PASTEL_COLORS[0];
+let highlightContextMenu = null;
+
+// Task highlight colors (duplicated from projects.js to avoid circular import)
+const TASK_HIGHLIGHT_BG = {
+  blue: 'rgba(59, 130, 246, 0.25)',
+  yellow: 'rgba(234, 179, 8, 0.25)',
+  orange: 'rgba(249, 115, 22, 0.25)',
+  red: 'rgba(239, 68, 68, 0.25)'
+};
+const TASK_HIGHLIGHT_BORDER = {
+  blue: 'rgba(59, 130, 246, 0.6)',
+  yellow: 'rgba(234, 179, 8, 0.6)',
+  orange: 'rgba(249, 115, 22, 0.6)',
+  red: 'rgba(239, 68, 68, 0.6)'
+};
+const TASK_LINK_COLOR_ORDER = ['red', 'orange', 'yellow', 'blue'];
+
+function getHighlightContextMenu() {
+  if (highlightContextMenu) return highlightContextMenu;
+  highlightContextMenu = document.createElement('div');
+  highlightContextMenu.className = 'highlight-context-menu';
+  highlightContextMenu.style.display = 'none';
+  highlightContextMenu.innerHTML = `
+    <button type="button" class="highlight-context-item ctx-bold-btn">
+      <strong>B</strong>
+      Bold
+    </button>
+    <button type="button" class="highlight-context-item ctx-italic-btn">
+      <em>I</em>
+      Italic
+    </button>
+    <button type="button" class="highlight-context-item ctx-underline-btn">
+      <u>U</u>
+      Underline
+    </button>
+    <div class="highlight-context-divider"></div>
+    <button type="button" class="highlight-context-item highlight-apply-btn">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 20h9"></path>
+        <path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+      </svg>
+      Highlight
+    </button>
+    <button type="button" class="highlight-context-item highlight-remove-btn">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="18" y1="6" x2="6" y2="18"></line>
+        <line x1="6" y1="6" x2="18" y2="18"></line>
+      </svg>
+      Remove highlight
+    </button>
+    <div class="highlight-context-divider ctx-link-task-divider"></div>
+    <button type="button" class="highlight-context-item ctx-link-task-btn">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+        <polyline points="14 2 14 8 20 8"></polyline>
+        <line x1="12" y1="18" x2="12" y2="12"></line>
+        <line x1="9" y1="15" x2="15" y2="15"></line>
+      </svg>
+      Link task
+    </button>
+  `;
+  document.body.appendChild(highlightContextMenu);
+  highlightContextMenu.addEventListener('mousedown', e => e.preventDefault());
+  document.addEventListener('click', (e) => {
+    if (!highlightContextMenu.contains(e.target)) {
+      highlightContextMenu.style.display = 'none';
+    }
+  });
+  return highlightContextMenu;
+}
+
+function hideHighlightContextMenu() {
+  const menu = getHighlightContextMenu();
+  menu.style.display = 'none';
+  hideTaskLinkPicker();
+}
+
+// ---- Task Link Picker (for "Link task" context menu item) ----
+let taskLinkPicker = null;
+
+function getTaskLinkPicker() {
+  if (taskLinkPicker) return taskLinkPicker;
+  taskLinkPicker = document.createElement('div');
+  taskLinkPicker.className = 'task-link-picker';
+  taskLinkPicker.style.display = 'none';
+  taskLinkPicker.addEventListener('mousedown', e => e.preventDefault());
+  document.body.appendChild(taskLinkPicker);
+  document.addEventListener('click', (e) => {
+    if (taskLinkPicker && !taskLinkPicker.contains(e.target) &&
+        !e.target.closest('.highlight-context-menu')) {
+      hideTaskLinkPicker();
+    }
+  });
+  return taskLinkPicker;
+}
+
+function hideTaskLinkPicker() {
+  const picker = getTaskLinkPicker();
+  picker.style.display = 'none';
+}
+
+function showTaskLinkPicker(x, y, editor, savedRange, onTaskLinked) {
+  const picker = getTaskLinkPicker();
+  const allTasks = window.getAllTasks ? window.getAllTasks().filter(t => !t.completed) : [];
+
+  if (allTasks.length === 0) {
+    picker.innerHTML = '<div class="task-link-picker-empty">No tasks available</div>';
+    picker.style.left = `${x}px`;
+    picker.style.top = `${y}px`;
+    picker.style.display = 'flex';
+    return;
+  }
+
+  picker.innerHTML = '<input type="text" class="task-link-picker-filter" placeholder="Filter tasks...">';
+  const filterInput = picker.querySelector('.task-link-picker-filter');
+  const colsWrap = document.createElement('div');
+  colsWrap.className = 'task-link-picker-cols';
+  picker.appendChild(colsWrap);
+
+  function renderTasks(query) {
+    colsWrap.innerHTML = '';
+    const lower = (query || '').toLowerCase();
+    const filtered = lower ? allTasks.filter(t => (t.title || '').toLowerCase().includes(lower)) : allTasks;
+
+    if (filtered.length === 0) {
+      colsWrap.innerHTML = '<div class="task-link-picker-empty">No matching tasks</div>';
+      return;
+    }
+
+    TASK_LINK_COLOR_ORDER.forEach(color => {
+      const colorTasks = filtered.filter(t => t.color === color).sort((a, b) => {
+        if (a.pinned && !b.pinned) return -1;
+        if (!a.pinned && b.pinned) return 1;
+        return (a.order || 0) - (b.order || 0);
+      });
+      if (colorTasks.length === 0) return;
+
+      const col = document.createElement('div');
+      col.className = 'task-link-picker-col';
+
+      colorTasks.forEach(task => {
+        const item = document.createElement('div');
+        item.className = `task-mention-item task-bubble-${color}`;
+        const titleSpan = document.createElement('span');
+        titleSpan.className = 'task-mention-item-title';
+        titleSpan.textContent = task.title || 'Untitled';
+        item.appendChild(titleSpan);
+        if (task.pinned) {
+          const badge = document.createElement('span');
+          badge.className = 'task-mention-primary-badge';
+          badge.textContent = 'P';
+          item.appendChild(badge);
+        }
+        item.addEventListener('click', () => {
+          // Wrap the saved selection with a task highlight span
+          try {
+            const span = document.createElement('span');
+            span.className = 'project-task-highlight';
+            span.dataset.taskId = task.id;
+            span.dataset.highlightColor = task.color;
+            span.style.backgroundColor = TASK_HIGHLIGHT_BG[task.color];
+            span.style.borderBottom = `2px solid ${TASK_HIGHLIGHT_BORDER[task.color]}`;
+            span.style.cursor = 'pointer';
+            span.contentEditable = 'false';
+
+            try {
+              savedRange.surroundContents(span);
+            } catch (err) {
+              const contents = savedRange.extractContents();
+              span.appendChild(contents);
+              savedRange.insertNode(span);
+            }
+          } catch (err) { /* range may be stale */ }
+
+          hideTaskLinkPicker();
+          hideHighlightContextMenu();
+          if (onTaskLinked) onTaskLinked(task);
+        });
+        col.appendChild(item);
+      });
+      colsWrap.appendChild(col);
+    });
+  }
+
+  renderTasks('');
+  filterInput.addEventListener('input', () => renderTasks(filterInput.value));
+
+  // Show offscreen to measure, then clamp to viewport
+  picker.style.visibility = 'hidden';
+  picker.style.display = 'flex';
+  picker.style.left = '0px';
+  picker.style.top = '0px';
+  const pw = picker.offsetWidth;
+  const ph = picker.offsetHeight;
+  picker.style.visibility = '';
+
+  let left = Math.max(8, Math.min(x, window.innerWidth - pw - 8));
+  let top = Math.max(8, Math.min(y, window.innerHeight - ph - 8));
+  picker.style.left = `${left}px`;
+  picker.style.top = `${top}px`;
+  filterInput.focus();
+}
+
+function applyHighlightToSelection(editor) {
+  const sel = window.getSelection();
+  if (!sel || sel.isCollapsed || sel.rangeCount === 0) return;
+  const range = sel.getRangeAt(0);
+  if (!editor.contains(range.commonAncestorContainer)) return;
+
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  const bg = isDark ? activeHighlightColor.dark : activeHighlightColor.color;
+
+  const mark = document.createElement('mark');
+  mark.className = 'text-highlight';
+  mark.style.backgroundColor = bg;
+  mark.dataset.highlightColor = activeHighlightColor.name.toLowerCase();
+
+  try {
+    range.surroundContents(mark);
+  } catch (e) {
+    const contents = range.extractContents();
+    mark.appendChild(contents);
+    range.insertNode(mark);
+  }
+
+  // Move cursor after the mark so subsequent typing is unhighlighted
+  const spacer = document.createTextNode('\u200B');
+  if (mark.nextSibling) {
+    mark.parentNode.insertBefore(spacer, mark.nextSibling);
+  } else {
+    mark.parentNode.appendChild(spacer);
+  }
+  const newRange = document.createRange();
+  newRange.setStartAfter(spacer);
+  newRange.collapse(true);
+  sel.removeAllRanges();
+  sel.addRange(newRange);
+
+  hideHighlightContextMenu();
+}
+
+function removeHighlightFromSelection(editor) {
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0) return;
+
+  const node = sel.anchorNode;
+  if (!node || !editor.contains(node)) return;
+
+  const mark = node.nodeType === Node.TEXT_NODE
+    ? node.parentElement?.closest('mark.text-highlight')
+    : node.closest?.('mark.text-highlight');
+
+  if (mark) {
+    const parent = mark.parentNode;
+    while (mark.firstChild) {
+      parent.insertBefore(mark.firstChild, mark);
+    }
+    parent.removeChild(mark);
+    parent.normalize();
+  }
+
+  sel.removeAllRanges();
+  hideHighlightContextMenu();
+}
+
+/**
+ * Create a highlighter button with color picker dropdown for a toolbar.
+ */
+export function createHighlighterButton() {
+  const wrapper = document.createElement('div');
+  wrapper.className = 'highlighter-btn-wrapper';
+
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'highlighter-toolbar-btn';
+  btn.title = 'Highlighter';
+  btn.innerHTML = `
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 20h9"></path>
+      <path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+    </svg>
+    <span class="highlighter-color-indicator"></span>
+  `;
+
+  const indicator = btn.querySelector('.highlighter-color-indicator');
+  indicator.style.backgroundColor = activeHighlightColor.color;
+
+  const dropdown = document.createElement('div');
+  dropdown.className = 'highlighter-color-dropdown';
+  dropdown.style.display = 'none';
+
+  HIGHLIGHT_PASTEL_COLORS.forEach(c => {
+    const swatch = document.createElement('button');
+    swatch.type = 'button';
+    swatch.className = 'highlighter-swatch';
+    if (c.name === activeHighlightColor.name) swatch.classList.add('active');
+    swatch.style.backgroundColor = c.color;
+    swatch.title = c.name;
+    swatch.addEventListener('mousedown', e => e.preventDefault());
+    swatch.addEventListener('click', (e) => {
+      e.stopPropagation();
+      activeHighlightColor = c;
+      document.querySelectorAll('.highlighter-color-indicator').forEach(ind => {
+        ind.style.backgroundColor = c.color;
+      });
+      document.querySelectorAll('.highlighter-swatch').forEach(sw => {
+        sw.classList.toggle('active', sw.title === c.name);
+      });
+      dropdown.style.display = 'none';
+    });
+    dropdown.appendChild(swatch);
+  });
+
+  btn.addEventListener('mousedown', e => e.preventDefault());
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    document.querySelectorAll('.highlighter-color-dropdown').forEach(d => {
+      if (d !== dropdown) d.style.display = 'none';
+    });
+    dropdown.style.display = dropdown.style.display === 'none' ? 'flex' : 'none';
+  });
+
+  document.addEventListener('click', () => { dropdown.style.display = 'none'; });
+
+  wrapper.appendChild(btn);
+  wrapper.appendChild(dropdown);
+  return wrapper;
+}
+
+/**
+ * Attach right-click context menu to a contenteditable editor.
+ * @param {HTMLElement} editor
+ * @param {Object} [options]
+ * @param {boolean} [options.linkTask] - Show "Link task" option
+ * @param {Function} [options.onTaskLinked] - Called with (task) after linking
+ */
+export function attachHighlighterContextMenu(editor, options) {
+  const opts = options || {};
+
+  editor.addEventListener('contextmenu', (e) => {
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed || sel.rangeCount === 0) return;
+    const range = sel.getRangeAt(0);
+    if (!editor.contains(range.commonAncestorContainer)) return;
+    if (!sel.toString().trim()) return;
+
+    e.preventDefault();
+    hideTaskLinkPicker();
+
+    const menu = getHighlightContextMenu();
+    const savedRange = range.cloneRange();
+
+    // --- Bold / Italic / Underline ---
+    function rewire(selector, handler) {
+      const old = menu.querySelector(selector);
+      const btn = old.cloneNode(true);
+      old.parentNode.replaceChild(btn, old);
+      btn.addEventListener('mousedown', ev => ev.preventDefault());
+      btn.addEventListener('click', handler);
+      return btn;
+    }
+
+    rewire('.ctx-bold-btn', () => { document.execCommand('bold'); hideHighlightContextMenu(); });
+    rewire('.ctx-italic-btn', () => { document.execCommand('italic'); hideHighlightContextMenu(); });
+    rewire('.ctx-underline-btn', () => { document.execCommand('underline'); hideHighlightContextMenu(); });
+
+    // --- Highlight / Remove highlight ---
+    rewire('.highlight-apply-btn', () => applyHighlightToSelection(editor));
+    const removeBtn = rewire('.highlight-remove-btn', () => removeHighlightFromSelection(editor));
+
+    const anchor = sel.anchorNode;
+    const inHighlight = anchor && (
+      anchor.nodeType === Node.TEXT_NODE
+        ? anchor.parentElement?.closest('mark.text-highlight')
+        : anchor.closest?.('mark.text-highlight')
+    );
+    removeBtn.style.display = inHighlight ? '' : 'none';
+
+    // --- Link task ---
+    const linkTaskBtn = menu.querySelector('.ctx-link-task-btn');
+    const linkTaskDivider = menu.querySelector('.ctx-link-task-divider');
+    if (opts.linkTask) {
+      linkTaskDivider.style.display = '';
+      const newLinkBtn = linkTaskBtn.cloneNode(true);
+      linkTaskBtn.parentNode.replaceChild(newLinkBtn, linkTaskBtn);
+      newLinkBtn.style.display = '';
+      newLinkBtn.addEventListener('mousedown', ev => ev.preventDefault());
+      newLinkBtn.addEventListener('click', () => {
+        const rect = newLinkBtn.getBoundingClientRect();
+        showTaskLinkPicker(rect.right + 4, rect.top, editor, savedRange, opts.onTaskLinked);
+      });
+    } else {
+      linkTaskDivider.style.display = 'none';
+      linkTaskBtn.style.display = 'none';
+    }
+
+    // Show offscreen to measure, then clamp to viewport
+    menu.style.visibility = 'hidden';
+    menu.style.display = '';
+    menu.style.left = '0px';
+    menu.style.top = '0px';
+    const mw = menu.offsetWidth;
+    const mh = menu.offsetHeight;
+    menu.style.visibility = '';
+
+    const menuLeft = Math.max(8, Math.min(e.clientX, window.innerWidth - mw - 8));
+    const menuTop = Math.max(8, Math.min(e.clientY, window.innerHeight - mh - 8));
+    menu.style.left = `${menuLeft}px`;
+    menu.style.top = `${menuTop}px`;
+  });
 }

@@ -718,3 +718,33 @@ export function copyToClipboard(text) {
     showToast('Failed to copy');
   });
 }
+
+// --- Move cursor to just after a given node (outside it)
+export function moveCursorAfterNode(node) {
+  const sel = window.getSelection();
+  if (!sel) return;
+  const spacer = document.createTextNode('\u200B');
+  if (node.nextSibling) {
+    node.parentNode.insertBefore(spacer, node.nextSibling);
+  } else {
+    node.parentNode.appendChild(spacer);
+  }
+  const range = document.createRange();
+  range.setStartAfter(spacer);
+  range.collapse(true);
+  sel.removeAllRanges();
+  sel.addRange(range);
+}
+
+// --- Normalize description HTML (strip lone <br> and whitespace)
+export function normalizeDescHtml(html) {
+  if (!html) return '';
+  const stripped = html.replace(/<br\s*\/?>/gi, '').replace(/&nbsp;/gi, ' ').trim();
+  return stripped ? html : '';
+}
+
+// --- Escape string for use in HTML attributes
+export function escapeAttr(str) {
+  if (!str) return '';
+  return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}

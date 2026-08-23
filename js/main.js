@@ -17,7 +17,6 @@ import {
   applyDarkMode,
   applyGlassMode,
   applyGlassTheme,
-  applyCursorShadow,
   toggleDarkMode,
   setDarkMode,
   setGlassMode,
@@ -42,6 +41,9 @@ import {
   wireNotepadEvents,
   toggleSavedNotesList,
   openNoteViewer,
+  markNoteTaskHighlightCompleted,
+  removeNoteTaskHighlight,
+  reconcileTaskHighlights,
   closeNoteViewer,
   editNoteFromViewer,
   deleteNoteFromViewer,
@@ -172,6 +174,13 @@ import {
 } from './features/reminders.js';
 
 import {
+  openCalendarView,
+  closeCalendarView,
+  updateNotificationBadge,
+  wireNotificationBadge
+} from './features/calendar.js';
+
+import {
   onAddCard,
   onDeleteCard,
   moveCardUp,
@@ -268,7 +277,8 @@ import {
   markProjectTaskHighlightCompleted,
   refreshProjectHighlights,
   removeMeetingTaskHighlight,
-  markMeetingTaskHighlightCompleted
+  markMeetingTaskHighlightCompleted,
+  attachTaskMention
 } from './features/projects.js';
 
 import {
@@ -378,7 +388,6 @@ window.openEditPopover = openEditPopover;
 window.applyDarkMode = applyDarkMode;
 window.applyGlassMode = applyGlassMode;
 window.applyGlassTheme = applyGlassTheme;
-window.applyCursorShadow = applyCursorShadow;
 window.toggleDarkMode = toggleDarkMode;
 window.setDarkMode = setDarkMode;
 window.setGlassTheme = setGlassTheme;
@@ -599,6 +608,13 @@ window.markProjectTaskHighlightCompleted = markProjectTaskHighlightCompleted;
 window.refreshProjectHighlights = refreshProjectHighlights;
 window.removeMeetingTaskHighlight = removeMeetingTaskHighlight;
 window.markMeetingTaskHighlightCompleted = markMeetingTaskHighlightCompleted;
+window.attachTaskMention = attachTaskMention;
+
+// Calendar
+window.openCalendarView = openCalendarView;
+window.closeCalendarView = closeCalendarView;
+window.updateNotificationBadge = updateNotificationBadge;
+window.wireNotificationBadge = wireNotificationBadge;
 
 // Meetings
 window.openMeetingsModal = openMeetingsModal;
@@ -649,6 +665,9 @@ window.enterNotepadEditMode = enterNotepadEditMode;
 window.updateNotepadButtonIndicator = updateNotepadButtonIndicator;
 window.wireNotepadEvents = wireNotepadEvents;
 window.toggleSavedNotesList = toggleSavedNotesList;
+window.markNoteTaskHighlightCompleted = markNoteTaskHighlightCompleted;
+window.removeNoteTaskHighlight = removeNoteTaskHighlight;
+window.reconcileTaskHighlights = reconcileTaskHighlights;
 window.openNoteViewer = openNoteViewer;
 window.closeNoteViewer = closeNoteViewer;
 window.editNoteFromViewer = editNoteFromViewer;

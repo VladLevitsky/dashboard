@@ -4,13 +4,345 @@
 // with a persistent, color-coded highlight that stays in sync.
 
 import { currentData } from '../state.js';
-import { $, showToast } from '../utils.js';
-import { handleEditorInput } from './edit-mode.js';
+import { $, showToast, moveCursorAfterNode } from '../utils.js';
+import { handleEditorInput, createHighlighterButton, attachHighlighterContextMenu } from './edit-mode.js';
 import { saveModel } from '../core/storage.js';
 import { TASK_COLORS, TASK_COLOR_LABELS } from '../constants.js';
 
 // Module state
 let currentProjectId = null;
+
+// ============================================================
+// @ MENTION AUTOCOMPLETE (shared by projects + meetings)
+// ============================================================
+
+let mentionDropdown = null;       // The dropdown DOM element
+let mentionEditor = null;         // The editor the mention is active in
+let mentionQuery = '';            // Text typed after @
+let mentionAnchorNode = null;     // Text node containing the @
+let mentionAnchorOffset = null;   // Offset of @ in that text node
+let mentionSelectedIndex = -1;    // Keyboard-selected item index
+let mentionOnInsert = null;       // Callback after inserting highlight (e.g. save)
+let mentionSuppressInput = false; // Suppress input events during DOM manipulation
+
+// Priority order for display rows (most important first)
+const MENTION_COLOR_ORDER = ['red', 'orange', 'yellow', 'blue'];
+const MENTION_COLOR_ROW_LABELS = {
+  red: 'Urgent & Important',
+  orange: 'Urgent & Not Important',
+  yellow: 'Not Urgent & Important',
+  blue: 'Not Urgent & Not Important'
+};
+
+function getMentionDropdown() {
+  if (mentionDropdown) return mentionDropdown;
+  mentionDropdown = document.createElement('div');
+  mentionDropdown.className = 'task-mention-dropdown';
+  mentionDropdown.style.display = 'none';
+  document.body.appendChild(mentionDropdown);
+  // Prevent clicks inside dropdown from stealing focus from editor
+  mentionDropdown.addEventListener('mousedown', e => e.preventDefault());
+  return mentionDropdown;
+}
+
+function getAllTasksForMention() {
+  if (!window.getAllTasks) return [];
+  return window.getAllTasks().filter(t => !t.completed);
+}
+
+function filterTasks(query) {
+  const tasks = getAllTasksForMention();
+  if (!query) return tasks;
+  const lower = query.toLowerCase();
+  return tasks.filter(t => (t.title || '').toLowerCase().includes(lower));
+}
+
+function buildMentionRows(query) {
+  const filtered = filterTasks(query);
+  const dropdown = getMentionDropdown();
+  dropdown.innerHTML = '';
+
+  if (filtered.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'task-mention-empty';
+    empty.textContent = 'No matching tasks';
+    dropdown.appendChild(empty);
+    mentionSelectedIndex = -1;
+    return;
+  }
+
+  let flatIndex = 0;
+  MENTION_COLOR_ORDER.forEach(color => {
+    const colorTasks = filtered
+      .filter(t => t.color === color)
+      .sort((a, b) => {
+        if (a.pinned && !b.pinned) return -1;
+        if (!a.pinned && b.pinned) return 1;
+        return (a.order || 0) - (b.order || 0);
+      });
+    if (colorTasks.length === 0) return;
+
+    const col = document.createElement('div');
+    col.className = 'task-mention-col';
+
+    colorTasks.forEach(task => {
+      const item = document.createElement('div');
+      item.className = `task-mention-item task-bubble-${color}`;
+      item.dataset.taskId = task.id;
+      item.dataset.flatIndex = flatIndex;
+
+      const titleSpan = document.createElement('span');
+      titleSpan.className = 'task-mention-item-title';
+      titleSpan.textContent = task.title || 'Untitled';
+      item.appendChild(titleSpan);
+
+      if (task.pinned) {
+        const badge = document.createElement('span');
+        badge.className = 'task-mention-primary-badge';
+        badge.textContent = 'P';
+        item.appendChild(badge);
+      }
+
+      item.addEventListener('click', () => selectMentionTask(task));
+      col.appendChild(item);
+      flatIndex++;
+    });
+
+    dropdown.appendChild(col);
+  });
+
+  // Reset selection
+  mentionSelectedIndex = -1;
+}
+
+function positionDropdown(editor) {
+  const dropdown = getMentionDropdown();
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0) { dropdown.style.display = 'none'; return; }
+
+  const range = sel.getRangeAt(0).cloneRange();
+  range.collapse(true);
+  const rect = range.getBoundingClientRect();
+  const editorRect = editor.getBoundingClientRect();
+  const x = rect.x || editorRect.x;
+  const y = rect.y || editorRect.y;
+
+  // Show offscreen first to measure
+  dropdown.style.visibility = 'hidden';
+  dropdown.style.display = 'flex';
+  dropdown.style.left = '0px';
+  dropdown.style.bottom = '';
+  dropdown.style.top = '0px';
+  const dw = dropdown.offsetWidth;
+  const dh = dropdown.offsetHeight;
+  dropdown.style.visibility = '';
+
+  // Clamp horizontally
+  let left = Math.max(8, Math.min(x, window.innerWidth - dw - 8));
+
+  // Prefer above cursor; if no room, show below
+  let top;
+  if (y - dh - 6 >= 0) {
+    top = y - dh - 6;
+  } else {
+    top = y + 20;
+  }
+  top = Math.max(8, Math.min(top, window.innerHeight - dh - 8));
+
+  dropdown.style.left = `${left}px`;
+  dropdown.style.top = `${top}px`;
+  dropdown.style.bottom = '';
+}
+
+function showMentionDropdown(editor, query) {
+  buildMentionRows(query);
+  positionDropdown(editor);
+}
+
+function hideMentionDropdown() {
+  const dropdown = getMentionDropdown();
+  dropdown.style.display = 'none';
+  mentionEditor = null;
+  mentionQuery = '';
+  mentionAnchorNode = null;
+  mentionAnchorOffset = null;
+  mentionSelectedIndex = -1;
+  mentionOnInsert = null;
+}
+
+function selectMentionTask(task) {
+  if (!mentionAnchorNode || !mentionEditor) { hideMentionDropdown(); return; }
+
+  // Suppress input events during DOM manipulation to prevent dropdown re-showing
+  mentionSuppressInput = true;
+
+  // Remove the @query text from the editor
+  const textNode = mentionAnchorNode;
+  const atOffset = mentionAnchorOffset;
+  const endOffset = atOffset + 1 + mentionQuery.length; // @ + query
+
+  try {
+    const text = textNode.textContent;
+    // Build new text: before @ + after query
+    const before = text.substring(0, atOffset);
+    const after = text.substring(endOffset);
+    textNode.textContent = before + after;
+
+    // Insert the highlight span at the @ position
+    const span = document.createElement('span');
+    span.className = 'project-task-highlight';
+    span.dataset.taskId = task.id;
+    span.dataset.highlightColor = task.color;
+    span.style.backgroundColor = HIGHLIGHT_COLORS[task.color];
+    span.style.borderBottom = `2px solid ${HIGHLIGHT_BORDER_COLORS[task.color]}`;
+    span.style.cursor = 'pointer';
+    span.contentEditable = 'false';
+    span.textContent = task.title;
+
+    // Split the text node at atOffset and insert span
+    if (atOffset < textNode.textContent.length) {
+      const afterNode = textNode.splitText(atOffset);
+      textNode.parentNode.insertBefore(span, afterNode);
+    } else {
+      textNode.parentNode.insertBefore(span, textNode.nextSibling);
+    }
+
+    // Move cursor after the span
+    moveCursorAfterNode(span);
+  } catch (e) {
+    // Fallback: just insert at cursor
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0) {
+      const range = sel.getRangeAt(0);
+      const span = document.createElement('span');
+      span.className = 'project-task-highlight';
+      span.dataset.taskId = task.id;
+      span.dataset.highlightColor = task.color;
+      span.style.backgroundColor = HIGHLIGHT_COLORS[task.color];
+      span.style.borderBottom = `2px solid ${HIGHLIGHT_BORDER_COLORS[task.color]}`;
+      span.style.cursor = 'pointer';
+      span.contentEditable = 'false';
+      span.textContent = task.title;
+      range.insertNode(span);
+      moveCursorAfterNode(span);
+    }
+  }
+
+  const cb = mentionOnInsert;
+  hideMentionDropdown();
+  if (cb) cb(task);
+  // Clear suppression after DOM settles
+  setTimeout(() => { mentionSuppressInput = false; }, 50);
+}
+
+function highlightSelectedItem(index) {
+  const dropdown = getMentionDropdown();
+  const items = dropdown.querySelectorAll('.task-mention-item');
+  items.forEach(el => el.classList.remove('selected'));
+  if (index >= 0 && index < items.length) {
+    items[index].classList.add('selected');
+    items[index].scrollIntoView({ block: 'nearest' });
+  }
+}
+
+function getMentionContext(editor) {
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0 || !sel.isCollapsed) return null;
+
+  const node = sel.anchorNode;
+  if (!node || node.nodeType !== Node.TEXT_NODE) return null;
+  if (!editor.contains(node)) return null;
+
+  const text = node.textContent;
+  const cursor = sel.anchorOffset;
+
+  // Search backwards from cursor for @
+  for (let i = cursor - 1; i >= 0; i--) {
+    const ch = text[i];
+    if (ch === '@') {
+      // Check that @ is at start of text or preceded by a space/newline
+      if (i === 0 || /\s/.test(text[i - 1])) {
+        return {
+          node: node,
+          atOffset: i,
+          query: text.substring(i + 1, cursor)
+        };
+      }
+      return null; // @ is mid-word
+    }
+    // Stop searching if we hit a space (no @ in this word segment)
+    // Actually we should keep going - the query can contain spaces
+    // But if we hit a newline, stop
+    if (ch === '\n') return null;
+  }
+  return null;
+}
+
+/**
+ * Attach @ mention autocomplete to a contenteditable editor.
+ * Call this once per editor setup.
+ * @param {HTMLElement} editor - The contenteditable element
+ * @param {Function} onInsert - Called after a task mention is inserted (for saving)
+ */
+export function attachTaskMention(editor, onInsert) {
+  editor.addEventListener('input', () => {
+    if (mentionSuppressInput) return;
+    const ctx = getMentionContext(editor);
+    if (ctx) {
+      mentionEditor = editor;
+      mentionAnchorNode = ctx.node;
+      mentionAnchorOffset = ctx.atOffset;
+      mentionQuery = ctx.query;
+      mentionOnInsert = onInsert || null;
+      showMentionDropdown(editor, ctx.query);
+    } else {
+      if (mentionEditor === editor) hideMentionDropdown();
+    }
+  });
+
+  editor.addEventListener('keydown', (e) => {
+    const dropdown = getMentionDropdown();
+    if (dropdown.style.display === 'none' || mentionEditor !== editor) return;
+
+    const items = dropdown.querySelectorAll('.task-mention-item');
+    const count = items.length;
+    if (count === 0) return;
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      mentionSelectedIndex = (mentionSelectedIndex + 1) % count;
+      highlightSelectedItem(mentionSelectedIndex);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      mentionSelectedIndex = mentionSelectedIndex <= 0 ? count - 1 : mentionSelectedIndex - 1;
+      highlightSelectedItem(mentionSelectedIndex);
+    } else if (e.key === 'Enter' || e.key === 'Tab') {
+      if (mentionSelectedIndex >= 0 && mentionSelectedIndex < count) {
+        e.preventDefault();
+        const taskId = items[mentionSelectedIndex].dataset.taskId;
+        const tasks = getAllTasksForMention();
+        const task = tasks.find(t => t.id === taskId);
+        if (task) selectMentionTask(task);
+      }
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      hideMentionDropdown();
+    }
+  });
+
+  // Hide dropdown if editor loses focus
+  editor.addEventListener('blur', () => {
+    // Small delay to allow click on dropdown items
+    setTimeout(() => {
+      if (mentionEditor === editor) {
+        const dropdown = getMentionDropdown();
+        if (!dropdown.matches(':hover')) {
+          hideMentionDropdown();
+        }
+      }
+    }, 200);
+  });
+}
 
 // ============================================================
 // PROJECTS CRUD
@@ -116,7 +448,7 @@ export function markProjectTaskHighlightCompleted(projectId, taskId) {
   temp.querySelectorAll(`span.project-task-highlight[data-task-id="${taskId}"]`).forEach(span => {
     span.dataset.highlightColor = 'completed';
     span.style.backgroundColor = HIGHLIGHT_COLORS.completed;
-    span.style.borderBottomColor = HIGHLIGHT_BORDER_COLORS.completed;
+    span.style.borderBottom = '2px solid ' + HIGHLIGHT_BORDER_COLORS.completed;
     span.classList.add('completed');
   });
   project.content = temp.innerHTML;
@@ -129,7 +461,7 @@ export function markProjectTaskHighlightCompleted(projectId, taskId) {
       editor.querySelectorAll(`span.project-task-highlight[data-task-id="${taskId}"]`).forEach(span => {
         span.dataset.highlightColor = 'completed';
         span.style.backgroundColor = HIGHLIGHT_COLORS.completed;
-        span.style.borderBottomColor = HIGHLIGHT_BORDER_COLORS.completed;
+        span.style.borderBottom = '2px solid ' + HIGHLIGHT_BORDER_COLORS.completed;
         span.classList.add('completed');
       });
     }
@@ -152,7 +484,7 @@ export function refreshProjectHighlights() {
       const color = task.color || 'blue';
       span.dataset.highlightColor = color;
       span.style.backgroundColor = HIGHLIGHT_COLORS[color];
-      span.style.borderBottomColor = HIGHLIGHT_BORDER_COLORS[color];
+      span.style.borderBottom = '2px solid ' + HIGHLIGHT_BORDER_COLORS[color];
       span.classList.remove('completed');
     }
     // Completed/removed highlights are handled by their respective functions
@@ -248,6 +580,25 @@ export function openProjectsModal(openToProjectId) {
       });
     });
 
+    // Highlighter button — insert after the ordered list button, before spacer
+    const projectsToolbar = modal.querySelector('#projects-editor-toolbar');
+    const toolbarSpacer = projectsToolbar.querySelector('.projects-toolbar-spacer');
+    const hlDivider = document.createElement('div');
+    hlDivider.className = 'task-desc-toolbar-divider';
+    projectsToolbar.insertBefore(hlDivider, toolbarSpacer);
+    projectsToolbar.insertBefore(createHighlighterButton(), toolbarSpacer);
+
+    // Highlighter context menu on project editor
+    attachHighlighterContextMenu(modal.querySelector('#project-editor'), {
+      linkTask: true,
+      onTaskLinked: (task) => {
+        if (window.updateTask) {
+          window.updateTask(task.id, { projectHighlight: { projectId: currentProjectId } });
+        }
+        markProjectDirty();
+      }
+    });
+
     // Save button
     const saveBtn = modal.querySelector('#project-save-btn');
     saveBtn.addEventListener('click', () => {
@@ -282,6 +633,16 @@ export function openProjectsModal(openToProjectId) {
       if ((e.ctrlKey || e.metaKey) && ['b', 'i', 'u'].includes(e.key.toLowerCase())) {
         setTimeout(updateProjectsToolbarState, 0);
       }
+    });
+
+    // @ mention autocomplete for linking existing tasks
+    attachTaskMention(editor, (task) => {
+      if (window.updateTask) {
+        window.updateTask(task.id, {
+          projectHighlight: { projectId: currentProjectId }
+        });
+      }
+      markProjectDirty();
     });
 
     // Selection change → enable/disable convert button in toolbar
@@ -444,6 +805,15 @@ function loadCurrentProject() {
   if (emptyState) emptyState.hidden = true;
   if (editor) {
     editor.innerHTML = project.content || '';
+    // Reconcile task highlights based on actual task status
+    if (window.reconcileTaskHighlights) {
+      window.reconcileTaskHighlights(editor);
+      const reconciled = editor.innerHTML;
+      if (reconciled !== (project.content || '')) {
+        project.content = reconciled;
+        saveModel();
+      }
+    }
     editor.focus();
   }
 
@@ -557,23 +927,6 @@ function updateConvertButtonState() {
 // CONVERT SELECTION TO TASK
 // ============================================================
 
-// Move cursor to just after a given node (outside it)
-function moveCursorAfterNode(node) {
-  const sel = window.getSelection();
-  if (!sel) return;
-  // Insert a zero-width space after the span so the cursor has somewhere to land
-  const spacer = document.createTextNode('\u200B');
-  if (node.nextSibling) {
-    node.parentNode.insertBefore(spacer, node.nextSibling);
-  } else {
-    node.parentNode.appendChild(spacer);
-  }
-  const range = document.createRange();
-  range.setStartAfter(spacer);
-  range.collapse(true);
-  sel.removeAllRanges();
-  sel.addRange(range);
-}
 
 function convertSelectionToTask() {
   const selection = window.getSelection();
@@ -754,6 +1107,15 @@ export function removeMeetingTaskHighlight(meetingId, taskId) {
       span.parentNode.replaceChild(text, span);
     });
   }
+
+  // Update view mode panel if visible
+  const viewContent = document.querySelector('#meetings-view-section .meetings-view-content');
+  if (viewContent) {
+    viewContent.querySelectorAll(`span.project-task-highlight[data-task-id="${taskId}"]`).forEach(span => {
+      const text = document.createTextNode(span.textContent);
+      span.parentNode.replaceChild(text, span);
+    });
+  }
 }
 
 export function markMeetingTaskHighlightCompleted(meetingId, taskId) {
@@ -765,7 +1127,7 @@ export function markMeetingTaskHighlightCompleted(meetingId, taskId) {
   temp.querySelectorAll(`span.project-task-highlight[data-task-id="${taskId}"]`).forEach(span => {
     span.dataset.highlightColor = 'completed';
     span.style.backgroundColor = HIGHLIGHT_COLORS.completed;
-    span.style.borderBottomColor = HIGHLIGHT_BORDER_COLORS.completed;
+    span.style.borderBottom = '2px solid ' + HIGHLIGHT_BORDER_COLORS.completed;
     span.classList.add('completed');
   });
   meeting.description = temp.innerHTML;
@@ -776,7 +1138,18 @@ export function markMeetingTaskHighlightCompleted(meetingId, taskId) {
     liveEditor.querySelectorAll(`span.project-task-highlight[data-task-id="${taskId}"]`).forEach(span => {
       span.dataset.highlightColor = 'completed';
       span.style.backgroundColor = HIGHLIGHT_COLORS.completed;
-      span.style.borderBottomColor = HIGHLIGHT_BORDER_COLORS.completed;
+      span.style.borderBottom = '2px solid ' + HIGHLIGHT_BORDER_COLORS.completed;
+      span.classList.add('completed');
+    });
+  }
+
+  // Update view mode panel if visible
+  const viewContent = document.querySelector('#meetings-view-section .meetings-view-content');
+  if (viewContent) {
+    viewContent.querySelectorAll(`span.project-task-highlight[data-task-id="${taskId}"]`).forEach(span => {
+      span.dataset.highlightColor = 'completed';
+      span.style.backgroundColor = HIGHLIGHT_COLORS.completed;
+      span.style.borderBottom = '2px solid ' + HIGHLIGHT_BORDER_COLORS.completed;
       span.classList.add('completed');
     });
   }

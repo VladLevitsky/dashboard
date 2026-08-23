@@ -237,7 +237,7 @@ async function handleAuthSubmit(e) {
     if (window.applyDarkMode) window.applyDarkMode();
     if (window.applyGlassMode) window.applyGlassMode();
     if (window.applyGlassTheme) window.applyGlassTheme();
-    if (window.applyCursorShadow) window.applyCursorShadow();
+
     if (window.applyDisplayMode) window.applyDisplayMode();
     if (window.ensureSectionPlusButtons) window.ensureSectionPlusButtons();
 
@@ -280,7 +280,6 @@ async function handleLogout() {
   if (window.applyDarkMode) window.applyDarkMode();
   if (window.applyGlassMode) window.applyGlassMode();
   if (window.applyGlassTheme) window.applyGlassTheme();
-  if (window.applyCursorShadow) window.applyCursorShadow();
   if (window.applyDisplayMode) window.applyDisplayMode();
   if (window.ensureSectionPlusButtons) window.ensureSectionPlusButtons();
 
@@ -405,7 +404,7 @@ export async function postRestoreAuthSync() {
       if (window.applyDarkMode) window.applyDarkMode();
       if (window.applyGlassMode) window.applyGlassMode();
       if (window.applyGlassTheme) window.applyGlassTheme();
-      if (window.applyCursorShadow) window.applyCursorShadow();
+  
       if (window.applyDisplayMode) window.applyDisplayMode();
       if (window.ensureSectionPlusButtons) window.ensureSectionPlusButtons();
     }

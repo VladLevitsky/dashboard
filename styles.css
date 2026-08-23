@@ -464,11 +464,32 @@ body {
   height: 14px;
 }
 
-/* Time tracking button in header */
-.time-tracking-toggle {
+/* Header icons row */
+.header-icons-row {
   position: absolute;
   bottom: 20px;
   right: 20px;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  z-index: 10;
+}
+.header-icons-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.header-icons-spacer {
+  width: 40px;
+}
+.header-icons-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Calendar view button in header */
+.calendar-view-toggle {
   width: 30px;
   height: 30px;
   background: transparent;
@@ -479,7 +500,27 @@ body {
   align-items: center;
   justify-content: center;
   transition: all 0.2s ease;
-  z-index: 10;
+  padding: 0;
+}
+.calendar-view-toggle:hover {
+  color: var(--brand);
+  transform: scale(1.1);
+}
+[data-theme="dark"] .calendar-view-toggle { color: var(--muted); }
+[data-theme="dark"] .calendar-view-toggle:hover { color: var(--brand); }
+
+/* Time tracking button in header */
+.time-tracking-toggle {
+  width: 30px;
+  height: 30px;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
   padding: 0;
 }
 
@@ -488,7 +529,7 @@ body {
   transform: scale(1.1);
 }
 
-/* Display mode toggle button - left side, aligned with right-side buttons */
+/* Display mode toggle button */
 .display-mode-toggle {
   width: 30px;
   height: 30px;
@@ -501,7 +542,6 @@ body {
   justify-content: center;
   flex-shrink: 0;
   transition: all 0.2s ease;
-  z-index: 10;
   padding: 0;
 }
 
@@ -517,9 +557,6 @@ body {
 
 /* Meetings button in header */
 .meetings-toggle {
-  position: absolute;
-  bottom: 20px;
-  right: 100px;
   width: 30px;
   height: 30px;
   background: transparent;
@@ -530,7 +567,6 @@ body {
   align-items: center;
   justify-content: center;
   transition: all 0.2s ease;
-  z-index: 10;
   padding: 0;
 }
 
@@ -545,9 +581,6 @@ body {
 }
 
 .quick-access-toggle {
-  position: absolute;
-  bottom: 20px;
-  right: 60px;
   width: 30px;
   height: 30px;
   background: transparent;
@@ -558,7 +591,6 @@ body {
   align-items: center;
   justify-content: center;
   transition: all 0.2s ease;
-  z-index: 10;
   padding: 0;
 }
 
@@ -3706,6 +3738,12 @@ section.card[id^="new-card-"].card-size-full {
   padding: 16px 20px; border-bottom: 1px solid #e5e7eb;
 }
 .appearance-header h4 { margin: 0; font-size: 18px; font-weight: 600; }
+.appearance-close-btn {
+  background: none; border: none; cursor: pointer;
+  font-size: 22px; line-height: 1; padding: 0;
+  color: var(--muted); transition: color 0.15s;
+}
+.appearance-close-btn:hover { color: var(--text); }
 .appearance-body { padding: 20px; }
 .appearance-section { margin-bottom: 20px; }
 .appearance-section:last-child { margin-bottom: 0; }
@@ -3853,6 +3891,46 @@ section.card[id^="new-card-"].card-size-full {
 [data-theme="dark"] .appearance-option.active { background: #1e3a5f; border-color: var(--brand); }
 [data-theme="dark"] .appearance-btn.secondary { background: #334155; color: var(--text); }
 [data-theme="dark"] .appearance-btn.secondary:hover { background: #475569; }
+
+/* Appearance modal - divider & backup */
+.appearance-divider {
+  height: 1px;
+  background: #e5e7eb;
+  margin: 4px 0;
+}
+[data-theme="dark"] .appearance-divider {
+  background: #475569;
+}
+.appearance-backup-row {
+  display: flex;
+  gap: 10px;
+}
+.appearance-backup-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 20px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid #e5e7eb;
+  background: #f8fafc;
+  color: var(--text);
+  transition: all 0.15s ease;
+}
+.appearance-backup-btn:hover {
+  background: #e2e8f0;
+  border-color: #cbd5e1;
+}
+[data-theme="dark"] .appearance-backup-btn {
+  background: #334155;
+  border-color: #475569;
+}
+[data-theme="dark"] .appearance-backup-btn:hover {
+  background: #475569;
+  border-color: #64748b;
+}
 
 /* Copy-paste card styles */
 .copy-paste-list {
@@ -4512,63 +4590,6 @@ body[data-theme="dark"][data-style="glass"] .search-item:hover {
   background: rgba(51, 65, 85, 0.75);
 }
 
-/* Glass mode - Mouse shadow effect on cards */
-body[data-style="glass"] .card {
-  --mouse-x: -1000px;
-  --mouse-y: -1000px;
-}
-
-body[data-style="glass"][data-cursor-shadow="on"] .card::after {
-  content: '';
-  position: absolute;
-  top: -60px;
-  left: -60px;
-  right: -60px;
-  bottom: -60px;
-  /* Layered shadows for organic glass-like effect - offset to bottom-right */
-  /* Rotated -35deg so oval runs from bottom-left to top-right */
-  background:
-    /* Main soft elliptical shadow - elongated oval */
-    radial-gradient(
-      ellipse 99px 72px at calc(var(--mouse-x) + 92px) calc(var(--mouse-y) + 99px),
-      rgba(0, 0, 0, 0.03) 0%,
-      rgba(0, 0, 0, 0.016) 40%,
-      rgba(0, 0, 0, 0.005) 70%,
-      transparent 100%
-    ),
-    /* Secondary diffused layer - more elongated */
-    radial-gradient(
-      ellipse 134px 85px at calc(var(--mouse-x) + 106px) calc(var(--mouse-y) + 120px),
-      rgba(0, 0, 0, 0.013) 0%,
-      rgba(0, 0, 0, 0.005) 55%,
-      transparent 100%
-    );
-  pointer-events: none;
-  z-index: 1;
-  filter: blur(17px);
-  transform: rotate(35deg);
-  transform-origin: calc(var(--mouse-x) + 80px) calc(var(--mouse-y) + 80px);
-}
-
-/* Dark mode - slightly more visible shadow */
-body[data-theme="dark"][data-style="glass"][data-cursor-shadow="on"] .card::after {
-  background:
-    /* Main soft elliptical shadow - elongated oval */
-    radial-gradient(
-      ellipse 99px 72px at calc(var(--mouse-x) + 92px) calc(var(--mouse-y) + 99px),
-      rgba(0, 0, 0, 0.04) 0%,
-      rgba(0, 0, 0, 0.023) 40%,
-      rgba(0, 0, 0, 0.008) 70%,
-      transparent 100%
-    ),
-    /* Secondary diffused layer - more elongated */
-    radial-gradient(
-      ellipse 134px 85px at calc(var(--mouse-x) + 106px) calc(var(--mouse-y) + 120px),
-      rgba(0, 0, 0, 0.02) 0%,
-      rgba(0, 0, 0, 0.008) 55%,
-      transparent 100%
-    );
-}
 
 
 /* Glass mode - Popovers and modals */
@@ -6859,6 +6880,113 @@ body.stacked-mode .gap-add-btn {
   cursor: default;
 }
 
+/* Profile photo wrapper (allows badge to overflow the clipped circle) */
+.profile-photo-wrapper {
+  position: relative;
+  flex-shrink: 0;
+}
+
+/* Notification badge on profile photo */
+.notification-badge {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 6px;
+  background: #ef4444;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 700;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  cursor: pointer;
+  z-index: 5;
+  transition: transform 0.15s;
+}
+.notification-badge:hover {
+  transform: scale(1.1);
+}
+
+/* Notification popover */
+.notification-popover {
+  position: fixed;
+  z-index: 10001;
+  width: 300px;
+  max-height: 400px;
+  overflow-y: auto;
+  background: var(--card, #ffffff);
+  border: 1px solid rgba(0,0,0,0.1);
+  border-radius: 12px;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.15);
+  padding: 8px;
+}
+[data-theme="dark"] .notification-popover {
+  background: var(--card, #1e293b);
+  border-color: rgba(255,255,255,0.1);
+  box-shadow: 0 8px 30px rgba(0,0,0,0.4);
+}
+.notification-section {
+  margin-bottom: 4px;
+}
+.notification-section:last-child {
+  margin-bottom: 0;
+}
+.notification-section-header {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--brand);
+  padding: 8px 10px 4px;
+}
+.notification-section-overdue {
+  color: #ef4444;
+}
+.notification-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  transition: background 0.12s;
+}
+.notification-item:hover {
+  background: rgba(0,0,0,0.04);
+}
+[data-theme="dark"] .notification-item:hover {
+  background: rgba(255,255,255,0.06);
+}
+.notification-item-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.notification-item-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.notification-item-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.notification-item-type {
+  font-size: 10px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
 /* Only show pointer cursor in edit mode */
 .card.editing .profile-photo-container {
   cursor: pointer;
@@ -8230,9 +8358,6 @@ body.stacked-mode .gap-add-btn {
 
 /* Tasks Summary Toggle Button */
 .tasks-summary-toggle {
-  position: absolute;
-  bottom: 20px;
-  right: 140px;
   width: 30px;
   height: 30px;
   background: transparent;
@@ -8243,7 +8368,6 @@ body.stacked-mode .gap-add-btn {
   align-items: center;
   justify-content: center;
   transition: all 0.2s ease;
-  z-index: 10;
   padding: 0;
 }
 
@@ -9406,7 +9530,7 @@ body[data-theme="dark"][data-style="glass"][data-glass-theme="sunset"] .tasks-su
   display: flex;
   flex-direction: column;
   gap: 20px;
-  flex: 0 0 380px;
+  flex: 0 0 532px;
   overflow-y: auto;
 }
 
@@ -10098,6 +10222,118 @@ body[data-theme="dark"][data-style="glass"][data-glass-theme="sunset"] .tasks-su
 
 [data-theme="dark"] .task-subtask-delete-btn:hover {
   background: rgba(255, 255, 255, 0.1);
+}
+
+/* Subtask actions wrapper */
+.task-subtask-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+/* 3-dot menu */
+.task-subtask-menu-wrap {
+  position: relative;
+}
+.task-subtask-menu-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.task-subtask-menu-btn:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--text);
+}
+[data-theme="dark"] .task-subtask-menu-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+.task-subtask-menu-dropdown {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 100;
+  min-width: 160px;
+  background: var(--card, #ffffff);
+  border: 1px solid rgba(0,0,0,0.1);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+  padding: 4px;
+}
+[data-theme="dark"] .task-subtask-menu-dropdown {
+  background: var(--card, #1e293b);
+  border-color: rgba(255,255,255,0.1);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.35);
+}
+.task-subtask-menu-item {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text);
+  text-align: left;
+  transition: background 0.12s;
+}
+.task-subtask-menu-item:hover {
+  background: rgba(0,0,0,0.05);
+}
+[data-theme="dark"] .task-subtask-menu-item:hover {
+  background: rgba(255,255,255,0.08);
+}
+.task-subtask-menu-item-danger {
+  color: var(--danger);
+}
+.task-subtask-menu-item-danger:hover {
+  background: rgba(239, 68, 68, 0.08);
+}
+
+/* Subtask date picker */
+.task-subtask-date-wrap {
+  position: relative;
+}
+.task-subtask-date-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.task-subtask-date-btn:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--text);
+}
+.task-subtask-date-btn.has-date {
+  color: var(--brand);
+}
+[data-theme="dark"] .task-subtask-date-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+.task-subtask-date-input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
 }
 
 .task-subtasks-add-btn {
@@ -11882,9 +12118,6 @@ body[data-theme="dark"][data-style="glass"][data-glass-theme="sunset"] .tasks-su
 
 /* Auth toggle button in header */
 .auth-toggle {
-  position: absolute;
-  bottom: 20px;
-  right: 180px;
   width: 30px;
   height: 30px;
   background: transparent;
@@ -11895,7 +12128,6 @@ body[data-theme="dark"][data-style="glass"][data-glass-theme="sunset"] .tasks-su
   align-items: center;
   justify-content: center;
   transition: all 0.2s ease;
-  z-index: 10;
   padding: 0;
 }
 .auth-toggle:hover { color: var(--brand); transform: scale(1.1); }
@@ -11930,6 +12162,12 @@ body[data-theme="dark"][data-style="glass"][data-glass-theme="sunset"] .tasks-su
   padding: 16px 20px; border-bottom: 1px solid #e5e7eb;
 }
 .auth-header h4 { margin: 0; font-size: 18px; font-weight: 600; color: var(--text); }
+.auth-close-btn {
+  background: none; border: none; cursor: pointer;
+  font-size: 22px; line-height: 1; padding: 0;
+  color: var(--muted); transition: color 0.15s;
+}
+.auth-close-btn:hover { color: var(--text); }
 .auth-body { padding: 20px; }
 
 .auth-field { margin-bottom: 14px; }
@@ -12057,5 +12295,494 @@ body.glass-mode[data-theme="dark"] .auth-dialog {
 body.glass-mode[data-theme="dark"] .auth-user-popover {
   background: rgba(30,41,59,0.7);
   border-color: rgba(255,255,255,0.1);
+}
+
+/* ============================================================
+   @ Task Mention Autocomplete Dropdown
+   ============================================================ */
+.task-mention-dropdown {
+  position: fixed;
+  z-index: 100000;
+  max-height: 360px;
+  overflow-y: auto;
+  background: var(--card, #ffffff);
+  border: 1px solid rgba(0,0,0,0.12);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+  padding: 8px;
+  display: flex;
+  flex-direction: row;
+  gap: 6px;
+}
+.task-mention-col {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.task-mention-item {
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: filter 0.12s ease, transform 0.1s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.task-mention-item:hover,
+.task-mention-item.selected {
+  filter: brightness(0.88);
+  transform: scale(1.03);
+}
+.task-mention-item-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.task-mention-primary-badge {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  font-size: 9px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,0,0.15);
+  flex-shrink: 0;
+  line-height: 1;
+}
+.task-mention-empty {
+  padding: 12px 16px;
+  color: var(--muted, #6b7280);
+  font-size: 13px;
+  text-align: center;
+}
+
+/* ============================================================
+   Text Highlighter
+   ============================================================ */
+
+/* Toolbar button wrapper */
+.highlighter-btn-wrapper {
+  position: relative;
+  display: inline-flex;
+}
+.highlighter-toolbar-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  padding: 4px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--text);
+  transition: background 0.15s;
+}
+.highlighter-toolbar-btn:hover {
+  background: rgba(0,0,0,0.08);
+}
+[data-theme="dark"] .highlighter-toolbar-btn:hover {
+  background: rgba(255,255,255,0.1);
+}
+.highlighter-color-indicator {
+  width: 12px;
+  height: 4px;
+  border-radius: 2px;
+  display: block;
+}
+
+/* Color picker dropdown */
+.highlighter-color-dropdown {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 4px;
+  background: var(--card, #ffffff);
+  border: 1px solid rgba(0,0,0,0.12);
+  border-radius: 8px;
+  padding: 6px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+  z-index: 100001;
+}
+[data-theme="dark"] .highlighter-color-dropdown {
+  background: var(--card, #1e293b);
+  border-color: rgba(255,255,255,0.1);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.35);
+}
+.highlighter-swatch {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: transform 0.12s, border-color 0.12s;
+  padding: 0;
+}
+.highlighter-swatch:hover {
+  transform: scale(1.15);
+}
+.highlighter-swatch.active {
+  border-color: var(--text, #1f2937);
+}
+
+/* Right-click context menu */
+.highlight-context-menu {
+  position: fixed;
+  z-index: 100002;
+  background: var(--card, #ffffff);
+  border: 1px solid rgba(0,0,0,0.12);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+  padding: 4px;
+  min-width: 160px;
+}
+[data-theme="dark"] .highlight-context-menu {
+  background: var(--card, #1e293b);
+  border-color: rgba(255,255,255,0.1);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+}
+.highlight-context-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text);
+  transition: background 0.12s;
+}
+.highlight-context-item:hover {
+  background: rgba(0,0,0,0.06);
+}
+[data-theme="dark"] .highlight-context-item:hover {
+  background: rgba(255,255,255,0.08);
+}
+.highlight-context-divider {
+  height: 1px;
+  background: rgba(0,0,0,0.08);
+  margin: 2px 8px;
+}
+[data-theme="dark"] .highlight-context-divider {
+  background: rgba(255,255,255,0.08);
+}
+
+/* Task Link Picker (opened from context menu) */
+.task-link-picker {
+  position: fixed;
+  z-index: 100003;
+  max-height: 360px;
+  overflow-y: auto;
+  background: var(--card, #ffffff);
+  border: 1px solid rgba(0,0,0,0.12);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+[data-theme="dark"] .task-link-picker {
+  background: var(--card, #1e293b);
+  border-color: rgba(255,255,255,0.1);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+}
+.task-link-picker-filter {
+  border: 1px solid rgba(0,0,0,0.12);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 13px;
+  outline: none;
+  background: var(--bg, #f5f6f8);
+  color: var(--text);
+}
+[data-theme="dark"] .task-link-picker-filter {
+  border-color: rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.05);
+}
+.task-link-picker-filter:focus {
+  border-color: var(--brand);
+}
+.task-link-picker-cols {
+  display: flex;
+  flex-direction: row;
+  gap: 6px;
+}
+.task-link-picker-col {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.task-link-picker-empty {
+  padding: 12px 16px;
+  color: var(--muted, #6b7280);
+  font-size: 13px;
+  text-align: center;
+}
+
+/* The highlight mark itself */
+mark.text-highlight {
+  border-radius: 3px;
+  padding: 1px 2px;
+}
+
+/* Dark mode */
+[data-theme="dark"] .task-mention-dropdown {
+  background: var(--card, #1e293b);
+  border-color: rgba(255,255,255,0.1);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+}
+
+/* ============================================================
+   Calendar View Modal
+   ============================================================ */
+.calendar-view-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.calendar-view-modal[hidden] {
+  display: none;
+}
+.calendar-view-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.4);
+}
+.calendar-view-dialog {
+  position: relative;
+  width: 480px;
+  max-height: 90vh;
+  background: var(--card, #ffffff);
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+[data-theme="dark"] .calendar-view-dialog {
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+}
+.calendar-view-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid rgba(0,0,0,0.08);
+}
+.calendar-view-header h4 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+[data-theme="dark"] .calendar-view-header {
+  border-bottom-color: rgba(255,255,255,0.08);
+}
+.calendar-view-close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 22px;
+  line-height: 1;
+  color: var(--muted);
+  padding: 0;
+  transition: color 0.15s;
+}
+.calendar-view-close:hover { color: var(--text); }
+
+.calendar-view-body {
+  padding: 16px 20px;
+  overflow-y: auto;
+}
+
+/* Navigation */
+.calendar-view-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+.calendar-view-month-label {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+}
+.calendar-view-nav-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--muted);
+  padding: 4px;
+  border-radius: 6px;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+}
+.calendar-view-nav-btn:hover {
+  color: var(--text);
+  background: rgba(0,0,0,0.05);
+}
+[data-theme="dark"] .calendar-view-nav-btn:hover {
+  background: rgba(255,255,255,0.08);
+}
+
+/* Weekday headers */
+.calendar-view-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  text-align: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+
+/* Day grid */
+.calendar-view-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+.calendar-view-day {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 6px 2px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.12s;
+  min-height: 40px;
+}
+.calendar-view-day:hover {
+  background: rgba(0,0,0,0.04);
+}
+[data-theme="dark"] .calendar-view-day:hover {
+  background: rgba(255,255,255,0.06);
+}
+.calendar-view-day.other-month {
+  opacity: 0.35;
+}
+.calendar-view-day.today .calendar-view-day-num {
+  background: var(--brand);
+  color: white;
+  border-radius: 50%;
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.calendar-view-day.selected {
+  background: rgba(44, 123, 229, 0.1);
+}
+[data-theme="dark"] .calendar-view-day.selected {
+  background: rgba(59, 130, 246, 0.15);
+}
+.calendar-view-day-num {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  line-height: 1;
+}
+
+/* Indicator dot + count */
+.calendar-view-day-indicator {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-top: 3px;
+}
+.calendar-view-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #ef4444;
+}
+.calendar-view-dot-count {
+  font-size: 9px;
+  font-weight: 700;
+  color: #ef4444;
+  line-height: 1;
+}
+
+/* Day items list */
+.calendar-view-day-items {
+  margin-top: 16px;
+  border-top: 1px solid rgba(0,0,0,0.06);
+  padding-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+[data-theme="dark"] .calendar-view-day-items {
+  border-top-color: rgba(255,255,255,0.06);
+}
+.calendar-view-no-items {
+  color: var(--muted);
+  font-size: 13px;
+  text-align: center;
+  padding: 8px;
+}
+.calendar-view-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  transition: background 0.12s;
+}
+.calendar-view-item:hover {
+  background: rgba(0,0,0,0.03);
+}
+[data-theme="dark"] .calendar-view-item:hover {
+  background: rgba(255,255,255,0.05);
+}
+.calendar-view-item-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.calendar-view-item-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text);
+  min-width: 0;
+}
+.calendar-view-item-type {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+.calendar-view-item-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 

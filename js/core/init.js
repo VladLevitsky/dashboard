@@ -2,8 +2,8 @@
 // Handles application startup, event listeners, and UI wiring
 
 import { model, editState, currentData, currentSections } from '../state.js';
-import { $, $$, showToast, generateKey } from '../utils.js';
-import { PLACEHOLDER_URL, ANIMATION_DELAY_MS, CARD_HIDE_DELAY_MS, TIMER_UPDATE_INTERVAL_MS, APP_VERSION } from '../constants.js';
+import { $, $$, showToast, generateKey, escapeAttr } from '../utils.js';
+import { PLACEHOLDER_URL, ANIMATION_DELAY_MS, CARD_HIDE_DELAY_MS, TIMER_UPDATE_INTERVAL_MS } from '../constants.js';
 import { saveModel, restoreModel, exportBackupFile, deepMergeModel, cleanupOldBackups } from './storage.js';
 import {
   toggleEditMode,
@@ -11,7 +11,6 @@ import {
   applyDarkMode,
   applyGlassMode,
   applyGlassTheme,
-  applyCursorShadow,
   toggleDarkMode,
   openAppearanceModal,
   wireAppearanceModalEvents,
@@ -93,46 +92,6 @@ let cardsCollapsed = false;
 let currentCopyTextItem = null;
 let currentCopyTextSection = null;
 
-// ===== GLASS MODE SHADOW EFFECT =====
-
-// Track the last hovered card to reset mouse position when leaving
-let lastHoveredCard = null;
-
-// Initialize mouse tracking for glass mode shadow effect (cards only)
-function initGlassGlowEffect() {
-  document.addEventListener('mousemove', (e) => {
-    if (!model.glassMode || model.glassCursorShadow === false) return;
-
-    const card = e.target.closest('.card');
-
-    // Reset previous card if we moved to a different one
-    if (lastHoveredCard && lastHoveredCard !== card) {
-      lastHoveredCard.style.setProperty('--mouse-x', '-1000px');
-      lastHoveredCard.style.setProperty('--mouse-y', '-1000px');
-    }
-
-    // Update card shadow position
-    if (card) {
-      const rect = card.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
-      card.style.setProperty('--mouse-x', `${x}px`);
-      card.style.setProperty('--mouse-y', `${y}px`);
-      lastHoveredCard = card;
-    } else {
-      lastHoveredCard = null;
-    }
-  });
-
-  // Reset shadow when mouse leaves the window
-  document.addEventListener('mouseleave', () => {
-    if (lastHoveredCard) {
-      lastHoveredCard.style.setProperty('--mouse-x', '-1000px');
-      lastHoveredCard.style.setProperty('--mouse-y', '-1000px');
-      lastHoveredCard = null;
-    }
-  });
-}
 
 // ===== SEARCH FUNCTIONALITY =====
 
@@ -617,11 +576,6 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
-function escapeAttr(text) {
-  if (!text) return '';
-  return text.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-}
-
 function attachSearchResultHandlers() {
   // Handle clicks on link toggles for icons, reminders, and subtasks
   const linkToggles = searchResultsContainer.querySelectorAll('.search-links-toggle');
@@ -729,9 +683,7 @@ export async function init() {
   applyDarkMode();
   applyGlassMode();
   applyGlassTheme();
-  applyCursorShadow();
   applyDisplayMode();
-  initGlassGlowEffect();
   if (window.renderHeaderAndTitles) window.renderHeaderAndTitles();
   if (window.renderAllSections) window.renderAllSections();
   wireUI();
@@ -1107,6 +1059,16 @@ export function wireUI() {
   $('#display-mode-toggle').addEventListener('click', openDisplayModeModal);
 
   // Meetings toggle
+  const calendarViewToggle = $('#calendar-view-toggle');
+  if (calendarViewToggle) {
+    calendarViewToggle.addEventListener('click', () => {
+      if (window.openCalendarView) window.openCalendarView();
+    });
+  }
+
+  // Wire notification badge on profile photo
+  if (window.wireNotificationBadge) window.wireNotificationBadge();
+
   const meetingsToggle = $('#meetings-toggle');
   if (meetingsToggle) {
     meetingsToggle.addEventListener('click', openMeetingsModal);
@@ -1256,120 +1218,8 @@ export function wireUI() {
     toggleEditMode();
   });
 
-  // Restore last backup flow
-  const overrideBtn = $('#override-links');
-  const importBtn = $('#import-links');
-  const importInput = $('#import-links-input');
-  const connectBtn = $('#connect-folder');
-
-  // Override links confirmation - now downloads the file instead of trying to write directly
-  overrideBtn.addEventListener('click', () => {
-    try {
-      // Extract current dashboard state (including new items)
-      const currentState = window.extractUrlOverrides ? window.extractUrlOverrides() : {};
-      const json = JSON.stringify(currentState, null, 2);
-
-      // Generate filename with today's date
-      const today = new Date();
-      const year = today.getFullYear();
-      const month = String(today.getMonth() + 1).padStart(2, '0');
-      const day = String(today.getDate()).padStart(2, '0');
-      const dateStr = `${year}-${month}-${day}`;
-      const filename = `Personal Dashboard (${dateStr}).json`;
-
-      // Create a download link to save the file
-      const blob = new Blob([json], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-
-      showToast(`Dashboard backup saved as: ${filename}`);
-    } catch (error) {
-      showToast('Error creating backup file.');
-    }
-  });
-
-  // Import links from JSON without any server
-  importBtn.addEventListener('click', () => importInput.click());
-  importInput.addEventListener('change', async () => {
-    const file = importInput.files && importInput.files[0];
-    if (!file) return;
-    try {
-      // Set import flag to prevent automatic JSON file saving during import
-      window.isImporting = true;
-
-      // Clear the flags for manual imports to allow override application
-      window.skipUrlOverrides = false;
-      window.localStorageRestored = false;
-
-      const text = await file.text();
-      const json = JSON.parse(text);
-
-      // Basic validation
-      if (!json || typeof json !== 'object') {
-        throw new Error('Invalid file format: not a valid JSON object');
-      }
-
-      // Validate critical data structures
-      if (json._structure && !Array.isArray(json._structure.sections)) {
-        throw new Error('Invalid file format: sections must be an array');
-      }
-
-      // Validate reminders structure if present
-      if (json.reminders && typeof json.reminders !== 'object') {
-        throw new Error('Invalid file format: reminders must be an object');
-      }
-
-      // Validate quick access items if present
-      if (json.quickAccessItems) {
-        if (!json.quickAccessItems.icons || !Array.isArray(json.quickAccessItems.icons)) {
-          throw new Error('Invalid file format: quickAccessItems.icons must be an array');
-        }
-        if (!json.quickAccessItems.listItems || !Array.isArray(json.quickAccessItems.listItems)) {
-          throw new Error('Invalid file format: quickAccessItems.listItems must be an array');
-        }
-      }
-
-      // Optional: validate expected keys exist and warn if different version
-      if (json._metadata && json._metadata.version && json._metadata.version !== APP_VERSION) {
-        if (!confirm(`This file was exported from a different version (${json._metadata.version}). Import anyway?`)) {
-          window.isImporting = false;
-          return;
-        }
-      }
-
-      if (window.applyUrlOverrides) window.applyUrlOverrides(json);
-
-      // Re-render to show the imported data
-      if (window.renderAllSections) window.renderAllSections();
-
-      // Wait for rendering to complete using requestAnimationFrame (ensures DOM updates finish)
-      await new Promise(resolve => {
-        requestAnimationFrame(() => {
-          requestAnimationFrame(resolve); // Double RAF ensures render completes
-        });
-      });
-
-      // Clear import flag after render completes
-      window.isImporting = false;
-
-      showToast('Links imported. Press checkmark to keep them.');
-    } catch (error) {
-      console.error('JSON import error:', error);
-      showToast(`Invalid JSON file: ${error.message}`);
-      // Clear the import flag immediately on error
-      window.isImporting = false;
-    } finally {
-      importInput.value = '';
-    }
-  });
-
   // Manually connect project folder (works on file:// if browser supports FS Access)
+  const connectBtn = $('#connect-folder');
   connectBtn.addEventListener('click', async () => {
     const handle = await (window.selectProjectFolder ? window.selectProjectFolder() : null);
     showToast(handle ? 'Project folder connected.' : 'Could not connect folder.');

@@ -72,6 +72,9 @@ export function renderAllSections() {
 
   // Restore scroll position after re-rendering
   window.scrollTo(scrollX, scrollY);
+
+  // Update notification badge
+  if (window.updateNotificationBadge) window.updateNotificationBadge();
 }
 
 // --- Toggle card width between half and full
@@ -1409,12 +1412,9 @@ export function renderUnifiedCard(sectionEl, sectionId) {
   const data = currentData();
   const cardData = data[sectionId] || { "_default": { icons: [], reminders: [], subtasks: [], copyPaste: [] } };
 
-  console.log(`[Render] renderUnifiedCard for ${sectionId}:`, cardData);
-
   // Initialize if empty
   if (!data[sectionId]) {
     data[sectionId] = { "_default": { icons: [], reminders: [], subtasks: [], copyPaste: [] } };
-    console.log(`[Render] Initialized empty card data for ${sectionId}`);
   }
 
   const container = document.createElement('div');
@@ -1431,19 +1431,14 @@ export function renderUnifiedCard(sectionEl, sectionId) {
   });
 
   sortedEntries.forEach(([subtitle, items]) => {
-    console.log(`[Render] Processing subtitle "${subtitle}" for ${sectionId}:`, items);
-    console.log(`[Render] items type: ${typeof items}, isArray: ${Array.isArray(items)}`);
-
     // Handle old format where items might be an array (e.g., old reminders format)
     // Convert to new unified format on-the-fly
     if (Array.isArray(items)) {
-      console.log(`[Render] Converting old array format for ${sectionId}/${subtitle}`);
       // Detect what type of items based on properties
       const firstItem = items[0];
       if (firstItem) {
         if (firstItem.type === 'days' || firstItem.type === 'interval' || firstItem.schedule !== undefined || firstItem.mode === 'calendar' || firstItem.mode === 'interval') {
           // Old reminders format (check both 'type' and 'mode' properties)
-          console.log(`[Render] Detected old reminders format for ${sectionId}/${subtitle}`);
           cardData[subtitle] = {
             icons: [],
             reminders: items.map(r => ({ ...r })),
@@ -1476,7 +1471,6 @@ export function renderUnifiedCard(sectionEl, sectionId) {
           };
         } else if (firstItem.title !== undefined || firstItem.name !== undefined) {
           // Fallback: if item has title/name, assume it's a reminder
-          console.log(`[Render] Fallback: treating items with title/name as reminders for ${sectionId}/${subtitle}`);
           cardData[subtitle] = {
             icons: [],
             reminders: items.map(r => ({ ...r })),
@@ -1494,10 +1488,8 @@ export function renderUnifiedCard(sectionEl, sectionId) {
       items = cardData[subtitle];
     } else if (items && typeof items === 'object') {
       // Already correct object format - ensure it has all required arrays
-      console.log(`[Render] Object format detected for ${sectionId}/${subtitle}, ensuring structure`);
     } else {
       // Invalid format - create empty structure
-      console.log(`[Render] Invalid format for ${sectionId}/${subtitle}, creating empty structure`);
       cardData[subtitle] = { icons: [], reminders: [], subtasks: [], copyPaste: [] };
       items = cardData[subtitle];
     }
@@ -1511,8 +1503,6 @@ export function renderUnifiedCard(sectionEl, sectionId) {
     if (!Array.isArray(items.reminders)) items.reminders = [];
     if (!Array.isArray(items.subtasks)) items.subtasks = [];
     if (!Array.isArray(items.copyPaste)) items.copyPaste = [];
-
-    console.log(`[Render] Final items structure for ${sectionId}/${subtitle}: icons=${items.icons.length}, reminders=${items.reminders.length}, subtasks=${items.subtasks.length}, copyPaste=${items.copyPaste.length}`);
 
     // Render subtitle header (unless "_default" or empty/falsy)
     if (subtitle && subtitle !== '_default') {
@@ -1704,14 +1694,11 @@ export function renderUnifiedCard(sectionEl, sectionId) {
 
     // Render reminders (if any, or always in edit mode for consistency)
     const remindersArray = Array.isArray(items.reminders) ? items.reminders : [];
-    console.log(`[Render] Reminders for ${sectionId}/${subtitle}:`, remindersArray, `(length: ${remindersArray.length})`);
     if (remindersArray.length > 0 || editState.enabled) {
-      console.log(`[Render] Rendering ${remindersArray.length} reminders for ${sectionId}/${subtitle}`);
       const remindersGroup = document.createElement('div');
       remindersGroup.className = 'unified-reminders-group';
 
       remindersArray.forEach(rem => {
-        console.log(`[Render] Creating reminder item:`, rem);
         const div = createUnifiedReminderItem(rem, sectionId, subtitle, subtitleColor);
         remindersGroup.appendChild(div);
       });
@@ -1721,8 +1708,6 @@ export function renderUnifiedCard(sectionEl, sectionId) {
       if (editState.enabled) {
         initializeContainerDragHandlers(remindersGroup, `${sectionId}:${subtitle}:reminders`);
       }
-    } else {
-      console.log(`[Render] No reminders to render for ${sectionId}/${subtitle}`);
     }
 
     // Render subtasks (if any)

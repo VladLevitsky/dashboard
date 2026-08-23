@@ -3,8 +3,8 @@
 // Tasks are color-coded (blue/yellow/orange/red) representing urgency and importance
 
 import { model, editState, currentData, currentSections } from '../state.js';
-import { $, showToast, createAnimatedBorder } from '../utils.js';
-import { markDirtyAndSave, handleEditorInput } from './edit-mode.js';
+import { $, showToast, createAnimatedBorder, normalizeDescHtml } from '../utils.js';
+import { markDirtyAndSave, handleEditorInput, createHighlighterButton, attachHighlighterContextMenu } from './edit-mode.js';
 import { saveModel } from '../core/storage.js';
 import { TASK_COLORS, TASK_COLOR_LABELS, ANIMATION_DELAY_MS, CARD_HIDE_DELAY_MS } from '../constants.js';
 
@@ -203,6 +203,9 @@ export function deleteTask(taskId) {
   if (task.meetingHighlight) {
     removeMeetingHighlight(task.meetingHighlight.meetingId, taskId);
   }
+  if (task.noteHighlight) {
+    removeNoteHighlight(task.noteHighlight.sectionId, taskId);
+  }
 
   tasks.splice(taskIndex, 1);
   saveModel();
@@ -233,6 +236,9 @@ export function completeTask(taskId) {
   if (task.meetingHighlight) {
     markMeetingHighlightCompleted(task.meetingHighlight.meetingId, taskId);
   }
+  if (task.noteHighlight) {
+    markNoteHighlightCompleted(task.noteHighlight.sectionId, taskId);
+  }
 
   // Move to completed archive
   task.completed = true;
@@ -258,6 +264,19 @@ export function deleteCompletedTask(taskId) {
   data.completedTasks = data.completedTasks || [];
   const idx = data.completedTasks.findIndex(t => t.id === taskId);
   if (idx === -1) return false;
+
+  const task = data.completedTasks[idx];
+  // Remove highlights (revert to plain text)
+  if (task.projectHighlight) {
+    removeProjectHighlight(task.projectHighlight.projectId, taskId);
+  }
+  if (task.meetingHighlight) {
+    removeMeetingHighlight(task.meetingHighlight.meetingId, taskId);
+  }
+  if (task.noteHighlight) {
+    removeNoteHighlight(task.noteHighlight.sectionId, taskId);
+  }
+
   data.completedTasks.splice(idx, 1);
   saveModel();
   return true;
@@ -266,6 +285,12 @@ export function deleteCompletedTask(taskId) {
 // Clear all completed tasks permanently
 export function clearCompletedTasks() {
   const data = currentData();
+  // Remove all highlights before clearing
+  (data.completedTasks || []).forEach(task => {
+    if (task.projectHighlight) removeProjectHighlight(task.projectHighlight.projectId, task.id);
+    if (task.meetingHighlight) removeMeetingHighlight(task.meetingHighlight.meetingId, task.id);
+    if (task.noteHighlight) removeNoteHighlight(task.noteHighlight.sectionId, task.id);
+  });
   data.completedTasks = [];
   saveModel();
 }
@@ -295,6 +320,20 @@ function removeMeetingHighlight(meetingId, taskId) {
 function markMeetingHighlightCompleted(meetingId, taskId) {
   if (window.markMeetingTaskHighlightCompleted) {
     window.markMeetingTaskHighlightCompleted(meetingId, taskId);
+  }
+}
+
+// Helper: mark card note highlight as completed
+function markNoteHighlightCompleted(sectionId, taskId) {
+  if (window.markNoteTaskHighlightCompleted) {
+    window.markNoteTaskHighlightCompleted(sectionId, taskId);
+  }
+}
+
+// Helper: remove card note highlight (revert to plain text)
+function removeNoteHighlight(sectionId, taskId) {
+  if (window.removeNoteTaskHighlight) {
+    window.removeNoteTaskHighlight(sectionId, taskId);
   }
 }
 
@@ -1989,6 +2028,10 @@ function openTaskEditorModal(taskData, titleText) {
               </label>
             </div>
             <div class="task-editor-field">
+              <label for="task-editor-date">Due Date (Optional)</label>
+              <input type="date" id="task-editor-date" />
+            </div>
+            <div class="task-editor-field">
               <label for="task-editor-link">Task Link (Optional)</label>
               <input type="url" id="task-editor-link" placeholder="https://example.com" />
             </div>
@@ -2096,8 +2139,18 @@ function openTaskEditorModal(taskData, titleText) {
       });
     });
 
+    // Highlighter button in task description toolbar
+    const taskDescToolbar = modal.querySelector('#task-desc-editor-wrap .task-desc-toolbar');
+    if (taskDescToolbar) {
+      const hlDiv = document.createElement('div');
+      hlDiv.className = 'task-desc-toolbar-divider';
+      taskDescToolbar.appendChild(hlDiv);
+      taskDescToolbar.appendChild(createHighlighterButton());
+    }
+
     // Markdown auto-convert in description editor (reuse Card Notes handler)
     const descEditor = modal.querySelector('#task-desc-editor');
+    attachHighlighterContextMenu(descEditor);
     descEditor.addEventListener('input', handleEditorInput);
 
     // Update toolbar on keyboard shortcuts (Ctrl+B, Ctrl+I, Ctrl+U)
@@ -2142,6 +2195,10 @@ function openTaskEditorModal(taskData, titleText) {
   // Populate name field
   const nameInput = $('#task-editor-name');
   nameInput.value = taskData.title || '';
+
+  // Populate date field
+  const dateInput = $('#task-editor-date');
+  dateInput.value = taskData.dueDate || '';
 
   // Populate link field
   const linkInput = $('#task-editor-link');
@@ -2333,6 +2390,7 @@ function openTaskEditorModal(taskData, titleText) {
     }
 
     const link = linkInput.value.trim() || null;
+    const dueDate = dateInput.value || null;
 
     // Get description - from editor if editing, from view if not
     const rawDesc = descriptionEditing
@@ -2351,6 +2409,7 @@ function openTaskEditorModal(taskData, titleText) {
         color: selectedColor,
         linkedItem: selectedLinkedItem,
         link: link,
+        dueDate: dueDate,
         description: description,
         subtasks: subtasks.length > 0 ? subtasks : null,
         pinned: primaryCheckbox.checked
@@ -2360,6 +2419,7 @@ function openTaskEditorModal(taskData, titleText) {
       // Create new task
       const task = createTask(title, selectedColor, selectedLinkedItem, link);
       const updates = { pinned: primaryCheckbox.checked };
+      if (dueDate) updates.dueDate = dueDate;
       if (description) updates.description = description;
       if (subtasks.length > 0) updates.subtasks = subtasks;
       updateTask(task.id, updates);
@@ -2469,11 +2529,6 @@ function updateItemSelectorText(textEl, linkedItem) {
 }
 
 // --- Normalize contenteditable HTML (strip lone <br>, whitespace-only)
-function normalizeDescHtml(html) {
-  if (!html) return '';
-  const trimmed = html.trim();
-  return (trimmed === '<br>' || trimmed === '') ? '' : trimmed;
-}
 
 // --- Description editor helpers
 function enterDescriptionEditMode() {
@@ -2600,46 +2655,10 @@ function renderEditorSubtasks() {
     titleWrap.appendChild(titleInput);
     titleWrap.appendChild(confirmBtn);
 
-    // Click input to enter edit mode — removes bubble class while editing
-    titleInput.addEventListener('click', () => {
-      if (titleInput.readOnly) {
-        titleInput.readOnly = false;
-        titleInput.classList.remove('locked');
-        confirmBtn.hidden = false;
-        row.classList.remove('subtask-bubble', 'subtask-bubble-completed', 'subtask-bubble-important');
-        titleInput.focus();
-      }
-    });
-
-    // Confirm locks it back — restores bubble class
-    confirmBtn.addEventListener('click', () => {
-      titleInput.readOnly = true;
-      titleInput.classList.add('locked');
-      confirmBtn.hidden = true;
-      if (subtask.title) {
-        row.classList.add('subtask-bubble');
-        if (subtask.completed) row.classList.add('subtask-bubble-completed');
-        if (subtask.important) row.classList.add('subtask-bubble-important');
-      }
-    });
-
-    // Description indicator / edit button
-    const descBtn = document.createElement('button');
-    descBtn.type = 'button';
-    descBtn.className = 'task-subtask-desc-btn';
-    const hasDesc = normalizeDescHtml(subtask.description || '');
-    descBtn.title = hasDesc ? 'Edit description' : 'Add description';
-    descBtn.innerHTML = `
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-        <polyline points="14 2 14 8 20 8"></polyline>
-        <line x1="16" y1="13" x2="8" y2="13"></line>
-        <line x1="16" y1="17" x2="8" y2="17"></line>
-      </svg>`;
-    if (hasDesc) descBtn.classList.add('has-content');
-    descBtn.addEventListener('click', () => {
-      openSubtaskDescriptionModal(subtask);
-    });
+    // --- Action buttons container (only visible when locked) ---
+    const actionsWrap = document.createElement('div');
+    actionsWrap.className = 'task-subtask-actions';
+    if (!isLocked) actionsWrap.style.display = 'none';
 
     // Complete toggle button
     const completeBtn = document.createElement('button');
@@ -2652,9 +2671,7 @@ function renderEditorSubtasks() {
       </svg>`;
     completeBtn.addEventListener('click', () => {
       subtask.completed = !subtask.completed;
-      // If marking as complete, remove important status
       if (subtask.completed) subtask.important = false;
-      // Persist immediately so completed state survives refresh
       if (currentEditingTaskId) {
         const cleanSubtasks = editorSubtasks.filter(s => s.title && s.title.trim());
         updateTask(currentEditingTaskId, { subtasks: cleanSubtasks.length > 0 ? cleanSubtasks : null });
@@ -2662,21 +2679,42 @@ function renderEditorSubtasks() {
       renderEditorSubtasks();
     });
 
-    // Important toggle button
-    const importantBtn = document.createElement('button');
-    importantBtn.type = 'button';
-    importantBtn.className = 'task-subtask-important-btn' + (subtask.important ? ' is-important' : '');
-    importantBtn.title = subtask.important ? 'Remove importance' : 'Mark as important';
-    importantBtn.innerHTML = `
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-        <line x1="12" y1="2" x2="12" y2="16"></line>
-        <circle cx="12" cy="20" r="1" fill="currentColor" stroke="none"></circle>
+    // 3-dot menu button
+    const menuBtn = document.createElement('button');
+    menuBtn.type = 'button';
+    menuBtn.className = 'task-subtask-menu-btn';
+    menuBtn.title = 'More options';
+    menuBtn.innerHTML = `
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+        <circle cx="12" cy="5" r="2"></circle>
+        <circle cx="12" cy="12" r="2"></circle>
+        <circle cx="12" cy="19" r="2"></circle>
       </svg>`;
-    importantBtn.addEventListener('click', () => {
+
+    // Dropdown menu
+    const menuDropdown = document.createElement('div');
+    menuDropdown.className = 'task-subtask-menu-dropdown';
+    menuDropdown.style.display = 'none';
+
+    const hasDesc = normalizeDescHtml(subtask.description || '');
+
+    const descOption = document.createElement('button');
+    descOption.type = 'button';
+    descOption.className = 'task-subtask-menu-item';
+    descOption.textContent = hasDesc ? 'Edit description' : 'Add description';
+    descOption.addEventListener('click', () => {
+      menuDropdown.style.display = 'none';
+      openSubtaskDescriptionModal(subtask);
+    });
+
+    const importantOption = document.createElement('button');
+    importantOption.type = 'button';
+    importantOption.className = 'task-subtask-menu-item';
+    importantOption.textContent = subtask.important ? 'Remove importance' : 'Mark as important';
+    importantOption.addEventListener('click', () => {
+      menuDropdown.style.display = 'none';
       subtask.important = !subtask.important;
-      // If marking as important, remove completed status
       if (subtask.important) subtask.completed = false;
-      // Persist immediately
       if (currentEditingTaskId) {
         const cleanSubtasks = editorSubtasks.filter(s => s.title && s.title.trim());
         updateTask(currentEditingTaskId, { subtasks: cleanSubtasks.length > 0 ? cleanSubtasks : null });
@@ -2684,26 +2722,108 @@ function renderEditorSubtasks() {
       renderEditorSubtasks();
     });
 
-    const deleteBtn = document.createElement('button');
-    deleteBtn.type = 'button';
-    deleteBtn.className = 'task-subtask-delete-btn';
-    deleteBtn.title = 'Remove subtask';
-    deleteBtn.innerHTML = `
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
-        <line x1="18" y1="6" x2="6" y2="18"></line>
-        <line x1="6" y1="6" x2="18" y2="18"></line>
-      </svg>`;
-    deleteBtn.addEventListener('click', () => {
+    const deleteOption = document.createElement('button');
+    deleteOption.type = 'button';
+    deleteOption.className = 'task-subtask-menu-item task-subtask-menu-item-danger';
+    deleteOption.textContent = 'Remove subtask';
+    deleteOption.addEventListener('click', () => {
+      menuDropdown.style.display = 'none';
       if (!confirm('Delete this subtask?')) return;
       editorSubtasks.splice(index, 1);
       renderEditorSubtasks();
     });
 
+    menuDropdown.appendChild(descOption);
+    menuDropdown.appendChild(importantOption);
+    menuDropdown.appendChild(deleteOption);
+
+    menuBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      // Close any other open menus
+      document.querySelectorAll('.task-subtask-menu-dropdown').forEach(d => {
+        if (d !== menuDropdown) d.style.display = 'none';
+      });
+      menuDropdown.style.display = menuDropdown.style.display === 'none' ? '' : 'none';
+    });
+
+    // Close menu on outside click
+    const closeMenu = (e) => {
+      if (!menuBtn.contains(e.target) && !menuDropdown.contains(e.target)) {
+        menuDropdown.style.display = 'none';
+      }
+    };
+    document.addEventListener('click', closeMenu);
+
+    const menuWrap = document.createElement('div');
+    menuWrap.className = 'task-subtask-menu-wrap';
+    menuWrap.appendChild(menuBtn);
+    menuWrap.appendChild(menuDropdown);
+
+    // Subtask date picker button
+    const subtaskDateBtn = document.createElement('button');
+    subtaskDateBtn.type = 'button';
+    subtaskDateBtn.className = 'task-subtask-date-btn' + (subtask.dueDate ? ' has-date' : '');
+    subtaskDateBtn.title = subtask.dueDate ? `Due: ${subtask.dueDate}` : 'Set due date';
+    subtaskDateBtn.innerHTML = `
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+        <line x1="16" y1="2" x2="16" y2="6"></line>
+        <line x1="8" y1="2" x2="8" y2="6"></line>
+        <line x1="3" y1="10" x2="21" y2="10"></line>
+      </svg>`;
+
+    // Hidden date input for native picker
+    const subtaskDateInput = document.createElement('input');
+    subtaskDateInput.type = 'date';
+    subtaskDateInput.className = 'task-subtask-date-input';
+    subtaskDateInput.value = subtask.dueDate || '';
+    subtaskDateInput.addEventListener('change', () => {
+      subtask.dueDate = subtaskDateInput.value || null;
+      subtaskDateBtn.classList.toggle('has-date', !!subtask.dueDate);
+      subtaskDateBtn.title = subtask.dueDate ? `Due: ${subtask.dueDate}` : 'Set due date';
+      if (currentEditingTaskId) {
+        const cleanSubtasks = editorSubtasks.filter(s => s.title && s.title.trim());
+        updateTask(currentEditingTaskId, { subtasks: cleanSubtasks.length > 0 ? cleanSubtasks : null });
+      }
+    });
+    subtaskDateBtn.addEventListener('click', () => subtaskDateInput.showPicker());
+
+    const subtaskDateWrap = document.createElement('div');
+    subtaskDateWrap.className = 'task-subtask-date-wrap';
+    subtaskDateWrap.appendChild(subtaskDateBtn);
+    subtaskDateWrap.appendChild(subtaskDateInput);
+
+    actionsWrap.appendChild(completeBtn);
+    actionsWrap.appendChild(subtaskDateWrap);
+    actionsWrap.appendChild(menuWrap);
+
+    // Click input to enter edit mode
+    titleInput.addEventListener('click', () => {
+      if (titleInput.readOnly) {
+        titleInput.readOnly = false;
+        titleInput.classList.remove('locked');
+        confirmBtn.hidden = false;
+        actionsWrap.style.display = 'none';
+        row.classList.remove('subtask-bubble', 'subtask-bubble-completed', 'subtask-bubble-important');
+        titleInput.focus();
+      }
+    });
+
+    // Confirm locks it back
+    confirmBtn.addEventListener('click', () => {
+      titleInput.readOnly = true;
+      titleInput.classList.add('locked');
+      confirmBtn.hidden = true;
+      if (subtask.title) {
+        actionsWrap.style.display = '';
+        row.classList.add('subtask-bubble');
+        if (subtask.completed) row.classList.add('subtask-bubble-completed');
+        if (subtask.important) row.classList.add('subtask-bubble-important');
+      }
+    });
+
     row.appendChild(titleWrap);
-    row.appendChild(descBtn);
-    row.appendChild(completeBtn);
-    row.appendChild(importantBtn);
-    row.appendChild(deleteBtn);
+    row.appendChild(actionsWrap);
     list.appendChild(row);
   });
 }
@@ -2764,8 +2884,18 @@ function openSubtaskDescriptionModal(subtask) {
       });
     });
 
+    // Highlighter button in subtask description toolbar
+    const subtaskToolbar = modal.querySelector('.subtask-desc-body .task-desc-toolbar');
+    if (subtaskToolbar) {
+      const hlDiv = document.createElement('div');
+      hlDiv.className = 'task-desc-toolbar-divider';
+      subtaskToolbar.appendChild(hlDiv);
+      subtaskToolbar.appendChild(createHighlighterButton());
+    }
+
     // Markdown auto-convert
     const editorEl = modal.querySelector('#subtask-desc-editor');
+    attachHighlighterContextMenu(editorEl);
     editorEl.addEventListener('input', handleEditorInput);
 
     editorEl.addEventListener('keydown', (e) => {
@@ -2991,8 +3121,18 @@ export function openIdeasModal() {
       });
     });
 
+    // Highlighter button in ideas toolbar
+    const ideasToolbar = modal.querySelector('.ideas-editor-toolbar');
+    if (ideasToolbar) {
+      const hlDiv = document.createElement('div');
+      hlDiv.className = 'task-desc-toolbar-divider';
+      ideasToolbar.appendChild(hlDiv);
+      ideasToolbar.appendChild(createHighlighterButton());
+    }
+
     // Markdown auto-convert + toolbar state update
     const editorEl = modal.querySelector('#ideas-editor');
+    attachHighlighterContextMenu(editorEl);
     editorEl.addEventListener('input', handleEditorInput);
     editorEl.addEventListener('keydown', (e) => {
       if ((e.ctrlKey || e.metaKey) && ['b', 'i', 'u'].includes(e.key.toLowerCase())) {

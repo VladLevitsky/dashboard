@@ -19,8 +19,8 @@
 // Render order: Icons → Reminders → Subtasks → Copy-paste
 //
 export const model = {
-  // Schema version for data migration (4 = halfWidth cards)
-  schemaVersion: 4,
+  // Schema version for data migration (5 = centralized Eisenhower tasks)
+  schemaVersion: 5,
   // Track the order and structure of sections for normal (single-column) mode
   // Empty by default - users add cards via the + button
   sections: [],
@@ -65,9 +65,8 @@ export const model = {
     profilePhotoYPercent: 0,
   },
   darkMode: false,
-  glassMode: false,  // 'glass' style (glassmorphism) vs 'solid' style
+  glassMode: true,   // Glass mode is always on
   glassTheme: 'classic',  // 'classic' (grey) or 'sunset' (orange/purple gradient)
-  glassCursorShadow: true,  // Whether to show cursor shadow effect in glass mode
   reminders: {},
 
   dailyTasks: [],
@@ -118,9 +117,9 @@ const MODEL_STATIC_KEYS = new Set([
   'displayMode', 'quickAccessItems', 'sectionTitles', 'sectionIcons',
   'sectionColors', 'subtitleColors', 'collapsedSubtitles', 'cardNotes',
   'collapsedCards', 'tasks', 'ideas', 'meetings', 'completedTasks', 'projects',
-  'header', 'darkMode', 'glassMode', 'glassTheme', 'glassCursorShadow',
+  'header', 'darkMode', 'glassMode', 'glassTheme',
   'reminders', 'dailyTasks', 'dailyTools', 'contentCreation', 'ads',
-  'analytics', 'tools', 'tasksSummaryOrder'
+  'analytics', 'tools'
 ]);
 
 // --- Reset model to clean state (removes all dynamic section data)

@@ -3,13 +3,14 @@
 // Each meeting has a name, description, links, and type
 
 import { currentData } from '../state.js';
-import { $, showToast } from '../utils.js';
-import { handleEditorInput } from './edit-mode.js';
+import { $, showToast, moveCursorAfterNode, normalizeDescHtml, escapeAttr } from '../utils.js';
+import { handleEditorInput, createHighlighterButton, attachHighlighterContextMenu } from './edit-mode.js';
 import { saveModel } from '../core/storage.js';
-import { HIGHLIGHT_COLORS, HIGHLIGHT_BORDER_COLORS, hyperlinkSelection, canHyperlink } from './projects.js';
+import { HIGHLIGHT_COLORS, HIGHLIGHT_BORDER_COLORS, hyperlinkSelection, canHyperlink, attachTaskMention } from './projects.js';
 
 // Module state
 let meetingsEditingId = null;
+let currentMeetingSelHandler = null;
 let meetingsInitialState = null; // For unsaved changes detection
 let meetingsInEditMode = false; // Whether the edit/add form is showing
 
@@ -54,16 +55,6 @@ function deleteMeeting(meetingId) {
   meetings.splice(idx, 1);
   saveModel();
   return true;
-}
-
-function normalizeDescHtml(html) {
-  if (!html) return '';
-  const trimmed = html.trim();
-  return (trimmed === '<br>' || trimmed === '') ? '' : trimmed;
-}
-
-function escapeAttr(str) {
-  return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 // ============================================================
@@ -174,6 +165,10 @@ export function closeMeetingsModal(force) {
   meetingsEditingId = null;
   meetingsInEditMode = false;
   meetingsInitialState = null;
+  if (currentMeetingSelHandler) {
+    document.removeEventListener('selectionchange', currentMeetingSelHandler);
+    currentMeetingSelHandler = null;
+  }
 }
 
 // ============================================================
@@ -260,6 +255,31 @@ function showMeetingsViewMode(meeting) {
     });
   }
 
+  // Reconcile task highlights based on actual task status
+  const viewContent = viewSection.querySelector('.meetings-view-content');
+  if (viewContent && window.reconcileTaskHighlights) {
+    window.reconcileTaskHighlights(viewContent);
+    // Persist any changes back
+    const reconciled = viewContent.innerHTML;
+    if (meeting.description && reconciled !== meeting.description) {
+      meeting.description = reconciled;
+      saveModel();
+    }
+  }
+
+  // Click on task highlights in view mode to open linked task
+  if (viewContent) {
+    viewContent.addEventListener('click', (e) => {
+      const highlight = e.target.closest('span.project-task-highlight');
+      if (highlight && !highlight.classList.contains('completed')) {
+        const taskId = highlight.dataset.taskId;
+        if (taskId && window.openEditTaskModal) {
+          window.openEditTaskModal(taskId);
+        }
+      }
+    });
+  }
+
   // Wire view mode buttons
   $('#meetings-view-edit').addEventListener('click', () => {
     const m = getAllMeetings().find(x => x.id === meetingsEditingId);
@@ -309,6 +329,33 @@ function showMeetingsEditMode(meeting) {
       <select id="meetings-inline-type">
         <option value="one-time">One-Time</option>
         <option value="routine">Recurring</option>
+      </select>
+    </div>
+    <div class="meeting-editor-field" style="margin-top: 16px;">
+      <label for="meetings-inline-date">Date</label>
+      <input type="date" id="meetings-inline-date" />
+    </div>
+    <div class="meeting-editor-field meeting-recurrence-field" id="meetings-recurrence-section" style="margin-top: 16px; display: none;">
+      <label for="meetings-inline-repeat">Repeat</label>
+      <select id="meetings-inline-repeat">
+        <option value="none">No repeat</option>
+        <option value="weekly">Every # of weeks</option>
+        <option value="monthly">Every month</option>
+      </select>
+    </div>
+    <div class="meeting-editor-field" id="meetings-weekly-options" style="margin-top: 8px; display: none;">
+      <label for="meetings-inline-weekly-type">Weekly option</label>
+      <select id="meetings-inline-weekly-type">
+        <option value="1">Every 1 week</option>
+        <option value="2">Every 2 weeks</option>
+        <option value="3">Every 3 weeks</option>
+      </select>
+    </div>
+    <div class="meeting-editor-field" id="meetings-monthly-options" style="margin-top: 8px; display: none;">
+      <label for="meetings-inline-monthly-type">Monthly option</label>
+      <select id="meetings-inline-monthly-type">
+        <option value="sameDay">Same day of month</option>
+        <option value="firstWeekday">First weekday of month</option>
       </select>
     </div>
     <div class="meeting-links-section">
@@ -367,11 +414,57 @@ function showMeetingsEditMode(meeting) {
   $('#meetings-inline-name').value = meetingData.title || '';
   $('#meetings-inline-type').value = meetingData.type || 'one-time';
 
+  // Populate date and recurrence
+  $('#meetings-inline-date').value = meetingData.date || '';
+  const meetingType = meetingData.type || 'one-time';
+  const recurrenceSection = $('#meetings-recurrence-section');
+  const weeklyOpts = $('#meetings-weekly-options');
+  const monthlyOpts = $('#meetings-monthly-options');
+
+  if (meetingType === 'routine') {
+    recurrenceSection.style.display = '';
+    const repeat = meetingData.repeat || 'none';
+    $('#meetings-inline-repeat').value = repeat;
+    if (repeat === 'weekly') {
+      weeklyOpts.style.display = '';
+      $('#meetings-inline-weekly-type').value = (meetingData.repeatWeeks || 1).toString();
+    } else if (repeat === 'monthly') {
+      monthlyOpts.style.display = '';
+      $('#meetings-inline-monthly-type').value = meetingData.repeatMonthlyType || 'sameDay';
+    }
+  }
+
+  // Type change toggles recurrence visibility
+  $('#meetings-inline-type').addEventListener('change', () => {
+    const isRecurring = $('#meetings-inline-type').value === 'routine';
+    recurrenceSection.style.display = isRecurring ? '' : 'none';
+    if (!isRecurring) {
+      weeklyOpts.style.display = 'none';
+      monthlyOpts.style.display = 'none';
+    }
+  });
+
+  // Repeat change toggles weekly/monthly options
+  $('#meetings-inline-repeat').addEventListener('change', () => {
+    const val = $('#meetings-inline-repeat').value;
+    weeklyOpts.style.display = val === 'weekly' ? '' : 'none';
+    monthlyOpts.style.display = val === 'monthly' ? '' : 'none';
+  });
+
   // Populate links
   (meetingData.links || []).forEach(link => addInlineLinkRow(link.title, link.url));
 
   // Populate description
-  $('#meetings-inline-desc-editor').innerHTML = meetingData.description || '';
+  const descEditorEl = $('#meetings-inline-desc-editor');
+  descEditorEl.innerHTML = meetingData.description || '';
+  if (window.reconcileTaskHighlights) {
+    window.reconcileTaskHighlights(descEditorEl);
+    const reconciled = descEditorEl.innerHTML;
+    if (reconciled !== (meetingData.description || '')) {
+      const m = getAllMeetings().find(x => x.id === meetingsEditingId);
+      if (m) { m.description = reconciled; saveModel(); }
+    }
+  }
 
   // Wire toolbar buttons
   viewSection.querySelectorAll('.meetings-inline-toolbar-btn').forEach(btn => {
@@ -381,6 +474,31 @@ function showMeetingsEditMode(meeting) {
       updateInlineToolbarState();
       $('#meetings-inline-desc-editor').focus();
     });
+  });
+
+  // Highlighter button — insert before hyperlink button in toolbar
+  const meetingsToolbar = $('#meetings-inline-toolbar');
+  const meetingHyperlinkRef = $('#meeting-hyperlink-btn');
+  if (meetingsToolbar && meetingHyperlinkRef) {
+    const hlDiv = document.createElement('div');
+    hlDiv.className = 'task-desc-toolbar-divider';
+    meetingsToolbar.insertBefore(hlDiv, meetingHyperlinkRef);
+    meetingsToolbar.insertBefore(createHighlighterButton(), meetingHyperlinkRef);
+  }
+
+  // Highlighter context menu on meetings editor
+  attachHighlighterContextMenu($('#meetings-inline-desc-editor'), {
+    linkTask: true,
+    onTaskLinked: (task) => {
+      if (window.updateTask) {
+        window.updateTask(task.id, { meetingHighlight: { meetingId: meetingsEditingId } });
+      }
+      const meeting = getAllMeetings().find(m => m.id === meetingsEditingId);
+      if (meeting) {
+        meeting.description = $('#meetings-inline-desc-editor').innerHTML;
+        saveModel();
+      }
+    }
   });
 
   // Hyperlink button
@@ -404,16 +522,18 @@ function showMeetingsEditMode(meeting) {
   }
 
   // Selection change → enable/disable hyperlink + convert buttons
-  const meetingSelHandler = () => {
+  // Remove previous listener to prevent accumulation
+  if (currentMeetingSelHandler) {
+    document.removeEventListener('selectionchange', currentMeetingSelHandler);
+  }
+  currentMeetingSelHandler = () => {
     const editor = $('#meetings-inline-desc-editor');
     if (!editor) return;
     const hasSelection = canHyperlink(editor);
     if (hyperlinkBtn) hyperlinkBtn.disabled = !hasSelection;
     if (convertBtn) convertBtn.disabled = !hasSelection;
   };
-  document.addEventListener('selectionchange', meetingSelHandler);
-  // Store handler ref to clean up if needed
-  viewSection._selHandler = meetingSelHandler;
+  document.addEventListener('selectionchange', currentMeetingSelHandler);
 
   // Click on highlights to open linked task
   const descEditor = $('#meetings-inline-desc-editor');
@@ -432,6 +552,21 @@ function showMeetingsEditMode(meeting) {
   descEditor.addEventListener('keydown', (e) => {
     if ((e.ctrlKey || e.metaKey) && ['b', 'i', 'u'].includes(e.key.toLowerCase())) {
       setTimeout(updateInlineToolbarState, 0);
+    }
+  });
+
+  // @ mention autocomplete for linking existing tasks
+  attachTaskMention(descEditor, (task) => {
+    if (window.updateTask) {
+      window.updateTask(task.id, {
+        meetingHighlight: { meetingId: meetingsEditingId }
+      });
+    }
+    // Save the updated description
+    const meeting = getAllMeetings().find(m => m.id === meetingsEditingId);
+    if (meeting) {
+      meeting.description = descEditor.innerHTML;
+      saveModel();
     }
   });
 
@@ -492,18 +627,35 @@ function showMeetingsEditMode(meeting) {
 
     const description = normalizeDescHtml($('#meetings-inline-desc-editor').innerHTML) || null;
 
+    // Collect date and recurrence
+    const date = $('#meetings-inline-date').value || null;
+    let repeat = null;
+    let repeatWeeks = null;
+    let repeatMonthlyType = null;
+    if (type === 'routine') {
+      repeat = $('#meetings-inline-repeat').value;
+      if (repeat === 'weekly') {
+        repeatWeeks = parseInt($('#meetings-inline-weekly-type').value) || 1;
+      } else if (repeat === 'monthly') {
+        repeatMonthlyType = $('#meetings-inline-monthly-type').value || 'sameDay';
+      }
+      if (repeat === 'none') repeat = null;
+    }
+
     let savedMeeting;
     if (meetingsEditingId) {
-      savedMeeting = updateMeeting(meetingsEditingId, { title, type, description, links: meetingLinks });
+      savedMeeting = updateMeeting(meetingsEditingId, { title, type, description, links: meetingLinks, date, repeat, repeatWeeks, repeatMonthlyType });
       showToast('Meeting updated');
     } else {
       savedMeeting = createMeeting(title, type, description, meetingLinks);
+      if (date) updateMeeting(savedMeeting.id, { date, repeat, repeatWeeks, repeatMonthlyType });
       showToast('Meeting created');
     }
 
     // Re-render list and show saved meeting in view mode
     renderMeetingsList();
     if (savedMeeting) showMeetingsViewMode(savedMeeting);
+    if (window.updateNotificationBadge) window.updateNotificationBadge();
   });
 
   // Mark edit mode and capture initial state for unsaved changes detection
@@ -607,21 +759,6 @@ function updateInlineToolbarState() {
 // CONVERT MEETING SELECTION TO TASK (two-way linking)
 // ============================================================
 
-function moveCursorAfterNode(node) {
-  const sel = window.getSelection();
-  if (!sel) return;
-  const spacer = document.createTextNode('\u200B');
-  if (node.nextSibling) {
-    node.parentNode.insertBefore(spacer, node.nextSibling);
-  } else {
-    node.parentNode.appendChild(spacer);
-  }
-  const range = document.createRange();
-  range.setStartAfter(spacer);
-  range.collapse(true);
-  sel.removeAllRanges();
-  sel.addRange(range);
-}
 
 function convertMeetingSelectionToTask(meetingId) {
   if (!meetingId) return;
