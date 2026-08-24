@@ -3620,12 +3620,20 @@ section.card[id^="new-card-"].card-size-full {
 .media-body { overflow: auto; padding: 12px 16px; }
 .media-footer { padding: 12px 16px; border-top: 1px solid #e5e7eb; display: flex; justify-content: flex-end; }
 .media-actions { display: flex; gap: 8px; align-items: center; }
-.media-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 12px; }
+.media-grid { display: flex; flex-direction: column; gap: 12px; }
+.media-section-header { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); padding: 4px 0; border-bottom: 1px solid rgba(0,0,0,0.06); }
+[data-theme="dark"] .media-section-header { border-bottom-color: rgba(255,255,255,0.06); }
+.media-section-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 12px; }
 .media-item { border: 2px solid transparent; border-radius: 10px; overflow: hidden; background: #f8fafc; cursor: pointer; display: grid; grid-template-rows: 1fr auto; }
 .media-item.selected { border-color: var(--brand); }
 .media-item img { width: 100%; height: 120px; object-fit: contain; background: white; }
 .media-item .name { padding: 6px 8px; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .upload-btn { display: inline-grid; align-items: center; border: 1px dashed #cbd5e1; padding: 6px 10px; border-radius: 8px; cursor: pointer; }
+/* Delete button states */
+/* Delete button: grey background when disabled/default item, red when user item */
+#media-delete { background: #9ca3af; border-color: #9ca3af; color: #f1f5f9; transition: background 0.15s, border-color 0.15s; }
+#media-delete.media-delete-active { background: var(--danger); border-color: var(--danger); color: white; }
+#media-delete:disabled { background: #9ca3af; border-color: #9ca3af; color: #f1f5f9; opacity: 0.6; }
 
 /* Breakdown modal */
 .breakdown-modal { position: fixed; inset: 0; display: none; z-index: 2000; }

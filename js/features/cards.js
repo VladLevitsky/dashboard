@@ -52,6 +52,22 @@ export function onDeleteCard(sectionId) {
   const sectionIndex = sections.findIndex(s => s.id === sectionId);
   if (sectionIndex === -1) return;
 
+  // Collect R2 fileIds from all items in this card for deferred cleanup
+  const orphanFileIds = [];
+  const cardData = data[sectionId];
+  if (cardData && typeof cardData === 'object') {
+    Object.values(cardData).forEach(group => {
+      if (!group || typeof group !== 'object') return;
+      ['icons', 'reminders', 'subtasks'].forEach(key => {
+        if (group[key]) {
+          group[key].forEach(item => {
+            if (item.linkType === 'file' && item.fileId) orphanFileIds.push(item.fileId);
+          });
+        }
+      });
+    });
+  }
+
   removeSectionFromBothArrays(sectionId);
   delete data.sectionTitles[sectionId];
   delete data[sectionId];
@@ -66,6 +82,11 @@ export function onDeleteCard(sectionId) {
 
   markDirtyAndSave();
   if (window.renderAllSections) window.renderAllSections();
+
+  // Deferred R2 cleanup after profile is persisted
+  if (orphanFileIds.length > 0 && window.cleanupOrphanedR2Files) {
+    window.cleanupOrphanedR2Files(orphanFileIds);
+  }
 }
 
 // --- Move card up

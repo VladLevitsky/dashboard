@@ -208,8 +208,22 @@ export function deleteTask(taskId) {
     removeNoteHighlight(task.noteHighlight.sectionId, taskId);
   }
 
+  // Collect R2 fileIds for deferred cleanup
+  const orphanFileIds = [];
+  if (task.taskLinks) {
+    task.taskLinks.forEach(l => {
+      if (l.type === 'file' && l.fileId) orphanFileIds.push(l.fileId);
+    });
+  }
+
   tasks.splice(taskIndex, 1);
   saveModel();
+
+  // Clean up R2 files after profile is persisted
+  if (orphanFileIds.length > 0 && window.cleanupOrphanedR2Files) {
+    window.cleanupOrphanedR2Files(orphanFileIds);
+  }
+
   return true;
 }
 
@@ -277,23 +291,44 @@ export function deleteCompletedTask(taskId) {
   if (task.noteHighlight) {
     removeNoteHighlight(task.noteHighlight.sectionId, taskId);
   }
+  const orphanFileIds = [];
+  if (task.taskLinks) {
+    task.taskLinks.forEach(l => {
+      if (l.type === 'file' && l.fileId) orphanFileIds.push(l.fileId);
+    });
+  }
 
   data.completedTasks.splice(idx, 1);
   saveModel();
+
+  if (orphanFileIds.length > 0 && window.cleanupOrphanedR2Files) {
+    window.cleanupOrphanedR2Files(orphanFileIds);
+  }
+
   return true;
 }
 
 // Clear all completed tasks permanently
 export function clearCompletedTasks() {
   const data = currentData();
-  // Remove all highlights before clearing
+  // Collect R2 fileIds before clearing
+  const orphanFileIds = [];
   (data.completedTasks || []).forEach(task => {
     if (task.projectHighlight) removeProjectHighlight(task.projectHighlight.projectId, task.id);
     if (task.meetingHighlight) removeMeetingHighlight(task.meetingHighlight.meetingId, task.id);
     if (task.noteHighlight) removeNoteHighlight(task.noteHighlight.sectionId, task.id);
+    if (task.taskLinks) {
+      task.taskLinks.forEach(l => {
+        if (l.type === 'file' && l.fileId) orphanFileIds.push(l.fileId);
+      });
+    }
   });
   data.completedTasks = [];
   saveModel();
+
+  if (orphanFileIds.length > 0 && window.cleanupOrphanedR2Files) {
+    window.cleanupOrphanedR2Files(orphanFileIds);
+  }
 }
 
 // Helper: remove project highlight (called when deleting a task)

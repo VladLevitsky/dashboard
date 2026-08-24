@@ -53,8 +53,20 @@ function deleteMeeting(meetingId) {
   const meetings = data.meetings || [];
   const idx = meetings.findIndex(m => m.id === meetingId);
   if (idx === -1) return false;
+  // Collect R2 fileIds for deferred cleanup
+  const meeting = meetings[idx];
+  const orphanFileIds = [];
+  if (meeting.files) {
+    meeting.files.forEach(f => {
+      if (f.fileId) orphanFileIds.push(f.fileId);
+    });
+  }
   meetings.splice(idx, 1);
   saveModel();
+
+  if (orphanFileIds.length > 0 && window.cleanupOrphanedR2Files) {
+    window.cleanupOrphanedR2Files(orphanFileIds);
+  }
   return true;
 }
 

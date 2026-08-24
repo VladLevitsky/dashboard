@@ -421,5 +421,105 @@ export async function migrateBase64ToR2() {
 }
 
 function isBase64Image(value) {
-  return typeof value === 'string' && value.startsWith('data:image/');
+  if (typeof value !== 'string' || !value.startsWith('data:image/')) return false;
+  // Skip SVG — lightweight, not in R2 allowed types, fine as Base64/inline
+  if (value.startsWith('data:image/svg')) return false;
+  return true;
+}
+
+// ============================================================
+// DEFERRED R2 CLEANUP (profile-integrity-first)
+// ============================================================
+
+/**
+ * Collect all fileIds currently referenced anywhere in the profile.
+ * Used to verify a file is truly orphaned before deleting from R2.
+ */
+export function getAllReferencedFileIds() {
+  const model = window.model;
+  if (!model) return new Set();
+  const ids = new Set();
+
+  // Header images
+  if (model.header) {
+    const logoRef = classifyImageRef(model.header.companyLogoSrc);
+    if (logoRef.type === 'r2') ids.add(logoRef.value);
+    const profileRef = classifyImageRef(model.header.profilePhotoSrc);
+    if (profileRef.type === 'r2') ids.add(profileRef.value);
+  }
+
+  // Card icons, reminders, subtasks
+  (model.sections || []).forEach(section => {
+    const cardData = model[section.id];
+    if (!cardData || typeof cardData !== 'object') return;
+    Object.values(cardData).forEach(group => {
+      if (!group || typeof group !== 'object') return;
+      ['icons', 'reminders', 'subtasks'].forEach(key => {
+        if (group[key]) {
+          group[key].forEach(item => {
+            if (item.linkType === 'file' && item.fileId) ids.add(item.fileId);
+            const iconRef = classifyImageRef(item.icon);
+            if (iconRef.type === 'r2') ids.add(iconRef.value);
+          });
+        }
+      });
+    });
+  });
+
+  // Tasks and completed tasks
+  [model.tasks, model.completedTasks].forEach(arr => {
+    (arr || []).forEach(task => {
+      if (task.taskLinks) {
+        task.taskLinks.forEach(l => {
+          if (l.type === 'file' && l.fileId) ids.add(l.fileId);
+        });
+      }
+    });
+  });
+
+  // Meetings
+  (model.meetings || []).forEach(meeting => {
+    if (meeting.files) {
+      meeting.files.forEach(f => {
+        if (f.fileId) ids.add(f.fileId);
+      });
+    }
+  });
+
+  return ids;
+}
+
+/**
+ * Safely delete R2 files after profile has been persisted.
+ * - Deduplicates fileIds
+ * - Checks each fileId is no longer referenced in the current profile
+ * - Logs failures instead of swallowing them
+ * - Does NOT roll back profile changes on cleanup failure
+ *
+ * @param {string[]} fileIds - Array of fileIds to potentially delete
+ */
+export async function cleanupOrphanedR2Files(fileIds) {
+  if (!fileIds || fileIds.length === 0) return;
+  if (!isLoggedIn()) return;
+
+  // Deduplicate
+  const unique = [...new Set(fileIds)];
+
+  // Check which are truly orphaned
+  const referenced = getAllReferencedFileIds();
+  const orphaned = unique.filter(id => !referenced.has(id));
+
+  if (orphaned.length === 0) return;
+
+  // Delete in parallel, log failures
+  const results = await Promise.allSettled(
+    orphaned.map(id => deleteR2File(id))
+  );
+
+  results.forEach((result, idx) => {
+    if (result.status === 'rejected' || (result.value && !result.value.ok)) {
+      const err = result.status === 'rejected' ? result.reason : result.value?.error;
+      console.warn(`R2 cleanup failed for file ${orphaned[idx]}:`, err || 'Unknown error');
+    }
+  });
 }

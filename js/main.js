@@ -176,6 +176,8 @@ import {
 import {
   migrateBase64ToR2,
   openFile,
+  deleteR2File,
+  cleanupOrphanedR2Files,
   revokeAllBlobUrls
 } from './core/file-service.js';
 
@@ -622,6 +624,8 @@ window.closeCalendarView = closeCalendarView;
 window.migrateBase64ToR2 = migrateBase64ToR2;
 window.openFile = openFile;
 window.revokeAllBlobUrls = revokeAllBlobUrls;
+window.deleteR2File = deleteR2File;
+window.cleanupOrphanedR2Files = cleanupOrphanedR2Files;
 window.updateNotificationBadge = updateNotificationBadge;
 window.wireNotificationBadge = wireNotificationBadge;
 

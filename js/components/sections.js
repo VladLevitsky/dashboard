@@ -12,6 +12,12 @@ import { persistImageFromLibraryEntry } from '../features/media-library.js';
 import { setImageFromRef, classifyImageRef, uploadFile, dataURLtoBlob, filenameFromDataUrl, deleteR2File } from '../core/file-service.js';
 import { isLoggedIn } from '../core/auth.js';
 
+// Helper: collect R2 fileId from an item for deferred cleanup after save
+function getItemR2FileId(item) {
+  if (item && item.linkType === 'file' && item.fileId) return item.fileId;
+  return null;
+}
+
 // Helper: apply link type (URL or file) from edit popover result to an item
 function applyLinkToItem(item, result) {
   if (result.linkType === 'file' && result.fileId) {
@@ -30,7 +36,8 @@ function applyLinkToItem(item, result) {
 // Helper: upload icon media to R2 if logged in, otherwise use Base64
 async function resolveIconMedia(chosenMedia) {
   const base64Src = persistImageFromLibraryEntry(chosenMedia);
-  if (isLoggedIn() && typeof base64Src === 'string' && base64Src.startsWith('data:')) {
+  // Skip SVG — not in R2 allowed types, fine as inline
+  if (isLoggedIn() && typeof base64Src === 'string' && base64Src.startsWith('data:') && !base64Src.startsWith('data:image/svg')) {
     const blob = dataURLtoBlob(base64Src);
     const fileName = filenameFromDataUrl(base64Src, 'icon');
     const result = await uploadFile(blob, fileName);
@@ -2020,10 +2027,12 @@ function createUnifiedIconButton(item, sectionId, subtitle, subtitleColor) {
           if (window.cleanupTasksForItem) {
             window.cleanupTasksForItem('icon', item.key, sectionId);
           }
+          const orphanFileId = getItemR2FileId(item);
           const idx = subtitleData.icons.findIndex(i => i.key === item.key);
           if (idx !== -1) subtitleData.icons.splice(idx, 1);
           markDirtyAndSave();
           renderAllSections();
+          if (orphanFileId && window.cleanupOrphanedR2Files) window.cleanupOrphanedR2Files([orphanFileId]);
           return;
         }
         applyLinkToItem(item, { url, linkType, fileId, fileName });
@@ -2341,7 +2350,7 @@ function createUnifiedSubtaskItem(item, sectionId, subtitle, subtitleColor) {
       const subtitleData = cardData[subtitle];
 
       if (doDelete) {
-        // Clean up any tasks linked to this subtask
+        const orphanFileId = getItemR2FileId(item);
         if (window.cleanupTasksForItem) {
           window.cleanupTasksForItem('subtask', item.key, sectionId);
         }
@@ -2349,6 +2358,7 @@ function createUnifiedSubtaskItem(item, sectionId, subtitle, subtitleColor) {
         if (idx !== -1) subtitleData.subtasks.splice(idx, 1);
         markDirtyAndSave();
         renderAllSections();
+        if (orphanFileId && window.cleanupOrphanedR2Files) window.cleanupOrphanedR2Files([orphanFileId]);
         return;
       }
       item.text = text || item.text;
@@ -2627,7 +2637,7 @@ function createUnifiedReminderItem(rem, sectionId, subtitle, subtitleColor) {
         const subtitleData = cardData[subtitle];
 
         if (doDelete) {
-          // Clean up any tasks linked to this reminder
+          const orphanFileId = getItemR2FileId(rem);
           if (window.cleanupTasksForItem) {
             window.cleanupTasksForItem('reminder', rem.key, sectionId);
           }
@@ -2635,6 +2645,7 @@ function createUnifiedReminderItem(rem, sectionId, subtitle, subtitleColor) {
           if (idx !== -1) subtitleData.reminders.splice(idx, 1);
           markDirtyAndSave();
           renderAllSections();
+          if (orphanFileId && window.cleanupOrphanedR2Files) window.cleanupOrphanedR2Files([orphanFileId]);
           return;
         }
         rem.title = text || rem.title;
@@ -2674,7 +2685,7 @@ function createUnifiedReminderItem(rem, sectionId, subtitle, subtitleColor) {
         const subtitleData = cardData[subtitle];
 
         if (doDelete) {
-          // Clean up any tasks linked to this reminder
+          const orphanFileId = getItemR2FileId(rem);
           if (window.cleanupTasksForItem) {
             window.cleanupTasksForItem('reminder', rem.key, sectionId);
           }
@@ -2682,6 +2693,7 @@ function createUnifiedReminderItem(rem, sectionId, subtitle, subtitleColor) {
           if (idx !== -1) subtitleData.reminders.splice(idx, 1);
           markDirtyAndSave();
           renderAllSections();
+          if (orphanFileId && window.cleanupOrphanedR2Files) window.cleanupOrphanedR2Files([orphanFileId]);
           return;
         }
         rem.title = text || rem.title;

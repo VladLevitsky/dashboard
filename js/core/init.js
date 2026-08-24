@@ -1288,7 +1288,7 @@ export function wireUI() {
             async ({ src, zoom, xPercent, yPercent }) => {
               let newSrc = src;
               // Upload to R2 if authenticated and src is a data URL
-              if (isLoggedIn() && typeof src === 'string' && src.startsWith('data:')) {
+              if (isLoggedIn() && typeof src === 'string' && src.startsWith('data:') && !src.startsWith('data:image/svg')) {
                 const blob = dataURLtoBlob(src);
                 const fileName = filenameFromDataUrl(src, 'company-logo');
                 const result = await uploadFile(blob, fileName);
@@ -1336,7 +1336,7 @@ export function wireUI() {
             yPixels,
             async ({ src, zoom, xPercent, yPercent }) => {
               let newSrc = src;
-              if (isLoggedIn() && typeof src === 'string' && src.startsWith('data:')) {
+              if (isLoggedIn() && typeof src === 'string' && src.startsWith('data:') && !src.startsWith('data:image/svg')) {
                 const blob = dataURLtoBlob(src);
                 const fileName = filenameFromDataUrl(src, 'profile-photo');
                 const result = await uploadFile(blob, fileName);
