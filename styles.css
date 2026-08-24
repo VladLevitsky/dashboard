@@ -35,7 +35,7 @@ body {
 .card {
   background: var(--card);
   border-radius: var(--radius);
-  padding: 28.8px 40.32px 48.384px 40.32px; /* reduced bottom by 20% for all cards except top (overridden) */
+  padding: 28px 40px 42px 40px;
   margin: 0 16px 40px 16px; /* consistent 40px vertical spacing, standard side gutters */
   position: relative;
   transition: all 0.3s ease;
@@ -94,7 +94,7 @@ body {
 /* Header and time tracking sections should never collapse */
 .app-header.collapsed,
 .time-tracking-card.collapsed {
-  padding: 28.8px 40.32px 48.384px 40.32px !important;
+  padding: 28px 40px 42px 40px !important;
   margin-bottom: 40px !important;
 }
 
@@ -618,7 +618,7 @@ body {
   max-height: none;
   margin: 0 auto 40px auto !important; /* Add bottom margin when active, consistent with other cards */
   opacity: 1;
-  padding: 28.8px 40.32px 48.384px 40.32px !important; /* Restore padding when active */
+  padding: 28px 40px 42px 40px !important; /* Restore padding when active */
 }
 
 .time-tracking-card h3 {
@@ -841,7 +841,7 @@ body {
   max-height: 2000px;
   margin: 0 auto 40px auto !important;
   opacity: 1;
-  padding: 28.8px 40.32px 48.384px 40.32px !important;
+  padding: 28px 40px 42px 40px !important;
   transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1),
               padding 0.4s cubic-bezier(0.4, 0, 0.2, 1),
               margin 0.4s cubic-bezier(0.4, 0, 0.2, 1),
@@ -849,7 +849,7 @@ body {
 }
 
 .quick-access-card.collapsed {
-  padding: 28.8px 40.32px 48.384px 40.32px !important;
+  padding: 28px 40px 42px 40px !important;
   margin-bottom: 40px !important;
 }
 
@@ -3166,7 +3166,7 @@ section.card[id^="new-card-"]:not(.card-size-medium):not(.card-size-large):not(.
 
 .card.card-size-full {
   min-height: 240px !important;
-  padding: 28.8px 40.32px 48.384px 40.32px !important;
+  padding: 28px 40px 42px 40px !important;
   position: relative !important;
 }
 
@@ -3191,7 +3191,7 @@ section.card[id^="new-card-"].card-size-large {
 
 section.card[id^="new-card-"].card-size-full {
   min-height: 240px !important;
-  padding: 28.8px 40.32px 48.384px 40.32px !important;
+  padding: 28px 40px 42px 40px !important;
   position: relative !important;
 }
 
@@ -3201,7 +3201,7 @@ section.card[id^="new-card-"].card-size-full {
 .card[id*="newCardAnalytics"],
 .card[id*="copy-paste"] {
   min-height: auto;
-  padding: 28.8px 40.32px 48.384px 40.32px;
+  padding: 28px 40px 42px 40px;
 }
 
 /* Inline add tiles in edit mode (for icons only) - Circular with blue accent */
@@ -6601,7 +6601,7 @@ body.stacked-mode .two-col .card {
   margin: 0 !important;
   width: 100% !important;
   max-width: none !important;
-  padding: 14px 10px 16px 10px;
+  padding: 20px 18px 24px 18px;
 }
 
 /* ===== HALF-WIDTH SINGLE CONTAINERS ===== */
@@ -6614,18 +6614,21 @@ body.stacked-mode .half-width-single {
 body.stacked-mode .half-width-single .card {
   width: 50% !important;
   max-width: 50% !important;
-  padding: 14px 10px 16px 10px;
+  padding: 20px 18px 24px 18px;
 }
 
 /* ===== HEADER - Keep original sizing ===== */
 body.stacked-mode .app-header.card {
-  padding: 28.8px 40.32px 48.384px 40.32px;
+  padding: 28px 40px 42px 40px;
 }
 
 body.stacked-mode .app-header .section-title,
 body.stacked-mode .app-header h2,
 body.stacked-mode .app-header h3 {
   font-size: 24px !important;
+}
+body.stacked-mode .header-search-row {
+  left: 40px;
 }
 
 /* Time tracking, quick access, and eisenhower cards match content width in stacked mode */
@@ -8730,7 +8733,7 @@ body[data-theme="dark"][data-style="glass"][data-glass-theme="sunset"] .tasks-su
   max-height: 20000px;
   margin: 0 auto 40px auto !important;
   opacity: 1;
-  padding: 28.8px 40.32px 48.384px 40.32px !important;
+  padding: 28px 40px 42px 40px !important;
   transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1),
               padding 0.4s cubic-bezier(0.4, 0, 0.2, 1),
               margin 0.4s cubic-bezier(0.4, 0, 0.2, 1),
