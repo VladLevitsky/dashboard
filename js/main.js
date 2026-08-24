@@ -178,6 +178,8 @@ import {
   openFile,
   deleteR2File,
   cleanupOrphanedR2Files,
+  flushPendingR2Deletions,
+  clearPendingR2Deletions,
   revokeAllBlobUrls
 } from './core/file-service.js';
 
@@ -626,6 +628,8 @@ window.openFile = openFile;
 window.revokeAllBlobUrls = revokeAllBlobUrls;
 window.deleteR2File = deleteR2File;
 window.cleanupOrphanedR2Files = cleanupOrphanedR2Files;
+window.flushPendingR2Deletions = flushPendingR2Deletions;
+window.clearPendingR2Deletions = clearPendingR2Deletions;
 window.updateNotificationBadge = updateNotificationBadge;
 window.wireNotificationBadge = wireNotificationBadge;
 

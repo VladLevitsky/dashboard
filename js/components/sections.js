@@ -20,6 +20,13 @@ function getItemR2FileId(item) {
 
 // Helper: apply link type (URL or file) from edit popover result to an item
 function applyLinkToItem(item, result) {
+  // Queue old R2 file for cleanup if being replaced or removed
+  const oldFileId = (item.linkType === 'file' && item.fileId) ? item.fileId : null;
+  const newFileId = (result.linkType === 'file' && result.fileId) ? result.fileId : null;
+  if (oldFileId && oldFileId !== newFileId && window.cleanupOrphanedR2Files) {
+    window.cleanupOrphanedR2Files([oldFileId]);
+  }
+
   if (result.linkType === 'file' && result.fileId) {
     item.url = PLACEHOLDER_URL;
     item.linkType = 'file';
@@ -2038,9 +2045,21 @@ function createUnifiedIconButton(item, sectionId, subtitle, subtitleColor) {
         applyLinkToItem(item, { url, linkType, fileId, fileName });
         // Emoji takes precedence over image (last choice wins)
         if (chosenEmoji) {
+          // Queue old R2 icon image for cleanup if being replaced
+          const oldIconRef = classifyImageRef(item.icon);
+          if (oldIconRef.type === 'r2' && window.cleanupOrphanedR2Files) {
+            window.cleanupOrphanedR2Files([oldIconRef.value]);
+          }
           item.icon = chosenEmoji;
         } else if (chosenMedia) {
-          item.icon = await resolveIconMedia(chosenMedia);
+          // Queue old R2 icon image for cleanup if being replaced
+          const oldIconRef = classifyImageRef(item.icon);
+          const newIcon = await resolveIconMedia(chosenMedia);
+          const newIconRef = classifyImageRef(newIcon);
+          if (oldIconRef.type === 'r2' && oldIconRef.value !== newIconRef.value && window.cleanupOrphanedR2Files) {
+            window.cleanupOrphanedR2Files([oldIconRef.value]);
+          }
+          item.icon = newIcon;
         }
         markDirtyAndSave();
         renderAllSections();

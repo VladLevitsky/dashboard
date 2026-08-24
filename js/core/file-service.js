@@ -490,28 +490,86 @@ export function getAllReferencedFileIds() {
 }
 
 /**
- * Safely delete R2 files after profile has been persisted.
- * - Deduplicates fileIds
- * - Checks each fileId is no longer referenced in the current profile
- * - Logs failures instead of swallowing them
- * - Does NOT roll back profile changes on cleanup failure
+ * Queue R2 file IDs for deferred deletion.
  *
- * @param {string[]} fileIds - Array of fileIds to potentially delete
+ * R2 files are NEVER deleted immediately. They are always queued and only
+ * physically deleted after the updated profile has been successfully saved
+ * to D1 (via flushPendingR2Deletions).
+ *
+ * - During Edit Mode: fileIds are queued silently. The confirm flow calls
+ *   immediateCloudSave() which triggers cloudSave → flush on D1 success.
+ * - Outside Edit Mode: fileIds are queued, then immediateCloudSave() is
+ *   triggered so the D1 save (and subsequent flush) happens promptly
+ *   rather than waiting for the 20-minute periodic sync.
+ *
+ * @param {string[]} fileIds - Array of fileIds to queue for deletion
  */
-export async function cleanupOrphanedR2Files(fileIds) {
+export function cleanupOrphanedR2Files(fileIds) {
   if (!fileIds || fileIds.length === 0) return;
   if (!isLoggedIn()) return;
 
-  // Deduplicate
-  const unique = [...new Set(fileIds)];
+  const es = window.editState;
+  if (!es) return;
 
-  // Check which are truly orphaned
+  let added = false;
+  fileIds.forEach(id => {
+    if (id && !es.pendingR2Deletions.includes(id)) {
+      es.pendingR2Deletions.push(id);
+      added = true;
+    }
+  });
+
+  // Outside edit mode: trigger immediate D1 save so flush happens promptly.
+  // In edit mode the confirm flow handles this via its own immediateCloudSave.
+  // Debounced to avoid redundant saves when multiple items are deleted in quick succession.
+  if (added && !es.enabled) {
+    _scheduleImmediateSync();
+  }
+}
+
+// Debounce non-edit-mode cloud saves triggered by R2 cleanup queuing.
+// Multiple deletions within 500ms batch into a single D1 save + flush.
+let _syncDebounceTimer = null;
+function _scheduleImmediateSync() {
+  if (_syncDebounceTimer) clearTimeout(_syncDebounceTimer);
+  _syncDebounceTimer = setTimeout(() => {
+    _syncDebounceTimer = null;
+    if (window.immediateCloudSave) window.immediateCloudSave();
+  }, 500);
+}
+
+/**
+ * Flush pending R2 deletions AFTER profile has been successfully persisted to D1.
+ *
+ * Safe order enforced by callers:
+ *   1. Remove reference from model
+ *   2. Save to localStorage (saveModel)
+ *   3. Save to D1 (cloudSave / immediateCloudSave) — MUST succeed
+ *   4. Call this function
+ *
+ * - Deduplicates fileIds
+ * - Checks each fileId against the committed model to confirm it's truly orphaned
+ * - Uses Promise.allSettled so one failure doesn't block others
+ * - Logs failures for orphan diagnosis; does NOT roll back the profile change
+ */
+export async function flushPendingR2Deletions() {
+  const es = window.editState;
+  if (!es) return;
+
+  const pending = es.pendingR2Deletions.splice(0);
+  if (pending.length === 0) return;
+  if (!isLoggedIn()) return;
+
+  // Deduplicate
+  const unique = [...new Set(pending)];
+
+  // Check the committed model — fileId may still be referenced by another item
   const referenced = getAllReferencedFileIds();
   const orphaned = unique.filter(id => !referenced.has(id));
 
   if (orphaned.length === 0) return;
 
-  // Delete in parallel, log failures
+  // Best-effort parallel deletion — one failure must not stop the others
   const results = await Promise.allSettled(
     orphaned.map(id => deleteR2File(id))
   );
@@ -519,7 +577,13 @@ export async function cleanupOrphanedR2Files(fileIds) {
   results.forEach((result, idx) => {
     if (result.status === 'rejected' || (result.value && !result.value.ok)) {
       const err = result.status === 'rejected' ? result.reason : result.value?.error;
-      console.warn(`R2 cleanup failed for file ${orphaned[idx]}:`, err || 'Unknown error');
+      console.warn(`[R2 cleanup] Failed to delete file ${orphaned[idx]}:`, err || 'Unknown error');
     }
   });
+}
+
+/** Discard all pending R2 deletions (called on edit cancel). */
+export function clearPendingR2Deletions() {
+  const es = window.editState;
+  if (es) es.pendingR2Deletions = [];
 }

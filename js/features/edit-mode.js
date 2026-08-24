@@ -667,6 +667,12 @@ export function confirmGlobalEdit() {
 
   saveModel();
   editState.dirty = false;
+
+  // Immediate cloud save — cloudSave flushes queued R2 deletions on D1 success
+  if (window.immediateCloudSave) {
+    window.immediateCloudSave();
+  }
+
   toggleEditMode();
   showToast('Changes saved');
 }
@@ -674,6 +680,7 @@ export function confirmGlobalEdit() {
 // --- Cancel Global Edit (discard changes)
 export function cancelGlobalEdit() {
   editState.dirty = false;
+  if (window.clearPendingR2Deletions) window.clearPendingR2Deletions();
   toggleEditMode();
   showToast('Changes discarded');
 }

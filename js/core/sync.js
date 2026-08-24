@@ -66,6 +66,14 @@ export async function cloudSave() {
 
     if (result.ok) {
       _dirty = false;
+
+      // D1 save succeeded — flush any queued R2 file deletions
+      if (window.flushPendingR2Deletions) {
+        try { await window.flushPendingR2Deletions(); } catch (e) {
+          console.warn('[R2 cleanup] Error during flush after cloud save:', e);
+        }
+      }
+
       return { ok: true };
     }
 
@@ -105,7 +113,7 @@ export async function cloudLoad() {
 // --- Immediate cloud save (called after edit-mode confirm and import) ---
 
 export async function immediateCloudSave() {
-  if (!isLoggedIn()) return;
+  if (!isLoggedIn()) return { ok: false };
 
   _dirty = true; // Ensure dirty flag is set
   const result = await cloudSave();
@@ -116,6 +124,8 @@ export async function immediateCloudSave() {
     // Subtle failure notice (non-intrusive)
     showToast("Couldn't sync to cloud. Will retry.");
   }
+
+  return result;
 }
 
 // --- 20-minute background sync timer ---

@@ -158,6 +158,19 @@ export function updateTask(taskId, updates) {
     }
   }
 
+  // Queue old R2 files for cleanup if taskLinks are being replaced
+  if (updates.taskLinks !== undefined && task.taskLinks) {
+    const newFileIds = new Set(
+      (updates.taskLinks || []).filter(l => l.type === 'file' && l.fileId).map(l => l.fileId)
+    );
+    const removedFileIds = task.taskLinks
+      .filter(l => l.type === 'file' && l.fileId && !newFileIds.has(l.fileId))
+      .map(l => l.fileId);
+    if (removedFileIds.length > 0 && window.cleanupOrphanedR2Files) {
+      window.cleanupOrphanedR2Files(removedFileIds);
+    }
+  }
+
   // If changing color, update order to be last in new color group
   const colorChanging = updates.color && updates.color !== task.color;
   if (colorChanging) {

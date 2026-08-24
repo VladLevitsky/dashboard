@@ -43,6 +43,20 @@ function updateMeeting(meetingId, updates) {
   const meetings = getAllMeetings();
   const meeting = meetings.find(m => m.id === meetingId);
   if (!meeting) return null;
+
+  // Queue old R2 files for cleanup if files array is being replaced
+  if (updates.files !== undefined && meeting.files) {
+    const newFileIds = new Set(
+      (updates.files || []).filter(f => f.fileId).map(f => f.fileId)
+    );
+    const removedFileIds = meeting.files
+      .filter(f => f.fileId && !newFileIds.has(f.fileId))
+      .map(f => f.fileId);
+    if (removedFileIds.length > 0 && window.cleanupOrphanedR2Files) {
+      window.cleanupOrphanedR2Files(removedFileIds);
+    }
+  }
+
   Object.assign(meeting, updates);
   saveModel();
   return meeting;

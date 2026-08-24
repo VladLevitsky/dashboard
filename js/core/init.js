@@ -5,7 +5,7 @@ import { model, editState, currentData, currentSections } from '../state.js';
 import { $, $$, showToast, generateKey, escapeAttr } from '../utils.js';
 import { PLACEHOLDER_URL, ANIMATION_DELAY_MS, CARD_HIDE_DELAY_MS, TIMER_UPDATE_INTERVAL_MS } from '../constants.js';
 import { saveModel, restoreModel, exportBackupFile, deepMergeModel, cleanupOldBackups } from './storage.js';
-import { setImageFromRef, getDisplaySrc, classifyImageRef, uploadFile, dataURLtoBlob, filenameFromDataUrl, deleteR2File } from './file-service.js';
+import { setImageFromRef, getDisplaySrc, classifyImageRef, uploadFile, dataURLtoBlob, filenameFromDataUrl } from './file-service.js';
 import { isLoggedIn } from './auth.js';
 import {
   toggleEditMode,
@@ -1209,6 +1209,7 @@ export function wireUI() {
       // Skip file persistence to avoid triggering Edge file system access
 
       // Immediate cloud save on edit confirm (async, non-blocking)
+      // cloudSave automatically flushes queued R2 deletions on D1 success
       immediateCloudSave();
     }
 
@@ -1240,6 +1241,8 @@ export function wireUI() {
 
   $('#edit-cancel-global').addEventListener('click', () => {
     if (!editState.enabled) return;
+    // Discard queued R2 deletions — items are being restored
+    if (window.clearPendingR2Deletions) window.clearPendingR2Deletions();
     toggleEditMode();
   });
 
@@ -1293,10 +1296,10 @@ export function wireUI() {
                 const fileName = filenameFromDataUrl(src, 'company-logo');
                 const result = await uploadFile(blob, fileName);
                 if (result.ok && result.fileId) {
-                  // Clean up old R2 file if replacing
+                  // Queue old R2 file for cleanup (deleted after D1 save confirms)
                   const oldRef = classifyImageRef(data.header.companyLogoSrc);
-                  if (oldRef.type === 'r2') {
-                    deleteR2File(oldRef.value).catch(() => {});
+                  if (oldRef.type === 'r2' && window.cleanupOrphanedR2Files) {
+                    window.cleanupOrphanedR2Files([oldRef.value]);
                   }
                   newSrc = { type: 'r2', fileId: result.fileId };
                 }
@@ -1341,9 +1344,10 @@ export function wireUI() {
                 const fileName = filenameFromDataUrl(src, 'profile-photo');
                 const result = await uploadFile(blob, fileName);
                 if (result.ok && result.fileId) {
+                  // Queue old R2 file for cleanup (deleted after D1 save confirms)
                   const oldRef = classifyImageRef(data.header.profilePhotoSrc);
-                  if (oldRef.type === 'r2') {
-                    deleteR2File(oldRef.value).catch(() => {});
+                  if (oldRef.type === 'r2' && window.cleanupOrphanedR2Files) {
+                    window.cleanupOrphanedR2Files([oldRef.value]);
                   }
                   newSrc = { type: 'r2', fileId: result.fileId };
                 }

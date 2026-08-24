@@ -92,6 +92,7 @@ export const editState = {
   chosenMedia: null,
   chosenEmoji: null,  // Emoji character chosen from emoji picker
   currentCalendarTarget: null,
+  pendingR2Deletions: [],  // fileIds queued for R2 deletion during edit mode
 };
 
 // --- Drag State for card and item reordering
