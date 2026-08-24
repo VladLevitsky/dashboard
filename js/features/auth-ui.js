@@ -415,4 +415,13 @@ export async function postRestoreAuthSync() {
 
   // Start background sync timer
   startSyncTimer();
+
+  // Auto-migrate Base64 images to R2 (safe, idempotent, non-blocking)
+  try {
+    if (window.migrateBase64ToR2) {
+      window.migrateBase64ToR2();
+    }
+  } catch {
+    // Migration failure should not break the app
+  }
 }

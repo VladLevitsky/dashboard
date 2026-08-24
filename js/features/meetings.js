@@ -7,6 +7,7 @@ import { $, showToast, moveCursorAfterNode, normalizeDescHtml, escapeAttr } from
 import { handleEditorInput, createHighlighterButton, attachHighlighterContextMenu } from './edit-mode.js';
 import { saveModel } from '../core/storage.js';
 import { HIGHLIGHT_COLORS, HIGHLIGHT_BORDER_COLORS, hyperlinkSelection, canHyperlink, attachTaskMention } from './projects.js';
+import { uploadFile, openFile } from '../core/file-service.js';
 
 // Module state
 let meetingsEditingId = null;
@@ -320,50 +321,62 @@ function showMeetingsEditMode(meeting) {
   const viewSection = $('#meetings-view-section');
   viewSection.hidden = false;
   viewSection.innerHTML = `
-    <div class="meeting-editor-field">
-      <label for="meetings-inline-name">Meeting Name</label>
-      <input type="text" id="meetings-inline-name" placeholder="Enter meeting name..." />
+    <div class="meeting-editor-top-row">
+      <div class="meeting-editor-field meeting-editor-name-col">
+        <label for="meetings-inline-name">Meeting Name</label>
+        <input type="text" id="meetings-inline-name" placeholder="Enter meeting name..." />
+      </div>
+      <div class="meeting-editor-field meeting-editor-type-col">
+        <label for="meetings-inline-type">Type</label>
+        <select id="meetings-inline-type">
+          <option value="one-time">One-Time</option>
+          <option value="routine">Recurring</option>
+        </select>
+      </div>
+      <div class="meeting-editor-field meeting-editor-date-col">
+        <label for="meetings-inline-date">Date</label>
+        <input type="date" id="meetings-inline-date" />
+      </div>
     </div>
-    <div class="meeting-editor-field" style="margin-top: 16px;">
-      <label for="meetings-inline-type">Type</label>
-      <select id="meetings-inline-type">
-        <option value="one-time">One-Time</option>
-        <option value="routine">Recurring</option>
-      </select>
-    </div>
-    <div class="meeting-editor-field" style="margin-top: 16px;">
-      <label for="meetings-inline-date">Date</label>
-      <input type="date" id="meetings-inline-date" />
-    </div>
-    <div class="meeting-editor-field meeting-recurrence-field" id="meetings-recurrence-section" style="margin-top: 16px; display: none;">
-      <label for="meetings-inline-repeat">Repeat</label>
-      <select id="meetings-inline-repeat">
-        <option value="none">No repeat</option>
-        <option value="weekly">Every # of weeks</option>
-        <option value="monthly">Every month</option>
-      </select>
-    </div>
-    <div class="meeting-editor-field" id="meetings-weekly-options" style="margin-top: 8px; display: none;">
-      <label for="meetings-inline-weekly-type">Weekly option</label>
-      <select id="meetings-inline-weekly-type">
-        <option value="1">Every 1 week</option>
-        <option value="2">Every 2 weeks</option>
-        <option value="3">Every 3 weeks</option>
-      </select>
-    </div>
-    <div class="meeting-editor-field" id="meetings-monthly-options" style="margin-top: 8px; display: none;">
-      <label for="meetings-inline-monthly-type">Monthly option</label>
-      <select id="meetings-inline-monthly-type">
-        <option value="sameDay">Same day of month</option>
-        <option value="firstWeekday">First weekday of month</option>
-      </select>
+    <div class="meeting-editor-recurrence-row">
+      <div class="meeting-editor-field" id="meetings-recurrence-section" style="display: none;">
+        <label for="meetings-inline-repeat">Repeat</label>
+        <select id="meetings-inline-repeat">
+          <option value="none">No repeat</option>
+          <option value="weekly">Every # of weeks</option>
+          <option value="monthly">Every month</option>
+        </select>
+      </div>
+      <div class="meeting-editor-field" id="meetings-weekly-options" style="display: none;">
+        <label for="meetings-inline-weekly-type">Weekly option</label>
+        <select id="meetings-inline-weekly-type">
+          <option value="1">Every 1 week</option>
+          <option value="2">Every 2 weeks</option>
+          <option value="3">Every 3 weeks</option>
+        </select>
+      </div>
+      <div class="meeting-editor-field" id="meetings-monthly-options" style="display: none;">
+        <label for="meetings-inline-monthly-type">Monthly option</label>
+        <select id="meetings-inline-monthly-type">
+          <option value="sameDay">Same day of month</option>
+          <option value="firstWeekday">First weekday of month</option>
+        </select>
+      </div>
     </div>
     <div class="meeting-links-section">
       <label>Links</label>
       <div class="meeting-link-rows" id="meetings-inline-link-rows"></div>
       <button type="button" class="meeting-add-link-btn" id="meetings-inline-add-link">+ Add Link</button>
     </div>
-    <div class="meeting-editor-description">
+    <div class="meeting-files-section">
+      <label>Files</label>
+      <div class="meeting-file-rows" id="meetings-inline-file-rows"></div>
+      <div class="meeting-file-add-row">
+        <button type="button" class="meeting-add-link-btn" id="meetings-inline-add-file">+ Add File</button>
+        <input type="file" id="meetings-inline-file-input" hidden />
+      </div>
+    </div>
+    <div class="meeting-editor-description meeting-editor-description-expanded">
       <label>Description</label>
       <div class="task-desc-editor-wrap" id="meetings-inline-desc-wrap">
         <div class="task-desc-toolbar" id="meetings-inline-toolbar">
@@ -453,6 +466,28 @@ function showMeetingsEditMode(meeting) {
 
   // Populate links
   (meetingData.links || []).forEach(link => addInlineLinkRow(link.title, link.url));
+
+  // Populate files
+  (meetingData.files || []).forEach(f => addInlineFileRow(f.fileId, f.fileName));
+
+  // Wire file add button
+  const fileAddBtn = $('#meetings-inline-add-file');
+  const fileInput = $('#meetings-inline-file-input');
+  if (fileAddBtn && fileInput) {
+    fileAddBtn.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', async () => {
+      const file = fileInput.files && fileInput.files[0];
+      if (!file) return;
+      const result = await uploadFile(file, file.name);
+      if (result.ok && result.fileId) {
+        addInlineFileRow(result.fileId, file.name);
+        showToast('File attached');
+      } else {
+        showToast('File upload failed: ' + (result.error || 'Unknown error'));
+      }
+      fileInput.value = '';
+    });
+  }
 
   // Populate description
   const descEditorEl = $('#meetings-inline-desc-editor');
@@ -627,6 +662,15 @@ function showMeetingsEditMode(meeting) {
 
     const description = normalizeDescHtml($('#meetings-inline-desc-editor').innerHTML) || null;
 
+    // Collect files
+    const fileRows = document.querySelectorAll('#meetings-inline-file-rows .meeting-file-row');
+    const meetingFiles = [];
+    fileRows.forEach(row => {
+      const fId = row.dataset.fileId;
+      const fName = row.querySelector('.meeting-file-name')?.textContent || '';
+      if (fId) meetingFiles.push({ fileId: fId, fileName: fName });
+    });
+
     // Collect date and recurrence
     const date = $('#meetings-inline-date').value || null;
     let repeat = null;
@@ -644,11 +688,11 @@ function showMeetingsEditMode(meeting) {
 
     let savedMeeting;
     if (meetingsEditingId) {
-      savedMeeting = updateMeeting(meetingsEditingId, { title, type, description, links: meetingLinks, date, repeat, repeatWeeks, repeatMonthlyType });
+      savedMeeting = updateMeeting(meetingsEditingId, { title, type, description, links: meetingLinks, files: meetingFiles, date, repeat, repeatWeeks, repeatMonthlyType });
       showToast('Meeting updated');
     } else {
       savedMeeting = createMeeting(title, type, description, meetingLinks);
-      if (date) updateMeeting(savedMeeting.id, { date, repeat, repeatWeeks, repeatMonthlyType });
+      updateMeeting(savedMeeting.id, { files: meetingFiles, date, repeat, repeatWeeks, repeatMonthlyType });
       showToast('Meeting created');
     }
 
@@ -744,6 +788,39 @@ function addInlineLinkRow(title, url) {
   `;
 
   row.querySelector('.meeting-link-remove').addEventListener('click', () => row.remove());
+  container.appendChild(row);
+}
+
+function addInlineFileRow(fileId, fileName) {
+  const container = $('#meetings-inline-file-rows');
+  if (!container) return;
+
+  const row = document.createElement('div');
+  row.className = 'meeting-file-row';
+  row.dataset.fileId = fileId;
+
+  const nameSpan = document.createElement('span');
+  nameSpan.className = 'meeting-file-name';
+  nameSpan.textContent = fileName || fileId;
+  nameSpan.title = fileName || fileId;
+
+  const openBtn = document.createElement('button');
+  openBtn.type = 'button';
+  openBtn.className = 'meeting-file-open';
+  openBtn.title = 'Open file';
+  openBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>`;
+  openBtn.addEventListener('click', () => openFile(fileId, fileName));
+
+  const removeBtn = document.createElement('button');
+  removeBtn.type = 'button';
+  removeBtn.className = 'meeting-link-remove';
+  removeBtn.title = 'Remove file';
+  removeBtn.textContent = '\u00D7';
+  removeBtn.addEventListener('click', () => row.remove());
+
+  row.appendChild(nameSpan);
+  row.appendChild(openBtn);
+  row.appendChild(removeBtn);
   container.appendChild(row);
 }
 

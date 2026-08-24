@@ -1,11 +1,12 @@
 # Personal Dashboard - Documentation
 
 ## Overview
-A fully customizable personal dashboard built with vanilla JavaScript, HTML5, and CSS3. No frameworks. All data persists in browser localStorage with optional JSON import/export.
+A fully customizable personal dashboard built with vanilla JavaScript, HTML5, and CSS3. No frameworks. Data persists in browser localStorage (fast cache) and Cloudflare D1 (durable cloud storage) with JSON import/export backup.
 
 **Hosting**: Public GitHub repo served via GitHub Pages (static site, client-side only)
+**Backend**: Cloudflare Workers (API + Viewer), D1 database, R2 file storage
 
-> **SECURITY**: This is a PUBLIC repository. NEVER include API keys, credentials, private URLs, tokens, or sensitive data. User data lives in localStorage, not the repo.
+> **SECURITY**: This is a PUBLIC repository. NEVER include API keys, credentials, private URLs, tokens, or sensitive data. Backend secrets live in Cloudflare Worker secrets, not the repo. See `Reference/Backend/AI_BACKEND_CONTEXT.md` for full backend architecture (gitignored).
 
 ---
 
@@ -14,65 +15,99 @@ A fully customizable personal dashboard built with vanilla JavaScript, HTML5, an
 ### Data Model
 ```javascript
 const model = {
-  schemaVersion: 3,
+  schemaVersion: 5,
   darkMode: boolean,
-  glassMode: boolean,           // Glassmorphism style toggle
+  glassMode: true,              // Always on (glass style)
   glassTheme: 'classic' | 'sunset',
-  glassCursorShadow: boolean,
   displayMode: 'normal' | 'stacked',
   sections: [{ id, type: 'unified', title, twoColumnPair?, pairIndex? }],
-  sectionsStacked: null | Section[],  // Independent order for stacked mode
+  sectionsStacked: null | Section[],
 
   // Card data stored by sectionId:
   [sectionId]: {
     "SubtitleName": {
-      icons: [{ key, icon, url, title }],
-      reminders: [{ key, title, url, type, schedule?, interval?, currentNumber?, intervalType?, intervalUnit?, breakdown?, links?, tasks? }],
-      subtasks: [{ key, text, url, links?, tasks? }],
+      icons: [{ key, icon, url, title, linkType?, fileId?, fileName? }],
+      reminders: [{ key, title, url, type, schedule?, interval?, currentNumber?, intervalType?, intervalUnit?, breakdown?, links?, linkType?, fileId?, fileName? }],
+      subtasks: [{ key, text, url, links?, linkType?, fileId?, fileName? }],
       copyPaste: [{ key, text, copyText }]
     }
   },
   sectionColors: { [sectionId]: { light, dark } },
-  subtitleColors: { [sectionId:subtitle]: { light, dark } }
-}
+  subtitleColors: { [sectionId:subtitle]: { light, dark } },
 
-const editState = { enabled, working: null | DeepClone<model>, currentElement, currentData }
-const dragState = { draggedElement, draggedSection, dropIndicator, potentialDropZone, potentialDropPosition, ... }
+  // Centralized task system (Eisenhower Matrix)
+  tasks: [{
+    id, title, color: 'blue'|'yellow'|'orange'|'red',
+    linkedItem?, link?, dueDate?, order, pinned: boolean,
+    taskLinks?: [{ type: 'url', value } | { type: 'file', fileId, fileName }],
+    description?, subtasks?: [{ id, title, completed, important, description?, dueDate? }],
+    projectHighlight?, meetingHighlight?, noteHighlight?
+  }],
+  completedTasks: [{ ...task, completed: true, completedAt }],
+
+  // Feature data
+  projects: [{ id, title, content }],
+  meetings: [{ id, title, type, description, links, files?: [{ fileId, fileName }], date?, repeat?, repeatWeeks?, repeatMonthlyType? }],
+  ideas: [{ id, title, content }],
+  cardNotes: { [sectionId]: [{ key, title, content, color? }] },
+  quickAccessItems: { icons: [], listItems: [], quickLinks: [] },
+  timers: [],
+  header: { profilePhotoSrc, companyLogoSrc, profilePhotoZoom, ... }
+}
+```
+
+### Image References
+Images use explicit format objects (or legacy strings for backward compatibility):
+```javascript
+{ type: 'r2', fileId: '...' }        // R2-stored image (authenticated)
+{ type: 'asset', src: 'assets/...' } // Built-in project asset
+{ type: 'url', url: 'https://...' }  // External URL
+// Legacy: 'data:image/...' (Base64), 'assets/...' (string path) — auto-migrated to R2
 ```
 
 ### File Structure
 ```
-├── index.html           # Main HTML (~350 lines)
-├── styles.css           # All CSS with variables (~2500 lines)
+├── index.html
+├── styles.css
 ├── CLAUDE.md
 ├── js/
-│   ├── main.js          # Entry point, exports to window.*
-│   ├── state.js         # model, editState, dragState, currentData(), currentSections()
-│   ├── constants.js     # STORAGE_KEY, icons, PLACEHOLDER_URL
-│   ├── utils.js         # $, $$, deepClone, showToast, color utils
+│   ├── main.js              # Entry point, exports to window.*
+│   ├── state.js             # model, editState, dragState, currentData(), currentSections()
+│   ├── constants.js          # STORAGE_KEY, API_BASE, TURNSTILE_SITE_KEY, etc.
+│   ├── utils.js             # $, $$, deepClone, showToast, moveCursorAfterNode, normalizeDescHtml, escapeAttr
 │   ├── core/
-│   │   ├── init.js      # App bootstrap, wireUI, display mode
-│   │   ├── storage.js   # localStorage, deepMergeModel, backups
-│   │   └── import-export.js
+│   │   ├── init.js          # App bootstrap, wireUI, header rendering
+│   │   ├── storage.js       # localStorage, deepMergeModel, schema migrations
+│   │   ├── import-export.js # JSON export/import with migration
+│   │   ├── auth.js          # Authentication (login/register/logout/session)
+│   │   ├── sync.js          # Cloud sync (D1 profiles, dirty tracking, 20-min interval)
+│   │   └── file-service.js  # R2 file operations, image ref classification, Base64 migration
 │   ├── features/
-│   │   ├── edit-mode.js # Toggle, popovers, color pickers
-│   │   ├── drag-drop.js # Card and item reordering
+│   │   ├── edit-mode.js     # Toggle, popovers, color pickers, notepad, highlighter, context menu
+│   │   ├── drag-drop.js     # Card and item reordering
 │   │   ├── timers.js
-│   │   ├── quick-access.js
+│   │   ├── quick-access.js  # Quick access panel with reconciliation
 │   │   ├── media-library.js
 │   │   ├── image-editor.js  # Profile/logo positioning
 │   │   ├── reminders.js     # Calendar/interval popovers, breakdown modal
 │   │   ├── cards.js         # Card CRUD, type selector
 │   │   ├── links.js         # Link modals
-│   │   └── tasks.js         # Color-coded tasks
+│   │   ├── tasks.js         # Eisenhower Matrix task management
+│   │   ├── projects.js      # Projects module, @ mention autocomplete, highlight management
+│   │   ├── meetings.js      # Meetings with dates and recurrence
+│   │   ├── calendar.js      # Calendar view, notification badge
+│   │   └── auth-ui.js       # Auth modal UI, cloud sync triggers
 │   └── components/
-│       └── sections.js  # Section rendering
-└── assets/
+│       └── sections.js      # Section rendering (icons, lists, reminders, copy-paste)
+├── assets/
+└── Reference/               # (gitignored) Backend docs, screenshots, working context
 ```
 
-### Storage
-- **Key**: `personal_dashboard_model_v2`
-- **Backups**: `personal_dashboard_backup_[timestamp]` (auto-cleaned on startup)
+### Storage & Sync
+- **localStorage key**: `personal_dashboard_model_v2` (fast browser cache)
+- **D1**: Durable cloud profile via `PUT /profile` (2MB max)
+- **R2**: Private file/image storage via `POST /files` (5MB/file, 100MB/user)
+- **Sync model**: localStorage for immediate edits → cloud sync on confirm, every 20 min, and on import
 
 ---
 
@@ -83,49 +118,99 @@ const dragState = { draggedElement, draggedSection, dropIndicator, potentialDrop
 - Creates working copy; changes only save on confirm (✓) or discard on cancel (×)
 - `currentData()` returns working copy when editing, model otherwise
 
-### Card System (v3.0 Unified)
+### Card System (Unified)
 All cards are type `'unified'` containing any mix of:
-- **Icons**: Horizontal row of clickable image buttons
-- **Reminders**: Time/interval tracking with badges
-- **Subtasks**: 2-column grid of text links
+- **Icons**: Horizontal row of clickable image buttons (supports URL or R2 file links via `linkType`/`fileId`)
+- **Reminders**: Time/interval tracking with color-coded day badges (supports URL or file links)
+- **Subtasks**: 2-column grid of text links (supports URL or file links)
 - **Copy-Paste**: 2-column grid, copies text on click
 
-**Render order** within each subtitle: Icons → Reminders → Subtasks → Copy-paste
+### Eisenhower Matrix Tasks
+Central task store in `model.tasks[]` with 4-color priority system:
+- **Red**: Urgent & Important
+- **Orange**: Urgent & Not Important
+- **Yellow**: Not Urgent & Important
+- **Blue**: Not Urgent & Not Important
+- Tasks can have: subtasks, descriptions, due dates, multiple links & files, linked items, project/meeting/note highlights
+- **Links & Files**: Task editor has a `+` button to add multiple links/files. Clicking `+` shows URL or File choice. URL entries use subtask-style input (editable → confirmed with edit/delete inside). File entries upload to R2.
+- `task.taskLinks[]` stores the array; `task.link` is kept for backward compat (first URL)
+- Primary (pinned) tasks float to top within their color group
 
-**Subtitles**: Optional grouping; `_default` used when none specified
+### Task Highlight System
+Tasks can be linked to text in Projects, Meetings, and Card Notes:
+- **@ mention**: Type `@` after a space to autocomplete an existing task name → inserts color-coded pill
+- **Right-click → Link task**: Select text, right-click, choose "Link task" from context menu
+- **State-based reconciliation**: `reconcileTaskHighlights()` checks actual task status on every display:
+  - Active task → correct priority color
+  - Completed task → green
+  - Deleted task → reverted to plain text (text preserved)
 
-### Reminders
-**Calendar Mode** (📅): Date selection with repeat options (none, weekly 1-3 weeks, monthly)
-- Badges: Green (8+ days), Yellow (3-7), Orange (1-2), Red (overdue/today)
+### Projects
+Rich-text editor per project with toolbar (bold, italic, underline, lists, highlighter).
+Supports task highlighting, hyperlinking, and @ mention autocomplete.
 
-**Interval Mode** (#): Target/current numbers with goal/limit type and unit (none, $, %)
-- **Breakdown**: Grid icon opens modal; locked (#) = manual entry, unlocked (Σ) = auto-sum from rows
+### Meetings
+Meetings with two categories: one-time and recurring.
+- Edit form layout: name (2/3 width), type, and date on a single row
+- Recurrence options for recurring: weekly (1-3 weeks) or monthly
+- Links section for adding URL links
+- Files section for uploading R2 file attachments (`meeting.files[]`)
+- Rich-text description editor (expanded height) with task highlighting
 
-**Links**: Chain icon opens modal to add title+URL pairs; view mode shows expandable bubbles
+### Calendar View
+Full month calendar aggregating all dated items:
+- Reminders (from schedule/getNextOccurrence)
+- Tasks and subtasks with due dates
+- Meetings (including recurring occurrences)
+- Red dot + count indicator on days with items
+- Click a day to see its items; click an item to open its editor
 
-**Tasks**: Workflow icon opens modal for red/yellow/green tasks; view mode allows click-to-cycle color and drag-to-reorder
+### Notification Badge
+Red badge on profile photo showing count of overdue + due-today items.
+Click to see categorized list (Due Today / Overdue) with direct links to items.
+
+### Text Highlighter
+Available in all rich-text editors (projects, meetings, tasks, subtasks, ideas, card notes):
+- 5 pastel colors (yellow, green, blue, pink, purple) selectable in toolbar
+- Right-click context menu: Bold, Italic, Underline, Highlight, Remove highlight, Link task
+
+### Card Notes (Notepad)
+Per-card note system with rich-text editing, color coding, and task linking.
+Notes viewer reconciles task highlights on open.
+
+### Settings Modal
+Accessible via gear icon in edit mode. Contains:
+- Theme: Light / Dark toggle
+- Theme: Classic (Grey) / Sunset dropdown
+- JSON File Backup: Download and Upload with overwrite warning
+
+### Quick Access
+Prioritized items panel with state-based reconciliation — automatically removes items whose source cards/items have been deleted.
+
+### R2 File Storage Integration
+- Images (profile photo, logo, card icons) stored in R2 when authenticated
+- Legacy Base64 images auto-migrated to R2 on login (safe, idempotent)
+- Edit popover for icons/subtasks/reminders supports URL or File Upload via `allowFileLink` dropdown
+- Task editor has multi-link system: `+` button → choose URL or File → subtask-style input with confirm/edit/delete
+- Meeting editor has dedicated Files section for R2 attachments
+- File-linked items open via authenticated fetch (images/PDFs inline, HTML via isolated viewer)
+- Image refs use `classifyImageRef()` → `setImageFromRef()` for rendering
+
+### Authentication & Cloud Sync
+- Username/password auth via Cloudflare Workers
+- Session token stored in localStorage (30-day expiry)
+- Profile syncs to D1 on: confirm edits, import, every 20 min while dirty
+- 401 invalidates session but preserves local dashboard data
 
 ### Display Modes
 - **Normal**: Single-column centered
 - **Stacked**: Two-column masonry grid
-- Each mode maintains independent section ordering
-- Toggle via monitor icon in header
-
-### Two-Column Layout
-Container for side-by-side cards with `twoColumnPair: true` and `pairIndex: 0|1`
+- Independent section ordering per mode
 
 ### Dark Mode
-- Toggle in bottom-left (only visible in edit mode)
+- Toggle in Settings modal
 - Colors stored as `{ light, dark }` objects for independent theming
-
-### Image Editor
-- **Profile**: 90×90px circle, cover fit, zoom 100-150%
-- **Logo**: 216×126px rectangle, fit mode, zoom 100-300%
-- `openImageEditor(src, zoom, x, y, onSave, type)` / `applyProfilePhotoTransform()` / `applyLogoTransform()`
-
-### Import/Export
-- Export: JSON file with all sections, settings, metadata
-- Import: Upload JSON, confirmation before overwrite
+- Glass mode always active with Classic or Sunset theme
 
 ---
 
@@ -135,76 +220,49 @@ Container for side-by-side cards with `twoColumnPair: true` and `pairIndex: 0|1`
 - `init()` - Bootstrap app
 - `saveModel()` / `restoreModel()` - localStorage persistence
 - `toggleEditMode()` / `confirmGlobalEdit()` / `cancelGlobalEdit()`
-- `renderAllSections()` / `createSectionElement(section)`
+- `renderAllSections()` / `renderHeaderAndTitles()`
 
-### Edit Operations
-- `openEditPopover(element, data, type)`
-- `openCalendarPopover(reminder)` / `openIntervalPopover(reminder)`
-- `openBreakdownModal(reminder)`
-- `openLinksModal(reminder, subtitle, sectionId)` / `openListItemLinksModal(item, sectionId)`
-- `openTasksModal(reminder)` / `openListItemTasksModal(item, sectionId)`
-- `openColorPicker(sectionId, sectionType)` / `openSubtitleColorPicker(sectionId, subtitle)`
-- `onAddCard(afterSectionId)` / `onDeleteCard(sectionId)`
+### File Service (`js/core/file-service.js`)
+- `uploadFile(blob, fileName)` - Authenticated R2 upload
+- `fetchFileBlobUrl(fileId)` - Fetch file → cached blob URL
+- `openFile(fileId, fileName)` - Open file (HTML via viewer, others via blob)
+- `setImageFromRef(img, ref, placeholder)` - Resolve any image ref to img.src
+- `classifyImageRef(ref)` - Detect r2/asset/url/base64/none
+- `migrateBase64ToR2()` - Auto-migrate legacy Base64 images
+- `reconcileTaskHighlights(container)` - State-based highlight reconciliation
 
-### State Helpers
-- `currentData()` - Get active data (working or model)
-- `currentSections()` - Get sections for current display mode
-- `ensureSectionInBothArrays(section)` / `removeSectionFromBothArrays(sectionId)`
-- `getColorForCurrentMode(colorData, default)` / `setColorForCurrentMode(colorData, color)`
+### Tasks
+- `createTask()` / `updateTask()` / `deleteTask()` / `completeTask()`
+- `getTasksByColor(color)` / `getAllTasks()` / `getCompletedTasks()`
+- `openAddTaskModal()` / `openEditTaskModal(taskId)`
+- `openItemTasksModal(type, key, sectionId, subtitle)`
 
-### Toggle Functions
-- `toggleReminderLinks()` / `toggleListItemLinks()` / `closeAllReminderLinks()` / `closeAllListItemLinks()`
-- `toggleReminderTasks()` / `toggleListItemTasks()` / `closeAllReminderTasks()` / `closeAllListItemTasks()`
+### Projects & Meetings
+- `openProjectsModal()` / `closeProjectsModal()`
+- `openMeetingsModal()` / `closeMeetingsModal()`
+- `attachTaskMention(editor, onInsert)` - Wire @ autocomplete to an editor
+- `attachHighlighterContextMenu(editor, options)` - Wire right-click menu
 
----
+### Calendar & Notifications
+- `openCalendarView()` / `closeCalendarView()`
+- `updateNotificationBadge()` / `wireNotificationBadge()`
 
-## CSS Architecture
-
-### Variables
-```css
-:root {
-  --bg: #f5f6f8; --card: #ffffff; --text: #1f2937; --muted: #6b7280;
-  --brand: #2c7be5; --accent: #22c55e; --danger: #ef4444; --warn: #f59e0b;
-  --shadow: 0 10px 30px rgba(0,0,0,0.08); --radius: 16px;
-}
-[data-theme="dark"] {
-  --bg: #0f172a; --card: #1e293b; --text: #f1f5f9; --muted: #94a3b8;
-  --brand: #3b82f6; --accent: #10b981; --shadow: 0 10px 30px rgba(0,0,0,0.3);
-}
-```
-
-### Key Classes
-- `.card` / `.card.editing` - Card container
-- `.fab` / `.fab-accept` / `.fab-cancel` - Floating action buttons
-- `.editable` / `.add-tile` / `.gap-add-btn` - Interactive elements
-- `.reminder-item` / `.days-badge` - Reminder styling
-- `.reminder-links-toggle` / `.reminder-link-bubble` - Link bubbles
-- `.reminder-tasks-toggle` / `.reminder-task-bubble` / `.task-bubble-red/yellow/green` - Task bubbles
-- `.edit-popover` / `.calendar-popover` / `.interval-popover` / `.breakdown-modal` - Modals
-
-### Key IDs
-`#edit-toggle`, `#edit-accept-global`, `#edit-cancel-global`, `#dark-mode-toggle`, `#display-mode-toggle`, `#card-type-popover`, `#reminder-links-modal`, `#reminder-tasks-modal`
+### Shared Utilities (`js/utils.js`)
+- `moveCursorAfterNode(node)` - Move cursor after a contenteditable node
+- `normalizeDescHtml(html)` - Strip empty descriptions
+- `escapeAttr(str)` - Safe HTML attribute escaping (4 chars: &, ", <, >)
 
 ---
 
-## Design Guidelines
+## Schema Migrations
 
-### Icons
-- Minimalist SVG with `stroke="currentColor"` or `fill="currentColor"`
-- Consistent 2px stroke weight
-- Sizes: 16-20px (buttons), 32px (cards), 48-90px (profile/logo)
-- No emoji icons in UI
+| Version | Migration | Function |
+|---------|-----------|----------|
+| 3 | Unified card format | `migrateToUnifiedCards()` |
+| 4 | Half-width cards | `migrateToHalfWidthCards()` |
+| 5 | Centralized Eisenhower tasks | `migrateToEisenhowerTasks()` |
 
-### Spacing
-- 16px between elements, 40px between cards
-- Buttons: equal spacing from edges
-
-### User Preferences
-- No visual borders in edit mode
-- Edit button: 62×62px
-- Dark mode toggle only in edit mode
-- Add tiles show "+" only (not "+ Add")
-- Auto-round decimals to whole numbers
+Migrations run automatically in `restoreModel()` and are idempotent.
 
 ---
 
@@ -212,50 +270,66 @@ Container for side-by-side cards with `twoColumnPair: true` and `pairIndex: 0|1`
 
 ### State Management
 ```javascript
-// Always use currentData() for active state
-const data = currentData();
-// Check edit state before showing controls
+const data = currentData(); // Working copy in edit mode, model otherwise
 if (editState.enabled) { /* show edit controls */ }
-// Deep clone for working copy
 editState.working = deepClone(model);
 ```
 
-### Display Mode Handling
-- `currentSections()` returns `sections` or `sectionsStacked` based on mode
-- New sections added to BOTH arrays via `ensureSectionInBothArrays()`
-- Reordering only affects current mode's array
-- `setDisplayMode(mode)` updates both model and working copy
+### Image Handling
+```javascript
+// Rendering: handles R2, asset, URL, Base64, null
+setImageFromRef(imgElement, data.header.profilePhotoSrc, 'assets/icons/placeholder-profile.svg');
+
+// Upload: store R2 ref when authenticated, Base64 fallback otherwise
+if (isLoggedIn() && src.startsWith('data:')) {
+  const blob = dataURLtoBlob(src);
+  const result = await uploadFile(blob, 'image.png');
+  if (result.ok) newSrc = { type: 'r2', fileId: result.fileId };
+}
+```
+
+### Task Highlight Lifecycle
+```javascript
+// Creating: @ mention or right-click "Link task" inserts <span class="project-task-highlight">
+// Completing: reconcileTaskHighlights() or markXxxHighlightCompleted() → green
+// Deleting: reconcileTaskHighlights() or removeXxxHighlight() → plain text (preserved)
+// All three surfaces (projects, meetings, card notes) follow the same pattern
+```
 
 ### Adding Features Checklist
 1. Use minimalist SVG icons with currentColor
-2. Add dark mode styles
+2. Add dark mode styles (glass mode is always on)
 3. Ensure data saves to model correctly
 4. Only show edit controls when `editState.enabled`
 5. Add confirmation for destructive actions
 6. Show toast feedback for actions
-7. Use two-layer saves for complex operations
-
----
-
-## Troubleshooting
-
-| Issue | Check |
-|-------|-------|
-| Dark mode not persisting | `saveModel()` includes `darkMode`, `toggleDarkMode()` updates both model and working |
-| Delete button misaligned | Parent card has `position: relative` |
-| Icons not theming | SVG uses `currentColor`, parent has `color: var(--text)` |
-| Changes not saving | `confirmGlobalEdit()` called (not just `saveModel()`), working copy cloned properly |
-| Decimal rounding | Use `Math.round(parseFloat(value))` before save |
+7. Handle both URL and R2 file references where applicable
+8. Ensure new fields are in saveModel, restoreModel, deepMergeModel, import/export
 
 ---
 
 ## Version History
 
-### v3.0 (Current)
+### v4.0 (Current)
+- Eisenhower Matrix task system (schemaVersion 5)
+- Projects and Meetings modules with rich-text editors
+- Calendar view with notification badge
+- @ task mention autocomplete and right-click context menu
+- Text highlighter (5 pastel colors)
+- State-based task highlight reconciliation
+- R2 file storage integration with Base64 auto-migration
+- URL vs File upload on icons
+- Settings modal with JSON backup (replaces old FAB buttons)
+- Glass mode always on (solid style removed)
+- Card notes with task linking
+- Quick Access reconciliation
+- Authentication and cloud sync (D1/R2)
+- Task and subtask due dates
+- Meeting dates with recurrence options
+
+### v3.0
 - Unified card system: icons, reminders, subtasks, copy-paste coexist
-- Reminders as item type within cards (not separate card type)
 - Schema version 3 with auto-migration
-- Tasks feature (color-coded red/yellow/green with click-to-cycle and drag-to-reorder)
 - Independent light/dark mode colors
 - Display modes (normal/stacked) with independent ordering
 - Full drag-drop support for cards and items
@@ -264,10 +338,7 @@ editState.working = deepClone(model);
 ### v2.x
 - ES6 module migration from monolithic app.js
 - Independent display mode sections
-- Drag-drop improvements
-- Fixed color independence between light/dark modes
 
 ### v1.x
 - Initial features: edit mode, reminders, dark mode, import/export
 - Media library, breakdown modal
-- Reminder links feature

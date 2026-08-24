@@ -6,6 +6,7 @@ import { model, editState, currentData, currentSections } from '../state.js';
 import { $, showToast, createAnimatedBorder, normalizeDescHtml } from '../utils.js';
 import { markDirtyAndSave, handleEditorInput, createHighlighterButton, attachHighlighterContextMenu } from './edit-mode.js';
 import { saveModel } from '../core/storage.js';
+import { uploadFile, openFile } from '../core/file-service.js';
 import { TASK_COLORS, TASK_COLOR_LABELS, ANIMATION_DELAY_MS, CARD_HIDE_DELAY_MS } from '../constants.js';
 
 // Module state
@@ -2032,8 +2033,14 @@ function openTaskEditorModal(taskData, titleText) {
               <input type="date" id="task-editor-date" />
             </div>
             <div class="task-editor-field">
-              <label for="task-editor-link">Task Link (Optional)</label>
-              <input type="url" id="task-editor-link" placeholder="https://example.com" />
+              <label>Links &amp; Files</label>
+              <div class="task-editor-links-list" id="task-editor-links-list"></div>
+              <button type="button" id="task-editor-links-add" class="task-subtasks-add-btn" title="Add link or file">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="12" y1="5" x2="12" y2="19"></line>
+                  <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+              </button>
             </div>
             <div class="task-editor-field">
               <label>Link to Item (Optional)</label>
@@ -2200,9 +2207,195 @@ function openTaskEditorModal(taskData, titleText) {
   const dateInput = $('#task-editor-date');
   dateInput.value = taskData.dueDate || '';
 
-  // Populate link field
-  const linkInput = $('#task-editor-link');
-  linkInput.value = taskData.link || '';
+  // Populate links & files list
+  let editorLinks = [];
+
+  // Migrate old single link to array format
+  if (taskData.taskLinks && Array.isArray(taskData.taskLinks)) {
+    editorLinks = taskData.taskLinks.map(l => ({ ...l }));
+  } else if (taskData.link) {
+    editorLinks = [{ type: 'url', value: taskData.link }];
+  } else if (taskData.linkType === 'file' && taskData.fileId) {
+    editorLinks = [{ type: 'file', fileId: taskData.fileId, fileName: taskData.fileName || '' }];
+  }
+
+  function renderEditorLinks() {
+    const list = $('#task-editor-links-list');
+    if (!list) return;
+    list.innerHTML = '';
+
+    editorLinks.forEach((linkItem, idx) => {
+      const row = document.createElement('div');
+      row.className = 'task-editor-link-row';
+
+      if (linkItem._editing) {
+        // Choosing type stage
+        if (!linkItem._typeChosen) {
+          row.className = 'task-editor-link-row task-editor-link-type-choice';
+          const urlBtn = document.createElement('button');
+          urlBtn.type = 'button';
+          urlBtn.className = 'task-editor-type-btn';
+          urlBtn.textContent = 'URL';
+          urlBtn.addEventListener('click', () => {
+            linkItem._typeChosen = true;
+            linkItem.type = 'url';
+            renderEditorLinks();
+          });
+          const fileBtn = document.createElement('button');
+          fileBtn.type = 'button';
+          fileBtn.className = 'task-editor-type-btn';
+          fileBtn.textContent = 'File';
+          fileBtn.addEventListener('click', () => {
+            linkItem._typeChosen = true;
+            linkItem.type = 'file';
+            renderEditorLinks();
+          });
+          row.appendChild(urlBtn);
+          row.appendChild(fileBtn);
+
+          const cancelBtn = document.createElement('button');
+          cancelBtn.type = 'button';
+          cancelBtn.className = 'task-editor-link-icon-btn';
+          cancelBtn.title = 'Cancel';
+          cancelBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
+          cancelBtn.addEventListener('click', () => {
+            editorLinks.splice(idx, 1);
+            renderEditorLinks();
+          });
+          row.appendChild(cancelBtn);
+        } else if (linkItem.type === 'url') {
+          // URL input mode
+          const wrap = document.createElement('div');
+          wrap.className = 'task-subtask-title-wrap';
+          const input = document.createElement('input');
+          input.type = 'text';
+          input.className = 'task-subtask-title-input';
+          input.placeholder = 'https://example.com';
+          input.value = linkItem.value || '';
+          const confirmBtn = document.createElement('button');
+          confirmBtn.type = 'button';
+          confirmBtn.className = 'task-subtask-confirm-btn';
+          confirmBtn.title = 'Confirm';
+          confirmBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+          confirmBtn.addEventListener('click', () => {
+            const val = input.value.trim();
+            if (val) {
+              linkItem.value = val;
+              delete linkItem._editing;
+              delete linkItem._typeChosen;
+              renderEditorLinks();
+            }
+          });
+          input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') { e.preventDefault(); confirmBtn.click(); }
+          });
+          wrap.appendChild(input);
+          wrap.appendChild(confirmBtn);
+          row.appendChild(wrap);
+          setTimeout(() => input.focus(), 0);
+        } else if (linkItem.type === 'file') {
+          // File upload mode
+          const fileRow = document.createElement('div');
+          fileRow.className = 'task-editor-file-row';
+          const chooseBtn = document.createElement('button');
+          chooseBtn.type = 'button';
+          chooseBtn.className = 'task-editor-file-btn';
+          chooseBtn.textContent = 'Choose File...';
+          const nameSpan = document.createElement('span');
+          nameSpan.className = 'task-editor-file-name';
+          nameSpan.textContent = 'No file selected';
+          const fileInput = document.createElement('input');
+          fileInput.type = 'file';
+          fileInput.hidden = true;
+          chooseBtn.addEventListener('click', () => fileInput.click());
+          fileInput.addEventListener('change', async () => {
+            const file = fileInput.files && fileInput.files[0];
+            if (!file) return;
+            nameSpan.textContent = 'Uploading...';
+            const result = await uploadFile(file, file.name);
+            if (result.ok && result.fileId) {
+              linkItem.fileId = result.fileId;
+              linkItem.fileName = file.name;
+              delete linkItem._editing;
+              delete linkItem._typeChosen;
+              renderEditorLinks();
+            } else {
+              nameSpan.textContent = 'Upload failed';
+              showToast('File upload failed: ' + (result.error || 'Unknown error'));
+            }
+          });
+          fileRow.appendChild(chooseBtn);
+          fileRow.appendChild(nameSpan);
+          fileRow.appendChild(fileInput);
+          row.appendChild(fileRow);
+
+          const cancelBtn = document.createElement('button');
+          cancelBtn.type = 'button';
+          cancelBtn.className = 'task-editor-link-icon-btn';
+          cancelBtn.title = 'Cancel';
+          cancelBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
+          cancelBtn.addEventListener('click', () => {
+            editorLinks.splice(idx, 1);
+            renderEditorLinks();
+          });
+          row.appendChild(cancelBtn);
+        }
+      } else {
+        // Locked/confirmed state
+        const wrap = document.createElement('div');
+        wrap.className = 'task-subtask-title-wrap';
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'task-subtask-title-input locked';
+        input.readOnly = true;
+        input.value = linkItem.type === 'file' ? (linkItem.fileName || linkItem.fileId) : (linkItem.value || '');
+        if (linkItem.type === 'file') {
+          input.style.color = 'var(--accent)';
+        }
+        // Click to copy
+        input.addEventListener('click', () => {
+          if (linkItem.type === 'url' && linkItem.value) {
+            navigator.clipboard.writeText(linkItem.value).then(() => showToast('URL copied'));
+          }
+        });
+        const editBtn = document.createElement('button');
+        editBtn.type = 'button';
+        editBtn.className = 'task-editor-link-inline-btn task-editor-link-edit-btn';
+        editBtn.title = 'Edit';
+        editBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>';
+        editBtn.addEventListener('click', () => {
+          linkItem._editing = true;
+          linkItem._typeChosen = true;
+          renderEditorLinks();
+        });
+
+        const deleteBtn = document.createElement('button');
+        deleteBtn.type = 'button';
+        deleteBtn.className = 'task-editor-link-inline-btn task-editor-link-delete-btn';
+        deleteBtn.title = 'Remove';
+        deleteBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
+        deleteBtn.addEventListener('click', () => {
+          editorLinks.splice(idx, 1);
+          renderEditorLinks();
+        });
+
+        wrap.appendChild(input);
+        wrap.appendChild(editBtn);
+        wrap.appendChild(deleteBtn);
+        row.appendChild(wrap);
+      }
+
+      list.appendChild(row);
+    });
+  }
+
+  renderEditorLinks();
+
+  // Add button
+  $('#task-editor-links-add').onclick = () => {
+    editorLinks.push({ type: 'url', value: '', _editing: true, _typeChosen: false });
+    renderEditorLinks();
+  };
 
   // Render color buttons
   const colorsContainer = $('#task-editor-colors');
@@ -2381,7 +2574,7 @@ function openTaskEditorModal(taskData, titleText) {
   cancelBtn.onclick = closeTaskEditorModal;
 
   const saveBtn = $('#task-editor-save');
-  saveBtn.onclick = () => {
+  saveBtn.onclick = async () => {
     const title = nameInput.value.trim();
     if (!title) {
       showToast('Please enter a task name');
@@ -2389,7 +2582,19 @@ function openTaskEditorModal(taskData, titleText) {
       return;
     }
 
-    const link = linkInput.value.trim() || null;
+    // Collect confirmed links (filter out editing/empty ones)
+    const taskLinks = editorLinks
+      .filter(l => !l._editing)
+      .filter(l => (l.type === 'url' && l.value) || (l.type === 'file' && l.fileId))
+      .map(l => {
+        if (l.type === 'file') return { type: 'file', fileId: l.fileId, fileName: l.fileName || '' };
+        return { type: 'url', value: l.value };
+      });
+
+    // Keep backward compat: set legacy `link` field from first URL link
+    const firstUrl = taskLinks.find(l => l.type === 'url');
+    const link = firstUrl ? firstUrl.value : null;
+
     const dueDate = dateInput.value || null;
 
     // Get description - from editor if editing, from view if not
@@ -2404,16 +2609,18 @@ function openTaskEditorModal(taskData, titleText) {
 
     if (currentEditingTaskId) {
       // Update existing task
-      updateTask(currentEditingTaskId, {
+      const taskUpdate = {
         title,
         color: selectedColor,
         linkedItem: selectedLinkedItem,
         link: link,
+        taskLinks: taskLinks.length > 0 ? taskLinks : null,
         dueDate: dueDate,
         description: description,
         subtasks: subtasks.length > 0 ? subtasks : null,
         pinned: primaryCheckbox.checked
-      });
+      };
+      updateTask(currentEditingTaskId, taskUpdate);
       showToast('Task updated');
     } else {
       // Create new task
@@ -2422,6 +2629,7 @@ function openTaskEditorModal(taskData, titleText) {
       if (dueDate) updates.dueDate = dueDate;
       if (description) updates.description = description;
       if (subtasks.length > 0) updates.subtasks = subtasks;
+      if (taskLinks.length > 0) updates.taskLinks = taskLinks;
       updateTask(task.id, updates);
       showToast('Task created');
 

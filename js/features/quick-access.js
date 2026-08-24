@@ -3,6 +3,7 @@
 
 import { editState, currentData } from '../state.js';
 import { $, openUrl, copyToClipboard } from '../utils.js';
+import { classifyImageRef, setImageFromRef } from '../core/file-service.js';
 import { ANIMATION_DELAY_MS, CARD_HIDE_DELAY_MS } from '../constants.js';
 import { saveModel } from '../core/storage.js';
 
@@ -194,7 +195,11 @@ function reconcileQuickAccessItems(data) {
       if (!group || typeof group !== 'object') return;
       if (group.icons) {
         group.icons.forEach(icon => {
-          if (icon.icon && icon.url) existingIcons.add(`${icon.icon}::${icon.url}`);
+          if (icon.icon && icon.url) {
+            const ref = classifyImageRef(icon.icon);
+            const key = ref.type === 'r2' ? `r2:${ref.value}` : String(icon.icon);
+            existingIcons.add(`${key}::${icon.url}`);
+          }
         });
       }
       if (group.subtasks) {
@@ -218,9 +223,11 @@ function reconcileQuickAccessItems(data) {
   // Filter icons — keep only those that still exist in a card
   if (data.quickAccessItems.icons) {
     const before = data.quickAccessItems.icons.length;
-    data.quickAccessItems.icons = data.quickAccessItems.icons.filter(icon =>
-      existingIcons.has(`${icon.icon}::${icon.url}`)
-    );
+    data.quickAccessItems.icons = data.quickAccessItems.icons.filter(icon => {
+      const ref = classifyImageRef(icon.icon);
+      const key = ref.type === 'r2' ? `r2:${ref.value}` : String(icon.icon);
+      return existingIcons.has(`${key}::${icon.url}`);
+    });
     if (data.quickAccessItems.icons.length < before) changed = true;
   }
 
@@ -299,10 +306,13 @@ export function renderQuickAccess() {
   // Render icons second
   if (icons.length > 0) {
     html += '<div class="quick-access-icons">';
-    icons.forEach(item => {
+    icons.forEach((item, idx) => {
+      const classified = classifyImageRef(item.icon);
+      const imgSrc = (classified.type === 'r2') ? '' : (classified.value || '');
+      const fileIdAttr = (classified.type === 'r2') ? ` data-r2-file-id="${classified.value}"` : '';
       html += `
         <div class="icon-button quick-access-icon" data-qa-url="${item.url}" style="cursor: pointer;">
-          <img src="${item.icon}" alt="${item.title || item.name || ''}" />
+          <img src="${imgSrc}" alt="${item.title || item.name || ''}"${fileIdAttr} />
         </div>
       `;
     });
@@ -343,6 +353,11 @@ export function renderQuickAccess() {
   }
 
   content.innerHTML = html;
+
+  // Resolve R2 images (async, non-blocking)
+  content.querySelectorAll('img[data-r2-file-id]').forEach(img => {
+    setImageFromRef(img, { type: 'r2', fileId: img.dataset.r2FileId });
+  });
 
   // Use event delegation
   const existingHandler = content._quickAccessClickHandler;
@@ -399,10 +414,18 @@ export function renderQuickAccess() {
 
 
 // --- Check if item is selected
+function iconRefsMatch(a, b) {
+  if (a === b) return true;
+  if (a && b && typeof a === 'object' && typeof b === 'object') {
+    return a.type === b.type && a.fileId === b.fileId;
+  }
+  return false;
+}
+
 export function isItemSelected(itemData, data) {
   if (itemData.type === 'icon') {
     return data.quickAccessItems.icons.some(item =>
-      item.icon === itemData.icon && item.url === itemData.url
+      iconRefsMatch(item.icon, itemData.icon) && item.url === itemData.url
     );
   } else if (itemData.type === 'list') {
     return data.quickAccessItems.listItems.some(item =>
@@ -443,7 +466,7 @@ export function toggleItemQuickAccess(itemData) {
     // Remove from quick access
     if (itemData.type === 'icon') {
       data.quickAccessItems.icons = data.quickAccessItems.icons.filter(item =>
-        !(item.icon === itemData.icon && item.url === itemData.url)
+        !(iconRefsMatch(item.icon, itemData.icon) && item.url === itemData.url)
       );
     } else if (itemData.type === 'list') {
       data.quickAccessItems.listItems = data.quickAccessItems.listItems.filter(item =>

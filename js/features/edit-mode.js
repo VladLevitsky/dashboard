@@ -157,6 +157,61 @@ export function openEditPopover(targetEl, values, onDone, cursorPos) {
     copyTextarea.value = useCopyText ? (values.copyText || '') : '';
   }
 
+  // Link type dropdown and file upload
+  const linkTypeField = $('#edit-link-type-field');
+  const linkTypeSelect = $('#edit-link-type');
+  const fileField = $('#edit-file-field');
+  const fileInput = $('#edit-file-input');
+  const fileChooseBtn = $('#edit-file-choose');
+  const fileNameSpan = $('#edit-file-name');
+  const showLinkType = !hideUrl && !useCopyText && values.allowFileLink === true;
+  linkTypeField.hidden = !showLinkType;
+  linkTypeField.style.display = showLinkType ? '' : 'none';
+
+  // Reset file state
+  editState.chosenFile = null;
+  editState.chosenFileId = null;
+  if (fileInput) fileInput.value = '';
+  if (fileNameSpan) fileNameSpan.textContent = 'No file selected';
+
+  // Detect if current item has a file link
+  if (values.linkType === 'file' && values.fileId) {
+    linkTypeSelect.value = 'file';
+    urlField.hidden = true;
+    urlField.style.display = 'none';
+    fileField.hidden = false;
+    if (fileNameSpan) fileNameSpan.textContent = values.fileName || values.fileId;
+    editState.chosenFileId = values.fileId;
+  } else {
+    linkTypeSelect.value = 'url';
+    fileField.hidden = true;
+  }
+
+  linkTypeSelect.onchange = () => {
+    if (linkTypeSelect.value === 'file') {
+      urlField.hidden = true;
+      urlField.style.display = 'none';
+      fileField.hidden = false;
+    } else {
+      urlField.hidden = false;
+      urlField.style.display = '';
+      fileField.hidden = true;
+    }
+  };
+
+  if (fileChooseBtn) {
+    fileChooseBtn.onclick = () => fileInput.click();
+  }
+  if (fileInput) {
+    fileInput.onchange = () => {
+      const file = fileInput.files && fileInput.files[0];
+      if (file) {
+        editState.chosenFile = file;
+        if (fileNameSpan) fileNameSpan.textContent = file.name;
+      }
+    };
+  }
+
   $('#edit-image-field').hidden = values.allowImage ? false : true;
   $('#chosen-image-name').textContent = '';
   editState.chosenMedia = null;

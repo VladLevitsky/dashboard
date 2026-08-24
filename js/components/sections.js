@@ -2,13 +2,44 @@
 // Handles all section rendering (icons, lists, reminders, copy-paste)
 
 import { editState, model, currentData, currentSections } from '../state.js';
-import { $, $$, openUrl, generateKey, getSectionDataKey, getColorForCurrentMode, darkenColor, lightenAndDesaturateColor, colorToGlassRgba, isGlassModeActive, isColorCode, getContrastTextColor, createAnimatedBorder } from '../utils.js';
+import { $, $$, openUrl, generateKey, getSectionDataKey, getColorForCurrentMode, darkenColor, lightenAndDesaturateColor, colorToGlassRgba, isGlassModeActive, isColorCode, getContrastTextColor, createAnimatedBorder, showToast } from '../utils.js';
 import { PLACEHOLDER_URL, icons, LINK_ICON_SVG, TASKS_ICON_SVG } from '../constants.js';
 import { markDirtyAndSave, openEditPopover, openSubtitleColorPicker } from '../features/edit-mode.js';
 import { saveModel } from '../core/storage.js';
 import { initializeDragHandlers, initializeItemDragHandlers, initializeContainerDragHandlers, initializeReminderDragHandlers, initializeCardDropZone, handleDragOver, handleDrop } from '../features/drag-drop.js';
 import { createCardDeleteButton, createCardReorderButtons } from '../features/cards.js';
 import { persistImageFromLibraryEntry } from '../features/media-library.js';
+import { setImageFromRef, classifyImageRef, uploadFile, dataURLtoBlob, filenameFromDataUrl, deleteR2File } from '../core/file-service.js';
+import { isLoggedIn } from '../core/auth.js';
+
+// Helper: apply link type (URL or file) from edit popover result to an item
+function applyLinkToItem(item, result) {
+  if (result.linkType === 'file' && result.fileId) {
+    item.url = PLACEHOLDER_URL;
+    item.linkType = 'file';
+    item.fileId = result.fileId;
+    item.fileName = result.fileName || '';
+  } else {
+    item.url = result.url || PLACEHOLDER_URL;
+    delete item.linkType;
+    delete item.fileId;
+    delete item.fileName;
+  }
+}
+
+// Helper: upload icon media to R2 if logged in, otherwise use Base64
+async function resolveIconMedia(chosenMedia) {
+  const base64Src = persistImageFromLibraryEntry(chosenMedia);
+  if (isLoggedIn() && typeof base64Src === 'string' && base64Src.startsWith('data:')) {
+    const blob = dataURLtoBlob(base64Src);
+    const fileName = filenameFromDataUrl(base64Src, 'icon');
+    const result = await uploadFile(blob, fileName);
+    if (result.ok && result.fileId) {
+      return { type: 'r2', fileId: result.fileId };
+    }
+  }
+  return base64Src;
+}
 
 // --- Render all sections
 export function renderAllSections() {
@@ -310,16 +341,20 @@ export function createIconButton(item, section) {
     btn.appendChild(emojiSpan);
   } else {
     const img = document.createElement('img');
-    img.src = item.icon;
+    setImageFromRef(img, item.icon);
     img.alt = item.key;
     btn.appendChild(img);
   }
 
   btn.addEventListener('click', () => {
     if (!editState.enabled) {
-      openUrl(item.url);
+      if (item.linkType === 'file' && item.fileId && window.openFile) {
+        window.openFile(item.fileId, item.fileName);
+      } else {
+        openUrl(item.url);
+      }
     } else {
-      openEditPopover(btn, { hideText: true, url: item.url, allowImage: true, allowDelete: true }, async ({ text, url, chosenMedia, chosenEmoji, delete: doDelete, accept }) => {
+      openEditPopover(btn, { hideText: true, url: item.url, linkType: item.linkType, fileId: item.fileId, fileName: item.fileName, allowImage: true, allowDelete: true, allowFileLink: true }, async ({ text, url, chosenMedia, chosenEmoji, linkType, fileId, fileName, delete: doDelete, accept }) => {
         if (!accept) return;
         if (doDelete) {
           const collection = currentData()[section];
@@ -334,7 +369,7 @@ export function createIconButton(item, section) {
         if (chosenEmoji) {
           item.icon = chosenEmoji;
         } else if (chosenMedia) {
-          item.icon = persistImageFromLibraryEntry(chosenMedia);
+          item.icon = await resolveIconMedia(chosenMedia);
         }
         markDirtyAndSave();
         renderAllSections();
@@ -383,8 +418,8 @@ export function createEditableSeparator(item, section) {
           return;
         }
         if (chosenMedia) {
-          item.icon = persistImageFromLibraryEntry(chosenMedia);
-          separatorEl.src = item.icon;
+          item.icon = await resolveIconMedia(chosenMedia);
+          setImageFromRef(separatorEl, item.icon);
         }
         markDirtyAndSave();
       });
@@ -749,9 +784,17 @@ export function renderListForSection(sectionEl, sectionId, isTools) {
     }
 
     const a = document.createElement('a');
-    a.href = item.url;
-    a.target = '_blank';
-    a.rel = 'noopener noreferrer';
+    if (item.linkType === 'file' && item.fileId) {
+      a.href = '#';
+      a.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (!editState.enabled && window.openFile) window.openFile(item.fileId, item.fileName);
+      });
+    } else {
+      a.href = item.url;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+    }
     a.textContent = item.text;
 
     if (editState.enabled) {
@@ -815,7 +858,7 @@ export function renderListForSection(sectionEl, sectionId, isTools) {
       }
       if (e.target.closest('.list-item-links-btn')) return;
       e.preventDefault();
-      openEditPopover(div, { text: item.text, url: item.url, allowDelete: true }, ({ text, url, delete: doDelete, accept }) => {
+      openEditPopover(div, { text: item.text, url: item.url, linkType: item.linkType, fileId: item.fileId, fileName: item.fileName, allowDelete: true, allowFileLink: true }, ({ text, url, linkType, fileId, fileName, delete: doDelete, accept }) => {
         if (!accept) return;
         if (doDelete) {
           const collection = currentData()[sectionId];
@@ -826,7 +869,7 @@ export function renderListForSection(sectionEl, sectionId, isTools) {
           return;
         }
         item.text = text || item.text;
-        item.url = url || PLACEHOLDER_URL;
+        applyLinkToItem(item, { url, linkType, fileId, fileName });
         markDirtyAndSave();
         renderAllSections();
       });
@@ -1131,7 +1174,7 @@ export function renderRemindersForSection(sectionEl) {
           return;
         }
         e.preventDefault();
-        openEditPopover(div, { text: rem.title, url: rem.url, allowDelete: true }, ({ text, url, delete: doDelete, accept }) => {
+        openEditPopover(div, { text: rem.title, url: rem.url, linkType: rem.linkType, fileId: rem.fileId, fileName: rem.fileName, allowDelete: true, allowFileLink: true }, ({ text, url, linkType, fileId, fileName, delete: doDelete, accept }) => {
           if (!accept) return;
           if (doDelete) {
             const collection = data.reminders[subtitle];
@@ -1142,7 +1185,7 @@ export function renderRemindersForSection(sectionEl) {
             return;
           }
           rem.title = text || rem.title;
-          rem.url = url || PLACEHOLDER_URL;
+          applyLinkToItem(rem, { url, linkType, fileId, fileName });
           markDirtyAndSave();
           renderAllSections();
         });
@@ -1840,7 +1883,7 @@ function createUnifiedIconButton(item, sectionId, subtitle, subtitleColor) {
     btn.appendChild(emojiSpan);
   } else {
     const img = document.createElement('img');
-    img.src = item.icon;
+    setImageFromRef(img, item.icon);
     img.alt = item.key;
     btn.appendChild(img);
   }
@@ -1945,20 +1988,29 @@ function createUnifiedIconButton(item, sectionId, subtitle, subtitleColor) {
       return;
     }
     if (!editState.enabled) {
-      openUrl(item.url);
+      // Handle file-linked items
+      if (item.linkType === 'file' && item.fileId && window.openFile) {
+        window.openFile(item.fileId, item.fileName);
+      } else {
+        openUrl(item.url);
+      }
     } else {
       openEditPopover(btn, {
         hideText: true,
         url: item.url,
+        linkType: item.linkType,
+        fileId: item.fileId,
+        fileName: item.fileName,
         allowImage: true,
         allowDelete: true,
+        allowFileLink: true,
         allowIconLinks: true,
         allowIconTasks: true,
         iconRef: item,
         iconSectionId: sectionId,
         iconSubtitle: subtitle,
         moveContext: { sectionId, subtitle, itemType: 'icons', itemKey: item.key }
-      }, async ({ url, chosenMedia, chosenEmoji, delete: doDelete, accept }) => {
+      }, async ({ url, chosenMedia, chosenEmoji, linkType, fileId, fileName, delete: doDelete, accept }) => {
         if (!accept) return;
         const cardData = currentData()[sectionId];
         const subtitleData = cardData[subtitle];
@@ -1974,12 +2026,12 @@ function createUnifiedIconButton(item, sectionId, subtitle, subtitleColor) {
           renderAllSections();
           return;
         }
-        item.url = url || PLACEHOLDER_URL;
+        applyLinkToItem(item, { url, linkType, fileId, fileName });
         // Emoji takes precedence over image (last choice wins)
         if (chosenEmoji) {
           item.icon = chosenEmoji;
         } else if (chosenMedia) {
-          item.icon = persistImageFromLibraryEntry(chosenMedia);
+          item.icon = await resolveIconMedia(chosenMedia);
         }
         markDirtyAndSave();
         renderAllSections();
@@ -2103,9 +2155,19 @@ function createUnifiedSubtaskItem(item, sectionId, subtitle, subtitleColor) {
   }
 
   const a = document.createElement('a');
-  a.href = item.url;
-  a.target = '_blank';
-  a.rel = 'noopener noreferrer';
+  if (item.linkType === 'file' && item.fileId) {
+    a.href = '#';
+    a.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (!editState.enabled && window.openFile) {
+        window.openFile(item.fileId, item.fileName);
+      }
+    });
+  } else {
+    a.href = item.url;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+  }
   a.textContent = item.text;
 
   if (editState.enabled) {
@@ -2267,9 +2329,13 @@ function createUnifiedSubtaskItem(item, sectionId, subtitle, subtitleColor) {
     openEditPopover(div, {
       text: item.text,
       url: item.url,
+      linkType: item.linkType,
+      fileId: item.fileId,
+      fileName: item.fileName,
       allowDelete: true,
+      allowFileLink: true,
       moveContext: { sectionId, subtitle, itemType: 'subtasks', itemKey: item.key }
-    }, ({ text, url, delete: doDelete, accept }) => {
+    }, ({ text, url, linkType, fileId, fileName, delete: doDelete, accept }) => {
       if (!accept) return;
       const cardData = currentData()[sectionId];
       const subtitleData = cardData[subtitle];
@@ -2286,7 +2352,7 @@ function createUnifiedSubtaskItem(item, sectionId, subtitle, subtitleColor) {
         return;
       }
       item.text = text || item.text;
-      item.url = url || PLACEHOLDER_URL;
+      applyLinkToItem(item, { url, linkType, fileId, fileName });
       markDirtyAndSave();
       renderAllSections();
     }, { x: e.clientX, y: e.clientY });
@@ -2549,9 +2615,13 @@ function createUnifiedReminderItem(rem, sectionId, subtitle, subtitleColor) {
       openEditPopover(div, {
         text: rem.title,
         url: rem.url,
+        linkType: rem.linkType,
+        fileId: rem.fileId,
+        fileName: rem.fileName,
         allowDelete: true,
+        allowFileLink: true,
         moveContext: { sectionId, subtitle, itemType: 'reminders', itemKey: rem.key }
-      }, ({ text, url, delete: doDelete, accept }) => {
+      }, ({ text, url, linkType, fileId, fileName, delete: doDelete, accept }) => {
         if (!accept) return;
         const cardData = currentData()[sectionId];
         const subtitleData = cardData[subtitle];
@@ -2568,7 +2638,7 @@ function createUnifiedReminderItem(rem, sectionId, subtitle, subtitleColor) {
           return;
         }
         rem.title = text || rem.title;
-        rem.url = url || PLACEHOLDER_URL;
+        applyLinkToItem(rem, { url, linkType, fileId, fileName });
         markDirtyAndSave();
         renderAllSections();
       }, { x: e.clientX, y: e.clientY });
@@ -2592,9 +2662,13 @@ function createUnifiedReminderItem(rem, sectionId, subtitle, subtitleColor) {
       openEditPopover(div, {
         text: rem.title,
         url: rem.url,
+        linkType: rem.linkType,
+        fileId: rem.fileId,
+        fileName: rem.fileName,
         allowDelete: true,
+        allowFileLink: true,
         moveContext: { sectionId, subtitle, itemType: 'reminders', itemKey: rem.key }
-      }, ({ text, url, delete: doDelete, accept }) => {
+      }, ({ text, url, linkType, fileId, fileName, delete: doDelete, accept }) => {
         if (!accept) return;
         const cardData = currentData()[sectionId];
         const subtitleData = cardData[subtitle];
@@ -2611,7 +2685,7 @@ function createUnifiedReminderItem(rem, sectionId, subtitle, subtitleColor) {
           return;
         }
         rem.title = text || rem.title;
-        rem.url = url || PLACEHOLDER_URL;
+        applyLinkToItem(rem, { url, linkType, fileId, fileName });
         markDirtyAndSave();
         renderAllSections();
       }, { x: e.clientX, y: e.clientY });

@@ -5,6 +5,8 @@ import { model, editState, currentData, currentSections } from '../state.js';
 import { $, $$, showToast, generateKey, escapeAttr } from '../utils.js';
 import { PLACEHOLDER_URL, ANIMATION_DELAY_MS, CARD_HIDE_DELAY_MS, TIMER_UPDATE_INTERVAL_MS } from '../constants.js';
 import { saveModel, restoreModel, exportBackupFile, deepMergeModel, cleanupOldBackups } from './storage.js';
+import { setImageFromRef, getDisplaySrc, classifyImageRef, uploadFile, dataURLtoBlob, filenameFromDataUrl, deleteR2File } from './file-service.js';
+import { isLoggedIn } from './auth.js';
 import {
   toggleEditMode,
   hideEditPopover,
@@ -83,7 +85,6 @@ import { ensureSectionPlusButtons } from '../features/cards.js';
 import { initStickyNotes } from '../features/sticky-notes.js';
 import { initAuthOnStartup, postRestoreAuthSync } from '../features/auth-ui.js';
 import { immediateCloudSave } from '../core/sync.js';
-import { isLoggedIn } from '../core/auth.js';
 
 // Module state
 let cardsCollapsed = false;
@@ -1001,10 +1002,12 @@ export function renderHeaderAndTitles() {
 
     // Always set onload handler first, then set/refresh src
     logoEl.onload = applyLogoTransformFn;
-    logoEl.src = data.header.companyLogoSrc;
+    const logoRef = classifyImageRef(data.header.companyLogoSrc);
+    setImageFromRef(logoEl, data.header.companyLogoSrc, 'assets/icons/placeholder-logo.svg');
 
     // If image is already complete (cached), manually trigger transform
-    if (logoEl.complete && logoEl.naturalWidth) {
+    // Skip for R2 refs — transform fires via onload when async fetch completes
+    if (logoRef.type !== 'r2' && logoEl.complete && logoEl.naturalWidth) {
       applyLogoTransformFn();
     }
   }
@@ -1026,11 +1029,12 @@ export function renderHeaderAndTitles() {
     // Always set onload handler first, then set/refresh src
     // This ensures transform is applied whether image is cached or newly loaded
     profileEl.onload = applyTransform;
-    profileEl.src = data.header.profilePhotoSrc;
+    const profileRef = classifyImageRef(data.header.profilePhotoSrc);
+    setImageFromRef(profileEl, data.header.profilePhotoSrc, 'assets/icons/placeholder-profile.svg');
 
     // If image is already complete (cached), manually trigger transform
-    // since onload may not fire for cached images
-    if (profileEl.complete && profileEl.naturalWidth) {
+    // Skip for R2 refs — transform fires via onload when async fetch completes
+    if (profileRef.type !== 'r2' && profileEl.complete && profileEl.naturalWidth) {
       applyTransform();
     }
   }
@@ -1142,21 +1146,42 @@ export function wireUI() {
   document.addEventListener('dragenter', (e) => e.preventDefault());
   document.addEventListener('dragleave', (e) => e.preventDefault());
 
-  $('#edit-form').addEventListener('submit', (e) => {
+  $('#edit-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const copyTextarea = $('#edit-copytext');
     const copyText = copyTextarea ? copyTextarea.value : '';
+    const linkTypeSelect = $('#edit-link-type');
+    const linkType = linkTypeSelect ? linkTypeSelect.value : 'url';
+
     const payload = {
       text: $('#edit-text').value.trim(),
       url: $('#edit-url').value.trim(),
       copyText: copyText,
       chosenMedia: editState.chosenMedia || null,
       chosenEmoji: editState.chosenEmoji || null,
+      linkType: linkType,
       accept: true
     };
+
+    // Handle file upload if file type selected
+    if (linkType === 'file') {
+      if (editState.chosenFile) {
+        const result = await uploadFile(editState.chosenFile, editState.chosenFile.name);
+        if (result.ok && result.fileId) {
+          payload.fileId = result.fileId;
+          payload.fileName = editState.chosenFile.name;
+        } else {
+          showToast('File upload failed: ' + (result.error || 'Unknown error'));
+          return;
+        }
+      } else if (editState.chosenFileId) {
+        payload.fileId = editState.chosenFileId;
+        payload.fileName = $('#edit-file-name')?.textContent || '';
+      }
+    }
+
     if (editState.currentTarget) editState.currentTarget.onDone(payload);
     hideEditPopover();
-    // Re-render items that might show new text
     if (window.renderAllSections) window.renderAllSections();
     refreshEditingClasses();
   });
@@ -1253,21 +1278,39 @@ export function wireUI() {
         const xPixels = (data.header.companyLogoXPercent || 0) * editorFrameSize;
         const yPixels = (data.header.companyLogoYPercent || 0) * editorFrameSize;
 
-        window.openImageEditor(
-          data.header.companyLogoSrc,
-          data.header.companyLogoZoom || 1,
-          xPixels,
-          yPixels,
-          ({ src, zoom, xPercent, yPercent }) => {
-            data.header.companyLogoSrc = src;
-            data.header.companyLogoZoom = zoom;
-            data.header.companyLogoXPercent = xPercent;
-            data.header.companyLogoYPercent = yPercent;
-            markDirtyAndSave();
-            renderHeaderAndTitles();
-          },
-          'logo'  // Type: logo uses square frame and fit-inside zoom
-        );
+        // Resolve R2 ref to displayable src for the image editor
+        getDisplaySrc(data.header.companyLogoSrc, 'assets/icons/placeholder-logo.svg').then(editorSrc => {
+          window.openImageEditor(
+            editorSrc,
+            data.header.companyLogoZoom || 1,
+            xPixels,
+            yPixels,
+            async ({ src, zoom, xPercent, yPercent }) => {
+              let newSrc = src;
+              // Upload to R2 if authenticated and src is a data URL
+              if (isLoggedIn() && typeof src === 'string' && src.startsWith('data:')) {
+                const blob = dataURLtoBlob(src);
+                const fileName = filenameFromDataUrl(src, 'company-logo');
+                const result = await uploadFile(blob, fileName);
+                if (result.ok && result.fileId) {
+                  // Clean up old R2 file if replacing
+                  const oldRef = classifyImageRef(data.header.companyLogoSrc);
+                  if (oldRef.type === 'r2') {
+                    deleteR2File(oldRef.value).catch(() => {});
+                  }
+                  newSrc = { type: 'r2', fileId: result.fileId };
+                }
+              }
+              data.header.companyLogoSrc = newSrc;
+              data.header.companyLogoZoom = zoom;
+              data.header.companyLogoXPercent = xPercent;
+              data.header.companyLogoYPercent = yPercent;
+              markDirtyAndSave();
+              renderHeaderAndTitles();
+            },
+            'logo'
+          );
+        });
       }
     });
   }
@@ -1285,21 +1328,36 @@ export function wireUI() {
         const xPixels = (data.header.profilePhotoXPercent || 0) * editorFrameSize;
         const yPixels = (data.header.profilePhotoYPercent || 0) * editorFrameSize;
 
-        window.openImageEditor(
-          data.header.profilePhotoSrc,
-          data.header.profilePhotoZoom || 1,
-          xPixels,
-          yPixels,
-          ({ src, zoom, xPercent, yPercent }) => {
-            data.header.profilePhotoSrc = src;
-            data.header.profilePhotoZoom = zoom;
-            data.header.profilePhotoXPercent = xPercent;
-            data.header.profilePhotoYPercent = yPercent;
-            markDirtyAndSave();
-            renderHeaderAndTitles();
-          },
-          'profile'  // Type: profile uses circle frame and cover zoom
-        );
+        getDisplaySrc(data.header.profilePhotoSrc, 'assets/icons/placeholder-profile.svg').then(editorSrc => {
+          window.openImageEditor(
+            editorSrc,
+            data.header.profilePhotoZoom || 1,
+            xPixels,
+            yPixels,
+            async ({ src, zoom, xPercent, yPercent }) => {
+              let newSrc = src;
+              if (isLoggedIn() && typeof src === 'string' && src.startsWith('data:')) {
+                const blob = dataURLtoBlob(src);
+                const fileName = filenameFromDataUrl(src, 'profile-photo');
+                const result = await uploadFile(blob, fileName);
+                if (result.ok && result.fileId) {
+                  const oldRef = classifyImageRef(data.header.profilePhotoSrc);
+                  if (oldRef.type === 'r2') {
+                    deleteR2File(oldRef.value).catch(() => {});
+                  }
+                  newSrc = { type: 'r2', fileId: result.fileId };
+                }
+              }
+              data.header.profilePhotoSrc = newSrc;
+              data.header.profilePhotoZoom = zoom;
+              data.header.profilePhotoXPercent = xPercent;
+              data.header.profilePhotoYPercent = yPercent;
+              markDirtyAndSave();
+              renderHeaderAndTitles();
+            },
+            'profile'
+          );
+        });
       }
     });
   }

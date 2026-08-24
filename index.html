@@ -230,10 +230,27 @@
           Text
           <input type="text" id="edit-text" />
         </label>
-        <label class="field-url">
+        <div class="field-link-type" id="edit-link-type-field">
+          <label>
+            Link Type
+            <select id="edit-link-type">
+              <option value="url">URL</option>
+              <option value="file">File Upload</option>
+            </select>
+          </label>
+        </div>
+        <label class="field-url" id="edit-url-field">
           URL
           <input type="text" id="edit-url" />
         </label>
+        <div class="field-file-upload" id="edit-file-field" hidden>
+          <label>File</label>
+          <div class="file-upload-row">
+            <button type="button" id="edit-file-choose" class="btn">Choose File...</button>
+            <span id="edit-file-name" class="muted">No file selected</span>
+            <input type="file" id="edit-file-input" hidden />
+          </div>
+        </div>
         <label class="field-copytext" hidden>
           Copy Text
           <textarea id="edit-copytext" rows="4" placeholder="Text to copy (supports multiple lines)"></textarea>

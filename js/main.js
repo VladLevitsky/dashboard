@@ -174,6 +174,12 @@ import {
 } from './features/reminders.js';
 
 import {
+  migrateBase64ToR2,
+  openFile,
+  revokeAllBlobUrls
+} from './core/file-service.js';
+
+import {
   openCalendarView,
   closeCalendarView,
   updateNotificationBadge,
@@ -613,6 +619,9 @@ window.attachTaskMention = attachTaskMention;
 // Calendar
 window.openCalendarView = openCalendarView;
 window.closeCalendarView = closeCalendarView;
+window.migrateBase64ToR2 = migrateBase64ToR2;
+window.openFile = openFile;
+window.revokeAllBlobUrls = revokeAllBlobUrls;
 window.updateNotificationBadge = updateNotificationBadge;
 window.wireNotificationBadge = wireNotificationBadge;
 
