@@ -4,7 +4,7 @@
 
 import { currentData } from '../state.js';
 import { $, showToast, moveCursorAfterNode, normalizeDescHtml, escapeAttr } from '../utils.js';
-import { handleEditorInput, createHighlighterButton, attachHighlighterContextMenu } from './edit-mode.js';
+import { handleEditorInput, handleEditorKeydown, createHighlighterButton, attachHighlighterContextMenu } from './edit-mode.js';
 import { saveModel } from '../core/storage.js';
 import { HIGHLIGHT_COLORS, HIGHLIGHT_BORDER_COLORS, hyperlinkSelection, canHyperlink, attachTaskMention } from './projects.js';
 import { uploadFile, openFile } from '../core/file-service.js';
@@ -611,6 +611,7 @@ function showMeetingsEditMode(meeting) {
   // Markdown auto-convert
   descEditor.addEventListener('input', handleEditorInput);
   descEditor.addEventListener('keydown', (e) => {
+    handleEditorKeydown(e);
     if ((e.ctrlKey || e.metaKey) && ['b', 'i', 'u'].includes(e.key.toLowerCase())) {
       setTimeout(updateInlineToolbarState, 0);
     }

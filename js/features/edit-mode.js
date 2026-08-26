@@ -2253,21 +2253,108 @@ function isInListItem() {
   return null;
 }
 
-// --- Check if cursor is inside a list
+// --- Check if cursor is inside a list (UL or OL)
 function isInList() {
   const selection = window.getSelection();
   if (!selection.rangeCount) return null;
 
   let node = selection.anchorNode;
   while (node && node !== document.body) {
-    if (node.tagName === 'UL') return node;
+    if (node.tagName === 'UL' || node.tagName === 'OL') return node;
     node = node.parentNode;
   }
   return null;
 }
 
+// --- Indent a list item: wrap it in a nested list under the previous sibling
+// Supports up to 4 nesting levels (browser may allow more, but we cap it)
+function indentListItem(li) {
+  const parentList = li.parentNode; // UL or OL
+  if (!parentList) return;
+
+  // Don't indent if already 4 levels deep
+  let depth = 0;
+  let walk = parentList;
+  while (walk) {
+    if (walk.tagName === 'UL' || walk.tagName === 'OL') depth++;
+    walk = walk.parentNode;
+  }
+  if (depth >= 4) return;
+
+  // Must have a previous sibling LI to nest under
+  const prevLi = li.previousElementSibling;
+  if (!prevLi || prevLi.tagName !== 'LI') return;
+
+  // Find or create a nested list inside the previous LI (same type as parent)
+  const listTag = parentList.tagName; // UL or OL
+  let nestedList = prevLi.querySelector(`:scope > ${listTag}`);
+  if (!nestedList) {
+    nestedList = document.createElement(listTag);
+    prevLi.appendChild(nestedList);
+  }
+
+  // Move the LI into the nested list
+  nestedList.appendChild(li);
+
+  // Place cursor at start of the moved item
+  const sel = window.getSelection();
+  const range = document.createRange();
+  range.setStart(li, 0);
+  range.collapse(true);
+  sel.removeAllRanges();
+  sel.addRange(range);
+}
+
+// --- Outdent a list item: move it up one nesting level
+function outdentListItem(li) {
+  const parentList = li.parentNode; // UL or OL
+  if (!parentList) return;
+
+  const grandparentLi = parentList.parentNode;
+  // Can only outdent if nested (parent list is inside another LI)
+  if (!grandparentLi || grandparentLi.tagName !== 'LI') return;
+
+  const outerList = grandparentLi.parentNode; // The outer UL or OL
+
+  // Move any sibling LIs after this one into a new nested list under this LI
+  const followingSiblings = [];
+  let next = li.nextElementSibling;
+  while (next) {
+    followingSiblings.push(next);
+    next = next.nextElementSibling;
+  }
+  if (followingSiblings.length > 0) {
+    let subList = li.querySelector(`:scope > ${parentList.tagName}`);
+    if (!subList) {
+      subList = document.createElement(parentList.tagName);
+      li.appendChild(subList);
+    }
+    followingSiblings.forEach(sib => subList.appendChild(sib));
+  }
+
+  // Insert this LI after the grandparent LI in the outer list
+  if (grandparentLi.nextSibling) {
+    outerList.insertBefore(li, grandparentLi.nextSibling);
+  } else {
+    outerList.appendChild(li);
+  }
+
+  // Clean up empty nested list
+  if (parentList.children.length === 0) {
+    parentList.remove();
+  }
+
+  // Place cursor at start of the moved item
+  const sel = window.getSelection();
+  const range = document.createRange();
+  range.setStart(li, 0);
+  range.collapse(true);
+  sel.removeAllRanges();
+  sel.addRange(range);
+}
+
 // --- Handle keydown in contenteditable editor
-function handleEditorKeydown(e) {
+export function handleEditorKeydown(e) {
   const editor = e.target;
 
   if (e.key === 'Tab') {
@@ -2276,11 +2363,9 @@ function handleEditorKeydown(e) {
 
     if (li) {
       if (e.shiftKey) {
-        // Shift+Tab: outdent
-        document.execCommand('outdent', false, null);
+        outdentListItem(li);
       } else {
-        // Tab: indent (create nested list)
-        document.execCommand('indent', false, null);
+        indentListItem(li);
       }
     }
     return;
@@ -2361,33 +2446,44 @@ function handleEditorKeydown(e) {
       const text = li.textContent.trim();
       if (!text) {
         e.preventDefault();
-        // Remove empty list item and exit list
         const ul = li.parentNode;
         const parentLi = ul.parentNode.tagName === 'LI' ? ul.parentNode : null;
 
-        li.remove();
-
-        // If this was nested, move cursor after parent li
         if (parentLi) {
+          // Nested list: outdent the empty item (move up one level)
+          li.remove();
+          if (ul.children.length === 0) ul.remove();
+          // Create a new empty LI in the parent list
+          const outerList = parentLi.parentNode;
+          const newLi = document.createElement('li');
+          newLi.appendChild(document.createElement('br'));
+          if (parentLi.nextSibling) {
+            outerList.insertBefore(newLi, parentLi.nextSibling);
+          } else {
+            outerList.appendChild(newLi);
+          }
           const range = document.createRange();
-          range.setStartAfter(parentLi);
+          range.setStart(newLi, 0);
           range.collapse(true);
           const selection = window.getSelection();
           selection.removeAllRanges();
           selection.addRange(range);
-        } else if (ul.children.length === 0) {
-          // Remove empty ul and add a line break
-          const br = document.createElement('div');
-          br.innerHTML = '<br>';
-          ul.parentNode.insertBefore(br, ul);
-          ul.remove();
+        } else {
+          // Top-level list: exit the list
+          li.remove();
+          if (ul.children.length === 0) {
+            const br = document.createElement('div');
+            br.innerHTML = '<br>';
+            ul.parentNode.insertBefore(br, ul);
+            ul.remove();
 
-          const range = document.createRange();
-          range.setStart(br, 0);
-          range.collapse(true);
-          const selection = window.getSelection();
-          selection.removeAllRanges();
-          selection.addRange(range);
+            const range = document.createRange();
+            range.setStart(br, 0);
+            range.collapse(true);
+            const selection = window.getSelection();
+            selection.removeAllRanges();
+            selection.addRange(range);
+          }
         }
         return;
       }
@@ -2481,20 +2577,14 @@ export function handleEditorInput(e) {
   // Find the block element containing this text (div created by Enter key)
   let blockToReplace = node.parentElement;
 
-  // If parent is the editor itself, we need to handle differently
+  // If parent is the editor itself (text node is a direct child)
   if (blockToReplace === editor) {
-    // Text is directly in the editor - only proceed if editor is essentially empty
-    // (just contains this "* " text)
-    const editorContent = editor.textContent.replace(/\u00A0/g, ' ').trim();
-    if (!/^[*\-]$/.test(editorContent)) return;
-
-    // Create a new list and replace editor contents
+    // Create a new list and replace only the text node
     const ul = document.createElement('ul');
     const li = document.createElement('li');
     li.appendChild(document.createElement('br')); // Empty li needs br for cursor
     ul.appendChild(li);
-    editor.innerHTML = '';
-    editor.appendChild(ul);
+    editor.replaceChild(ul, node);
 
     // Place cursor in the list item
     const newRange = document.createRange();
@@ -2536,12 +2626,12 @@ export function handleEditorInput(e) {
 function convertToHeading(editor, textNode, level, selection) {
   let blockToReplace = textNode.parentElement;
 
-  // If parent is the editor itself
+  // If parent is the editor itself (text node is a direct child)
   if (blockToReplace === editor) {
     const heading = document.createElement(`h${level}`);
     heading.appendChild(document.createElement('br'));
-    editor.innerHTML = '';
-    editor.appendChild(heading);
+    // Replace only the text node, preserving all other editor content
+    editor.replaceChild(heading, textNode);
 
     const newRange = document.createRange();
     newRange.setStart(heading, 0);
@@ -2556,6 +2646,10 @@ function convertToHeading(editor, textNode, level, selection) {
       blockToReplace.parentElement !== editor) {
     return;
   }
+
+  // Verify this block ONLY contains the heading trigger (no other meaningful content)
+  const blockContent = blockToReplace.textContent.replace(/\u00A0/g, ' ');
+  if (!/^#{1,6} $/.test(blockContent)) return;
 
   // Create the heading element
   const heading = document.createElement(`h${level}`);
@@ -2576,14 +2670,14 @@ function convertToHeading(editor, textNode, level, selection) {
 function convertToNumberedList(editor, textNode, selection) {
   let blockToReplace = textNode.parentElement;
 
-  // If parent is the editor itself
+  // If parent is the editor itself (text node is a direct child)
   if (blockToReplace === editor) {
     const ol = document.createElement('ol');
     const li = document.createElement('li');
     li.appendChild(document.createElement('br'));
     ol.appendChild(li);
-    editor.innerHTML = '';
-    editor.appendChild(ol);
+    // Replace only the text node, preserving all other editor content
+    editor.replaceChild(ol, textNode);
 
     const newRange = document.createRange();
     newRange.setStart(li, 0);

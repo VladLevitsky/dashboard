@@ -8036,9 +8036,25 @@ body.stacked-mode .gap-add-btn {
   list-style-type: circle;
   margin-top: 2px;
 }
+.notepad-editor ul ul ul {
+  list-style-type: square;
+  margin-top: 2px;
+}
+.notepad-editor ul ul ul ul {
+  list-style-type: disc;
+  margin-top: 2px;
+}
 
 .notepad-editor ol ol {
   list-style-type: lower-alpha;
+  margin-top: 2px;
+}
+.notepad-editor ol ol ol {
+  list-style-type: lower-roman;
+  margin-top: 2px;
+}
+.notepad-editor ol ol ol ol {
+  list-style-type: decimal;
   margin-top: 2px;
 }
 
@@ -9008,6 +9024,20 @@ body[data-theme="dark"][data-style="glass"][data-glass-theme="sunset"] .tasks-su
 [data-theme="dark"] .ideas-editor:focus {
   border-color: var(--brand);
 }
+
+.ideas-editor ul, .ideas-editor ol {
+  margin: 0;
+  padding-left: 20px;
+}
+.ideas-editor ul { list-style-type: disc; }
+.ideas-editor ol { list-style-type: decimal; }
+.ideas-editor ul ul { list-style-type: circle; margin-top: 2px; }
+.ideas-editor ul ul ul { list-style-type: square; margin-top: 2px; }
+.ideas-editor ul ul ul ul { list-style-type: disc; margin-top: 2px; }
+.ideas-editor ol ol { list-style-type: lower-alpha; margin-top: 2px; }
+.ideas-editor ol ol ol { list-style-type: lower-roman; margin-top: 2px; }
+.ideas-editor ol ol ol ol { list-style-type: decimal; margin-top: 2px; }
+.ideas-editor li { margin: 2px 0; }
 
 .ideas-editor-actions {
   display: flex;
@@ -10181,6 +10211,30 @@ body[data-theme="dark"][data-style="glass"][data-glass-theme="sunset"] .tasks-su
   list-style-type: decimal;
 }
 
+.task-desc-editor ul ul {
+  list-style-type: circle;
+  margin-top: 2px;
+}
+.task-desc-editor ul ul ul {
+  list-style-type: square;
+  margin-top: 2px;
+}
+.task-desc-editor ul ul ul ul {
+  list-style-type: disc;
+  margin-top: 2px;
+}
+.task-desc-editor ol ol {
+  list-style-type: lower-alpha;
+  margin-top: 2px;
+}
+.task-desc-editor ol ol ol {
+  list-style-type: lower-roman;
+  margin-top: 2px;
+}
+.task-desc-editor ol ol ol ol {
+  list-style-type: decimal;
+  margin-top: 2px;
+}
 .task-desc-editor li {
   margin: 2px 0;
 }
@@ -10479,10 +10533,8 @@ body[data-theme="dark"][data-style="glass"][data-glass-theme="sunset"] .tasks-su
   background: rgba(255, 255, 255, 0.1);
 }
 .task-subtask-menu-dropdown {
-  position: absolute;
-  right: 0;
-  top: calc(100% + 4px);
-  z-index: 100;
+  position: fixed;
+  z-index: 10020;
   min-width: 160px;
   background: var(--card, #ffffff);
   border: 1px solid rgba(0,0,0,0.1);
@@ -12316,6 +12368,24 @@ body[data-theme="dark"][data-style="glass"][data-glass-theme="sunset"] .tasks-su
 }
 .project-editor li::marker {
   color: var(--text);
+}
+.project-editor ul ul {
+  list-style-type: circle !important;
+}
+.project-editor ul ul ul {
+  list-style-type: square !important;
+}
+.project-editor ul ul ul ul {
+  list-style-type: disc !important;
+}
+.project-editor ol ol {
+  list-style-type: lower-alpha !important;
+}
+.project-editor ol ol ol {
+  list-style-type: lower-roman !important;
+}
+.project-editor ol ol ol ol {
+  list-style-type: decimal !important;
 }
 
 /* Project Task Highlights (pill-shaped, non-editable) */

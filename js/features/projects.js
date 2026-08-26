@@ -5,7 +5,7 @@
 
 import { currentData } from '../state.js';
 import { $, showToast, moveCursorAfterNode } from '../utils.js';
-import { handleEditorInput, createHighlighterButton, attachHighlighterContextMenu } from './edit-mode.js';
+import { handleEditorInput, handleEditorKeydown, createHighlighterButton, attachHighlighterContextMenu } from './edit-mode.js';
 import { saveModel } from '../core/storage.js';
 import { TASK_COLORS, TASK_COLOR_LABELS } from '../constants.js';
 
@@ -630,6 +630,7 @@ export function openProjectsModal(openToProjectId) {
       markProjectDirty();
     });
     editor.addEventListener('keydown', (e) => {
+      handleEditorKeydown(e);
       if ((e.ctrlKey || e.metaKey) && ['b', 'i', 'u'].includes(e.key.toLowerCase())) {
         setTimeout(updateProjectsToolbarState, 0);
       }

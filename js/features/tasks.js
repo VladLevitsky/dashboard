@@ -4,7 +4,7 @@
 
 import { model, editState, currentData, currentSections } from '../state.js';
 import { $, showToast, createAnimatedBorder, normalizeDescHtml } from '../utils.js';
-import { markDirtyAndSave, handleEditorInput, createHighlighterButton, attachHighlighterContextMenu } from './edit-mode.js';
+import { markDirtyAndSave, handleEditorInput, handleEditorKeydown, createHighlighterButton, attachHighlighterContextMenu } from './edit-mode.js';
 import { saveModel } from '../core/storage.js';
 import { uploadFile, openFile } from '../core/file-service.js';
 import { TASK_COLORS, TASK_COLOR_LABELS, ANIMATION_DELAY_MS, CARD_HIDE_DELAY_MS } from '../constants.js';
@@ -2208,8 +2208,9 @@ function openTaskEditorModal(taskData, titleText) {
     attachHighlighterContextMenu(descEditor);
     descEditor.addEventListener('input', handleEditorInput);
 
-    // Update toolbar on keyboard shortcuts (Ctrl+B, Ctrl+I, Ctrl+U)
+    // Handle Tab/Shift+Tab for list nesting + toolbar updates on Ctrl+B/I/U
     descEditor.addEventListener('keydown', (e) => {
+      handleEditorKeydown(e);
       if ((e.ctrlKey || e.metaKey) && ['b', 'i', 'u'].includes(e.key.toLowerCase())) {
         setTimeout(updateTaskToolbarState, 0);
       }
@@ -2999,16 +3000,38 @@ function renderEditorSubtasks() {
       document.querySelectorAll('.task-subtask-menu-dropdown').forEach(d => {
         if (d !== menuDropdown) d.style.display = 'none';
       });
-      menuDropdown.style.display = menuDropdown.style.display === 'none' ? '' : 'none';
+      const isOpen = menuDropdown.style.display !== 'none';
+      if (isOpen) {
+        menuDropdown.style.display = 'none';
+      } else {
+        // Position fixed relative to viewport to escape overflow clipping
+        const btnRect = menuBtn.getBoundingClientRect();
+        menuDropdown.style.display = '';
+        menuDropdown.style.position = 'fixed';
+        menuDropdown.style.top = (btnRect.bottom + 4) + 'px';
+        menuDropdown.style.right = (window.innerWidth - btnRect.right) + 'px';
+        menuDropdown.style.left = 'auto';
+        // If it would overflow bottom, show above instead
+        const dropRect = menuDropdown.getBoundingClientRect();
+        if (dropRect.bottom > window.innerHeight - 8) {
+          menuDropdown.style.top = (btnRect.top - dropRect.height - 4) + 'px';
+        }
+      }
     });
 
-    // Close menu on outside click
+    // Close menu on outside click or scroll
     const closeMenu = (e) => {
       if (!menuBtn.contains(e.target) && !menuDropdown.contains(e.target)) {
         menuDropdown.style.display = 'none';
       }
     };
     document.addEventListener('click', closeMenu);
+    const scrollParent = document.querySelector('.task-editor-content');
+    if (scrollParent) {
+      scrollParent.addEventListener('scroll', () => {
+        menuDropdown.style.display = 'none';
+      }, { passive: true });
+    }
 
     const menuWrap = document.createElement('div');
     menuWrap.className = 'task-subtask-menu-wrap';
@@ -3155,6 +3178,7 @@ function openSubtaskDescriptionModal(subtask) {
     editorEl.addEventListener('input', handleEditorInput);
 
     editorEl.addEventListener('keydown', (e) => {
+      handleEditorKeydown(e);
       if ((e.ctrlKey || e.metaKey) && ['b', 'i', 'u'].includes(e.key.toLowerCase())) {
         setTimeout(updateSubtaskToolbarState, 0);
       }
@@ -3391,6 +3415,7 @@ export function openIdeasModal() {
     attachHighlighterContextMenu(editorEl);
     editorEl.addEventListener('input', handleEditorInput);
     editorEl.addEventListener('keydown', (e) => {
+      handleEditorKeydown(e);
       if ((e.ctrlKey || e.metaKey) && ['b', 'i', 'u'].includes(e.key.toLowerCase())) {
         setTimeout(updateIdeasToolbarState, 0);
       }
