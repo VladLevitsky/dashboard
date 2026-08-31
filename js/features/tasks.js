@@ -6,6 +6,7 @@ import { model, editState, currentData, currentSections } from '../state.js';
 import { $, showToast, createAnimatedBorder, normalizeDescHtml, openUrl } from '../utils.js';
 import { markDirtyAndSave, handleEditorInput, handleEditorKeydown, createHighlighterButton, attachHighlighterContextMenu, toggleChecklist, isInChecklist, attachChecklistHandler } from './edit-mode.js';
 import { saveModel } from '../core/storage.js';
+import { immediateCloudSave } from '../core/sync.js';
 import { uploadFile, openFile, setImageFromRef } from '../core/file-service.js';
 import { TASK_COLORS, TASK_COLOR_LABELS, ANIMATION_DELAY_MS, CARD_HIDE_DELAY_MS } from '../constants.js';
 
@@ -3505,11 +3506,13 @@ function openSubtaskDescriptionModal(subtask) {
   modal.hidden = false;
   requestAnimationFrame(() => editor.focus());
 
-  // Persist subtasks to the task when editing an existing task
+  // Persist subtasks to the task when editing an existing task,
+  // then push to the cloud immediately so a refresh can't lose it
   const persistSubtasks = () => {
     if (currentEditingTaskId) {
       const cleanSubtasks = editorSubtasks.filter(s => s.title && s.title.trim());
       updateTask(currentEditingTaskId, { subtasks: cleanSubtasks.length > 0 ? cleanSubtasks : null });
+      immediateCloudSave();
     }
   };
 

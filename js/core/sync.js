@@ -38,9 +38,17 @@ let _dirty = false;
 let _syncTimerId = null;
 let _isSaving = false;
 
+// Dirty flag is also persisted to localStorage so unsynced changes
+// survive a page refresh (otherwise syncOnLogin would let stale cloud
+// data overwrite local edits made since the last cloud save).
+function getDirtyFlagKey() {
+  return getActiveStorageKey() + '__dirty';
+}
+
 export function markCloudDirty() {
   if (isLoggedIn()) {
     _dirty = true;
+    try { localStorage.setItem(getDirtyFlagKey(), '1'); } catch (e) { /* quota — in-memory flag still set */ }
   }
 }
 
@@ -66,6 +74,7 @@ export async function cloudSave() {
 
     if (result.ok) {
       _dirty = false;
+      try { localStorage.removeItem(getDirtyFlagKey()); } catch (e) { /* ignore */ }
 
       // D1 save succeeded — flush any queued R2 file deletions
       if (window.flushPendingR2Deletions) {
@@ -166,6 +175,19 @@ export async function syncOnLogin() {
   const cloudHasData = isProfileMeaningful(cloudProfile);
   const localRaw = localStorage.getItem(getActiveStorageKey());
   const localHasData = localRaw ? isProfileMeaningful(JSON.parse(localRaw)) : false;
+
+  // Local has unsynced changes from a previous session (persisted dirty flag)
+  // → local is authoritative: upload it instead of letting stale cloud data overwrite it
+  const localDirty = localStorage.getItem(getDirtyFlagKey()) === '1';
+  if (localDirty && localHasData) {
+    _dirty = true;
+    const saveResult = await cloudSave();
+    if (saveResult.ok) {
+      return { action: 'uploaded_local' };
+    }
+    // Upload failed — keep local data and the dirty flag; retry via sync timer
+    return { action: 'none' };
+  }
 
   if (cloudHasData) {
     // Validate that cloud data looks like a dashboard model before trusting it
