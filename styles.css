@@ -9819,6 +9819,9 @@ body[data-theme="dark"][data-style="glass"][data-glass-theme="sunset"] .tasks-su
   background: rgba(0, 0, 0, 0.06);
   color: var(--text);
 }
+.task-subtask-menu-btn.has-desc {
+  color: var(--brand);
+}
 [data-theme="dark"] .task-subtask-menu-btn:hover {
   background: rgba(255, 255, 255, 0.1);
 }
@@ -10198,6 +10201,21 @@ body[data-theme="dark"][data-style="glass"][data-glass-theme="sunset"] .tasks-su
 
 [data-theme="dark"] .subtask-desc-actions {
   border-top-color: #475569;
+}
+
+/* Delete button sits left, danger-colored */
+.subtask-desc-delete-btn {
+  margin-right: auto;
+  color: #dc2626;
+}
+.subtask-desc-delete-btn:hover {
+  background: rgba(220, 38, 38, 0.08);
+}
+[data-theme="dark"] .subtask-desc-delete-btn {
+  color: #f87171;
+}
+[data-theme="dark"] .subtask-desc-delete-btn:hover {
+  background: rgba(248, 113, 113, 0.12);
 }
 
 /* Reuse toolbar button styles for subtask modal */

@@ -3236,6 +3236,7 @@ function renderEditorSubtasks() {
     menuDropdown.style.display = 'none';
 
     const hasDesc = normalizeDescHtml(subtask.description || '');
+    if (hasDesc) menuBtn.classList.add('has-desc');
 
     const closeDropdown = () => {
       menuDropdown.style.display = 'none';
@@ -3245,7 +3246,7 @@ function renderEditorSubtasks() {
     const descOption = document.createElement('button');
     descOption.type = 'button';
     descOption.className = 'task-subtask-menu-item';
-    descOption.textContent = hasDesc ? 'Edit description' : 'Add description';
+    descOption.textContent = hasDesc ? 'View description' : 'Add description';
     descOption.addEventListener('click', () => {
       closeDropdown();
       openSubtaskDescriptionModal(subtask);
@@ -3433,6 +3434,7 @@ function openSubtaskDescriptionModal(subtask) {
           <div id="subtask-desc-editor" class="task-desc-editor" contenteditable="true"></div>
         </div>
         <div class="subtask-desc-actions">
+          <button type="button" id="subtask-desc-delete" class="btn-secondary subtask-desc-delete-btn">Delete</button>
           <button type="button" id="subtask-desc-cancel" class="btn-secondary">Cancel</button>
           <button type="button" id="subtask-desc-save" class="btn-primary">Save</button>
         </div>
@@ -3503,12 +3505,32 @@ function openSubtaskDescriptionModal(subtask) {
   modal.hidden = false;
   requestAnimationFrame(() => editor.focus());
 
-  // Wire save/cancel
+  // Persist subtasks to the task when editing an existing task
+  const persistSubtasks = () => {
+    if (currentEditingTaskId) {
+      const cleanSubtasks = editorSubtasks.filter(s => s.title && s.title.trim());
+      updateTask(currentEditingTaskId, { subtasks: cleanSubtasks.length > 0 ? cleanSubtasks : null });
+    }
+  };
+
+  // Delete button only shown when a description exists
+  const deleteBtn = $('#subtask-desc-delete');
+  deleteBtn.hidden = !normalizeDescHtml(subtask.description || '');
+
+  // Wire save/cancel/delete
   $('#subtask-desc-cancel').onclick = () => { modal.hidden = true; };
   $('#subtask-desc-save').onclick = () => {
     subtask.description = normalizeDescHtml(editor.innerHTML) || '';
+    persistSubtasks();
     modal.hidden = true;
     renderEditorSubtasks(); // Update indicator
+  };
+  deleteBtn.onclick = () => {
+    if (!confirm('Delete this description?')) return;
+    subtask.description = '';
+    persistSubtasks();
+    modal.hidden = true;
+    renderEditorSubtasks();
   };
 }
 
