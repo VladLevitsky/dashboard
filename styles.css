@@ -9972,6 +9972,14 @@ body[data-theme="dark"][data-style="glass"][data-glass-theme="sunset"] .tasks-su
   z-index: -1;
 }
 
+/* Row with an open 3-dot menu must rise above sibling rows —
+   .subtask-bubble creates a stacking context (isolation + z-index: 0),
+   so the dropdown's z-index can't escape it on its own */
+.task-subtask-row.menu-open {
+  position: relative;
+  z-index: 100;
+}
+
 /* Locked input inside bubble is transparent */
 .task-subtask-row.subtask-bubble .task-subtask-title-input.locked {
   background: transparent;

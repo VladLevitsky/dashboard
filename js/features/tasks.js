@@ -3237,12 +3237,17 @@ function renderEditorSubtasks() {
 
     const hasDesc = normalizeDescHtml(subtask.description || '');
 
+    const closeDropdown = () => {
+      menuDropdown.style.display = 'none';
+      row.classList.remove('menu-open');
+    };
+
     const descOption = document.createElement('button');
     descOption.type = 'button';
     descOption.className = 'task-subtask-menu-item';
     descOption.textContent = hasDesc ? 'Edit description' : 'Add description';
     descOption.addEventListener('click', () => {
-      menuDropdown.style.display = 'none';
+      closeDropdown();
       openSubtaskDescriptionModal(subtask);
     });
 
@@ -3251,7 +3256,7 @@ function renderEditorSubtasks() {
     importantOption.className = 'task-subtask-menu-item';
     importantOption.textContent = subtask.important ? 'Remove importance' : 'Mark as important';
     importantOption.addEventListener('click', () => {
-      menuDropdown.style.display = 'none';
+      closeDropdown();
       subtask.important = !subtask.important;
       if (subtask.important) subtask.completed = false;
       if (currentEditingTaskId) {
@@ -3266,7 +3271,7 @@ function renderEditorSubtasks() {
     deleteOption.className = 'task-subtask-menu-item task-subtask-menu-item-danger';
     deleteOption.textContent = 'Remove subtask';
     deleteOption.addEventListener('click', () => {
-      menuDropdown.style.display = 'none';
+      closeDropdown();
       if (!confirm('Delete this subtask?')) return;
       editorSubtasks.splice(index, 1);
       renderEditorSubtasks();
@@ -3280,15 +3285,20 @@ function renderEditorSubtasks() {
       e.stopPropagation();
       // Close any other open menus
       document.querySelectorAll('.task-subtask-menu-dropdown').forEach(d => {
-        if (d !== menuDropdown) d.style.display = 'none';
+        if (d !== menuDropdown) {
+          d.style.display = 'none';
+          const otherRow = d.closest('.task-subtask-row');
+          if (otherRow) otherRow.classList.remove('menu-open');
+        }
       });
       const isOpen = menuDropdown.style.display !== 'none';
       if (isOpen) {
-        menuDropdown.style.display = 'none';
+        closeDropdown();
       } else {
         // Position fixed relative to viewport to escape overflow clipping
         const btnRect = menuBtn.getBoundingClientRect();
         menuDropdown.style.display = '';
+        row.classList.add('menu-open');
         menuDropdown.style.position = 'fixed';
         menuDropdown.style.top = (btnRect.bottom + 4) + 'px';
         menuDropdown.style.right = (window.innerWidth - btnRect.right) + 'px';
@@ -3304,14 +3314,14 @@ function renderEditorSubtasks() {
     // Close menu on outside click or scroll
     const closeMenu = (e) => {
       if (!menuBtn.contains(e.target) && !menuDropdown.contains(e.target)) {
-        menuDropdown.style.display = 'none';
+        closeDropdown();
       }
     };
     document.addEventListener('click', closeMenu);
     const scrollParent = document.querySelector('.task-editor-content');
     if (scrollParent) {
       scrollParent.addEventListener('scroll', () => {
-        menuDropdown.style.display = 'none';
+        closeDropdown();
       }, { passive: true });
     }
 
