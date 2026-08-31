@@ -107,6 +107,9 @@ export const dragState = {
   potentialDropColSpan: null,
   dragOffsetCol: 0,   // cell offset within the card where the drag was grabbed
   dragOffsetRow: 0,
+  dragOriginCol: null, // card's position at dragstart (given to the partner on swap)
+  dragOriginRow: null,
+  swapTargetId: null,  // card the cursor is hovering inside → drop becomes a swap
   // Item-level dragging
   draggedItem: null,
   draggedItemKey: null,

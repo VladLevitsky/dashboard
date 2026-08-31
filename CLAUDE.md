@@ -95,8 +95,9 @@ Images use explicit format objects (or legacy strings for backward compatibility
 │   │   ├── reminders.js     # Calendar/interval popovers, breakdown modal
 │   │   ├── cards.js         # Card CRUD, type selector
 │   │   ├── links.js         # Link modals
+│   │   ├── grid-engine.js   # THE layout core: cell math, profiles, collisions, migrations v7/v8
 │   │   ├── card-modal.js    # Card edit modal (opens from tile view)
-│   │   ├── card-resize.js   # Drag-to-resize card width/height
+│   │   ├── card-resize.js   # 4-edge drag-to-resize (delegates math to grid-engine)
 │   │   ├── tasks.js         # Eisenhower Matrix task management
 │   │   ├── projects.js      # Projects module, @ mention autocomplete, highlight management
 │   │   ├── meetings.js      # Meetings with dates and recurrence
@@ -106,6 +107,8 @@ Images use explicit format objects (or legacy strings for backward compatibility
 │       └── sections.js      # Section rendering (icons, lists, reminders, copy-paste)
 ├── assets/
 └── Reference/               # (gitignored) Backend docs, screenshots, working context
+    ├── migration-test.mjs   # Node smoke test: schema migrations + device-profile round-trip
+    └── collapse-test.mjs    # Node smoke test: collapse display-layout compaction
 ```
 
 ### Storage & Sync
@@ -223,8 +226,20 @@ Prioritized items panel with state-based reconciliation — automatically remove
 - Each card stores `gridCol`, `gridRow`, `gridColSpan`, `gridRowSpan` — explicit placement, no CSS auto-flow, cards positioned relative to the grid only
 - Cards fill their grid area (`align-items: stretch`); white space lives inside the card
 - Key functions: `getCellSize()`, `applyCellSize()`, `applyGridPlacement()`, `mouseToGridCell()`, `computeDropPosition()`, `resolveCollisions()`, `reconcileRowSpans()`, `autoAssignGridPositions()` (2D bin-packing)
-- `reconcileRowSpans()` runs after every render: grows any card whose content outgrew its area, pushes neighbors down, persists — cards can never clip content
-- `ResizeObserver` recomputes cell sizes on container resize
+- `reconcileRowSpans()` runs after every render: grows any card whose content outgrew its area, pushes neighbors down, persists — cards can never clip content (collapsed cards are excluded from measurement)
+- `ResizeObserver` recomputes cell sizes on container resize (also observes the header for async image loads)
+
+### Card Collapse (view mode)
+- Chevron collapses a card to title-bar height; `computeDisplayLayout()` derives a DISPLAY layout where cards below rise by exactly the freed rows — per column, so intentional white space elsewhere is preserved
+- Rise allowance = MAX freed across the card's columns; the blocker-settle pass lands it on whatever is still expanded. Nothing ever sinks below its designed position; stored layout is never modified, so expanding restores exactly
+- `getCollapsedRowSpan()` computes title-bar rows per device mode (~72px)
+- Edit mode always shows the full designed layout (chevrons hidden there)
+- Old "click empty space → collapse all / navigate" feature was REMOVED; `setupCardCollapseExpand()` in init.js now only closes open link/task bubbles on outside click
+
+### Responsive Card Content (container queries, end of styles.css)
+- Item grids use `repeat(N, minmax(0, 1fr))` — plain `1fr` would let long pills force column overflow (clipped by the card edge)
+- Breakpoints on card content width: ≥900px → 3 columns, 431–899px → 2, ≤430px → 1; inner text ellipsizes, badges/buttons never shrink
+- Icons NEVER shrink — the flex-wrap icon row just adds more rows in narrow cards
 
 ### Per-Device Layout Profiles (mobile / tablet / desktop)
 - `DEVICE_MODES` in grid-engine.js: mobile (4 cols, 520px, single-column stack), tablet (24 cols, 1260px), desktop (24 cols, 2280px)
@@ -232,21 +247,24 @@ Prioritized items panel with state-based reconciliation — automatically remove
 - `persistActiveLayout()` (hooked into `markDirtyAndSave`) keeps `section.layouts[activeMode]` in sync; `hydrateLayout()` swaps a profile in (lazy-seeds missing profiles as a full-width stack at content height)
 - `switchDeviceMode(mode)` — works in view mode AND mid-edit (operates on working copy; cancel reverts all profiles)
 - Active mode: per-browser localStorage `dashboard_device_mode`, auto-detected by screen width on first visit (<768 mobile, <1600 tablet, else desktop); `model.lastActiveMode` (synced) records which mode the flat props represent for cross-device restore
-- Device picker: tablet icon (`#device-mode-toggle`) right of the search bar → bubble with 3 options (`openDeviceModeModal` in init.js)
-- Mobile is single-column: drop forces col 1/full width, width-resize handle hidden
+- Device picker: `#device-mode-toggle` right of the search bar shows the ACTIVE mode's icon (`updateDeviceModeToggleIcon`) → bubble with 3 options (`openDeviceModeModal` in init.js)
+- Mobile is single-column: drop forces col 1/full width, both horizontal resize handles hidden/guarded
 
 ### Edit Mode - Tile View & Drag/Drop
 - Entering edit mode adds `edit-mode-tiles` class (zoom 0.7) + graph-paper overlay aligned via `--grid-pad-left` / `--grid-origin-y`
 - Cards render view-mode content (no edit controls); click opens Card Edit Modal
 - **Drag**: anchor offset recorded at dragstart (grab point within card); ghost shows the exact final resting position via `computeDropPosition()` (clamp → auto-shrink width to fit → slide-under)
 - **Slide-under rule**: overlapping a card that starts ABOVE snaps the dragged card below it; only cards at/below the drop get pushed down (`resolveCollisions`)
-- **Resize**: right/bottom handles snap to any cell boundary; height can never shrink below content (`getMinRowSpan` via `measureContentHeight`, which ignores absolutely-positioned children)
-- Single "Add Card" FAB button (blue +) above Settings gear
+- **SWAP**: dragging so the CURSOR is inside another card arms a swap — both cards pulse (`.card-swap-glow`, `filter: drop-shadow` animation since glass box-shadows would drown a box-shadow pulse; dragged card opacity lifted from 0.4). Drop exchanges positions; each card keeps its own size; overlaps settle downward
+- **Resize on ALL FOUR edges**: right/bottom move that edge; left/top move the edge while anchoring the opposite one (adjust `gridCol`+`gridColSpan` / `gridRow`+`gridRowSpan` together). Snaps to any cell; height can never shrink below content (`getMinRowSpan` via `measureContentHeight`, which ignores absolutely-positioned children); top can't rise past row 2
+- Single "Add Card" FAB button (blue +) in the fab-left stack directly above Settings
 
 ### Card Edit Modal (`js/features/card-modal.js`)
 - `openCardEditModal(sectionId)` / `closeCardEditModal()`
-- The real card element rendered full-size on a backdrop (no modal chrome); width matches the card's grid width
-- All edit controls (add/edit/delete items, colors, subtitles, delete card) live on the card itself
+- The real card element rendered full-size on a backdrop (no modal chrome); width matches the card's grid width; hidden scrollbar + bottom fade gradient when content overflows
+- All edit controls (add/edit/delete items, colors, subtitles, delete card) live on the card itself; header buttons are [trash][X] top-right (`.card-modal-close-btn`)
+- Closing (X / backdrop / Escape) also closes any open item editors (`hideEditPopover`/`hideCalendarPopover`/`hideIntervalPopover`)
+- Item popovers (`.edit-popover`, `.calendar-popover`, `.interval-popover`, `.reminder-links-modal`) are z-index 2500 — MUST stay above the modal's 2000 or they render behind it
 
 ### Dark Mode
 - Toggle in Settings modal
@@ -371,7 +389,19 @@ Shared logic lives in `edit-mode.js`: `handleEditorKeydown`, `handleEditorInput`
 
 ## Version History
 
-### v4.0 (Current)
+### v5.0 (Current)
+- **Grid Engine** (schemaVersion 7): 24-column graph-paper layout, explicit cell placement, JS-computed px cell sizes, WYSIWYG edit/view parity, slide-under drop snapping, collision cascade
+- **Per-device layout profiles** (schemaVersion 8): independent mobile/tablet/desktop arrangements, device picker beside search bar, auto-detect + per-browser override, profiles sync to D1
+- Edit mode = zoomed miniature tiles; click opens the Card Edit Modal (the real card on a backdrop)
+- 4-edge card resize; card SWAP by dropping onto another card (pulsing glow indicator)
+- Card collapse reclaims space in view mode (per-column display-layout compaction)
+- Checklists in all rich-text editors (toolbar, context menu, `[] ` shortcut)
+- Context menus work without text selection; subtask due dates clear on completion
+- Responsive card content via container queries (3/2/1 item columns); icons never shrink
+- Removed: normal/stacked display modes, gap add-buttons, collapse-all navigation
+- Node smoke tests in Reference/ for migrations, profile round-trips, collapse math
+
+### v4.0
 - Eisenhower Matrix task system (schemaVersion 5)
 - Projects and Meetings modules with rich-text editors
 - Calendar view with notification badge

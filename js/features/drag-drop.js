@@ -42,9 +42,14 @@ export function initializeDragHandlers(cardElement, sectionId) {
     if (section && section.gridCol && section.gridRow) {
       dragState.dragOffsetCol = Math.max(0, grabCell.col - section.gridCol);
       dragState.dragOffsetRow = Math.max(0, grabCell.row - section.gridRow);
+      // Original position — needed so a SWAP can hand this spot to the other card
+      dragState.dragOriginCol = section.gridCol;
+      dragState.dragOriginRow = section.gridRow;
     } else {
       dragState.dragOffsetCol = 0;
       dragState.dragOffsetRow = 0;
+      dragState.dragOriginCol = null;
+      dragState.dragOriginRow = null;
     }
 
     // Add dragging class for visual feedback
@@ -57,9 +62,10 @@ export function initializeDragHandlers(cardElement, sectionId) {
     // Ghost will be created in handleDragOver
   });
 
-  // Drag end — clean up ghost
+  // Drag end — clean up ghost and swap glow
   cardElement.addEventListener('dragend', (e) => {
     cardElement.classList.remove('dragging');
+    clearSwapGlow();
 
     // Remove grid ghost
     if (dragState.gridGhost) {
@@ -78,12 +84,34 @@ export function initializeDragHandlers(cardElement, sectionId) {
     dragState.potentialDropColSpan = null;
     dragState.dragOffsetCol = 0;
     dragState.dragOffsetRow = 0;
+    dragState.dragOriginCol = null;
+    dragState.dragOriginRow = null;
   });
+}
+
+// --- Swap-glow helpers: both cards pulse identically while a swap is armed
+function setSwapGlow(targetId) {
+  if (dragState.swapTargetId === targetId) return;
+  clearSwapGlow();
+  dragState.swapTargetId = targetId;
+  const targetEl = document.getElementById(targetId);
+  if (targetEl) targetEl.classList.add('card-swap-glow');
+  if (dragState.draggedElement) dragState.draggedElement.classList.add('card-swap-glow');
+}
+
+function clearSwapGlow() {
+  if (!dragState.swapTargetId) return;
+  const targetEl = document.getElementById(dragState.swapTargetId);
+  if (targetEl) targetEl.classList.remove('card-swap-glow');
+  if (dragState.draggedElement) dragState.draggedElement.classList.remove('card-swap-glow');
+  dragState.swapTargetId = null;
 }
 
 // --- Handle drag over: show a ghost at the card's FINAL resting position.
 // The ghost position is computed by the same function used on drop, so what
 // you see is exactly where the card will land (including slide-under snapping).
+// SWAP MODE: if the cursor itself is inside another card, the drop becomes a
+// position swap — both cards pulse to indicate it.
 export function handleDragOver(e) {
   if (!dragState.draggedElement || !editState.enabled) return;
 
@@ -101,9 +129,28 @@ export function handleDragOver(e) {
   const section = sections.find(s => s.id === dragState.draggedSection);
   if (!section) return;
 
+  const mouse = mouseToGridCell(e.clientX, e.clientY);
+
+  // SWAP detection: is the CURSOR cell inside another card's stored rect?
+  const swapTarget = sections.find(s =>
+    s.id !== section.id && s.type !== 'header' && s.gridCol && s.gridRow &&
+    mouse.col >= s.gridCol && mouse.col < s.gridCol + (s.gridColSpan || 1) &&
+    mouse.row >= s.gridRow && mouse.row < s.gridRow + (s.gridRowSpan || DEFAULT_ROW_SPAN)
+  );
+
+  if (swapTarget && dragState.dragOriginCol && dragState.dragOriginRow) {
+    setSwapGlow(swapTarget.id);
+    // Hide the placement ghost — the two glowing cards ARE the indicator
+    if (dragState.gridGhost) dragState.gridGhost.style.display = 'none';
+    dragState.potentialDropCol = null;
+    dragState.potentialDropRow = null;
+    dragState.potentialDropColSpan = null;
+    return;
+  }
+  clearSwapGlow();
+
   // Anchor-adjusted target: subtract the grab offset so the card's top-left
   // lands where the card (not the cursor) visually is
-  const mouse = mouseToGridCell(e.clientX, e.clientY);
   const rawCol = mouse.col - (dragState.dragOffsetCol || 0);
   const rawRow = mouse.row - (dragState.dragOffsetRow || 0);
 
@@ -130,16 +177,47 @@ export function handleDragOver(e) {
   ghost.style.gridRow = `${pos.row} / span ${rowSpan}`;
 }
 
-// --- Handle drop: place the card exactly where the ghost showed it.
+// --- Handle drop: either SWAP with the glowing target, or place at the ghost.
 export function handleDrop(e) {
   e.preventDefault();
 
   if (!dragState.draggedSection || !editState.enabled) return;
-  if (!dragState.potentialDropCol || !dragState.potentialDropRow) return;
 
   const sections = currentSections();
   const section = sections.find(s => s.id === dragState.draggedSection);
   if (!section) return;
+
+  // SWAP branch: exchange positions — each card keeps its own size.
+  // Any resulting overlaps settle downward via resolveCollisions.
+  if (dragState.swapTargetId) {
+    const target = sections.find(s => s.id === dragState.swapTargetId);
+    if (target && dragState.dragOriginCol && dragState.dragOriginRow) {
+      const targetCol = target.gridCol;
+      const targetRow = target.gridRow;
+
+      section.gridCol = targetCol;
+      section.gridRow = targetRow;
+      target.gridCol = dragState.dragOriginCol;
+      target.gridRow = dragState.dragOriginRow;
+
+      // Pin the actively dragged card; everything it now overlaps (possibly
+      // including the swap partner, when sizes differ) drops down gently
+      resolveCollisions(sections, section.id);
+
+      clearSwapGlow();
+      if (dragState.gridGhost) { dragState.gridGhost.remove(); dragState.gridGhost = null; }
+      dragState.potentialDropCol = null;
+      dragState.potentialDropRow = null;
+      dragState.potentialDropColSpan = null;
+
+      markDirtyAndSave();
+      if (window.renderAllSections) window.renderAllSections();
+      showToast('Cards swapped');
+    }
+    return;
+  }
+
+  if (!dragState.potentialDropCol || !dragState.potentialDropRow) return;
 
   // Apply the exact position the ghost was showing
   section.gridCol = dragState.potentialDropCol;

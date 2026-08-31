@@ -3220,7 +3220,7 @@ export function addCardButtons() {
         sectionEl.addEventListener('click', (e) => {
           if (!editState.enabled) return;
           // Don't open modal if clicking on buttons, resize handles, or drag handles
-          if (e.target.closest('button') || e.target.closest('.card-resize-handle-right') || e.target.closest('.card-resize-handle-bottom')) return;
+          if (e.target.closest('button') || e.target.closest('[class*="card-resize-handle"]')) return;
           // Only open in tile mode
           const main = document.querySelector('.app-main');
           if (main && main.classList.contains('edit-mode-tiles')) {
