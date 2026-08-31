@@ -1,10 +1,11 @@
 // Personal Dashboard - Cards Module
 // Handles card management (add, delete, move, reorder)
 
-import { editState, currentData, currentSections, ensureSectionInBothArrays, removeSectionFromBothArrays } from '../state.js';
+import { editState, currentData, currentSections } from '../state.js';
 import { $, $$, showToast, generateSectionId, generateUniqueCardTitle, generateKey } from '../utils.js';
 import { PLACEHOLDER_URL } from '../constants.js';
 import { markDirtyAndSave, refreshEditingClasses, openColorPicker } from './edit-mode.js';
+import { getGridCols } from './grid-engine.js';
 
 // --- Add new card
 export function onAddCard(targetSectionId) {
@@ -32,7 +33,6 @@ export function onAddCard(targetSectionId) {
   };
 
   sections.splice(targetIndex, 0, newSection);
-  ensureSectionInBothArrays(newSection);
 
   data[newSectionId] = [];
   data.sectionTitles[newSectionId] = uniqueTitle;
@@ -68,7 +68,7 @@ export function onDeleteCard(sectionId) {
     });
   }
 
-  removeSectionFromBothArrays(sectionId);
+  data.sections = data.sections.filter(s => s.id !== sectionId);
   delete data.sectionTitles[sectionId];
   delete data[sectionId];
 
@@ -160,8 +160,11 @@ export function createCardDeleteButton(sectionId) {
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.className = 'card-delete-btn';
-  btn.textContent = '×';
   btn.title = 'Delete this card';
+  btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="3 6 5 6 21 6"></polyline>
+    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+  </svg>`;
   btn.addEventListener('click', (e) => {
     e.preventDefault();
     onDeleteCard(sectionId);
@@ -241,76 +244,9 @@ export function ensureSectionPlusButtons() {
   // For now, we rely on renderAllSections to handle this via addCardButtons
 }
 
-// ===== GAP-BASED ADD BUTTON SYSTEM =====
-
-export function addGapButtons() {
-  const data = currentData();
-  const main = $('.app-main');
-
-  // Remove existing gap buttons
-  const existingGapButtons = main.querySelectorAll('.gap-add-btn');
-  existingGapButtons.forEach(btn => btn.remove());
-
-  if (!editState.enabled) return;
-
-  // Get all direct children of main (cards and two-col containers)
-  const children = Array.from(main.children);
-  const sections = currentSections();
-
-  // Build a mapping of DOM positions to section indices
-  let sectionIndex = 0;
-  const domToSectionMap = [0]; // First gap is before index 0
-
-  for (let i = 0; i < children.length; i++) {
-    const child = children[i];
-
-    if (child.classList.contains('two-col')) {
-      // Two-column container - count both sections inside it
-      const cards = child.querySelectorAll('.card');
-      sectionIndex += cards.length;
-    } else if (child.classList.contains('card')) {
-      // Regular card - count one section
-      sectionIndex += 1;
-    }
-
-    // The gap after this element maps to this section index
-    domToSectionMap.push(sectionIndex);
-  }
-
-  // Add gap buttons with correct section indices
-  for (let i = 0; i <= children.length; i++) {
-    const targetSectionIndex = domToSectionMap[i];
-    const gapBtn = createGapAddButton(targetSectionIndex);
-
-    if (i === 0) {
-      // First gap (before first element)
-      main.insertBefore(gapBtn, main.firstChild);
-    } else if (i === children.length) {
-      // Last gap (after last element)
-      main.appendChild(gapBtn);
-    } else {
-      // Gap between elements
-      main.insertBefore(gapBtn, children[i]);
-    }
-
-    // Show the button since we're in edit mode
-    gapBtn.style.display = 'flex';
-  }
-}
-
-// Gap-based add button
-export function createGapAddButton(targetIndex) {
-  const btn = document.createElement('button');
-  btn.type = 'button';
-  btn.className = 'gap-add-btn';
-  btn.textContent = '+';
-  btn.title = 'Add new card here';
-  btn.dataset.targetIndex = targetIndex;
-  btn.addEventListener('click', (e) => {
-    e.preventDefault();
-    createCard(targetIndex);
-  });
-  return btn;
+// Legacy stubs (no longer used - gap buttons replaced by Add Card FAB)
+export function addGapButtons() {}
+export function createGapAddButton() { return document.createElement('div');
 }
 
 // ===== CARD CREATION =====
@@ -331,7 +267,11 @@ export function createCard(targetIndex) {
   const newSection = {
     id: generateSectionId(),
     type: 'unified',
-    title: generateUniqueCardTitle('New Card')
+    title: generateUniqueCardTitle('New Card'),
+    // Full width of the ACTIVE device mode; autoAssign places it, and
+    // markDirtyAndSave's persistActiveLayout hook stores it in the profile.
+    gridColSpan: getGridCols(),
+    gridRowSpan: 8
   };
 
   // Initialize with unified structure (_default contains icons, reminders, subtasks, copyPaste)
@@ -344,10 +284,8 @@ export function createCard(targetIndex) {
     }
   };
 
-  // Insert the new section into current display mode's sections array
+  // Insert the new section into the sections array
   sections.splice(actualTargetIndex, 0, newSection);
-  // Also add to the other sections array (for when switching modes)
-  ensureSectionInBothArrays(newSection);
 
   // Add to sectionTitles
   data.sectionTitles[newSection.id] = newSection.title;

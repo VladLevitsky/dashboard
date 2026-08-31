@@ -12,7 +12,7 @@ export function toggleEditMode() {
   let closestCard = null;
   let closestDistance = Infinity;
 
-  document.querySelectorAll('.card, .two-col').forEach(card => {
+  document.querySelectorAll('.card').forEach(card => {
     const rect = card.getBoundingClientRect();
     const cardCenter = window.scrollY + rect.top + rect.height / 2;
     const distance = Math.abs(cardCenter - viewportCenter);
@@ -48,7 +48,17 @@ export function toggleEditMode() {
   if (window.refreshEditingClasses) window.refreshEditingClasses();
   $('#edit-fab-group').hidden = !editState.enabled;
   $('#appearance-toggle').hidden = !editState.enabled;
-  if (window.ensureSectionPlusButtons) window.ensureSectionPlusButtons();
+  const addCardFab = $('#add-card-fab');
+  if (addCardFab) addCardFab.hidden = !editState.enabled;
+
+  // Toggle tile mode on the grid container
+  const appMain = $('.app-main');
+  if (appMain) {
+    appMain.classList.toggle('edit-mode-tiles', editState.enabled);
+  }
+
+  // Recompute grid cell sizes (edit mode uses square cells, view mode uses auto rows)
+  if (window.applyCellSize) window.applyCellSize();
 
   if (!editState.enabled) {
     hideEditPopover();
@@ -637,18 +647,40 @@ export function wireAppearanceModalEvents() {
 }
 
 // --- Refresh Editing Classes on elements
+// In tile mode (edit-mode-tiles), cards on the grid do NOT get .editing —
+// they render as view-mode to preserve real proportions. Only the modal card gets .editing.
 export function refreshEditingClasses() {
+  const main = document.querySelector('.app-main');
+  const isTileMode = main && main.classList.contains('edit-mode-tiles');
+
   document.querySelectorAll('.card').forEach(card => {
-    card.classList.toggle('editing', editState.enabled);
+    // Cards inside the modal always follow editState; grid cards never get .editing in tile mode
+    const isInModal = card.closest('.card-edit-modal');
+    if (isTileMode && !isInModal) {
+      card.classList.remove('editing');
+    } else {
+      card.classList.toggle('editing', editState.enabled);
+    }
   });
   document.querySelectorAll('.editable').forEach(el => {
-    el.classList.toggle('editing', editState.enabled);
+    const isInModal = el.closest('.card-edit-modal');
+    if (isTileMode && !isInModal) {
+      el.classList.remove('editing');
+    } else {
+      el.classList.toggle('editing', editState.enabled);
+    }
   });
 }
 
 // --- Mark dirty and save (for edit operations)
 export function markDirtyAndSave() {
   editState.dirty = true;
+
+  // Keep the active device-layout profile in sync with the flat working
+  // layout after every mutation (drop, resize, reconcile, add/delete card).
+  if (window.persistActiveLayout && window.currentSections) {
+    window.persistActiveLayout(window.currentSections());
+  }
 
   // If NOT in edit mode, save immediately (for backwards compatibility)
   if (!editState.enabled) {
@@ -2172,6 +2204,9 @@ export function wireNotepadEvents() {
     hlSlot.appendChild(createHighlighterButton());
   }
 
+  // Checklist click handler on card notes editor
+  attachChecklistHandler(editor);
+
   // Toolbar button handlers
   const toolbarBtns = $$('.notepad-toolbar-btn');
   toolbarBtns.forEach(btn => {
@@ -2180,6 +2215,12 @@ export function wireNotepadEvents() {
     });
     btn.addEventListener('click', (e) => {
       e.preventDefault();
+      if (btn.classList.contains('notepad-checklist-btn')) {
+        toggleChecklist();
+        updateToolbarState();
+        if (editor) editor.focus();
+        return;
+      }
       const command = btn.dataset.command;
       if (command) {
         document.execCommand(command, false, null);
@@ -2290,6 +2331,10 @@ function indentListItem(li) {
   let nestedList = prevLi.querySelector(`:scope > ${listTag}`);
   if (!nestedList) {
     nestedList = document.createElement(listTag);
+    // Inherit checklist class from parent list
+    if (parentList.classList.contains('checklist')) {
+      nestedList.classList.add('checklist');
+    }
     prevLi.appendChild(nestedList);
   }
 
@@ -2471,21 +2516,37 @@ export function handleEditorKeydown(e) {
         } else {
           // Top-level list: exit the list
           li.remove();
+          const exitDiv = document.createElement('div');
+          exitDiv.innerHTML = '<br>';
           if (ul.children.length === 0) {
-            const br = document.createElement('div');
-            br.innerHTML = '<br>';
-            ul.parentNode.insertBefore(br, ul);
+            // List is now empty — replace it entirely
+            ul.parentNode.insertBefore(exitDiv, ul);
             ul.remove();
-
-            const range = document.createRange();
-            range.setStart(br, 0);
-            range.collapse(true);
-            const selection = window.getSelection();
-            selection.removeAllRanges();
-            selection.addRange(range);
+          } else {
+            // List still has items — insert plain line after the list
+            if (ul.nextSibling) {
+              ul.parentNode.insertBefore(exitDiv, ul.nextSibling);
+            } else {
+              ul.parentNode.appendChild(exitDiv);
+            }
           }
+          const range = document.createRange();
+          range.setStart(exitDiv, 0);
+          range.collapse(true);
+          const selection = window.getSelection();
+          selection.removeAllRanges();
+          selection.addRange(range);
         }
         return;
+      }
+      // Non-empty checklist item: browser will create new li, clean up checked class
+      if (li.parentElement && li.parentElement.classList.contains('checklist')) {
+        setTimeout(() => {
+          const currentLi = isInListItem();
+          if (currentLi && currentLi !== li) {
+            currentLi.classList.remove('checked');
+          }
+        }, 0);
       }
     }
   }
@@ -2519,10 +2580,14 @@ function isCursorAtStartOfElement(element, range) {
 function updateToolbarState() {
   const toolbarBtns = $$('.notepad-toolbar-btn');
   toolbarBtns.forEach(btn => {
+    if (btn.classList.contains('notepad-checklist-btn')) {
+      btn.classList.toggle('active', isInChecklist());
+      return;
+    }
     const command = btn.dataset.command;
     if (command) {
       const isActive = document.queryCommandState(command);
-      btn.classList.toggle('active', isActive);
+      btn.classList.toggle('active', isActive && !(command === 'insertUnorderedList' && isInChecklist()));
     }
   });
 }
@@ -2559,6 +2624,16 @@ export function handleEditorInput(e) {
     const cursorAtEnd = range.startOffset === node.textContent.length;
     if (cursorAtEnd) {
       convertToNumberedList(editor, node, selection);
+      return;
+    }
+  }
+
+  // Check for checklist pattern ([] followed by space)
+  const checklistMatch = text.match(/^\[\] $/);
+  if (checklistMatch && !isInList()) {
+    const cursorAtEnd = range.startOffset === node.textContent.length;
+    if (cursorAtEnd) {
+      convertToChecklist(editor, node, selection);
       return;
     }
   }
@@ -2710,6 +2785,159 @@ function convertToNumberedList(editor, textNode, selection) {
   selection.addRange(newRange);
 }
 
+// --- Convert text to checklist
+function convertToChecklist(editor, textNode, selection) {
+  let blockToReplace = textNode.parentElement;
+
+  if (blockToReplace === editor) {
+    const nodeContent = textNode.textContent.replace(/\u00A0/g, ' ');
+    if (!/^\[\] $/.test(nodeContent)) return;
+    const ul = document.createElement('ul');
+    ul.className = 'checklist';
+    const li = document.createElement('li');
+    li.appendChild(document.createElement('br'));
+    ul.appendChild(li);
+    editor.replaceChild(ul, textNode);
+
+    const newRange = document.createRange();
+    newRange.setStart(li, 0);
+    newRange.collapse(true);
+    selection.removeAllRanges();
+    selection.addRange(newRange);
+    return;
+  }
+
+  if ((blockToReplace.tagName !== 'DIV' && blockToReplace.tagName !== 'P') ||
+      blockToReplace.parentElement !== editor) {
+    return;
+  }
+
+  const blockContent = blockToReplace.textContent.replace(/\u00A0/g, ' ');
+  if (!/^\[\] $/.test(blockContent)) return;
+
+  const ul = document.createElement('ul');
+  ul.className = 'checklist';
+  const li = document.createElement('li');
+  li.appendChild(document.createElement('br'));
+  ul.appendChild(li);
+
+  blockToReplace.parentElement.replaceChild(ul, blockToReplace);
+
+  const newRange = document.createRange();
+  newRange.setStart(li, 0);
+  newRange.collapse(true);
+  selection.removeAllRanges();
+  selection.addRange(newRange);
+}
+
+// --- Toggle checklist on current line/selection
+// editorEl is optional — pass it when calling from context menu for reliable UL detection
+export function toggleChecklist(editorEl) {
+  const li = isInListItem();
+  if (li) {
+    const list = li.closest('ul, ol');
+    if (list && list.classList.contains('checklist')) {
+      // Already in checklist — manually unwrap each li into a paragraph
+      const sel = window.getSelection();
+      const fragment = document.createDocumentFragment();
+      let cursorTarget = null;
+      Array.from(list.children).forEach(child => {
+        if (child.tagName !== 'LI') return;
+        const div = document.createElement('div');
+        Array.from(child.childNodes).forEach(cn => {
+          if (cn.tagName === 'UL' || cn.tagName === 'OL') return;
+          div.appendChild(cn.cloneNode(true));
+        });
+        if (!div.childNodes.length) div.appendChild(document.createElement('br'));
+        if (child === li) cursorTarget = div;
+        fragment.appendChild(div);
+      });
+      list.parentNode.replaceChild(fragment, list);
+      if (cursorTarget && sel) {
+        const range = document.createRange();
+        range.setStart(cursorTarget, 0);
+        range.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(range);
+      }
+      return;
+    }
+    if (list && list.tagName === 'OL') {
+      // In ordered list — convert to checklist
+      const ul = document.createElement('ul');
+      ul.className = 'checklist';
+      while (list.firstChild) ul.appendChild(list.firstChild);
+      list.parentNode.replaceChild(ul, list);
+      return;
+    }
+    if (list && list.tagName === 'UL') {
+      // In regular bullet list — convert to checklist
+      list.classList.add('checklist');
+      return;
+    }
+  }
+  // Not in a list — create one then add checklist class
+  // Snapshot existing ULs so we can find the new one reliably (selection may be stale)
+  const priorULs = editorEl ? new Set(editorEl.querySelectorAll('ul')) : null;
+  document.execCommand('insertUnorderedList');
+  // Try selection-based detection first
+  const newLi = isInListItem();
+  if (newLi) {
+    const ul = newLi.closest('ul');
+    if (ul && !ul.classList.contains('checklist')) {
+      ul.classList.add('checklist');
+      return;
+    }
+  }
+  // Fallback: find the new UL by comparing DOM before/after execCommand
+  if (priorULs) {
+    for (const ul of editorEl.querySelectorAll('ul')) {
+      if (!priorULs.has(ul) && !ul.classList.contains('checklist')) {
+        ul.classList.add('checklist');
+        return;
+      }
+    }
+  }
+  // Last resort: retry after browser tick
+  setTimeout(() => {
+    const retryLi = isInListItem();
+    if (retryLi) {
+      const ul = retryLi.closest('ul');
+      if (ul && !ul.classList.contains('checklist')) ul.classList.add('checklist');
+    }
+  }, 0);
+}
+
+// --- Check if cursor is inside a checklist
+export function isInChecklist() {
+  const li = isInListItem();
+  if (!li) return false;
+  const list = li.closest('ul');
+  return list && list.classList.contains('checklist');
+}
+
+// --- Attach click handler for checklist checkboxes in an editor
+export function attachChecklistHandler(editor) {
+  editor.addEventListener('mousedown', (e) => {
+    // Walk up from target to find a checklist li
+    let node = e.target;
+    while (node && node !== editor) {
+      if (node.tagName === 'LI' && node.parentElement && node.parentElement.classList.contains('checklist')) {
+        const liRect = node.getBoundingClientRect();
+        const clickX = e.clientX - liRect.left;
+        // Click is in the checkbox area (the ::before circle in left padding)
+        if (clickX < 24) {
+          e.preventDefault();
+          e.stopPropagation();
+          node.classList.toggle('checked');
+        }
+        return;
+      }
+      node = node.parentNode;
+    }
+  });
+}
+
 // ============================================================
 // TEXT HIGHLIGHTER (shared across all rich-text editors)
 // ============================================================
@@ -2758,7 +2986,20 @@ function getHighlightContextMenu() {
       <u>U</u>
       Underline
     </button>
-    <div class="highlight-context-divider"></div>
+    <div class="highlight-context-divider ctx-lists-divider"></div>
+    <button type="button" class="highlight-context-item ctx-bullet-list-btn">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3" cy="6" r="1.5" fill="currentColor" stroke="none"/><circle cx="3" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="3" cy="18" r="1.5" fill="currentColor" stroke="none"/></svg>
+      Bullet list
+    </button>
+    <button type="button" class="highlight-context-item ctx-numbered-list-btn">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><line x1="10" y1="6" x2="21" y2="6"/><line x1="10" y1="12" x2="21" y2="12"/><line x1="10" y1="18" x2="21" y2="18"/><text x="1" y="8" font-size="8" fill="currentColor" stroke="none" font-family="sans-serif">1</text><text x="1" y="14" font-size="8" fill="currentColor" stroke="none" font-family="sans-serif">2</text><text x="1" y="20" font-size="8" fill="currentColor" stroke="none" font-family="sans-serif">3</text></svg>
+      Numbered list
+    </button>
+    <button type="button" class="highlight-context-item ctx-checklist-btn">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="3.5"/><line x1="14" y1="6.5" x2="21" y2="6.5"/><rect x="3" y="14" width="7" height="7" rx="3.5"/><line x1="14" y1="17.5" x2="21" y2="17.5"/><polyline points="4.5 17 6 18.5 8.5 15.5" stroke-width="1.5"/></svg>
+      Checklist
+    </button>
+    <div class="highlight-context-divider ctx-highlight-divider"></div>
     <button type="button" class="highlight-context-item highlight-apply-btn">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M12 20h9"></path>
@@ -3064,10 +3305,11 @@ export function attachHighlighterContextMenu(editor, options) {
 
   editor.addEventListener('contextmenu', (e) => {
     const sel = window.getSelection();
-    if (!sel || sel.isCollapsed || sel.rangeCount === 0) return;
+    if (!sel || sel.rangeCount === 0) return;
     const range = sel.getRangeAt(0);
     if (!editor.contains(range.commonAncestorContainer)) return;
-    if (!sel.toString().trim()) return;
+
+    const hasSelection = !sel.isCollapsed && sel.toString().trim();
 
     e.preventDefault();
     hideTaskLinkPicker();
@@ -3089,22 +3331,42 @@ export function attachHighlighterContextMenu(editor, options) {
     rewire('.ctx-italic-btn', () => { document.execCommand('italic'); hideHighlightContextMenu(); });
     rewire('.ctx-underline-btn', () => { document.execCommand('underline'); hideHighlightContextMenu(); });
 
-    // --- Highlight / Remove highlight ---
-    rewire('.highlight-apply-btn', () => applyHighlightToSelection(editor));
+    // --- List buttons (always visible) — restore focus + selection so commands target the editor ---
+    function restoreEditorFocus() {
+      editor.focus();
+      const s = window.getSelection();
+      s.removeAllRanges();
+      s.addRange(savedRange.cloneRange());
+    }
+    rewire('.ctx-bullet-list-btn', () => { restoreEditorFocus(); document.execCommand('insertUnorderedList'); hideHighlightContextMenu(); });
+    rewire('.ctx-numbered-list-btn', () => { restoreEditorFocus(); document.execCommand('insertOrderedList'); hideHighlightContextMenu(); });
+    rewire('.ctx-checklist-btn', () => { restoreEditorFocus(); toggleChecklist(editor); hideHighlightContextMenu(); });
+
+    // --- Highlight / Remove highlight (only with selection) ---
+    const highlightDivider = menu.querySelector('.ctx-highlight-divider');
+    const applyBtn = rewire('.highlight-apply-btn', () => applyHighlightToSelection(editor));
     const removeBtn = rewire('.highlight-remove-btn', () => removeHighlightFromSelection(editor));
 
-    const anchor = sel.anchorNode;
-    const inHighlight = anchor && (
-      anchor.nodeType === Node.TEXT_NODE
-        ? anchor.parentElement?.closest('mark.text-highlight')
-        : anchor.closest?.('mark.text-highlight')
-    );
-    removeBtn.style.display = inHighlight ? '' : 'none';
+    if (hasSelection) {
+      highlightDivider.style.display = '';
+      applyBtn.style.display = '';
+      const anchor = sel.anchorNode;
+      const inHighlight = anchor && (
+        anchor.nodeType === Node.TEXT_NODE
+          ? anchor.parentElement?.closest('mark.text-highlight')
+          : anchor.closest?.('mark.text-highlight')
+      );
+      removeBtn.style.display = inHighlight ? '' : 'none';
+    } else {
+      highlightDivider.style.display = 'none';
+      applyBtn.style.display = 'none';
+      removeBtn.style.display = 'none';
+    }
 
-    // --- Link task ---
+    // --- Link task (only with selection + if enabled) ---
     const linkTaskBtn = menu.querySelector('.ctx-link-task-btn');
     const linkTaskDivider = menu.querySelector('.ctx-link-task-divider');
-    if (opts.linkTask) {
+    if (opts.linkTask && hasSelection) {
       linkTaskDivider.style.display = '';
       const newLinkBtn = linkTaskBtn.cloneNode(true);
       linkTaskBtn.parentNode.replaceChild(newLinkBtn, linkTaskBtn);

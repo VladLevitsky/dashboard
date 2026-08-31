@@ -8,6 +8,7 @@
 import { model, editState, currentData } from '../state.js';
 import { PLACEHOLDER_URL, APP_VERSION, LINKS_FILE_PATH } from '../constants.js';
 import { saveModel, cleanupOldBackups, migrateToUnifiedCards, migrateToHalfWidthCards } from './storage.js';
+import { migrateToDeviceLayouts, hydrateLayout, getActiveMode } from '../features/grid-engine.js';
 import { getActiveStorageKey, markCloudDirty } from './sync.js';
 
 // --- Helper to convert reminder from internal format to JSON for export
@@ -119,12 +120,11 @@ export function extractUrlOverrides() {
   });
 
   // Schema version for migration support
-  obj.schemaVersion = data.schemaVersion || 5;
+  obj.schemaVersion = data.schemaVersion || 8;
 
   // Structure information
   obj._structure = {
     sections: data.sections,
-    sectionsStacked: data.sectionsStacked,
     sectionTitles: data.sectionTitles,
     sectionIcons: data.sectionIcons || {},
     sectionColors: data.sectionColors || {},
@@ -142,7 +142,7 @@ export function extractUrlOverrides() {
   obj.timeTrackingExpanded = data.timeTrackingExpanded || false;
   obj.quickAccessExpanded = data.quickAccessExpanded || false;
   obj.selectorModeActive = data.selectorModeActive || false;
-  obj.displayMode = data.displayMode || 'normal';
+  obj.lastActiveMode = data.lastActiveMode || 'tablet'; // device-layout profiles ride in sections[].layouts
   obj.quickAccessItems = data.quickAccessItems || { icons: [], listItems: [], quickLinks: [] };
   obj.timers = data.timers || [];
   obj.tasks = data.tasks || [];
@@ -625,10 +625,6 @@ export function applyUrlOverrides(data) {
   if (structure.sections && Array.isArray(structure.sections)) {
     current.sections = structure.sections;
   }
-  // Restore sectionsStacked (separate section order for stacked mode)
-  if (structure.sectionsStacked && Array.isArray(structure.sectionsStacked)) {
-    current.sectionsStacked = structure.sectionsStacked;
-  }
   if (structure.sectionTitles) {
     current.sectionTitles = structure.sectionTitles;
   }
@@ -682,17 +678,58 @@ export function applyUrlOverrides(data) {
         }
       });
     }
-    if (current.sectionsStacked) {
-      current.sectionsStacked.forEach(section => {
-        if (section.twoColumnPair) {
-          section.halfWidth = true;
-          delete section.twoColumnPair;
-          delete section.pairIndex;
+  }
+
+  // Run grid layout migration (v5 → v6 → v7)
+  if (window.migrateToGridLayout) {
+    window.migrateToGridLayout(current);
+  } else {
+    if (current.sections) {
+      current.sections.forEach(section => {
+        if (section.halfWidth !== undefined) {
+          section.gridColSpan = section.halfWidth ? 6 : 12;
+          delete section.halfWidth;
         }
       });
     }
+    delete current.sectionsStacked;
+    delete current.displayMode;
   }
-  current.schemaVersion = 5;
+  // Migrate to 24-col grid — ONLY for pre-v7 exports. Running this on
+  // v7/v8 data would double legitimate small colSpans (e.g., mobile's 4).
+  if (importedVersion < 7 && current.sections) {
+    current.sections.forEach(section => {
+      if (!section.gridColSpan) {
+        const old = section.gridSpan || 12;
+        section.gridColSpan = old * 2;
+      } else if (section.gridColSpan <= 12) {
+        section.gridColSpan = section.gridColSpan * 2;
+        if (section.gridCol) section.gridCol = (section.gridCol - 1) * 2 + 1;
+        if (section.gridRowSpan) section.gridRowSpan = section.gridRowSpan * 2;
+      }
+      delete section.gridSpan;
+      delete section.minHeight;
+    });
+  }
+
+  // Migrate to per-device layout profiles (v8), then show this browser's mode
+  if (data.lastActiveMode) current.lastActiveMode = data.lastActiveMode;
+  current.schemaVersion = importedVersion >= 8 ? 8 : 7;
+  migrateToDeviceLayouts(current);
+  if (Array.isArray(current.sections) && current.sections.length > 0) {
+    // Flat props in the export represent its lastActiveMode — sync that profile
+    const exportedMode = current.lastActiveMode || 'tablet';
+    current.sections.forEach(s => {
+      if (s.type === 'header' || !s.gridCol || !s.gridRow) return;
+      if (!s.layouts) s.layouts = {};
+      s.layouts[exportedMode] = {
+        col: s.gridCol, row: s.gridRow,
+        colSpan: s.gridColSpan || 24, rowSpan: s.gridRowSpan || 8,
+      };
+    });
+    hydrateLayout(current.sections, getActiveMode());
+    current.lastActiveMode = getActiveMode();
+  }
 
   // Apply to ALL sections - all are now unified format
   // Helper function to import unified card data
@@ -794,10 +831,6 @@ export function applyUrlOverrides(data) {
     current.selectorModeActive = data.selectorModeActive;
   }
 
-  // Apply display mode
-  if (data.displayMode === 'normal' || data.displayMode === 'stacked') {
-    current.displayMode = data.displayMode;
-  }
 
   // Apply quick access items
   if (data.quickAccessItems && typeof data.quickAccessItems === 'object') {
@@ -849,9 +882,9 @@ export function applyUrlOverrides(data) {
   if (window.isImporting) {
     // During import, only save to localStorage without triggering JSON file save
     const payload = {
-      schemaVersion: current.schemaVersion || 5,
+      schemaVersion: current.schemaVersion || 8,
       sections: current.sections,
-      sectionsStacked: current.sectionsStacked,
+      lastActiveMode: current.lastActiveMode || 'tablet',
       sectionTitles: current.sectionTitles,
       sectionIcons: current.sectionIcons,
       sectionColors: current.sectionColors,
@@ -868,7 +901,6 @@ export function applyUrlOverrides(data) {
       quickAccessExpanded: current.quickAccessExpanded,
       selectorModeActive: current.selectorModeActive,
       quickAccessItems: current.quickAccessItems,
-      displayMode: current.displayMode,
       tasks: current.tasks || [],
       completedTasks: current.completedTasks || [],
       projects: current.projects || [],

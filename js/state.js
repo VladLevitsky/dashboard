@@ -19,13 +19,13 @@
 // Render order: Icons → Reminders → Subtasks → Copy-paste
 //
 export const model = {
-  // Schema version for data migration (5 = centralized Eisenhower tasks)
-  schemaVersion: 5,
-  // Track the order and structure of sections for normal (single-column) mode
+  // Schema version for data migration (8 = per-device layout profiles)
+  schemaVersion: 8,
+  // Which device mode the flat grid props currently represent (synced)
+  lastActiveMode: 'tablet',
+  // Track the order and structure of sections
   // Empty by default - users add cards via the + button
   sections: [],
-  // Separate section order for stacked (two-column) mode - initialized from sections on first use
-  sectionsStacked: null,
   timers: [
     { id: 'timer-1', title: 'Task 1', elapsed: 0, isRunning: false, lastTick: null },
     { id: 'timer-2', title: 'Task 2', elapsed: 0, isRunning: false, lastTick: null },
@@ -33,7 +33,6 @@ export const model = {
   timeTrackingExpanded: false,
   quickAccessExpanded: false,
   selectorModeActive: false,
-  displayMode: 'normal', // 'normal' or 'stacked'
   quickAccessItems: {
     icons: [],
     listItems: [],
@@ -100,9 +99,14 @@ export const dragState = {
   draggedElement: null,
   draggedSection: null,
   dropIndicator: null,
-  potentialDropZone: null,
-  potentialDropPosition: null,
   lastDragOverTime: 0,
+  // Grid drag (card-level): ghost + snapped drop target in cell coordinates
+  gridGhost: null,
+  potentialDropCol: null,
+  potentialDropRow: null,
+  potentialDropColSpan: null,
+  dragOffsetCol: 0,   // cell offset within the card where the drag was grabbed
+  dragOffsetRow: 0,
   // Item-level dragging
   draggedItem: null,
   draggedItemKey: null,
@@ -113,9 +117,9 @@ export const dragState = {
 
 // --- Known static keys on the model (everything else is dynamic section data)
 const MODEL_STATIC_KEYS = new Set([
-  'schemaVersion', 'sections', 'sectionsStacked', 'timers',
+  'schemaVersion', 'sections', 'timers', 'lastActiveMode',
   'timeTrackingExpanded', 'quickAccessExpanded', 'selectorModeActive',
-  'displayMode', 'quickAccessItems', 'sectionTitles', 'sectionIcons',
+  'quickAccessItems', 'sectionTitles', 'sectionIcons',
   'sectionColors', 'subtitleColors', 'collapsedSubtitles', 'cardNotes',
   'collapsedCards', 'tasks', 'ideas', 'meetings', 'completedTasks', 'projects',
   'header', 'darkMode', 'glassMode', 'glassTheme',
@@ -134,7 +138,7 @@ export function resetModel() {
   }
   // Reset collection properties to defaults
   model.sections = [];
-  model.sectionsStacked = null;
+  model.lastActiveMode = 'tablet';
   model.sectionTitles = {};
   model.sectionIcons = {};
   model.sectionColors = {};
@@ -166,49 +170,7 @@ export function currentData() {
   return editState.working || model;
 }
 
-// --- Helper to get sections for current display mode
+// --- Helper to get sections array
 export function currentSections() {
-  const data = currentData();
-  const displayMode = data.displayMode || 'normal';
-
-  if (displayMode === 'stacked') {
-    // Initialize sectionsStacked from sections if not already done
-    if (!data.sectionsStacked) {
-      // Deep copy sections - halfWidth is shared between modes
-      data.sectionsStacked = data.sections.map(section => {
-        return JSON.parse(JSON.stringify(section));
-      });
-    }
-    return data.sectionsStacked;
-  }
-
-  return data.sections;
-}
-
-// --- Helper to ensure a section exists in both arrays (normal and stacked)
-export function ensureSectionInBothArrays(section) {
-  const data = currentData();
-
-  // Add to sections (normal mode) if not exists
-  if (!data.sections.find(s => s.id === section.id)) {
-    data.sections.push(JSON.parse(JSON.stringify(section)));
-  }
-
-  // Add to sectionsStacked if it exists and section not in it
-  if (data.sectionsStacked && !data.sectionsStacked.find(s => s.id === section.id)) {
-    data.sectionsStacked.push(JSON.parse(JSON.stringify(section)));
-  }
-}
-
-// --- Helper to remove a section from both arrays
-export function removeSectionFromBothArrays(sectionId) {
-  const data = currentData();
-
-  // Remove from sections (normal mode)
-  data.sections = data.sections.filter(s => s.id !== sectionId);
-
-  // Remove from sectionsStacked if it exists
-  if (data.sectionsStacked) {
-    data.sectionsStacked = data.sectionsStacked.filter(s => s.id !== sectionId);
-  }
+  return currentData().sections;
 }

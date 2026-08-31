@@ -87,7 +87,6 @@ import { initAuthOnStartup, postRestoreAuthSync } from '../features/auth-ui.js';
 import { immediateCloudSave } from '../core/sync.js';
 
 // Module state
-let cardsCollapsed = false;
 
 // Copy-text modal state
 let currentCopyTextItem = null;
@@ -684,8 +683,8 @@ export async function init() {
   applyDarkMode();
   applyGlassMode();
   applyGlassTheme();
-  applyDisplayMode();
   if (window.renderHeaderAndTitles) window.renderHeaderAndTitles();
+  if (window.applyCellSize) window.applyCellSize();
   if (window.renderAllSections) window.renderAllSections();
   wireUI();
   wireNotepadEvents();
@@ -694,6 +693,7 @@ export async function init() {
   ensureSectionPlusButtons();
   refreshEditingClasses();
   initStickyNotes();
+  if (window.initResizeObserver) window.initResizeObserver();
   initSearch();
 
   // Initialize time tracking if it was expanded
@@ -732,132 +732,83 @@ export async function init() {
   }
 }
 
-// ===== DISPLAY MODE =====
+// ===== DEVICE LAYOUT MODE PICKER =====
+// Bubble popup under the tablet icon beside the search bar. Each option
+// switches to an independent per-device layout profile (grid-engine.js).
 
-export function applyDisplayMode() {
-  const data = currentData();
-  const mode = data.displayMode || 'normal';
+const DEVICE_OPTION_ICONS = {
+  mobile: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="7" y="2" width="10" height="20" rx="2" ry="2"/><line x1="11" y1="18.5" x2="13" y2="18.5"/>
+    </svg>`,
+  tablet: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="4" y="2" width="16" height="20" rx="2" ry="2"/><line x1="10" y1="18.5" x2="14" y2="18.5"/>
+    </svg>`,
+  desktop: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
+    </svg>`,
+};
 
-  if (mode === 'stacked') {
-    document.body.classList.add('stacked-mode');
-  } else {
-    document.body.classList.remove('stacked-mode');
-  }
+/** Make the toggle button show the ACTIVE mode's icon (same art as the options). */
+export function updateDeviceModeToggleIcon() {
+  const toggleBtn = $('#device-mode-toggle');
+  if (!toggleBtn) return;
+  const mode = window.getActiveMode ? window.getActiveMode() : 'tablet';
+  toggleBtn.innerHTML = DEVICE_OPTION_ICONS[mode] || DEVICE_OPTION_ICONS.tablet;
+  toggleBtn.title = mode.charAt(0).toUpperCase() + mode.slice(1) + ' layout';
 }
 
-export function openDisplayModeModal() {
-  const toggleBtn = $('#display-mode-toggle');
+export function openDeviceModeModal() {
+  const toggleBtn = $('#device-mode-toggle');
   if (!toggleBtn) return;
 
-  // Check if already open - if so, close it
-  let container = toggleBtn._displayModeContainer;
-  if (container && container.parentNode) {
-    closeDisplayModeModal();
+  // Toggle behavior: close if already open
+  if (toggleBtn._deviceModeContainer && toggleBtn._deviceModeContainer.parentNode) {
+    closeDeviceModeModal();
     return;
   }
 
-  const data = currentData();
+  const activeMode = window.getActiveMode ? window.getActiveMode() : 'tablet';
 
-  // Create the bubble container
-  container = document.createElement('div');
-  container.className = 'display-mode-bubbles';
+  const container = document.createElement('div');
+  container.className = 'device-mode-bubbles';
 
-  // Normal mode option
-  const normalBtn = document.createElement('button');
-  normalBtn.type = 'button';
-  normalBtn.className = 'display-mode-option' + (data.displayMode === 'normal' ? ' active' : '');
-  normalBtn.dataset.mode = 'normal';
-  normalBtn.title = 'Normal view';
-  normalBtn.innerHTML = `
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-    </svg>
-  `;
-  normalBtn.style.animationDelay = '0ms';
-  normalBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    setDisplayMode('normal');
-    closeDisplayModeModal();
+  ['mobile', 'tablet', 'desktop'].forEach((mode, i) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'device-mode-option' + (mode === activeMode ? ' active' : '');
+    btn.dataset.mode = mode;
+    btn.title = mode.charAt(0).toUpperCase() + mode.slice(1) + ' layout';
+    btn.innerHTML = DEVICE_OPTION_ICONS[mode];
+    btn.style.animationDelay = `${i * 50}ms`;
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (window.switchDeviceMode) window.switchDeviceMode(mode);
+      closeDeviceModeModal();
+    });
+    container.appendChild(btn);
   });
 
-  // Stacked mode option
-  const stackedBtn = document.createElement('button');
-  stackedBtn.type = 'button';
-  stackedBtn.className = 'display-mode-option' + (data.displayMode === 'stacked' ? ' active' : '');
-  stackedBtn.dataset.mode = 'stacked';
-  stackedBtn.title = 'Stacked view (for large screens)';
-  stackedBtn.innerHTML = `
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <rect x="2" y="3" width="9" height="18" rx="1" ry="1"/>
-      <rect x="13" y="3" width="9" height="8" rx="1" ry="1"/>
-      <rect x="13" y="13" width="9" height="8" rx="1" ry="1"/>
-    </svg>
-  `;
-  stackedBtn.style.animationDelay = '50ms';
-  stackedBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    setDisplayMode('stacked');
-    closeDisplayModeModal();
-  });
-
-  container.appendChild(normalBtn);
-  container.appendChild(stackedBtn);
-
-  // Append to body for fixed positioning
   document.body.appendChild(container);
-  toggleBtn._displayModeContainer = container;
+  toggleBtn._deviceModeContainer = container;
 
-  // Position below the toggle button
   const btnRect = toggleBtn.getBoundingClientRect();
   container.style.left = `${btnRect.left + btnRect.width / 2}px`;
   container.style.top = `${btnRect.bottom + 10}px`;
-  container.style.bottom = 'auto';
 
-  // Trigger animation
-  requestAnimationFrame(() => {
-    container.classList.add('open');
-  });
+  requestAnimationFrame(() => container.classList.add('open'));
 }
 
-export function closeDisplayModeModal() {
-  const toggleBtn = $('#display-mode-toggle');
+export function closeDeviceModeModal() {
+  const toggleBtn = $('#device-mode-toggle');
   if (!toggleBtn) return;
 
-  const container = toggleBtn._displayModeContainer;
+  const container = toggleBtn._deviceModeContainer;
   if (container && container.parentNode) {
     container.classList.remove('open');
     container.classList.add('closing');
-    setTimeout(() => {
-      if (container.parentNode) {
-        container.remove();
-      }
-    }, 200);
-    toggleBtn._displayModeContainer = null;
+    setTimeout(() => { if (container.parentNode) container.remove(); }, 200);
+    toggleBtn._deviceModeContainer = null;
   }
-}
-
-export function setDisplayMode(mode) {
-  // Always update both model and working copy to ensure display mode persists
-  // Display mode is a UI preference, not content that should be "undoable"
-  model.displayMode = mode;
-  if (editState.working) {
-    editState.working.displayMode = mode;
-  }
-
-  // Apply the display mode to the body
-  applyDisplayMode();
-
-  // Re-render sections with the new mode's section order
-  if (window.renderAllSections) window.renderAllSections();
-
-  // Re-apply edit mode UI if active
-  if (editState.enabled) {
-    if (window.ensureSectionPlusButtons) window.ensureSectionPlusButtons();
-    if (window.refreshEditingClasses) window.refreshEditingClasses();
-  }
-
-  // Save to localStorage
-  saveModel();
 }
 
 // ===== COPY-PASTE MODAL =====
@@ -906,10 +857,11 @@ export function acceptCopyTextModal() {
   showToast('Copy text updated');
 }
 
-// ===== CARD COLLAPSE/EXPAND =====
+// ===== OUTSIDE-CLICK CLOSE FOR LINK/TASK BUBBLES =====
+// (The old click-empty-space-to-collapse-all navigation was removed;
+//  cards collapse individually via their chevrons instead.)
 
 export function setupCardCollapseExpand() {
-  // Use event delegation on the main container
   const main = $('.app-main');
   if (!main) return;
 
@@ -917,13 +869,11 @@ export function setupCardCollapseExpand() {
     // Only work when NOT in edit mode
     if (editState.enabled) return;
 
-    // Check if there are any open link containers (reminder, list item, or icon links)
+    // Close any open link containers when clicking outside them
     const openLinkContainers = document.querySelectorAll('.reminder-links-expanded, .list-item-links-expanded, .icon-links-expanded');
     if (openLinkContainers.length > 0) {
-      // If click is inside a link container or on a link toggle button, let it handle itself
       const isInsideLinks = e.target.closest('.reminder-links-expanded, .list-item-links-expanded, .icon-links-expanded, .reminder-links-toggle, .list-item-links-toggle, .icon-link-indicator');
       if (!isInsideLinks) {
-        // Close all open link containers and prevent card collapse
         closeAllReminderLinks();
         closeAllListItemLinks();
         closeAllIconLinks();
@@ -931,56 +881,16 @@ export function setupCardCollapseExpand() {
       }
     }
 
-    // Check if there are any open task containers (reminder or list item tasks)
+    // Close any open task containers when clicking outside them
     const openTaskContainers = document.querySelectorAll('.reminder-tasks-expanded');
     if (openTaskContainers.length > 0) {
-      // If click is inside a task container or on a task toggle button, let it handle itself
       const isInsideTasks = e.target.closest('.reminder-tasks-expanded, .reminder-tasks-toggle, .list-item-tasks-toggle');
       if (!isInsideTasks) {
-        // Close all open task containers and prevent card collapse
         closeAllReminderTasks();
         closeAllListItemTasks();
-        return;
       }
     }
-
-    const clickedCard = e.target.closest('.card');
-    if (!clickedCard) return;
-
-    // Check if click was on an interactive element
-    const isInteractive = e.target.closest('a, button, input, .editable, .reminder-item, .icon-button, .list-item, .copy-paste-item');
-
-    if (cardsCollapsed) {
-      // If cards are collapsed, clicking any card expands all and scrolls to it
-      expandAllCards();
-      setTimeout(() => {
-        clickedCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }, 100);
-    } else if (!isInteractive) {
-      // If cards are not collapsed and click is on empty space, collapse all
-      collapseAllCards();
-    }
   });
-}
-
-export function collapseAllCards() {
-  const cards = $$('.app-main .card');
-  const twoColContainers = $$('.app-main .two-col');
-
-  cards.forEach(card => card.classList.add('collapsed'));
-  twoColContainers.forEach(container => container.classList.add('collapsed'));
-
-  cardsCollapsed = true;
-}
-
-export function expandAllCards() {
-  const cards = $$('.app-main .card');
-  const twoColContainers = $$('.app-main .two-col');
-
-  cards.forEach(card => card.classList.remove('collapsed'));
-  twoColContainers.forEach(container => container.classList.remove('collapsed'));
-
-  cardsCollapsed = false;
 }
 
 // ===== HEADER AND TITLES =====
@@ -1059,8 +969,30 @@ export function wireUI() {
   $('#reset-all-timers').addEventListener('click', resetAllTimers);
   $('#add-timer-btn').addEventListener('click', addNewTimer);
 
-  // Display mode toggle
-  $('#display-mode-toggle').addEventListener('click', openDisplayModeModal);
+  // Device layout mode picker (icon beside search bar shows the active mode)
+  const deviceToggle = $('#device-mode-toggle');
+  if (deviceToggle) {
+    deviceToggle.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openDeviceModeModal();
+    });
+    updateDeviceModeToggleIcon();
+  }
+
+  // Add Card FAB button
+  const addCardFab = $('#add-card-fab');
+  if (addCardFab) {
+    addCardFab.addEventListener('click', () => {
+      if (window.createCard) {
+        window.createCard(0); // Insert at top
+        // Open the modal for the new card
+        const sections = window.currentSections ? window.currentSections() : [];
+        if (sections.length > 0 && window.openCardEditModal) {
+          window.openCardEditModal(sections[0].id);
+        }
+      }
+    });
+  }
 
   // Meetings toggle
   const calendarViewToggle = $('#calendar-view-toggle');
@@ -1135,11 +1067,11 @@ export function wireUI() {
     if (!clickedOnListItemTasksToggle && !clickedOnTaskBubble) {
       closeAllListItemTasks();
     }
-    // Close display mode bubbles when clicking outside
-    const clickedOnDisplayToggle = e.target.closest('#display-mode-toggle');
-    const clickedOnDisplayOption = e.target.closest('.display-mode-option');
-    if (!clickedOnDisplayToggle && !clickedOnDisplayOption) {
-      closeDisplayModeModal();
+    // Close device mode bubbles when clicking outside
+    const clickedOnDeviceToggle = e.target.closest('#device-mode-toggle');
+    const clickedOnDeviceOption = e.target.closest('.device-mode-option');
+    if (!clickedOnDeviceToggle && !clickedOnDeviceOption) {
+      closeDeviceModeModal();
     }
   });
 

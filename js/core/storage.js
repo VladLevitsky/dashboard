@@ -5,6 +5,7 @@ import { PLACEHOLDER_URL, APP_VERSION } from '../constants.js';
 import { model, currentData } from '../state.js';
 import { showToast } from '../utils.js';
 import { getActiveStorageKey, markCloudDirty } from './sync.js';
+import { migrateToGrid24, migrateToDeviceLayouts, hydrateLayout, persistActiveLayout, getActiveMode, DEFAULT_COL_SPAN, DEFAULT_ROW_SPAN } from '../features/grid-engine.js';
 
 // --- Migrate legacy card types to unified card structure (schemaVersion 3)
 // This converts:
@@ -194,7 +195,7 @@ export function migrateToUnifiedCards(data) {
     });
   }
 
-  // Process sectionsStacked array (stacked mode) if it exists
+  // Process sectionsStacked array (legacy stacked mode) if it exists
   if (Array.isArray(data.sectionsStacked)) {
     data.sectionsStacked.forEach(section => {
       if (legacyTypes.includes(section.type)) {
@@ -388,6 +389,37 @@ export function migrateToEisenhowerTasks(data) {
   return data;
 }
 
+// --- Migrate to grid layout (schemaVersion 6)
+// Converts halfWidth boolean to gridSpan number, removes stacked mode
+export function migrateToGridLayout(data) {
+  if (data.schemaVersion >= 6) return data;
+
+  const migrateArray = (sections) => {
+    if (!Array.isArray(sections)) return;
+    sections.forEach(section => {
+      const span = section.halfWidth ? 6 : 12;
+      section.gridSpan = span;
+      section.gridColSpan = span;
+      delete section.halfWidth;
+    });
+  };
+
+  // If user was in stacked mode, use that ordering
+  if (data.displayMode === 'stacked' && Array.isArray(data.sectionsStacked) && data.sectionsStacked.length > 0) {
+    migrateArray(data.sectionsStacked);
+    data.sections = data.sectionsStacked;
+  } else {
+    migrateArray(data.sections);
+  }
+
+  delete data.sectionsStacked;
+  delete data.displayMode;
+  data.schemaVersion = 6;
+  return data;
+}
+
+// migrateToGrid24 lives in grid-engine.js (single authoritative version, imported above)
+
 // --- Clean up old backup entries to prevent localStorage quota issues
 export function cleanupOldBackups() {
   const keys = Object.keys(localStorage);
@@ -407,9 +439,9 @@ export function saveModel() {
   const data = model;
 
   const payload = {
-    schemaVersion: data.schemaVersion || 5,
+    schemaVersion: data.schemaVersion || 8,
     sections: data.sections,
-    sectionsStacked: data.sectionsStacked,
+    lastActiveMode: data.lastActiveMode || 'tablet',
     sectionTitles: data.sectionTitles,
     sectionIcons: data.sectionIcons,
     sectionColors: data.sectionColors,
@@ -426,7 +458,6 @@ export function saveModel() {
     quickAccessExpanded: data.quickAccessExpanded,
     selectorModeActive: data.selectorModeActive,
     quickAccessItems: data.quickAccessItems,
-    displayMode: data.displayMode,
     tasks: data.tasks || [],
     ideas: data.ideas || [],
     meetings: data.meetings || [],
@@ -497,6 +528,15 @@ export async function restoreModel() {
     // Run migration for embedded tasks to Eisenhower Matrix (schemaVersion < 5)
     saved = migrateToEisenhowerTasks(saved);
 
+    // Run migration for grid layout (schemaVersion < 6)
+    saved = migrateToGridLayout(saved);
+
+    // Run migration for 24-column grid (schemaVersion < 7)
+    saved = migrateToGrid24(saved);
+
+    // Run migration for per-device layout profiles (schemaVersion < 8)
+    saved = migrateToDeviceLayouts(saved);
+
     // Restore schema version
     if (saved.schemaVersion) {
       model.schemaVersion = saved.schemaVersion;
@@ -506,8 +546,28 @@ export async function restoreModel() {
       model.sections = saved.sections;
     }
 
-    if (saved.sectionsStacked) {
-      model.sectionsStacked = saved.sectionsStacked;
+    // Which device mode the saved flat layout represents
+    if (saved.lastActiveMode) {
+      model.lastActiveMode = saved.lastActiveMode;
+    }
+
+    // Reconcile device layout profiles with the flat working layout:
+    // the flat props were saved from lastActiveMode — make sure that
+    // profile matches them (covers models synced from another device),
+    // then hydrate whichever mode THIS browser wants to display.
+    if (Array.isArray(model.sections) && model.sections.length > 0) {
+      const savedMode = model.lastActiveMode || 'tablet';
+      model.sections.forEach(s => {
+        if (s.type === 'header' || !s.gridCol || !s.gridRow) return;
+        if (!s.layouts) s.layouts = {};
+        s.layouts[savedMode] = {
+          col: s.gridCol, row: s.gridRow,
+          colSpan: s.gridColSpan || DEFAULT_COL_SPAN,
+          rowSpan: s.gridRowSpan || DEFAULT_ROW_SPAN,
+        };
+      });
+      hydrateLayout(model.sections, getActiveMode());
+      model.lastActiveMode = getActiveMode();
     }
 
     if (saved.sectionTitles) {
@@ -580,11 +640,6 @@ export async function restoreModel() {
     }
     if (saved.quickAccessItems) {
       model.quickAccessItems = saved.quickAccessItems;
-    }
-
-    // Restore display mode
-    if (saved.displayMode === 'normal' || saved.displayMode === 'stacked') {
-      model.displayMode = saved.displayMode;
     }
 
     // Restore centralized tasks (Eisenhower Matrix)
@@ -663,9 +718,6 @@ export function deepMergeModel(target, source) {
   // Handle arrays - replace them completely
   if (Array.isArray(source.sections)) {
     target.sections = [...source.sections];
-  }
-  if (Array.isArray(source.sectionsStacked)) {
-    target.sectionsStacked = [...source.sectionsStacked];
   }
   if (Array.isArray(source.timers)) {
     target.timers = [...source.timers];
@@ -772,6 +824,12 @@ export function deepMergeModel(target, source) {
   if (typeof source.schemaVersion !== 'undefined') {
     target.schemaVersion = source.schemaVersion;
   }
+  // Carry lastActiveMode through edit-mode confirm (device-layout profiles).
+  // switchDeviceMode writes both model and working copies, but the merge must
+  // be explicit so confirm can never desync them.
+  if (typeof source.lastActiveMode !== 'undefined') {
+    target.lastActiveMode = source.lastActiveMode;
+  }
   if (typeof source.darkMode !== 'undefined') {
     target.darkMode = source.darkMode;
   }
@@ -789,9 +847,6 @@ export function deepMergeModel(target, source) {
   }
   if (typeof source.selectorModeActive !== 'undefined') {
     target.selectorModeActive = source.selectorModeActive;
-  }
-  if (typeof source.displayMode !== 'undefined') {
-    target.displayMode = source.displayMode;
   }
   if (source.tasks && Array.isArray(source.tasks)) {
     target.tasks = JSON.parse(JSON.stringify(source.tasks));

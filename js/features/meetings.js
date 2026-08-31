@@ -4,7 +4,7 @@
 
 import { currentData } from '../state.js';
 import { $, showToast, moveCursorAfterNode, normalizeDescHtml, escapeAttr } from '../utils.js';
-import { handleEditorInput, handleEditorKeydown, createHighlighterButton, attachHighlighterContextMenu } from './edit-mode.js';
+import { handleEditorInput, handleEditorKeydown, createHighlighterButton, attachHighlighterContextMenu, toggleChecklist, isInChecklist, attachChecklistHandler } from './edit-mode.js';
 import { saveModel } from '../core/storage.js';
 import { HIGHLIGHT_COLORS, HIGHLIGHT_BORDER_COLORS, hyperlinkSelection, canHyperlink, attachTaskMention } from './projects.js';
 import { uploadFile, openFile } from '../core/file-service.js';
@@ -416,6 +416,9 @@ function showMeetingsEditMode(meeting) {
           <button type="button" class="task-desc-toolbar-btn meetings-inline-toolbar-btn" data-cmd="insertOrderedList" title="Numbered List">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><line x1="10" y1="6" x2="21" y2="6"/><line x1="10" y1="12" x2="21" y2="12"/><line x1="10" y1="18" x2="21" y2="18"/><text x="1" y="8" font-size="8" fill="currentColor" stroke="none" font-family="sans-serif">1</text><text x="1" y="14" font-size="8" fill="currentColor" stroke="none" font-family="sans-serif">2</text><text x="1" y="20" font-size="8" fill="currentColor" stroke="none" font-family="sans-serif">3</text></svg>
           </button>
+          <button type="button" class="task-desc-toolbar-btn meetings-inline-toolbar-btn meetings-checklist-btn" title="Checklist">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="3.5"/><line x1="14" y1="6.5" x2="21" y2="6.5"/><rect x="3" y="14" width="7" height="7" rx="3.5"/><line x1="14" y1="17.5" x2="21" y2="17.5"/><polyline points="4.5 17 6 18.5 8.5 15.5" stroke-width="1.5"/></svg>
+          </button>
           <div class="task-desc-toolbar-divider"></div>
           <button type="button" class="meeting-hyperlink-btn" id="meeting-hyperlink-btn" title="Select text, then click to add a hyperlink" disabled>
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -531,6 +534,12 @@ function showMeetingsEditMode(meeting) {
   viewSection.querySelectorAll('.meetings-inline-toolbar-btn').forEach(btn => {
     btn.addEventListener('mousedown', e => e.preventDefault());
     btn.addEventListener('click', () => {
+      if (btn.classList.contains('meetings-checklist-btn')) {
+        toggleChecklist();
+        updateInlineToolbarState();
+        $('#meetings-inline-desc-editor').focus();
+        return;
+      }
       document.execCommand(btn.dataset.cmd, false, null);
       updateInlineToolbarState();
       $('#meetings-inline-desc-editor').focus();
@@ -547,8 +556,12 @@ function showMeetingsEditMode(meeting) {
     meetingsToolbar.insertBefore(createHighlighterButton(), meetingHyperlinkRef);
   }
 
+  // Checklist click handler on meetings editor
+  const meetingsDescEditor = $('#meetings-inline-desc-editor');
+  attachChecklistHandler(meetingsDescEditor);
+
   // Highlighter context menu on meetings editor
-  attachHighlighterContextMenu($('#meetings-inline-desc-editor'), {
+  attachHighlighterContextMenu(meetingsDescEditor, {
     linkTask: true,
     onTaskLinked: (task) => {
       if (window.updateTask) {
@@ -854,8 +867,12 @@ function addInlineFileRow(fileId, fileName) {
 function updateInlineToolbarState() {
   const btns = document.querySelectorAll('.meetings-inline-toolbar-btn');
   btns.forEach(btn => {
+    if (btn.classList.contains('meetings-checklist-btn')) {
+      btn.classList.toggle('active', isInChecklist());
+      return;
+    }
     const cmd = btn.dataset.cmd;
-    if (cmd) btn.classList.toggle('active', document.queryCommandState(cmd));
+    if (cmd) btn.classList.toggle('active', document.queryCommandState(cmd) && !(cmd === 'insertUnorderedList' && isInChecklist()));
   });
 }
 

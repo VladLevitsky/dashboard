@@ -15,13 +15,16 @@ A fully customizable personal dashboard built with vanilla JavaScript, HTML5, an
 ### Data Model
 ```javascript
 const model = {
-  schemaVersion: 5,
+  schemaVersion: 8,
   darkMode: boolean,
   glassMode: true,              // Always on (glass style)
   glassTheme: 'classic' | 'sunset',
-  displayMode: 'normal' | 'stacked',
-  sections: [{ id, type: 'unified', title, twoColumnPair?, pairIndex? }],
-  sectionsStacked: null | Section[],
+  lastActiveMode: 'mobile'|'tablet'|'desktop', // which mode the flat grid props represent
+  sections: [{
+    id, type: 'unified', title,
+    gridCol, gridRow, gridColSpan, gridRowSpan,  // ACTIVE working layout (flat props)
+    layouts: { mobile?, tablet?, desktop?: { col, row, colSpan, rowSpan } }  // per-device profiles
+  }],
 
   // Card data stored by sectionId:
   [sectionId]: {
@@ -92,6 +95,8 @@ Images use explicit format objects (or legacy strings for backward compatibility
 │   │   ├── reminders.js     # Calendar/interval popovers, breakdown modal
 │   │   ├── cards.js         # Card CRUD, type selector
 │   │   ├── links.js         # Link modals
+│   │   ├── card-modal.js    # Card edit modal (opens from tile view)
+│   │   ├── card-resize.js   # Drag-to-resize card width/height
 │   │   ├── tasks.js         # Eisenhower Matrix task management
 │   │   ├── projects.js      # Projects module, @ mention autocomplete, highlight management
 │   │   ├── meetings.js      # Meetings with dates and recurrence
@@ -172,7 +177,16 @@ Click to see categorized list (Due Today / Overdue) with direct links to items.
 ### Text Highlighter
 Available in all rich-text editors (projects, meetings, tasks, subtasks, ideas, card notes):
 - 5 pastel colors (yellow, green, blue, pink, purple) selectable in toolbar
-- Right-click context menu: Bold, Italic, Underline, Highlight, Remove highlight, Link task
+- Right-click context menu: Bold, Italic, Underline, Bullet/Numbered/Checklist, Highlight, Remove highlight, Link task
+- Context menu works with or without text selection (highlight/link task require selection)
+
+### Checklists
+Available in all rich-text editors via toolbar button, context menu, or `[] ` markdown shortcut:
+- Uses `<ul class="checklist">` with CSS `::before` circle checkboxes
+- Click circle to toggle: checked items get green text, strikethrough, green filled circle with checkmark
+- Enter on checked item creates unchecked new item; Enter on empty item exits list
+- Tab/Shift+Tab indents/outdents (nested lists inherit `checklist` class)
+- `toggleChecklist()` handles conversion between list types (bullet ↔ numbered ↔ checklist)
 
 ### Card Notes (Notepad)
 Per-card note system with rich-text editing, color coding, and task linking.
@@ -202,10 +216,37 @@ Prioritized items panel with state-based reconciliation — automatically remove
 - Profile syncs to D1 on: confirm edits, import, every 20 min while dirty
 - 401 invalidates session but preserves local dashboard data
 
-### Display Modes
-- **Normal**: Single-column centered
-- **Stacked**: Two-column masonry grid
-- Independent section ordering per mode
+### Grid Engine (`js/features/grid-engine.js`) — single source of truth for layout
+- **24-column graph-paper grid**: uniform square cells (~36px at 1260px width), computed in JS as px values (never CSS %)
+- **One layout engine for both modes**: view AND edit mode use identical fixed square-cell rows (`grid-auto-rows: <px>`). Edit mode is a zoomed (0.7) preview of the exact same layout — WYSIWYG by construction
+- **Header** pinned to grid row 1 (auto height via `grid-template-rows: auto`); data cards live in rows 2+; all row math offsets by real header height (`getGridOriginY`)
+- Each card stores `gridCol`, `gridRow`, `gridColSpan`, `gridRowSpan` — explicit placement, no CSS auto-flow, cards positioned relative to the grid only
+- Cards fill their grid area (`align-items: stretch`); white space lives inside the card
+- Key functions: `getCellSize()`, `applyCellSize()`, `applyGridPlacement()`, `mouseToGridCell()`, `computeDropPosition()`, `resolveCollisions()`, `reconcileRowSpans()`, `autoAssignGridPositions()` (2D bin-packing)
+- `reconcileRowSpans()` runs after every render: grows any card whose content outgrew its area, pushes neighbors down, persists — cards can never clip content
+- `ResizeObserver` recomputes cell sizes on container resize
+
+### Per-Device Layout Profiles (mobile / tablet / desktop)
+- `DEVICE_MODES` in grid-engine.js: mobile (4 cols, 520px, single-column stack), tablet (24 cols, 1260px), desktop (24 cols, 2280px)
+- The flat `gridCol/gridRow/gridColSpan/gridRowSpan` props are the ACTIVE mode's working layout — all engine/drag/resize code operates on them unchanged
+- `persistActiveLayout()` (hooked into `markDirtyAndSave`) keeps `section.layouts[activeMode]` in sync; `hydrateLayout()` swaps a profile in (lazy-seeds missing profiles as a full-width stack at content height)
+- `switchDeviceMode(mode)` — works in view mode AND mid-edit (operates on working copy; cancel reverts all profiles)
+- Active mode: per-browser localStorage `dashboard_device_mode`, auto-detected by screen width on first visit (<768 mobile, <1600 tablet, else desktop); `model.lastActiveMode` (synced) records which mode the flat props represent for cross-device restore
+- Device picker: tablet icon (`#device-mode-toggle`) right of the search bar → bubble with 3 options (`openDeviceModeModal` in init.js)
+- Mobile is single-column: drop forces col 1/full width, width-resize handle hidden
+
+### Edit Mode - Tile View & Drag/Drop
+- Entering edit mode adds `edit-mode-tiles` class (zoom 0.7) + graph-paper overlay aligned via `--grid-pad-left` / `--grid-origin-y`
+- Cards render view-mode content (no edit controls); click opens Card Edit Modal
+- **Drag**: anchor offset recorded at dragstart (grab point within card); ghost shows the exact final resting position via `computeDropPosition()` (clamp → auto-shrink width to fit → slide-under)
+- **Slide-under rule**: overlapping a card that starts ABOVE snaps the dragged card below it; only cards at/below the drop get pushed down (`resolveCollisions`)
+- **Resize**: right/bottom handles snap to any cell boundary; height can never shrink below content (`getMinRowSpan` via `measureContentHeight`, which ignores absolutely-positioned children)
+- Single "Add Card" FAB button (blue +) above Settings gear
+
+### Card Edit Modal (`js/features/card-modal.js`)
+- `openCardEditModal(sectionId)` / `closeCardEditModal()`
+- The real card element rendered full-size on a backdrop (no modal chrome); width matches the card's grid width
+- All edit controls (add/edit/delete items, colors, subtitles, delete card) live on the card itself
 
 ### Dark Mode
 - Toggle in Settings modal
@@ -261,6 +302,9 @@ Prioritized items panel with state-based reconciliation — automatically remove
 | 3 | Unified card format | `migrateToUnifiedCards()` |
 | 4 | Half-width cards | `migrateToHalfWidthCards()` |
 | 5 | Centralized Eisenhower tasks | `migrateToEisenhowerTasks()` |
+| 6 | Grid layout (12-col) | `migrateToGridLayout()` |
+| 7 | 24-column grid | `migrateToGrid24()` |
+| 8 | Per-device layout profiles | `migrateToDeviceLayouts()` |
 
 Migrations run automatically in `restoreModel()` and are idempotent.
 
@@ -296,6 +340,22 @@ if (isLoggedIn() && src.startsWith('data:')) {
 // All three surfaces (projects, meetings, card notes) follow the same pattern
 ```
 
+### Rich-Text Editors (must be kept in sync)
+All 6 editors share the same toolbar features and must be updated together:
+
+| Editor | File | Element ID | Toolbar Btn Class | State Update Fn |
+|--------|------|-----------|-------------------|-----------------|
+| Projects | `projects.js` | `#project-editor` | `.projects-toolbar-btn` | `updateProjectsToolbarState()` |
+| Task Description | `tasks.js` | `#task-desc-editor` | `.task-desc-toolbar-btn` | `updateTaskToolbarState()` |
+| Subtask Description | `tasks.js` | `#subtask-desc-editor` | `.subtask-toolbar-btn` | `updateSubtaskToolbarState()` |
+| Ideas | `tasks.js` | `#ideas-editor` | `.ideas-toolbar-btn` | `updateIdeasToolbarState()` |
+| Meetings | `meetings.js` | `#meetings-inline-desc-editor` | `.meetings-inline-toolbar-btn` | `updateInlineToolbarState()` |
+| Card Notes | `edit-mode.js` + `index.html` | `#notepad-editor` | `.notepad-toolbar-btn` | `updateToolbarState()` |
+
+Each editor needs: toolbar HTML buttons, click handlers, `attachHighlighterContextMenu()`, `attachChecklistHandler()`, toolbar state update with checklist support, `handleEditorInput`/`handleEditorKeydown` wiring.
+
+Shared logic lives in `edit-mode.js`: `handleEditorKeydown`, `handleEditorInput`, `toggleChecklist`, `isInChecklist`, `attachChecklistHandler`, `attachHighlighterContextMenu`, `createHighlighterButton`.
+
 ### Adding Features Checklist
 1. Use minimalist SVG icons with currentColor
 2. Add dark mode styles (glass mode is always on)
@@ -305,6 +365,7 @@ if (isLoggedIn() && src.startsWith('data:')) {
 6. Show toast feedback for actions
 7. Handle both URL and R2 file references where applicable
 8. Ensure new fields are in saveModel, restoreModel, deepMergeModel, import/export
+9. For rich-text editor features: update all 6 editors listed above
 
 ---
 

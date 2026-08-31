@@ -6,8 +6,9 @@ import { $, $$, openUrl, generateKey, getSectionDataKey, getColorForCurrentMode,
 import { PLACEHOLDER_URL, icons, LINK_ICON_SVG, TASKS_ICON_SVG } from '../constants.js';
 import { markDirtyAndSave, openEditPopover, openSubtitleColorPicker } from '../features/edit-mode.js';
 import { saveModel } from '../core/storage.js';
-import { initializeDragHandlers, initializeItemDragHandlers, initializeContainerDragHandlers, initializeReminderDragHandlers, initializeCardDropZone, handleDragOver, handleDrop } from '../features/drag-drop.js';
+import { initializeDragHandlers, initializeItemDragHandlers, initializeContainerDragHandlers, initializeReminderDragHandlers, initializeCardDropZone } from '../features/drag-drop.js';
 import { createCardDeleteButton, createCardReorderButtons } from '../features/cards.js';
+import { applyCellSize, applyGridPlacement, computeDisplayLayout, reconcileRowSpans, autoAssignGridPositions as gridAutoAssign } from '../features/grid-engine.js';
 import { persistImageFromLibraryEntry } from '../features/media-library.js';
 import { setImageFromRef, classifyImageRef, uploadFile, dataURLtoBlob, filenameFromDataUrl, deleteR2File } from '../core/file-service.js';
 import { isLoggedIn } from '../core/auth.js';
@@ -69,50 +70,68 @@ export function renderAllSections() {
   const existingSections = main.querySelectorAll('section.card');
   existingSections.forEach(section => section.remove());
 
-  // Clear existing two-col containers and half-width-single containers
-  const existingTwoCol = main.querySelectorAll('.two-col');
-  existingTwoCol.forEach(container => container.remove());
-  const existingHalfWidthSingle = main.querySelectorAll('.half-width-single');
-  existingHalfWidthSingle.forEach(container => container.remove());
+  // Clear legacy containers
+  main.querySelectorAll('.two-col, .half-width-single').forEach(el => el.remove());
 
-  // Render sections based on the sections array
-  let i = 0;
-  while (i < sections.length) {
-    const section = sections[i];
-    const nextSection = i + 1 < sections.length ? sections[i + 1] : null;
+  // In tile mode, render cards as VIEW MODE (no edit controls) to preserve natural proportions
+  const isTileMode = main.classList.contains('edit-mode-tiles');
+  if (isTileMode) editState.enabled = false;
 
-    if (section.halfWidth && nextSection?.halfWidth) {
-      // Two adjacent half-width cards -> pair in .two-col
-      const container = document.createElement('div');
-      container.className = 'two-col';
-      const el1 = createSectionElement(section);
-      const el2 = createSectionElement(nextSection);
-      if (el1) { el1.classList.add('half-width'); container.appendChild(el1); }
-      if (el2) { el2.classList.add('half-width'); container.appendChild(el2); }
-      main.appendChild(container);
-      i += 2;
-    } else if (section.halfWidth) {
-      // Single half-width card
-      const container = document.createElement('div');
-      container.className = 'half-width-single';
-      const el = createSectionElement(section);
-      if (el) { el.classList.add('half-width'); container.appendChild(el); }
-      main.appendChild(container);
-      i += 1;
-    } else {
-      // Full-width card
-      const sectionEl = createSectionElement(section);
-      if (sectionEl) main.appendChild(sectionEl);
-      i += 1;
+  // Ensure cell sizes are computed (JS sets grid-template-columns/rows as px values)
+  applyCellSize();
+
+  // Auto-assign grid positions for cards that don't have them yet
+  gridAutoAssign(sections);
+
+  // Sort by grid position for DOM order (row first, then column) — purely for
+  // accessibility/tab order; visual position comes from explicit placement
+  const renderOrder = [...sections].sort((a, b) => {
+    const aRow = a.gridRow || 999;
+    const bRow = b.gridRow || 999;
+    if (aRow !== bRow) return aRow - bRow;
+    return (a.gridCol || 1) - (b.gridCol || 1);
+  });
+
+  // View mode only: collapsed cards shrink to title height and everything
+  // below moves up to fill the freed space (stored layout untouched).
+  // Edit mode always shows the full designed layout.
+  const displayMap = isTileMode
+    ? null
+    : computeDisplayLayout(sections, data.collapsedCards || {});
+
+  // Render sections — explicit placement; display override applies in view mode
+  renderOrder.forEach(section => {
+    const sectionEl = createSectionElement(section);
+    if (sectionEl) {
+      applyGridPlacement(sectionEl, section, displayMap ? displayMap.get(section.id) : null);
+      main.appendChild(sectionEl);
     }
-  }
+  });
 
-  // Add edit mode buttons if needed
+  // Restore edit state after tile render
+  if (isTileMode) editState.enabled = true;
+
+  // Add edit mode buttons (drag handlers, resize handles, tile click) if in edit mode
   if (editState.enabled) {
     addCardButtons();
-  } else {
-    const existingGapButtons = main.querySelectorAll('.gap-add-btn');
-    existingGapButtons.forEach(btn => btn.remove());
+  }
+
+  // Grow any card whose content is taller than its grid area, push neighbors
+  // down, and persist if anything changed. Cards can never clip their content.
+  // markDirtyAndSave (not saveModel) so persistActiveLayout keeps the active
+  // device profile in sync with the grown row spans; in edit mode it only
+  // marks the working copy dirty (persisted on confirm).
+  if (reconcileRowSpans(sections)) {
+    markDirtyAndSave();
+    // Reconcile re-applied STORED placement — restore collapsed-card
+    // compaction on top of the grown layout (view mode only)
+    if (!isTileMode) {
+      const dm = computeDisplayLayout(sections, data.collapsedCards || {});
+      sections.forEach(section => {
+        const el = document.getElementById(section.id);
+        if (el) applyGridPlacement(el, section, dm.get(section.id));
+      });
+    }
   }
 
   // Restore scroll position after re-rendering
@@ -120,27 +139,6 @@ export function renderAllSections() {
 
   // Update notification badge
   if (window.updateNotificationBadge) window.updateNotificationBadge();
-}
-
-// --- Toggle card width between half and full
-function toggleCardWidth(sectionId) {
-  const data = currentData();
-  const sections = currentSections();
-  const section = sections.find(s => s.id === sectionId);
-  if (!section) return;
-
-  section.halfWidth = !section.halfWidth;
-
-  // Sync to other display mode array
-  const otherSections = data.displayMode === 'stacked' ? data.sections : data.sectionsStacked;
-  if (otherSections) {
-    const other = otherSections.find(s => s.id === sectionId);
-    if (other) other.halfWidth = section.halfWidth;
-  }
-
-  markDirtyAndSave();
-  renderAllSections();
-  showToast(section.halfWidth ? 'Card set to half width' : 'Card set to full width');
 }
 
 // --- Create a section element based on section configuration
@@ -280,26 +278,6 @@ export function createSectionElement(section) {
     }
   });
   sectionEl.appendChild(notepadBtn);
-
-  // Add width toggle button (positioned to the left of collapse chevron)
-  const widthToggleBtn = document.createElement('button');
-  widthToggleBtn.type = 'button';
-  widthToggleBtn.className = 'card-width-toggle';
-  widthToggleBtn.title = section.halfWidth ? 'Switch to full width' : 'Switch to half width';
-  // Two vertical lines when full-width (will become half), single horizontal line when half-width (will become full)
-  widthToggleBtn.innerHTML = section.halfWidth
-    ? `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-        <line x1="5" y1="12" x2="19" y2="12"></line>
-      </svg>`
-    : `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-        <line x1="8" y1="5" x2="8" y2="19"></line>
-        <line x1="16" y1="5" x2="16" y2="19"></line>
-      </svg>`;
-  widthToggleBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    toggleCardWidth(section.id);
-  });
-  sectionEl.appendChild(widthToggleBtn);
 
   // Add collapse chevron button (only visible outside edit mode)
   const collapseBtn = document.createElement('button');
@@ -3231,92 +3209,32 @@ export function addCardButtons() {
 
       // Add delete button
       sectionEl.appendChild(createCardDeleteButton(section.id));
+
+      // Add resize handles for tile mode
+      if (window.initializeResizeHandles) {
+        window.initializeResizeHandles(sectionEl, section.id);
+      }
+
+      // Add click handler to open card edit modal in tile mode
+      if (!sectionEl._tileClickWired) {
+        sectionEl.addEventListener('click', (e) => {
+          if (!editState.enabled) return;
+          // Don't open modal if clicking on buttons, resize handles, or drag handles
+          if (e.target.closest('button') || e.target.closest('.card-resize-handle-right') || e.target.closest('.card-resize-handle-bottom')) return;
+          // Only open in tile mode
+          const main = document.querySelector('.app-main');
+          if (main && main.classList.contains('edit-mode-tiles')) {
+            if (window.openCardEditModal) {
+              window.openCardEditModal(section.id);
+            }
+          }
+        });
+        sectionEl._tileClickWired = true;
+      }
     }
   });
-
-  // Add gap-based add buttons
-  addGapButtons();
 }
 
-// --- Add gap-based add buttons
-function addGapButtons() {
-  const main = $('.app-main');
-  if (!main) return;
-
-  // Remove existing gap buttons
-  const existingGapButtons = main.querySelectorAll('.gap-add-btn');
-  existingGapButtons.forEach(btn => btn.remove());
-
-  if (!editState.enabled) return;
-
-  // Get all direct children of main (cards, two-col containers, and half-width-single containers)
-  const children = Array.from(main.children).filter(
-    child => child.classList.contains('card') || child.classList.contains('two-col') || child.classList.contains('half-width-single')
-  );
-  const sections = currentSections();
-
-  // Build a mapping of DOM positions to section indices
-  let sectionIndex = 0;
-  const domToSectionMap = [0]; // First gap is before index 0
-
-  for (let i = 0; i < children.length; i++) {
-    const child = children[i];
-
-    if (child.classList.contains('two-col')) {
-      // Two-column container - count both sections inside it
-      const cards = child.querySelectorAll('.card');
-      sectionIndex += cards.length;
-    } else if (child.classList.contains('half-width-single')) {
-      // Single half-width container - count one section
-      sectionIndex += 1;
-    } else if (child.classList.contains('card')) {
-      // Regular card - count one section
-      sectionIndex += 1;
-    }
-
-    // The gap after this element maps to this section index
-    domToSectionMap.push(sectionIndex);
-  }
-
-  // Add gap buttons with correct section indices
-  for (let i = 0; i <= children.length; i++) {
-    const targetSectionIndex = domToSectionMap[i];
-    const gapBtn = document.createElement('button');
-    gapBtn.type = 'button';
-    gapBtn.className = 'gap-add-btn';
-    gapBtn.textContent = '+';
-    gapBtn.title = 'Add new card here';
-    gapBtn.dataset.targetIndex = targetSectionIndex;
-    gapBtn.addEventListener('click', (e) => {
-      e.preventDefault();
-      if (window.createCard) window.createCard(targetSectionIndex);
-    });
-
-    if (i === 0) {
-      // First gap (before first element)
-      if (children.length > 0) {
-        main.insertBefore(gapBtn, children[0]);
-      } else {
-        main.appendChild(gapBtn);
-      }
-    } else if (i === children.length) {
-      // Last gap (after last element)
-      main.appendChild(gapBtn);
-    } else {
-      // Gap between elements - insert before the current child
-      // We need to find the actual position accounting for previously inserted buttons
-      const allChildren = Array.from(main.children);
-      const targetChild = children[i];
-      const targetIndex = allChildren.indexOf(targetChild);
-      if (targetIndex !== -1) {
-        main.insertBefore(gapBtn, targetChild);
-      }
-    }
-
-    // Show the button since we're in edit mode
-    gapBtn.style.display = 'flex';
-  }
-}
 
 // --- Toggle individual card collapse state
 export function toggleCardCollapse(sectionId, cardElement) {
@@ -3336,4 +3254,8 @@ export function toggleCardCollapse(sectionId, cardElement) {
 
   // Persist to localStorage immediately (not through edit mode)
   saveModel();
+
+  // Re-render so the display layout recomputes: the collapsed card shrinks
+  // to title height and cards below it move up to fill the freed space
+  renderAllSections();
 }

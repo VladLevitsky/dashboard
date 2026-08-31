@@ -4,6 +4,10 @@
 import { editState, dragState, currentData, currentSections } from '../state.js';
 import { $, showToast } from '../utils.js';
 import { markDirtyAndSave, refreshEditingClasses } from './edit-mode.js';
+import {
+  DEFAULT_ROW_SPAN,
+  mouseToGridCell, computeDropPosition, resolveCollisions
+} from './grid-engine.js';
 
 // --- Initialize drag handlers for a card
 export function initializeDragHandlers(cardElement, sectionId) {
@@ -30,6 +34,19 @@ export function initializeDragHandlers(cardElement, sectionId) {
     dragState.draggedElement = cardElement;
     dragState.draggedSection = sectionId;
 
+    // Record the ANCHOR OFFSET: which cell within the card was grabbed.
+    // This keeps the ghost aligned with where the card visually sits under
+    // the cursor, instead of snapping the card's top-left to the mouse.
+    const section = currentSections().find(s => s.id === sectionId);
+    const grabCell = mouseToGridCell(e.clientX, e.clientY);
+    if (section && section.gridCol && section.gridRow) {
+      dragState.dragOffsetCol = Math.max(0, grabCell.col - section.gridCol);
+      dragState.dragOffsetRow = Math.max(0, grabCell.row - section.gridRow);
+    } else {
+      dragState.dragOffsetCol = 0;
+      dragState.dragOffsetRow = 0;
+    }
+
     // Add dragging class for visual feedback
     cardElement.classList.add('dragging');
 
@@ -37,163 +54,117 @@ export function initializeDragHandlers(cardElement, sectionId) {
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', sectionId);
 
-    // Create drop indicator if it doesn't exist
-    if (!dragState.dropIndicator) {
-      dragState.dropIndicator = document.createElement('div');
-      dragState.dropIndicator.className = 'drop-indicator';
-      dragState.dropIndicator.style.position = 'absolute';
-      dragState.dropIndicator.style.zIndex = '1000';
-      dragState.dropIndicator.style.pointerEvents = 'none';
-      dragState.dropIndicator.innerHTML = '<div class="drop-line"></div>';
-      document.body.appendChild(dragState.dropIndicator);
-    }
-    // Make sure indicator starts hidden
-    dragState.dropIndicator.style.display = 'none';
+    // Ghost will be created in handleDragOver
   });
 
-  // Drag end
+  // Drag end — clean up ghost
   cardElement.addEventListener('dragend', (e) => {
-    // Remove dragging class
     cardElement.classList.remove('dragging');
 
-    // Hide drop indicator
+    // Remove grid ghost
+    if (dragState.gridGhost) {
+      dragState.gridGhost.remove();
+      dragState.gridGhost = null;
+    }
+    // Also hide legacy indicator if present
     if (dragState.dropIndicator) {
       dragState.dropIndicator.style.display = 'none';
     }
 
-    // Reset drag state
     dragState.draggedElement = null;
     dragState.draggedSection = null;
-    dragState.potentialDropZone = null;
-    dragState.potentialDropPosition = null;
+    dragState.potentialDropCol = null;
+    dragState.potentialDropRow = null;
+    dragState.potentialDropColSpan = null;
+    dragState.dragOffsetCol = 0;
+    dragState.dragOffsetRow = 0;
   });
 }
 
-// --- Handle drag over for determining drop zones
+// --- Handle drag over: show a ghost at the card's FINAL resting position.
+// The ghost position is computed by the same function used on drop, so what
+// you see is exactly where the card will land (including slide-under snapping).
 export function handleDragOver(e) {
   if (!dragState.draggedElement || !editState.enabled) return;
 
   e.preventDefault();
   e.dataTransfer.dropEffect = 'move';
 
-  // Throttle the event to prevent performance issues
   const now = Date.now();
-  if (now - dragState.lastDragOverTime < 50) return; // 50ms throttle
+  if (now - dragState.lastDragOverTime < 30) return;
   dragState.lastDragOverTime = now;
 
-  // Check if we're over the main area
   const main = document.querySelector('.app-main');
   if (!main) return;
 
-  const allCards = Array.from(main.querySelectorAll('.card:not(.dragging)'));
+  const sections = currentSections();
+  const section = sections.find(s => s.id === dragState.draggedSection);
+  if (!section) return;
 
-  // If no other cards, hide indicator and return
-  if (allCards.length === 0) {
-    if (dragState.dropIndicator) {
-      dragState.dropIndicator.style.display = 'none';
-    }
-    return;
+  // Anchor-adjusted target: subtract the grab offset so the card's top-left
+  // lands where the card (not the cursor) visually is
+  const mouse = mouseToGridCell(e.clientX, e.clientY);
+  const rawCol = mouse.col - (dragState.dragOffsetCol || 0);
+  const rawRow = mouse.row - (dragState.dragOffsetRow || 0);
+
+  // Compute the exact final resting position (clamp + shrink + slide-under)
+  const pos = computeDropPosition(sections, section.id, rawCol, rawRow);
+  if (!pos) return;
+
+  // Store for handleDrop — drop uses these exact values, no recomputation
+  dragState.potentialDropCol = pos.col;
+  dragState.potentialDropRow = pos.row;
+  dragState.potentialDropColSpan = pos.colSpan;
+
+  // Create or update ghost (a grid child using grid placement)
+  if (!dragState.gridGhost) {
+    dragState.gridGhost = document.createElement('div');
+    dragState.gridGhost.className = 'grid-drag-ghost';
+    main.appendChild(dragState.gridGhost);
   }
 
-  // Get mouse position
-  const mouseY = e.clientY;
-  const mouseX = e.clientX;
-
-  // Find the closest card
-  let closestCard = null;
-  let closestDistance = Infinity;
-  let dropPosition = 'before'; // or 'after' or 'beside'
-
-  allCards.forEach(card => {
-    const rect = card.getBoundingClientRect();
-    const cardMiddleY = rect.top + rect.height / 2;
-
-    // Check if we're near this card
-    const distanceY = Math.abs(mouseY - cardMiddleY);
-
-    if (distanceY < closestDistance) {
-      closestDistance = distanceY;
-      closestCard = card;
-
-      // Determine drop position
-      if (mouseY < cardMiddleY) {
-        dropPosition = 'before';
-      } else {
-        dropPosition = 'after';
-      }
-    }
-  });
-
-  // Update drop indicator position
-  if (closestCard && dragState.dropIndicator) {
-    const rect = closestCard.getBoundingClientRect();
-    const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-    const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
-
-    // Make indicator visible
-    dragState.dropIndicator.style.display = 'block';
-
-    // Position the drop indicator absolutely
-    if (dropPosition === 'before') {
-      dragState.dropIndicator.style.left = `${rect.left + scrollLeft}px`;
-      dragState.dropIndicator.style.top = `${rect.top + scrollTop - 6}px`;
-      dragState.dropIndicator.style.width = `${rect.width}px`;
-      dragState.dropIndicator.style.height = '4px';
-      dragState.dropIndicator.className = 'drop-indicator horizontal';
-    } else if (dropPosition === 'after') {
-      dragState.dropIndicator.style.left = `${rect.left + scrollLeft}px`;
-      dragState.dropIndicator.style.top = `${rect.bottom + scrollTop + 2}px`;
-      dragState.dropIndicator.style.width = `${rect.width}px`;
-      dragState.dropIndicator.style.height = '4px';
-      dragState.dropIndicator.className = 'drop-indicator horizontal';
-    }
-
-    dragState.potentialDropZone = closestCard.id;
-    dragState.potentialDropPosition = dropPosition;
-  } else if (dragState.dropIndicator) {
-    // Hide indicator if no valid drop zone
-    dragState.dropIndicator.style.display = 'none';
-  }
+  const rowSpan = section.gridRowSpan || DEFAULT_ROW_SPAN;
+  const ghost = dragState.gridGhost;
+  ghost.style.display = 'block';
+  ghost.style.gridColumn = `${pos.col} / span ${pos.colSpan}`;
+  ghost.style.gridRow = `${pos.row} / span ${rowSpan}`;
 }
 
-// --- Handle drop event
+// --- Handle drop: place the card exactly where the ghost showed it.
 export function handleDrop(e) {
   e.preventDefault();
 
-  if (!dragState.draggedSection || !dragState.potentialDropZone || !editState.enabled) return;
+  if (!dragState.draggedSection || !editState.enabled) return;
+  if (!dragState.potentialDropCol || !dragState.potentialDropRow) return;
 
   const sections = currentSections();
+  const section = sections.find(s => s.id === dragState.draggedSection);
+  if (!section) return;
 
-  const draggedIndex = sections.findIndex(s => s.id === dragState.draggedSection);
-  const targetIndex = sections.findIndex(s => s.id === dragState.potentialDropZone);
-
-  if (draggedIndex === -1 || targetIndex === -1 || draggedIndex === targetIndex) return;
-
-  const position = dragState.potentialDropPosition;
-
-  // Normal reordering
-  const draggedCard = sections[draggedIndex];
-
-  // Remove from current position
-  sections.splice(draggedIndex, 1);
-
-  // Calculate new index
-  let newIndex = draggedIndex < targetIndex ? targetIndex - 1 : targetIndex;
-  if (position === 'after') {
-    newIndex = draggedIndex < targetIndex ? targetIndex : targetIndex + 1;
+  // Apply the exact position the ghost was showing
+  section.gridCol = dragState.potentialDropCol;
+  section.gridRow = dragState.potentialDropRow;
+  if (dragState.potentialDropColSpan) {
+    section.gridColSpan = dragState.potentialDropColSpan;
   }
 
-  // Insert at new position
-  sections.splice(newIndex, 0, draggedCard);
+  // Push down any cards at/below that the placed card now overlaps.
+  // (Cards above were already avoided by slide-under in computeDropPosition.)
+  resolveCollisions(sections, section.id);
 
-  // Update and re-render
+  // Clean up ghost
+  if (dragState.gridGhost) {
+    dragState.gridGhost.remove();
+    dragState.gridGhost = null;
+  }
+
+  // Reset drop state
+  dragState.potentialDropCol = null;
+  dragState.potentialDropRow = null;
+  dragState.potentialDropColSpan = null;
+
   markDirtyAndSave();
   if (window.renderAllSections) window.renderAllSections();
-  if (editState.enabled) {
-    if (window.ensureSectionPlusButtons) window.ensureSectionPlusButtons();
-    refreshEditingClasses();
-  }
-
   showToast('Card moved');
 }
 

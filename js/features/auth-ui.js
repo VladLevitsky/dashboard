@@ -238,7 +238,7 @@ async function handleAuthSubmit(e) {
     if (window.applyGlassMode) window.applyGlassMode();
     if (window.applyGlassTheme) window.applyGlassTheme();
 
-    if (window.applyDisplayMode) window.applyDisplayMode();
+    if (window.applyCellSize) window.applyCellSize();
     if (window.ensureSectionPlusButtons) window.ensureSectionPlusButtons();
 
     // Start background sync timer
@@ -280,7 +280,7 @@ async function handleLogout() {
   if (window.applyDarkMode) window.applyDarkMode();
   if (window.applyGlassMode) window.applyGlassMode();
   if (window.applyGlassTheme) window.applyGlassTheme();
-  if (window.applyDisplayMode) window.applyDisplayMode();
+  if (window.applyCellSize) window.applyCellSize();
   if (window.ensureSectionPlusButtons) window.ensureSectionPlusButtons();
 
   renderAuthUI();
@@ -405,7 +405,7 @@ export async function postRestoreAuthSync() {
       if (window.applyGlassMode) window.applyGlassMode();
       if (window.applyGlassTheme) window.applyGlassTheme();
   
-      if (window.applyDisplayMode) window.applyDisplayMode();
+      if (window.applyCellSize) window.applyCellSize();
       if (window.ensureSectionPlusButtons) window.ensureSectionPlusButtons();
     }
   } catch (err) {

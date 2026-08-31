@@ -2,10 +2,10 @@
 // This file bootstraps the application and imports all necessary modules
 
 // Import core modules
-import { model, editState, dragState, currentData, currentSections, ensureSectionInBothArrays, removeSectionFromBothArrays, resetModel } from './state.js';
+import { model, editState, dragState, currentData, currentSections, resetModel } from './state.js';
 import { PLACEHOLDER_URL, icons, LINK_ICON_SVG, TASKS_ICON_SVG, TIMER_UPDATE_INTERVAL_MS, ANIMATION_DELAY_MS, CARD_HIDE_DELAY_MS, APP_VERSION, STORAGE_KEY, MEDIA_STORAGE_KEY, LINKS_FILE_PATH, MEDIA_MANIFEST_PATH, API_BASE, TURNSTILE_SITE_KEY, AUTH_TOKEN_KEY, AUTH_USERNAME_KEY, SCOPED_KEY_PREFIX, SYNC_INTERVAL_MS } from './constants.js';
 import { $, $$, openUrl, deepClone, generateKey, showToast, getColorForCurrentMode, setColorForCurrentMode, lightenAndDesaturateColor, darkenColor, glassCompensateColor, makePriorityGlowColor, convertToDarkModeColor, makeColorMoreVibrant, lightenColorBy20Percent, colorToGlassRgba, isGlassModeActive, getSectionDataKey, generateSectionId, generateUniqueCardTitle, fileToDataURL, copyToClipboard } from './utils.js';
-import { saveModel, restoreModel, exportBackupFile, deepMergeModel, cleanupOldBackups } from './core/storage.js';
+import { saveModel, restoreModel, exportBackupFile, deepMergeModel, cleanupOldBackups, migrateToGridLayout } from './core/storage.js';
 
 // Import feature modules
 import {
@@ -118,22 +118,22 @@ import {
 import {
   init,
   wireUI,
-  applyDisplayMode,
-  openDisplayModeModal,
-  closeDisplayModeModal,
-  setDisplayMode,
+  updateDeviceModeToggleIcon,
   openCopyTextModal,
   hideCopyTextModal,
   acceptCopyTextModal,
   setupCardCollapseExpand,
-  collapseAllCards,
-  expandAllCards,
   renderHeaderAndTitles,
   clearSearch
 } from './core/init.js';
 
+import { openCardEditModal, closeCardEditModal } from './features/card-modal.js';
+import { initializeResizeHandles, removeResizeHandles, snapshotGridPositions } from './features/card-resize.js';
+import { applyCellSize, initResizeObserver, autoAssignGridPositions, getCellSize, switchDeviceMode, getActiveMode, getGridCols, persistActiveLayout } from './features/grid-engine.js';
+
 import {
   renderAllSections,
+  renderUnifiedCard,
   createSectionElement,
   createIconButton,
   createEditableSeparator,
@@ -340,8 +340,6 @@ window.editState = editState;
 window.dragState = dragState;
 window.currentData = currentData;
 window.currentSections = currentSections;
-window.ensureSectionInBothArrays = ensureSectionInBothArrays;
-window.removeSectionFromBothArrays = removeSectionFromBothArrays;
 window.resetModel = resetModel;
 
 // Constants
@@ -388,6 +386,7 @@ window.restoreModel = restoreModel;
 window.exportBackupFile = exportBackupFile;
 window.deepMergeModel = deepMergeModel;
 window.cleanupOldBackups = cleanupOldBackups;
+window.migrateToGridLayout = migrateToGridLayout;
 
 // Edit Mode
 window.toggleEditMode = toggleEditMode;
@@ -476,21 +475,32 @@ window.applyUrlOverrides = applyUrlOverrides;
 // Initialization
 window.init = init;
 window.wireUI = wireUI;
-window.applyDisplayMode = applyDisplayMode;
-window.openDisplayModeModal = openDisplayModeModal;
-window.closeDisplayModeModal = closeDisplayModeModal;
-window.setDisplayMode = setDisplayMode;
 window.openCopyTextModal = openCopyTextModal;
 window.hideCopyTextModal = hideCopyTextModal;
 window.acceptCopyTextModal = acceptCopyTextModal;
 window.setupCardCollapseExpand = setupCardCollapseExpand;
-window.collapseAllCards = collapseAllCards;
-window.expandAllCards = expandAllCards;
 window.renderHeaderAndTitles = renderHeaderAndTitles;
 window.clearSearch = clearSearch;
 
+// Card Edit Modal
+window.openCardEditModal = openCardEditModal;
+window.closeCardEditModal = closeCardEditModal;
+window.initializeResizeHandles = initializeResizeHandles;
+window.removeResizeHandles = removeResizeHandles;
+window.snapshotGridPositions = snapshotGridPositions;
+window.applyCellSize = applyCellSize;
+window.initResizeObserver = initResizeObserver;
+window.autoAssignGridPositions = autoAssignGridPositions;
+window.getCellSize = getCellSize;
+window.switchDeviceMode = switchDeviceMode;
+window.getActiveMode = getActiveMode;
+window.updateDeviceModeToggleIcon = updateDeviceModeToggleIcon;
+window.getGridCols = getGridCols;
+window.persistActiveLayout = persistActiveLayout;
+
 // Sections Component
 window.renderAllSections = renderAllSections;
+window.renderUnifiedCard = renderUnifiedCard;
 window.createSectionElement = createSectionElement;
 window.createIconButton = createIconButton;
 window.createEditableSeparator = createEditableSeparator;

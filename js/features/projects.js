@@ -5,7 +5,7 @@
 
 import { currentData } from '../state.js';
 import { $, showToast, moveCursorAfterNode } from '../utils.js';
-import { handleEditorInput, handleEditorKeydown, createHighlighterButton, attachHighlighterContextMenu } from './edit-mode.js';
+import { handleEditorInput, handleEditorKeydown, createHighlighterButton, attachHighlighterContextMenu, toggleChecklist, isInChecklist, attachChecklistHandler } from './edit-mode.js';
 import { saveModel } from '../core/storage.js';
 import { TASK_COLORS, TASK_COLOR_LABELS } from '../constants.js';
 
@@ -537,6 +537,9 @@ export function openProjectsModal(openToProjectId) {
               <button type="button" class="task-desc-toolbar-btn projects-toolbar-btn" data-cmd="insertOrderedList" title="Numbered List">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><line x1="10" y1="6" x2="21" y2="6"/><line x1="10" y1="12" x2="21" y2="12"/><line x1="10" y1="18" x2="21" y2="18"/><text x="1" y="8" font-size="8" fill="currentColor" stroke="none" font-family="sans-serif">1</text><text x="1" y="14" font-size="8" fill="currentColor" stroke="none" font-family="sans-serif">2</text><text x="1" y="20" font-size="8" fill="currentColor" stroke="none" font-family="sans-serif">3</text></svg>
               </button>
+              <button type="button" class="task-desc-toolbar-btn projects-toolbar-btn projects-checklist-btn" title="Checklist">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="3.5"/><line x1="14" y1="6.5" x2="21" y2="6.5"/><rect x="3" y="14" width="7" height="7" rx="3.5"/><line x1="14" y1="17.5" x2="21" y2="17.5"/><polyline points="4.5 17 6 18.5 8.5 15.5" stroke-width="1.5"/></svg>
+              </button>
               <div class="projects-toolbar-spacer"></div>
               <span class="project-save-label" id="project-save-label"></span>
               <button type="button" class="project-save-btn" id="project-save-btn" title="Save">
@@ -574,13 +577,19 @@ export function openProjectsModal(openToProjectId) {
     modal.querySelectorAll('.projects-toolbar-btn').forEach(btn => {
       btn.addEventListener('mousedown', e => e.preventDefault());
       btn.addEventListener('click', () => {
+        if (btn.classList.contains('projects-checklist-btn')) {
+          toggleChecklist();
+          updateProjectsToolbarState();
+          $('#project-editor').focus();
+          return;
+        }
         document.execCommand(btn.dataset.cmd, false, null);
         updateProjectsToolbarState();
         $('#project-editor').focus();
       });
     });
 
-    // Highlighter button — insert after the ordered list button, before spacer
+    // Highlighter button — insert after the checklist button, before spacer
     const projectsToolbar = modal.querySelector('#projects-editor-toolbar');
     const toolbarSpacer = projectsToolbar.querySelector('.projects-toolbar-spacer');
     const hlDivider = document.createElement('div');
@@ -588,8 +597,12 @@ export function openProjectsModal(openToProjectId) {
     projectsToolbar.insertBefore(hlDivider, toolbarSpacer);
     projectsToolbar.insertBefore(createHighlighterButton(), toolbarSpacer);
 
+    // Checklist click handler on project editor
+    const projectEditor = modal.querySelector('#project-editor');
+    attachChecklistHandler(projectEditor);
+
     // Highlighter context menu on project editor
-    attachHighlighterContextMenu(modal.querySelector('#project-editor'), {
+    attachHighlighterContextMenu(projectEditor, {
       linkTask: true,
       onTaskLinked: (task) => {
         if (window.updateTask) {
@@ -878,8 +891,12 @@ function doSaveAndFlash() {
 function updateProjectsToolbarState() {
   const btns = document.querySelectorAll('.projects-toolbar-btn');
   btns.forEach(btn => {
+    if (btn.classList.contains('projects-checklist-btn')) {
+      btn.classList.toggle('active', isInChecklist());
+      return;
+    }
     const cmd = btn.dataset.cmd;
-    if (cmd) btn.classList.toggle('active', document.queryCommandState(cmd));
+    if (cmd) btn.classList.toggle('active', document.queryCommandState(cmd) && !(cmd === 'insertUnorderedList' && isInChecklist()));
   });
 }
 

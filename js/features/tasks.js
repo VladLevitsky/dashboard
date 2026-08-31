@@ -4,7 +4,7 @@
 
 import { model, editState, currentData, currentSections } from '../state.js';
 import { $, showToast, createAnimatedBorder, normalizeDescHtml } from '../utils.js';
-import { markDirtyAndSave, handleEditorInput, handleEditorKeydown, createHighlighterButton, attachHighlighterContextMenu } from './edit-mode.js';
+import { markDirtyAndSave, handleEditorInput, handleEditorKeydown, createHighlighterButton, attachHighlighterContextMenu, toggleChecklist, isInChecklist, attachChecklistHandler } from './edit-mode.js';
 import { saveModel } from '../core/storage.js';
 import { uploadFile, openFile } from '../core/file-service.js';
 import { TASK_COLORS, TASK_COLOR_LABELS, ANIMATION_DELAY_MS, CARD_HIDE_DELAY_MS } from '../constants.js';
@@ -2143,6 +2143,9 @@ function openTaskEditorModal(taskData, titleText) {
                 <button type="button" class="task-desc-toolbar-btn" data-cmd="insertOrderedList" title="Numbered List">
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><line x1="10" y1="6" x2="21" y2="6"/><line x1="10" y1="12" x2="21" y2="12"/><line x1="10" y1="18" x2="21" y2="18"/><text x="1" y="8" font-size="8" fill="currentColor" stroke="none" font-family="sans-serif">1</text><text x="1" y="14" font-size="8" fill="currentColor" stroke="none" font-family="sans-serif">2</text><text x="1" y="20" font-size="8" fill="currentColor" stroke="none" font-family="sans-serif">3</text></svg>
                 </button>
+                <button type="button" class="task-desc-toolbar-btn checklist-toolbar-btn" title="Checklist">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="3.5"/><line x1="14" y1="6.5" x2="21" y2="6.5"/><rect x="3" y="14" width="7" height="7" rx="3.5"/><line x1="14" y1="17.5" x2="21" y2="17.5"/><polyline points="4.5 17 6 18.5 8.5 15.5" stroke-width="1.5"/></svg>
+                </button>
               </div>
               <div id="task-desc-editor" class="task-desc-editor" contenteditable="true"></div>
               <div class="task-desc-editor-actions">
@@ -2187,6 +2190,12 @@ function openTaskEditorModal(taskData, titleText) {
     modal.querySelectorAll('.task-desc-toolbar-btn').forEach(btn => {
       btn.addEventListener('mousedown', (e) => e.preventDefault()); // Keep focus in editor
       btn.addEventListener('click', () => {
+        if (btn.classList.contains('checklist-toolbar-btn')) {
+          toggleChecklist();
+          updateTaskToolbarState();
+          $('#task-desc-editor').focus();
+          return;
+        }
         const cmd = btn.dataset.cmd;
         document.execCommand(cmd, false, null);
         updateTaskToolbarState();
@@ -2205,6 +2214,7 @@ function openTaskEditorModal(taskData, titleText) {
 
     // Markdown auto-convert in description editor (reuse Card Notes handler)
     const descEditor = modal.querySelector('#task-desc-editor');
+    attachChecklistHandler(descEditor);
     attachHighlighterContextMenu(descEditor);
     descEditor.addEventListener('input', handleEditorInput);
 
@@ -2928,7 +2938,10 @@ function renderEditorSubtasks() {
       </svg>`;
     completeBtn.addEventListener('click', () => {
       subtask.completed = !subtask.completed;
-      if (subtask.completed) subtask.important = false;
+      if (subtask.completed) {
+        subtask.important = false;
+        subtask.dueDate = null;
+      }
       if (currentEditingTaskId) {
         const cleanSubtasks = editorSubtasks.filter(s => s.title && s.title.trim());
         updateTask(currentEditingTaskId, { subtasks: cleanSubtasks.length > 0 ? cleanSubtasks : null });
@@ -3134,6 +3147,9 @@ function openSubtaskDescriptionModal(subtask) {
             <button type="button" class="subtask-toolbar-btn" data-cmd="insertOrderedList" title="Numbered List">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><line x1="10" y1="6" x2="21" y2="6"/><line x1="10" y1="12" x2="21" y2="12"/><line x1="10" y1="18" x2="21" y2="18"/><text x="1" y="8" font-size="8" fill="currentColor" stroke="none" font-family="sans-serif">1</text><text x="1" y="14" font-size="8" fill="currentColor" stroke="none" font-family="sans-serif">2</text><text x="1" y="20" font-size="8" fill="currentColor" stroke="none" font-family="sans-serif">3</text></svg>
             </button>
+            <button type="button" class="subtask-toolbar-btn checklist-toolbar-btn" title="Checklist">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="3.5"/><line x1="14" y1="6.5" x2="21" y2="6.5"/><rect x="3" y="14" width="7" height="7" rx="3.5"/><line x1="14" y1="17.5" x2="21" y2="17.5"/><polyline points="4.5 17 6 18.5 8.5 15.5" stroke-width="1.5"/></svg>
+            </button>
           </div>
           <div id="subtask-desc-editor" class="task-desc-editor" contenteditable="true"></div>
         </div>
@@ -3156,6 +3172,12 @@ function openSubtaskDescriptionModal(subtask) {
     modal.querySelectorAll('.subtask-toolbar-btn').forEach(btn => {
       btn.addEventListener('mousedown', (e) => e.preventDefault());
       btn.addEventListener('click', () => {
+        if (btn.classList.contains('checklist-toolbar-btn')) {
+          toggleChecklist();
+          updateSubtaskToolbarState();
+          $('#subtask-desc-editor').focus();
+          return;
+        }
         const cmd = btn.dataset.cmd;
         document.execCommand(cmd, false, null);
         updateSubtaskToolbarState();
@@ -3174,6 +3196,7 @@ function openSubtaskDescriptionModal(subtask) {
 
     // Markdown auto-convert
     const editorEl = modal.querySelector('#subtask-desc-editor');
+    attachChecklistHandler(editorEl);
     attachHighlighterContextMenu(editorEl);
     editorEl.addEventListener('input', handleEditorInput);
 
@@ -3213,22 +3236,31 @@ function openSubtaskDescriptionModal(subtask) {
 function updateSubtaskToolbarState() {
   const modal = $('#subtask-desc-modal');
   if (!modal) return;
+  const inChecklist = isInChecklist();
   modal.querySelectorAll('.subtask-toolbar-btn').forEach(btn => {
+    if (btn.classList.contains('checklist-toolbar-btn')) {
+      btn.classList.toggle('active', inChecklist);
+      return;
+    }
     const cmd = btn.dataset.cmd;
     if (cmd) {
-      btn.classList.toggle('active', document.queryCommandState(cmd));
+      btn.classList.toggle('active', document.queryCommandState(cmd) && !(cmd === 'insertUnorderedList' && inChecklist));
     }
   });
 }
 
 // --- Close task editor modal
 function updateTaskToolbarState() {
+  const inChecklist = isInChecklist();
   const btns = document.querySelectorAll('.task-desc-toolbar-btn');
   btns.forEach(btn => {
+    if (btn.classList.contains('checklist-toolbar-btn')) {
+      btn.classList.toggle('active', inChecklist);
+      return;
+    }
     const cmd = btn.dataset.cmd;
     if (cmd) {
-      const isActive = document.queryCommandState(cmd);
-      btn.classList.toggle('active', isActive);
+      btn.classList.toggle('active', document.queryCommandState(cmd) && !(cmd === 'insertUnorderedList' && inChecklist));
     }
   });
 }
@@ -3307,10 +3339,15 @@ function deleteIdea(ideaId) {
 function updateIdeasToolbarState() {
   const modal = $('#ideas-modal');
   if (!modal || modal.hidden) return;
+  const inChecklist = isInChecklist();
   modal.querySelectorAll('.ideas-toolbar-btn').forEach(btn => {
+    if (btn.classList.contains('checklist-toolbar-btn')) {
+      btn.classList.toggle('active', inChecklist);
+      return;
+    }
     const cmd = btn.dataset.cmd;
     if (cmd) {
-      btn.classList.toggle('active', document.queryCommandState(cmd));
+      btn.classList.toggle('active', document.queryCommandState(cmd) && !(cmd === 'insertUnorderedList' && inChecklist));
     }
   });
 }
@@ -3344,6 +3381,9 @@ export function openIdeasModal() {
             </button>
             <button type="button" class="ideas-toolbar-btn" data-cmd="insertOrderedList" title="Numbered List">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><line x1="10" y1="6" x2="21" y2="6"/><line x1="10" y1="12" x2="21" y2="12"/><line x1="10" y1="18" x2="21" y2="18"/><text x="1" y="8" font-size="8" fill="currentColor" stroke="none" font-family="sans-serif">1</text><text x="1" y="14" font-size="8" fill="currentColor" stroke="none" font-family="sans-serif">2</text><text x="1" y="20" font-size="8" fill="currentColor" stroke="none" font-family="sans-serif">3</text></svg>
+            </button>
+            <button type="button" class="ideas-toolbar-btn checklist-toolbar-btn" title="Checklist">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="3.5"/><line x1="14" y1="6.5" x2="21" y2="6.5"/><rect x="3" y="14" width="7" height="7" rx="3.5"/><line x1="14" y1="17.5" x2="21" y2="17.5"/><polyline points="4.5 17 6 18.5 8.5 15.5" stroke-width="1.5"/></svg>
             </button>
           </div>
           <div id="ideas-editor" class="ideas-editor" contenteditable="true"></div>
@@ -3394,6 +3434,12 @@ export function openIdeasModal() {
     modal.querySelectorAll('.ideas-toolbar-btn').forEach(btn => {
       btn.addEventListener('mousedown', (e) => e.preventDefault());
       btn.addEventListener('click', () => {
+        if (btn.classList.contains('checklist-toolbar-btn')) {
+          toggleChecklist();
+          updateIdeasToolbarState();
+          $('#ideas-editor').focus();
+          return;
+        }
         const cmd = btn.dataset.cmd;
         document.execCommand(cmd, false, null);
         updateIdeasToolbarState();
@@ -3412,6 +3458,7 @@ export function openIdeasModal() {
 
     // Markdown auto-convert + toolbar state update
     const editorEl = modal.querySelector('#ideas-editor');
+    attachChecklistHandler(editorEl);
     attachHighlighterContextMenu(editorEl);
     editorEl.addEventListener('input', handleEditorInput);
     editorEl.addEventListener('keydown', (e) => {

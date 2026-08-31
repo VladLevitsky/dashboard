@@ -36,7 +36,9 @@
       "Bash(start:*)",
       "Bash(grep -n \"\\\\\\\\.slice\\\\|\\\\\\\\.splice\\\\|\\\\\\\\.pop\\\\|\\\\\\\\.shift\\\\|notes\\\\\\\\[0\\\\\\\\]\\\\|notes\\\\\\\\.length\" js/features/edit-mode.js)",
       "WebFetch(domain:vladlevitsky.github.io)",
-      "Bash(grep -v \"//\")"
+      "Bash(grep -v \"//\")",
+      "Bash(grep -n \"export.*addCardButtons\\\\|function addCardButtons\" \"/c/Users/vlevitsky/Documents/Personal Dashboard - New\"/js/**/*.js)",
+      "Bash(sed:*)"
     ],
     "deny": [],
     "ask": []
