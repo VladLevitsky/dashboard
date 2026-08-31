@@ -3,10 +3,10 @@
 // Tasks are color-coded (blue/yellow/orange/red) representing urgency and importance
 
 import { model, editState, currentData, currentSections } from '../state.js';
-import { $, showToast, createAnimatedBorder, normalizeDescHtml } from '../utils.js';
+import { $, showToast, createAnimatedBorder, normalizeDescHtml, openUrl } from '../utils.js';
 import { markDirtyAndSave, handleEditorInput, handleEditorKeydown, createHighlighterButton, attachHighlighterContextMenu, toggleChecklist, isInChecklist, attachChecklistHandler } from './edit-mode.js';
 import { saveModel } from '../core/storage.js';
-import { uploadFile, openFile } from '../core/file-service.js';
+import { uploadFile, openFile, setImageFromRef } from '../core/file-service.js';
 import { TASK_COLORS, TASK_COLOR_LABELS, ANIMATION_DELAY_MS, CARD_HIDE_DELAY_MS } from '../constants.js';
 
 // Module state
@@ -62,15 +62,24 @@ export function getTasksByColor(color) {
   });
 }
 
+// Get all linked item refs for a task (supports legacy single `linkedItem`)
+export function getLinkedItems(task) {
+  if (!task) return [];
+  if (Array.isArray(task.linkedItems) && task.linkedItems.length > 0) return task.linkedItems;
+  return task.linkedItem ? [task.linkedItem] : [];
+}
+
+// Compare two linked item refs
+function sameItemRef(a, b) {
+  return !!a && !!b && a.type === b.type && a.key === b.key && a.sectionId === b.sectionId;
+}
+
 // Get tasks for a specific item
 export function getTasksForItem(type, key, sectionId) {
   const tasks = getAllTasks();
-  return tasks.filter(t =>
-    t.linkedItem &&
-    t.linkedItem.type === type &&
-    t.linkedItem.key === key &&
-    t.linkedItem.sectionId === sectionId
-  );
+  return tasks.filter(t => getLinkedItems(t).some(li =>
+    li.type === type && li.key === key && li.sectionId === sectionId
+  ));
 }
 
 // Find item by linkedItem reference
@@ -87,6 +96,8 @@ function findItemByReference(linkedItem) {
     return subtitleData.reminders?.find(r => r.key === linkedItem.key);
   } else if (linkedItem.type === 'subtask') {
     return subtitleData.subtasks?.find(s => s.key === linkedItem.key);
+  } else if (linkedItem.type === 'copyPaste') {
+    return subtitleData.copyPaste?.find(c => c.key === linkedItem.key);
   }
   return null;
 }
@@ -202,13 +213,13 @@ export function deleteTask(taskId) {
 
   const task = tasks[taskIndex];
 
-  // Remove reference from linked item
-  if (task.linkedItem) {
-    const item = findItemByReference(task.linkedItem);
+  // Remove reference from linked items
+  getLinkedItems(task).forEach(ref => {
+    const item = findItemByReference(ref);
     if (item?.taskIds) {
       item.taskIds = item.taskIds.filter(id => id !== taskId);
     }
-  }
+  });
 
   // Remove highlight links (revert to plain text, keep text)
   if (task.projectHighlight) {
@@ -249,13 +260,13 @@ export function completeTask(taskId) {
 
   const task = tasks[taskIndex];
 
-  // Remove reference from linked item
-  if (task.linkedItem) {
-    const item = findItemByReference(task.linkedItem);
+  // Remove reference from linked items
+  getLinkedItems(task).forEach(ref => {
+    const item = findItemByReference(ref);
     if (item?.taskIds) {
       item.taskIds = item.taskIds.filter(id => id !== taskId);
     }
-  }
+  });
 
   // Mark highlights as completed (turns green, link released)
   if (task.projectHighlight) {
@@ -1967,10 +1978,7 @@ export function openItemTasksModal(itemType, itemKey, sectionId, subtitle) {
     $('#item-tasks-close').addEventListener('click', closeItemTasksModal);
     $('#item-tasks-add-btn').addEventListener('click', () => {
       if (currentItemTasksContext) {
-        // Save context before closing modal (closing clears it)
-        const contextToPass = { ...currentItemTasksContext };
-        closeItemTasksModal();
-        openAddTaskModal(contextToPass);
+        openItemTaskPickerModal();
       }
     });
   }
@@ -2040,6 +2048,141 @@ export function refreshItemTasksModal() {
   }
 }
 
+// ============================================================
+// ITEM TASK PICKER (select an existing task to link to an item)
+// Mirrors the @ mention dropdown: tasks grouped by priority color
+// ============================================================
+
+const PICKER_COLOR_ORDER = ['red', 'orange', 'yellow', 'blue'];
+
+// --- Open the task picker on top of the item tasks modal
+function openItemTaskPickerModal() {
+  let modal = $('#item-task-picker-modal');
+
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'item-task-picker-modal';
+    modal.className = 'item-task-picker-modal';
+    modal.innerHTML = `
+      <div class="item-task-picker-backdrop"></div>
+      <div class="item-task-picker-dialog">
+        <div class="item-task-picker-header">
+          <h4>Select Task</h4>
+          <button type="button" class="item-task-picker-close-btn" title="Close">&times;</button>
+        </div>
+        <div class="item-task-picker-search">
+          <input type="text" id="item-task-picker-search-input" placeholder="Search tasks..." />
+        </div>
+        <div class="item-task-picker-list" id="item-task-picker-list"></div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+
+    modal.querySelector('.item-task-picker-backdrop').addEventListener('click', closeItemTaskPickerModal);
+    modal.querySelector('.item-task-picker-close-btn').addEventListener('click', closeItemTaskPickerModal);
+    $('#item-task-picker-search-input').addEventListener('input', (e) => {
+      renderItemTaskPickerList(e.target.value.trim().toLowerCase());
+    });
+  }
+
+  const searchInput = $('#item-task-picker-search-input');
+  searchInput.value = '';
+  renderItemTaskPickerList('');
+
+  modal.hidden = false;
+  searchInput.focus();
+}
+
+// --- Render task pills grouped by priority color (like @ mention dropdown)
+function renderItemTaskPickerList(query) {
+  const container = $('#item-task-picker-list');
+  if (!container || !currentItemTasksContext) return;
+
+  container.innerHTML = '';
+  const ctx = currentItemTasksContext;
+
+  // All active tasks not already linked to this item
+  const candidates = getAllTasks()
+    .filter(t => !t.completed)
+    .filter(t => !getLinkedItems(t).some(li => sameItemRef(li, ctx)))
+    .filter(t => !query || (t.title || '').toLowerCase().includes(query));
+
+  if (candidates.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'item-task-picker-empty';
+    empty.textContent = 'No matching tasks';
+    container.appendChild(empty);
+    return;
+  }
+
+  PICKER_COLOR_ORDER.forEach(color => {
+    const colorTasks = candidates
+      .filter(t => t.color === color)
+      .sort((a, b) => {
+        if (a.pinned && !b.pinned) return -1;
+        if (!a.pinned && b.pinned) return 1;
+        return (a.order || 0) - (b.order || 0);
+      });
+    if (colorTasks.length === 0) return;
+
+    const col = document.createElement('div');
+    col.className = 'task-mention-col';
+
+    colorTasks.forEach(task => {
+      const item = document.createElement('div');
+      item.className = `task-mention-item task-bubble-${color}`;
+      item.dataset.taskId = task.id;
+
+      const titleSpan = document.createElement('span');
+      titleSpan.className = 'task-mention-item-title';
+      titleSpan.textContent = task.title || 'Untitled';
+      item.appendChild(titleSpan);
+
+      if (task.pinned) {
+        const badge = document.createElement('span');
+        badge.className = 'task-mention-primary-badge';
+        badge.textContent = 'P';
+        item.appendChild(badge);
+      }
+
+      item.addEventListener('click', () => linkTaskToCurrentItem(task));
+      col.appendChild(item);
+    });
+
+    container.appendChild(col);
+  });
+}
+
+// --- Link an existing task to the current item context
+function linkTaskToCurrentItem(task) {
+  if (!currentItemTasksContext) return;
+  const ref = { ...currentItemTasksContext };
+
+  const items = getLinkedItems(task).map(li => ({ ...li }));
+  if (!items.some(li => sameItemRef(li, ref))) items.push(ref);
+  task.linkedItems = items;
+  task.linkedItem = items[0]; // Legacy compat: first ref
+
+  // Keep item-side taskIds reference in sync (same as createTask)
+  const item = findItemByReference(ref);
+  if (item) {
+    item.taskIds = item.taskIds || [];
+    if (!item.taskIds.includes(task.id)) item.taskIds.push(task.id);
+  }
+
+  saveModel();
+  closeItemTaskPickerModal();
+  renderItemTasksPills();
+  if (window.renderAllSections) window.renderAllSections();
+  showToast('Task linked');
+}
+
+// --- Close the task picker
+function closeItemTaskPickerModal() {
+  const modal = $('#item-task-picker-modal');
+  if (modal) modal.hidden = true;
+}
+
 // --- Description editor state
 let descriptionEditing = false;
 
@@ -2090,13 +2233,6 @@ function openTaskEditorModal(taskData, titleText) {
                 </svg>
               </button>
             </div>
-            <div class="task-editor-field">
-              <label>Link to Item (Optional)</label>
-              <div class="task-editor-item-selector" id="task-editor-item-selector">
-                <span class="task-editor-item-text">No item selected</span>
-                <button type="button" class="task-editor-item-btn">Select Item</button>
-              </div>
-            </div>
             <div class="task-editor-field" id="task-editor-project-link-field" hidden>
               <label>Linked Project</label>
               <div class="task-editor-project-link" id="task-editor-project-link">
@@ -2116,6 +2252,14 @@ function openTaskEditorModal(taskData, titleText) {
                   <line x1="5" y1="12" x2="19" y2="12"></line>
                 </svg>
               </button>
+            </div>
+            <div class="task-editor-field">
+              <label>Link to Item (Optional)</label>
+              <div class="task-editor-item-selector" id="task-editor-item-selector">
+                <span class="task-editor-item-text">No item selected</span>
+                <button type="button" class="task-editor-item-btn">Select Item</button>
+              </div>
+              <div class="task-editor-linked-items" id="task-editor-linked-items"></div>
             </div>
           </div>
           <div class="task-editor-description">
@@ -2507,29 +2651,31 @@ function openTaskEditorModal(taskData, titleText) {
     requestAnimationFrame(() => editor.focus());
   }
 
-  // Item selector - hide if opened from an item context
-  const itemSelectorField = $('#task-editor-item-selector')?.closest('.task-editor-field');
+  // Linked items (multi) - seeded from task, committed on save
   const itemSelector = $('#task-editor-item-selector');
-  let selectedLinkedItem = taskData.linkedItem ? { ...taskData.linkedItem } : null;
+  const itemText = itemSelector.querySelector('.task-editor-item-text');
+  const itemBtn = itemSelector.querySelector('.task-editor-item-btn');
+  const linkedItemsContainer = $('#task-editor-linked-items');
+  let selectedLinkedItems = getLinkedItems(taskData).map(li => ({ ...li }));
 
-  if (preLinkedItemContext) {
-    // Hide the item selector when adding from an item
-    if (itemSelectorField) itemSelectorField.style.display = 'none';
-  } else {
-    // Show the item selector
-    if (itemSelectorField) itemSelectorField.style.display = '';
-    const itemText = itemSelector.querySelector('.task-editor-item-text');
-    const itemBtn = itemSelector.querySelector('.task-editor-item-btn');
+  const renderLinkedItems = () => {
+    renderEditorLinkedItems(linkedItemsContainer, itemText, selectedLinkedItems, (index) => {
+      selectedLinkedItems.splice(index, 1);
+      renderLinkedItems();
+    });
+  };
+  renderLinkedItems();
 
-    updateItemSelectorText(itemText, selectedLinkedItem);
-
-    itemBtn.onclick = () => {
-      openItemSelectorModal((item) => {
-        selectedLinkedItem = item;
-        updateItemSelectorText(itemText, selectedLinkedItem);
-      });
-    };
-  }
+  itemBtn.onclick = () => {
+    openItemSelectorModal((item) => {
+      if (!item) {
+        selectedLinkedItems = [];
+      } else if (!selectedLinkedItems.some(li => sameItemRef(li, item))) {
+        selectedLinkedItems.push(item);
+      }
+      renderLinkedItems();
+    });
+  };
 
   // Project link field - show if task has a project highlight
   const projectLinkField = $('#task-editor-project-link-field');
@@ -2666,12 +2812,16 @@ function openTaskEditorModal(taskData, titleText) {
     // Clean up subtasks (remove empty titles)
     const subtasks = editorSubtasks.filter(s => s.title && s.title.trim());
 
+    // Linked items (legacy `linkedItem` mirrors the first ref)
+    const linkedItems = selectedLinkedItems.map(li => ({ ...li }));
+
     if (currentEditingTaskId) {
       // Update existing task
       const taskUpdate = {
         title,
         color: selectedColor,
-        linkedItem: selectedLinkedItem,
+        linkedItem: linkedItems[0] || null,
+        linkedItems: linkedItems.length > 0 ? linkedItems : null,
         link: link,
         taskLinks: taskLinks.length > 0 ? taskLinks : null,
         dueDate: dueDate,
@@ -2683,8 +2833,9 @@ function openTaskEditorModal(taskData, titleText) {
       showToast('Task updated');
     } else {
       // Create new task
-      const task = createTask(title, selectedColor, selectedLinkedItem, link);
+      const task = createTask(title, selectedColor, linkedItems[0] || null, link);
       const updates = { pinned: primaryCheckbox.checked };
+      if (linkedItems.length > 0) updates.linkedItems = linkedItems;
       if (dueDate) updates.dueDate = dueDate;
       if (description) updates.description = description;
       if (subtasks.length > 0) updates.subtasks = subtasks;
@@ -2770,29 +2921,147 @@ function taskEditorHasChanges() {
   return false;
 }
 
-// --- Update item selector display text
-function updateItemSelectorText(textEl, linkedItem) {
-  if (!linkedItem) {
-    textEl.textContent = 'No item selected';
-    textEl.classList.remove('has-item');
-  } else {
-    // Try to find the item to get its title
-    const item = findItemByReference(linkedItem);
-    let displayText = linkedItem.type;
+// --- Render linked item minis in the task editor
+// Display order: reminders, subtasks, copy-paste, icons
+const LINKED_ITEM_TYPE_ORDER = ['reminder', 'subtask', 'copyPaste', 'icon'];
 
-    if (item) {
-      if (linkedItem.type === 'icon') {
-        displayText = item.title || extractDomainFromUrl(item.url) || 'Icon';
-      } else if (linkedItem.type === 'reminder') {
-        displayText = item.title || 'Reminder';
-      } else if (linkedItem.type === 'subtask') {
-        displayText = item.text || 'Subtask';
-      }
+function renderEditorLinkedItems(container, textEl, refs, onRemove) {
+  if (textEl) {
+    if (refs.length === 0) {
+      textEl.textContent = 'No item selected';
+      textEl.classList.remove('has-item');
+    } else {
+      textEl.textContent = `${refs.length} item${refs.length !== 1 ? 's' : ''} linked`;
+      textEl.classList.add('has-item');
     }
-
-    textEl.textContent = displayText;
-    textEl.classList.add('has-item');
   }
+
+  if (!container) return;
+  container.innerHTML = '';
+
+  refs
+    .map((ref, index) => ({ ref, index }))
+    .sort((a, b) => LINKED_ITEM_TYPE_ORDER.indexOf(a.ref.type) - LINKED_ITEM_TYPE_ORDER.indexOf(b.ref.type))
+    .forEach(({ ref, index }) => {
+      container.appendChild(buildLinkedItemMini(ref, () => onRemove(index)));
+    });
+}
+
+// --- Open the link/file an item points to
+function openLinkedItemTarget(item) {
+  if (item.linkType === 'file' && item.fileId) {
+    openFile(item.fileId, item.fileName);
+  } else if (item.url) {
+    openUrl(item.url);
+  }
+}
+
+// --- Build the mini days/interval badge for a reminder (compact version of the card badge)
+function buildMiniReminderBadge(rem) {
+  const badge = document.createElement('span');
+  badge.className = 'days-badge';
+
+  if (rem.type === 'interval') {
+    if (window.calculateIntervalProgress && window.formatIntervalNumber && window.getIntervalColorClass) {
+      const progress = window.calculateIntervalProgress(rem);
+      const formattedNumber = window.formatIntervalNumber(progress.progress, rem.intervalUnit || 'none');
+      const typeText = (rem.intervalType || 'limit') === 'goal' ? 'Before goal' : 'Before limit';
+      badge.textContent = `${typeText}: ${formattedNumber}`;
+      badge.classList.add(window.getIntervalColorClass(progress.percentage, rem.intervalType || 'limit'));
+      return badge;
+    }
+  } else if (rem.schedule && window.getNextOccurrence && window.daysUntil && window.classForDaysLeft) {
+    try {
+      const nextDate = window.getNextOccurrence(rem.schedule);
+      const days = window.daysUntil(nextDate);
+      if (days === 0) {
+        badge.textContent = 'Today';
+      } else if (days < 0) {
+        badge.textContent = `Overdue by ${Math.abs(days)} day${Math.abs(days) !== 1 ? 's' : ''}`;
+      } else {
+        badge.textContent = `${days} day${days !== 1 ? 's' : ''} left`;
+      }
+      badge.classList.add(window.classForDaysLeft(days));
+      return badge;
+    } catch (e) { /* no badge */ }
+  }
+  return null;
+}
+
+// --- Build a functional miniature of a linked item
+function buildLinkedItemMini(ref, onRemove) {
+  const item = findItemByReference(ref);
+  const wrap = document.createElement('div');
+  wrap.className = `task-linked-mini task-linked-mini-${ref.type}`;
+
+  if (!item) {
+    wrap.classList.add('task-linked-mini-missing');
+    const title = document.createElement('span');
+    title.className = 'task-linked-mini-title';
+    title.textContent = '(deleted item)';
+    wrap.appendChild(title);
+  } else if (ref.type === 'reminder') {
+    const title = document.createElement('span');
+    title.className = 'task-linked-mini-title';
+    title.textContent = item.title || 'Reminder';
+    wrap.appendChild(title);
+    const badge = buildMiniReminderBadge(item);
+    if (badge) wrap.appendChild(badge);
+    wrap.title = item.title || 'Reminder';
+    wrap.addEventListener('click', () => openLinkedItemTarget(item));
+  } else if (ref.type === 'subtask') {
+    const title = document.createElement('span');
+    title.className = 'task-linked-mini-title task-linked-mini-link';
+    title.textContent = item.text || 'Link';
+    wrap.appendChild(title);
+    wrap.title = item.text || 'Link';
+    wrap.addEventListener('click', () => openLinkedItemTarget(item));
+  } else if (ref.type === 'copyPaste') {
+    const title = document.createElement('span');
+    title.className = 'task-linked-mini-title';
+    title.textContent = item.text || '';
+    wrap.appendChild(title);
+    const copyIcon = document.createElement('span');
+    copyIcon.className = 'task-linked-mini-copy';
+    copyIcon.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>';
+    wrap.appendChild(copyIcon);
+    wrap.title = 'Copy to clipboard';
+    wrap.addEventListener('click', () => {
+      navigator.clipboard.writeText(item.copyText || item.text || '');
+      showToast('Copied to clipboard');
+    });
+  } else if (ref.type === 'icon') {
+    const visual = document.createElement('span');
+    visual.className = 'task-linked-mini-icon-visual';
+    if (item.icon && typeof item.icon === 'string' && !item.icon.includes('/') && !item.icon.includes('.') && !item.icon.startsWith('http') && !item.icon.startsWith('data:') && item.icon.length <= 10) {
+      visual.textContent = item.icon; // Emoji icon
+    } else {
+      const img = document.createElement('img');
+      setImageFromRef(img, item.icon);
+      img.alt = item.title || item.key || 'Icon';
+      visual.appendChild(img);
+    }
+    wrap.appendChild(visual);
+    const title = document.createElement('span');
+    title.className = 'task-linked-mini-title';
+    title.textContent = item.title || extractDomainFromUrl(item.url) || 'Icon';
+    wrap.appendChild(title);
+    wrap.title = title.textContent;
+    wrap.addEventListener('click', () => openLinkedItemTarget(item));
+  }
+
+  const removeBtn = document.createElement('button');
+  removeBtn.type = 'button';
+  removeBtn.className = 'task-linked-mini-remove';
+  removeBtn.title = 'Unlink item';
+  removeBtn.innerHTML = '&times;';
+  removeBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    onRemove();
+  });
+  wrap.appendChild(removeBtn);
+
+  return wrap;
 }
 
 // --- Normalize contenteditable HTML (strip lone <br>, whitespace-only)
@@ -3696,7 +3965,13 @@ function renderItemSelectorCategories(filterQuery) {
     container.appendChild(category);
   }
 
-  if (filteredItems.icons.length === 0 && filteredItems.reminders.length === 0 && filteredItems.subtasks.length === 0) {
+  // Render Copy-Paste items
+  if (filteredItems.copyPaste.length > 0) {
+    const category = createItemSelectorCategory('Copy-Paste', filteredItems.copyPaste, 'copyPaste');
+    container.appendChild(category);
+  }
+
+  if (filteredItems.icons.length === 0 && filteredItems.reminders.length === 0 && filteredItems.subtasks.length === 0 && filteredItems.copyPaste.length === 0) {
     container.innerHTML = '<div class="item-selector-empty">No items found</div>';
   }
 }
@@ -3754,7 +4029,8 @@ export function collectLinkableItems() {
   const items = {
     icons: [],
     reminders: [],
-    subtasks: []
+    subtasks: [],
+    copyPaste: []
   };
 
   sections.forEach(section => {
@@ -3811,6 +4087,20 @@ export function collectLinkableItems() {
           });
         });
       }
+
+      // Collect copy-paste items
+      if (subtitleData.copyPaste) {
+        subtitleData.copyPaste.forEach(cp => {
+          items.copyPaste.push({
+            type: 'copyPaste',
+            key: cp.key,
+            title: cp.text || 'Copy-Paste',
+            sectionId: section.id,
+            subtitle,
+            breadcrumb
+          });
+        });
+      }
     });
   });
 
@@ -3825,7 +4115,8 @@ function filterLinkableItems(items, query) {
   return {
     icons: items.icons.filter(i => i.title?.toLowerCase().includes(q) || i.breadcrumb?.toLowerCase().includes(q)),
     reminders: items.reminders.filter(i => i.title?.toLowerCase().includes(q) || i.breadcrumb?.toLowerCase().includes(q)),
-    subtasks: items.subtasks.filter(i => i.title?.toLowerCase().includes(q) || i.breadcrumb?.toLowerCase().includes(q))
+    subtasks: items.subtasks.filter(i => i.title?.toLowerCase().includes(q) || i.breadcrumb?.toLowerCase().includes(q)),
+    copyPaste: items.copyPaste.filter(i => i.title?.toLowerCase().includes(q) || i.breadcrumb?.toLowerCase().includes(q))
   };
 }
 

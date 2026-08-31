@@ -46,7 +46,8 @@ export const model = {
   cardNotes: {},  // Notes for each card: { "sectionId": "note text" }
   collapsedCards: {},  // Track collapsed state of cards: { "sectionId": true }
   // Centralized task storage (Eisenhower Matrix)
-  // Each task: { id, title, color: 'blue'|'yellow'|'orange'|'red', linkedItem: { type, key, sectionId, subtitle }, order }
+  // Each task: { id, title, color: 'blue'|'yellow'|'orange'|'red', linkedItems: [{ type, key, sectionId, subtitle }], order }
+  // (legacy `linkedItem` = single ref, mirrored to first entry of linkedItems for backward compat)
   tasks: [],
   ideas: [],
   meetings: [],

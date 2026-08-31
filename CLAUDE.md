@@ -41,7 +41,9 @@ const model = {
   // Centralized task system (Eisenhower Matrix)
   tasks: [{
     id, title, color: 'blue'|'yellow'|'orange'|'red',
-    linkedItem?, link?, dueDate?, order, pinned: boolean,
+    linkedItems?: [{ type: 'reminder'|'subtask'|'copyPaste'|'icon', key, sectionId, subtitle }],
+    linkedItem?,  // legacy single ref, mirrored to linkedItems[0]
+    link?, dueDate?, order, pinned: boolean,
     taskLinks?: [{ type: 'url', value } | { type: 'file', fileId, fileName }],
     description?, subtasks?: [{ id, title, completed, important, description?, dueDate? }],
     projectHighlight?, meetingHighlight?, noteHighlight?
@@ -142,6 +144,9 @@ Central task store in `model.tasks[]` with 4-color priority system:
 - Tasks can have: subtasks, descriptions, due dates, multiple links & files, linked items, project/meeting/note highlights
 - **Links & Files**: Task editor has a `+` button to add multiple links/files. Clicking `+` shows URL or File choice. URL entries use subtask-style input (editable → confirmed with edit/delete inside). File entries upload to R2.
 - `task.taskLinks[]` stores the array; `task.link` is kept for backward compat (first URL)
+- **Linked Items (multi)**: `task.linkedItems[]` links a task to card items (reminders, subtasks, copy-paste, icons); legacy `task.linkedItem` mirrors the first ref. `getLinkedItems(task)` normalizes both shapes
+- Task editor: "Link to Item (Optional)" sits at the bottom below Subtasks. "Select Item" appends refs; linked items render below it as functional miniatures (order: reminders → subtasks → copy-paste → icons) — click opens the item's link/file (copy-paste copies), × unlinks
+- Item "Add Task" button (in the item tasks modal) opens a task PICKER (`#item-task-picker-modal`, styled like the @ mention dropdown: per-color columns red/orange/yellow/blue, pinned first, search filter) to link an EXISTING task to the item — it no longer creates a new task
 - Primary (pinned) tasks float to top within their color group
 
 ### Task Highlight System
