@@ -117,12 +117,15 @@ export function renderAllSections() {
   }
 
   // Grow any card whose content is taller than its grid area, push neighbors
-  // down, and persist if anything changed. Cards can never clip their content.
-  // markDirtyAndSave (not saveModel) so persistActiveLayout keeps the active
-  // device profile in sync with the grown row spans; in edit mode it only
-  // marks the working copy dirty (persisted on confirm).
+  // down. Cards can never clip their content. In edit mode the growth is part
+  // of the working copy (persisted on confirm); in view mode the growth is
+  // TRANSIENT — recalculated every render based on content at the current
+  // screen width — so the designed profile (set via the grid editor) is the
+  // permanent source of truth and never gets overwritten by runtime overflow.
   if (reconcileRowSpans(sections)) {
-    markDirtyAndSave();
+    if (editState.enabled) {
+      markDirtyAndSave();
+    }
     // Reconcile re-applied STORED placement — restore collapsed-card
     // compaction on top of the grown layout (view mode only)
     if (!isTileMode) {

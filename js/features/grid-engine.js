@@ -622,14 +622,21 @@ export function migrateToGrid24(data) {
  * Copy the flat working layout into layouts[activeMode].
  * Idempotent and cheap — called from markDirtyAndSave after every layout
  * mutation, and before every mode switch, so profiles are always fresh.
+ *
+ * In VIEW mode, existing profiles are never overwritten — the designed layout
+ * (set via the grid editor in edit mode) is the source of truth.  Runtime
+ * growth from reconcileRowSpans is transient and must not contaminate it.
  */
 export function persistActiveLayout(sections) {
   if (!Array.isArray(sections)) return;
   const mode = getActiveMode();
+  const inEdit = editState.enabled;
   sections.forEach(s => {
     if (s.type === 'header') return;
     if (!s.gridCol || !s.gridRow) return;
     if (!s.layouts) s.layouts = {};
+    // In view mode, preserve existing designed profile
+    if (!inEdit && s.layouts[mode]) return;
     s.layouts[mode] = {
       col: s.gridCol,
       row: s.gridRow,

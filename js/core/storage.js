@@ -552,19 +552,22 @@ export async function restoreModel() {
     }
 
     // Reconcile device layout profiles with the flat working layout:
-    // the flat props were saved from lastActiveMode — make sure that
-    // profile matches them (covers models synced from another device),
-    // then hydrate whichever mode THIS browser wants to display.
+    // the flat props were saved from lastActiveMode — only seed the profile
+    // if it doesn't exist yet (don't overwrite designed values with flat
+    // props that may include transient reconcileRowSpans growth).
+    // Then hydrate whichever mode THIS browser wants to display.
     if (Array.isArray(model.sections) && model.sections.length > 0) {
       const savedMode = model.lastActiveMode || 'tablet';
       model.sections.forEach(s => {
         if (s.type === 'header' || !s.gridCol || !s.gridRow) return;
         if (!s.layouts) s.layouts = {};
-        s.layouts[savedMode] = {
-          col: s.gridCol, row: s.gridRow,
-          colSpan: s.gridColSpan || DEFAULT_COL_SPAN,
-          rowSpan: s.gridRowSpan || DEFAULT_ROW_SPAN,
-        };
+        if (!s.layouts[savedMode]) {
+          s.layouts[savedMode] = {
+            col: s.gridCol, row: s.gridRow,
+            colSpan: s.gridColSpan || DEFAULT_COL_SPAN,
+            rowSpan: s.gridRowSpan || DEFAULT_ROW_SPAN,
+          };
+        }
       });
       hydrateLayout(model.sections, getActiveMode());
       model.lastActiveMode = getActiveMode();
