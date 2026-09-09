@@ -455,7 +455,7 @@ export function openAddItemOptions(sectionKey, event) {
     box-shadow: 0 10px 30px rgba(0,0,0,0.08);
     padding: 8px;
     border: 1px solid #e5e7eb;
-    z-index: 1000;
+    z-index: 2500;
     width: fit-content;
     height: fit-content;
   `;
@@ -477,7 +477,7 @@ export function openAddItemOptions(sectionKey, event) {
       ${supportsSeparators ? `<button id="add-separator-btn" style="width: 56px; height: 56px; border: 1px solid #e5e7eb; border-radius: 6px; background: #f8fafc; cursor: pointer; display: flex; align-items: center; justify-content: center;">
         <img src="${separatorIcon}" alt="separator" style="width: 40px; height: 40px;">
       </button>` : ''}
-      <button id="cancel-btn" style="width: 32px; height: 32px; border: none; border-radius: 50%; background: #fee2e2; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: bold; color: #7f1d1d;">✕</button>
+      <button id="cancel-btn" style="background: none; border: none; cursor: pointer; padding: 0; color: #ef4444; font-size: 22px; line-height: 1; transition: color 0.15s;">&times;</button>
     </div>
   `;
 
@@ -2944,7 +2944,7 @@ export function openUnifiedAddItemPopover(sectionId, subtitle, event) {
     box-shadow: 0 10px 30px rgba(0,0,0,0.08);
     padding: 12px;
     border: 1px solid #e5e7eb;
-    z-index: 1000;
+    z-index: 2500;
     width: fit-content;
     visibility: hidden;
   `;
@@ -2960,40 +2960,36 @@ export function openUnifiedAddItemPopover(sectionId, subtitle, event) {
       <div style="font-size: 12px; color: #6b7280; margin-bottom: 4px;">Add item type:</div>
       <div style="display: flex; gap: 8px; align-items: center;">
         <button id="add-icon-btn" title="Add Icon" style="width: 48px; height: 48px; border: 1px solid #e5e7eb; border-radius: 6px; background: #f8fafc; cursor: pointer; display: flex; align-items: center; justify-content: center;">
-          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-            <circle cx="8.5" cy="8.5" r="1.5"></circle>
-            <polyline points="21 15 16 10 5 21"></polyline>
+          <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="18" height="18" rx="2"></rect>
+            <circle cx="8.5" cy="8.5" r="2"></circle>
           </svg>
         </button>
         <button id="add-separator-btn" title="Add Separator" style="width: 48px; height: 48px; border: 1px solid #e5e7eb; border-radius: 6px; background: #f8fafc; cursor: pointer; display: flex; align-items: center; justify-content: center;">
-          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="5" y1="12" x2="19" y2="12"></line>
+          <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="12" y1="4" x2="12" y2="20"></line>
           </svg>
         </button>
         <button id="add-subtask-btn" title="Add Subtask" style="width: 48px; height: 48px; border: 1px solid #e5e7eb; border-radius: 6px; background: #f8fafc; cursor: pointer; display: flex; align-items: center; justify-content: center;">
-          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="8" y1="6" x2="21" y2="6"></line>
-            <line x1="8" y1="12" x2="21" y2="12"></line>
-            <line x1="8" y1="18" x2="21" y2="18"></line>
-            <line x1="3" y1="6" x2="3.01" y2="6"></line>
-            <line x1="3" y1="12" x2="3.01" y2="12"></line>
-            <line x1="3" y1="18" x2="3.01" y2="18"></line>
+          <svg xmlns="http://www.w3.org/2000/svg" width="26" height="16" viewBox="0 0 28 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="1" y="1" width="26" height="14" rx="3"></rect>
+            <circle cx="7" cy="8" r="2.5"></circle>
+            <line x1="12" y1="8" x2="23" y2="8"></line>
           </svg>
         </button>
         <button id="add-reminder-btn" title="Add Reminder" style="width: 48px; height: 48px; border: 1px solid #e5e7eb; border-radius: 6px; background: #f8fafc; cursor: pointer; display: flex; align-items: center; justify-content: center;">
-          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="10"></circle>
             <polyline points="12 6 12 12 16 14"></polyline>
           </svg>
         </button>
         <button id="add-copypaste-btn" title="Add Copy-Paste" style="width: 48px; height: 48px; border: 1px solid #e5e7eb; border-radius: 6px; background: #f8fafc; cursor: pointer; display: flex; align-items: center; justify-content: center;">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
+          <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
             <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
             <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
           </svg>
         </button>
-        <button id="cancel-btn" style="width: 32px; height: 32px; border: none; border-radius: 50%; background: #fee2e2; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: bold; color: #7f1d1d;">✕</button>
+        <button id="cancel-btn" style="background: none; border: none; cursor: pointer; padding: 0; color: #ef4444; font-size: 22px; line-height: 1; transition: color 0.15s;">&times;</button>
       </div>
     </div>
   `;
