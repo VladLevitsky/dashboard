@@ -150,6 +150,7 @@ export function extractUrlOverrides() {
   obj.projects = data.projects || [];
   obj.ideas = data.ideas || [];
   obj.meetings = data.meetings || [];
+  obj.subtaskTemplates = data.subtaskTemplates || [];
 
   // Metadata
   obj._metadata = {
@@ -872,6 +873,11 @@ export function applyUrlOverrides(data) {
     current.meetings = data.meetings;
   }
 
+  // Apply subtask templates
+  if (data.subtaskTemplates && Array.isArray(data.subtaskTemplates)) {
+    current.subtaskTemplates = data.subtaskTemplates;
+  }
+
   // Synchronize editState.working if in edit mode
   if (editState.enabled && editState.working) {
     editState.working = JSON.parse(JSON.stringify(model));
@@ -906,6 +912,7 @@ export function applyUrlOverrides(data) {
       projects: current.projects || [],
       ideas: current.ideas || [],
       meetings: current.meetings || [],
+      subtaskTemplates: current.subtaskTemplates || [],
     };
 
     // Add ALL sections - all are now unified format

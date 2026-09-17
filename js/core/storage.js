@@ -463,6 +463,7 @@ export function saveModel() {
     meetings: data.meetings || [],
     completedTasks: data.completedTasks || [],
     projects: data.projects || [],
+    subtaskTemplates: data.subtaskTemplates || [],
   };
 
   // Add ALL sections - all are now unified format
@@ -670,6 +671,11 @@ export async function restoreModel() {
       model.projects = saved.projects;
     }
 
+    // Restore subtask templates
+    if (saved.subtaskTemplates && Array.isArray(saved.subtaskTemplates)) {
+      model.subtaskTemplates = saved.subtaskTemplates;
+    }
+
     // Restore ALL section data (all are now unified format after migration)
     if (saved.sections) {
       saved.sections.forEach(section => {
@@ -862,6 +868,9 @@ export function deepMergeModel(target, source) {
   }
   if (source.projects && Array.isArray(source.projects)) {
     target.projects = JSON.parse(JSON.stringify(source.projects));
+  }
+  if (source.subtaskTemplates && Array.isArray(source.subtaskTemplates)) {
+    target.subtaskTemplates = JSON.parse(JSON.stringify(source.subtaskTemplates));
   }
 
   // Handle ALL section data (unified format - objects keyed by section ID)

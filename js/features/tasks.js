@@ -2247,12 +2247,21 @@ function openTaskEditorModal(taskData, titleText) {
             <div class="task-editor-field">
               <label>Subtasks</label>
               <div class="task-subtasks-list" id="task-subtasks-list"></div>
-              <button type="button" id="task-subtasks-add-btn" class="task-subtasks-add-btn">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
-                  <line x1="12" y1="5" x2="12" y2="19"></line>
-                  <line x1="5" y1="12" x2="19" y2="12"></line>
-                </svg>
-              </button>
+              <div class="task-subtasks-actions-row">
+                <button type="button" id="task-subtasks-add-btn" class="task-subtasks-add-btn">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                  </svg>
+                </button>
+                <button type="button" id="task-subtasks-save-template-btn" class="task-subtasks-template-btn" title="Save subtasks as template">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+                    <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                    <polyline points="7 3 7 8 15 8"></polyline>
+                  </svg>
+                </button>
+              </div>
             </div>
             <div class="task-editor-field">
               <label>Link to Item (Optional)</label>
@@ -2394,9 +2403,45 @@ function openTaskEditorModal(taskData, titleText) {
       exitDescriptionEditMode();
     });
 
-    // Subtasks add button
-    $('#task-subtasks-add-btn').addEventListener('click', () => {
+    // Subtasks add button (click = add, long-press = template picker)
+    const subtaskAddBtn = $('#task-subtasks-add-btn');
+    let subtaskLongPressTimer = null;
+    let subtaskLongPressTriggered = false;
+
+    const startSubtaskLongPress = () => {
+      subtaskLongPressTriggered = false;
+      subtaskLongPressTimer = setTimeout(() => {
+        subtaskLongPressTriggered = true;
+        openSubtaskTemplatePicker(subtaskAddBtn);
+      }, 750);
+    };
+    const cancelSubtaskLongPress = () => {
+      if (subtaskLongPressTimer) {
+        clearTimeout(subtaskLongPressTimer);
+        subtaskLongPressTimer = null;
+      }
+    };
+
+    subtaskAddBtn.addEventListener('mousedown', startSubtaskLongPress);
+    subtaskAddBtn.addEventListener('mouseup', cancelSubtaskLongPress);
+    subtaskAddBtn.addEventListener('mouseleave', cancelSubtaskLongPress);
+    subtaskAddBtn.addEventListener('touchstart', startSubtaskLongPress, { passive: true });
+    subtaskAddBtn.addEventListener('touchend', cancelSubtaskLongPress);
+    subtaskAddBtn.addEventListener('touchcancel', cancelSubtaskLongPress);
+
+    subtaskAddBtn.addEventListener('click', (e) => {
+      if (subtaskLongPressTriggered) {
+        e.preventDefault();
+        e.stopPropagation();
+        subtaskLongPressTriggered = false;
+        return;
+      }
       addSubtaskToEditor();
+    });
+
+    // Save subtasks as template button
+    $('#task-subtasks-save-template-btn').addEventListener('click', () => {
+      openSaveSubtaskTemplateModal();
     });
   }
 
@@ -3569,6 +3614,213 @@ function updateTaskToolbarState() {
   });
 }
 
+// ============================================================
+// SUBTASK TEMPLATES
+// ============================================================
+
+function openSaveSubtaskTemplateModal() {
+  const titled = editorSubtasks.filter(s => s.title && s.title.trim());
+  if (titled.length === 0) {
+    showToast('No subtasks to save as template');
+    return;
+  }
+
+  let modal = $('#subtask-template-name-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'subtask-template-name-modal';
+    modal.className = 'subtask-template-name-modal';
+    modal.innerHTML = `
+      <div class="subtask-template-name-backdrop"></div>
+      <div class="subtask-template-name-dialog">
+        <h4>Save Subtask Template</h4>
+        <input type="text" id="subtask-template-name-input" class="subtask-template-name-input" placeholder="Template name" maxlength="60" />
+        <div class="subtask-template-name-actions">
+          <button type="button" id="subtask-template-name-cancel" class="btn-secondary">Cancel</button>
+          <button type="button" id="subtask-template-name-save" class="btn-primary">Save</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+
+    modal.querySelector('.subtask-template-name-backdrop').addEventListener('click', () => {
+      modal.hidden = true;
+    });
+    $('#subtask-template-name-cancel').addEventListener('click', () => {
+      modal.hidden = true;
+    });
+    $('#subtask-template-name-save').addEventListener('click', () => {
+      const nameInput = $('#subtask-template-name-input');
+      const name = nameInput.value.trim();
+      if (!name) {
+        nameInput.focus();
+        return;
+      }
+      saveSubtaskTemplate(name);
+      modal.hidden = true;
+    });
+    // Enter key to save
+    $('#subtask-template-name-input').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        $('#subtask-template-name-save').click();
+      }
+    });
+  }
+
+  const nameInput = $('#subtask-template-name-input');
+  nameInput.value = '';
+  modal.hidden = false;
+  requestAnimationFrame(() => nameInput.focus());
+}
+
+function saveSubtaskTemplate(name) {
+  const titled = editorSubtasks.filter(s => s.title && s.title.trim());
+  if (titled.length === 0) return;
+
+  const template = {
+    id: 'tpl-' + Date.now() + '-' + Math.random().toString(36).substr(2, 6),
+    name: name,
+    items: titled.map(s => ({ title: s.title.trim() }))
+  };
+
+  model.subtaskTemplates = model.subtaskTemplates || [];
+  model.subtaskTemplates.push(template);
+  saveModel();
+  showToast('Template saved: ' + name);
+}
+
+function applySubtaskTemplate(templateId) {
+  const templates = model.subtaskTemplates || [];
+  const tpl = templates.find(t => t.id === templateId);
+  if (!tpl) return;
+
+  tpl.items.forEach(item => {
+    editorSubtasks.push({
+      id: generateSubtaskId(),
+      title: item.title,
+      description: '',
+      completed: false,
+      important: false
+    });
+  });
+  renderEditorSubtasks();
+  showToast('Applied template: ' + tpl.name);
+}
+
+function deleteSubtaskTemplate(templateId) {
+  model.subtaskTemplates = (model.subtaskTemplates || []).filter(t => t.id !== templateId);
+  saveModel();
+}
+
+function openSubtaskTemplatePicker(anchorEl) {
+  // Close any existing picker
+  closeSubtaskTemplatePicker();
+
+  const templates = model.subtaskTemplates || [];
+  if (templates.length === 0) {
+    showToast('No templates saved yet — use the save icon to create one');
+    return;
+  }
+
+  const container = document.createElement('div');
+  container.className = 'subtask-template-picker';
+  container.id = 'subtask-template-picker';
+
+  templates.forEach((tpl, index) => {
+    const row = document.createElement('div');
+    row.className = 'subtask-template-bubble-row';
+    row.style.animationDelay = `${index * 50}ms`;
+
+    const bubble = document.createElement('button');
+    bubble.type = 'button';
+    bubble.className = 'subtask-template-bubble';
+    bubble.textContent = tpl.name;
+    bubble.title = tpl.items.map(i => i.title).join(', ');
+    bubble.addEventListener('click', (e) => {
+      e.stopPropagation();
+      applySubtaskTemplate(tpl.id);
+      closeSubtaskTemplatePicker();
+    });
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.type = 'button';
+    deleteBtn.className = 'subtask-template-delete-btn';
+    deleteBtn.title = 'Delete template';
+    deleteBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`;
+    deleteBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (confirm('Delete template "' + tpl.name + '"?')) {
+        deleteSubtaskTemplate(tpl.id);
+        closeSubtaskTemplatePicker();
+        showToast('Template deleted');
+      }
+    });
+
+    row.appendChild(bubble);
+    row.appendChild(deleteBtn);
+    container.appendChild(row);
+  });
+
+  document.body.appendChild(container);
+
+  // Position relative to anchor (fixed positioning — viewport coordinates)
+  const rect = anchorEl.getBoundingClientRect();
+  const margin = 12;
+
+  requestAnimationFrame(() => {
+    const containerWidth = container.offsetWidth || 150;
+    const containerHeight = container.offsetHeight || 100;
+
+    let leftPos = rect.right + margin;
+    let topPos = rect.top + rect.height / 2;
+
+    // Overflow right → flip left
+    if (rect.right + margin + containerWidth > window.innerWidth) {
+      leftPos = rect.left - containerWidth - margin;
+      if (leftPos < margin) leftPos = margin;
+    }
+
+    // Vertical centering with overflow guard
+    const halfHeight = containerHeight / 2;
+    if (topPos - halfHeight < margin) {
+      topPos = margin + halfHeight;
+    } else if (topPos + halfHeight > window.innerHeight - margin) {
+      topPos = window.innerHeight - margin - halfHeight;
+    }
+
+    container.style.left = `${leftPos}px`;
+    container.style.top = `${topPos}px`;
+    container.style.transform = 'translateY(-50%)';
+
+    container.classList.add('open');
+  });
+
+  // Close on outside click (deferred so this click doesn't close it)
+  setTimeout(() => {
+    document.addEventListener('click', _templatePickerOutsideClick);
+  }, 0);
+}
+
+function _templatePickerOutsideClick(e) {
+  const picker = $('#subtask-template-picker');
+  if (picker && !picker.contains(e.target)) {
+    closeSubtaskTemplatePicker();
+  }
+}
+
+function closeSubtaskTemplatePicker() {
+  document.removeEventListener('click', _templatePickerOutsideClick);
+  const picker = $('#subtask-template-picker');
+  if (picker) {
+    picker.classList.remove('open');
+    picker.classList.add('closing');
+    setTimeout(() => {
+      if (picker.parentNode) picker.remove();
+    }, 250);
+  }
+}
+
 function closeTaskEditorModal(force) {
   if (!force && taskEditorHasChanges()) {
     if (!confirm('You have unsaved changes. Are you sure you want to close it?')) {
@@ -3582,6 +3834,11 @@ function closeTaskEditorModal(force) {
   // Also close subtask description modal if open
   const subtaskModal = $('#subtask-desc-modal');
   if (subtaskModal) subtaskModal.hidden = true;
+
+  // Close template name modal and picker if open
+  const tplNameModal = $('#subtask-template-name-modal');
+  if (tplNameModal) tplNameModal.hidden = true;
+  closeSubtaskTemplatePicker();
 
   currentEditingTaskId = null;
   preLinkedItemContext = null;

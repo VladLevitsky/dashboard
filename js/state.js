@@ -51,6 +51,7 @@ export const model = {
   tasks: [],
   ideas: [],
   meetings: [],
+  subtaskTemplates: [],  // [{ id, name, items: [{ title }] }]
   header: {
     companyLogoSrc: 'assets/icons/placeholder-logo.svg',
     companyLogoZoom: 1,
@@ -125,7 +126,7 @@ const MODEL_STATIC_KEYS = new Set([
   'timeTrackingExpanded', 'quickAccessExpanded', 'selectorModeActive',
   'quickAccessItems', 'sectionTitles', 'sectionIcons',
   'sectionColors', 'subtitleColors', 'collapsedSubtitles', 'cardNotes',
-  'collapsedCards', 'tasks', 'ideas', 'meetings', 'completedTasks', 'projects',
+  'collapsedCards', 'tasks', 'ideas', 'meetings', 'completedTasks', 'projects', 'subtaskTemplates',
   'header', 'darkMode', 'glassMode', 'glassTheme',
   'reminders', 'dailyTasks', 'dailyTools', 'contentCreation', 'ads',
   'analytics', 'tools'
@@ -155,6 +156,7 @@ export function resetModel() {
   model.meetings = [];
   model.completedTasks = [];
   model.projects = [];
+  model.subtaskTemplates = [];
   model.quickAccessItems = { icons: [], listItems: [], quickLinks: [] };
   model.timers = [
     { id: 'timer-1', title: 'Task 1', elapsed: 0, isRunning: false, lastTick: null },
