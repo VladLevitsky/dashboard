@@ -3,7 +3,7 @@
 // Each project is a rich-text editor; selected text can be promoted to a real task
 // with a persistent, color-coded highlight that stays in sync.
 
-import { currentData } from '../state.js';
+import { model, editState, currentData } from '../state.js';
 import { $, showToast, moveCursorAfterNode } from '../utils.js';
 import { handleEditorInput, handleEditorKeydown, createHighlighterButton, attachHighlighterContextMenu, toggleChecklist, isInChecklist, attachChecklistHandler } from './edit-mode.js';
 import { saveModel } from '../core/storage.js';
@@ -411,18 +411,32 @@ export const HIGHLIGHT_BORDER_COLORS = {
 
 // Remove a highlight from project content (revert to plain text)
 export function removeProjectTaskHighlight(projectId, taskId) {
-  const project = getProjectById(projectId);
-  if (!project || !project.content) return;
+  // Helper to strip highlight spans from HTML content
+  function stripHighlight(content) {
+    if (!content) return content;
+    const temp = document.createElement('div');
+    temp.innerHTML = content;
+    temp.querySelectorAll(`span.project-task-highlight[data-task-id="${taskId}"]`).forEach(span => {
+      const text = document.createTextNode(span.textContent);
+      span.parentNode.replaceChild(text, span);
+    });
+    return temp.innerHTML;
+  }
 
-  // Parse and remove highlight spans for this task
-  const temp = document.createElement('div');
-  temp.innerHTML = project.content;
-  temp.querySelectorAll(`span.project-task-highlight[data-task-id="${taskId}"]`).forEach(span => {
-    // Replace span with its text content
-    const text = document.createTextNode(span.textContent);
-    span.parentNode.replaceChild(text, span);
-  });
-  project.content = temp.innerHTML;
+  // Always update the real model so saveModel() persists the change
+  const realProject = (model.projects || []).find(p => p.id === projectId);
+  if (realProject && realProject.content) {
+    realProject.content = stripHighlight(realProject.content);
+  }
+
+  // Also update working copy if in edit mode
+  if (editState.enabled && editState.working) {
+    const wProject = (editState.working.projects || []).find(p => p.id === projectId);
+    if (wProject && wProject.content) {
+      wProject.content = stripHighlight(wProject.content);
+    }
+  }
+
   saveModel();
 
   // Update live editor if this project is currently open
@@ -666,8 +680,16 @@ export function openProjectsModal(openToProjectId) {
       updateConvertButtonState();
     });
 
-    // Click on highlights to open linked task
+    // Click on highlights to open linked task, click on links to open URL
     editor.addEventListener('click', (e) => {
+      // Hyperlinks — open in new tab
+      const link = e.target.closest('a[href]');
+      if (link && editor.contains(link)) {
+        e.preventDefault();
+        window.open(link.href, '_blank', 'noopener,noreferrer');
+        return;
+      }
+      // Task highlights
       const highlight = e.target.closest('span.project-task-highlight');
       if (highlight && !highlight.classList.contains('completed')) {
         const taskId = highlight.dataset.taskId;
@@ -1105,16 +1127,31 @@ function getMeetingById(id) {
 }
 
 export function removeMeetingTaskHighlight(meetingId, taskId) {
-  const meeting = getMeetingById(meetingId);
-  if (!meeting || !meeting.description) return;
+  function stripHighlight(desc) {
+    if (!desc) return desc;
+    const temp = document.createElement('div');
+    temp.innerHTML = desc;
+    temp.querySelectorAll(`span.project-task-highlight[data-task-id="${taskId}"]`).forEach(span => {
+      const text = document.createTextNode(span.textContent);
+      span.parentNode.replaceChild(text, span);
+    });
+    return temp.innerHTML;
+  }
 
-  const temp = document.createElement('div');
-  temp.innerHTML = meeting.description;
-  temp.querySelectorAll(`span.project-task-highlight[data-task-id="${taskId}"]`).forEach(span => {
-    const text = document.createTextNode(span.textContent);
-    span.parentNode.replaceChild(text, span);
-  });
-  meeting.description = temp.innerHTML;
+  // Always update the real model
+  const realMeeting = (model.meetings || []).find(m => m.id === meetingId);
+  if (realMeeting && realMeeting.description) {
+    realMeeting.description = stripHighlight(realMeeting.description);
+  }
+
+  // Also update working copy if in edit mode
+  if (editState.enabled && editState.working) {
+    const wMeeting = (editState.working.meetings || []).find(m => m.id === meetingId);
+    if (wMeeting && wMeeting.description) {
+      wMeeting.description = stripHighlight(wMeeting.description);
+    }
+  }
+
   saveModel();
 
   // Update live editor if this meeting is currently being edited

@@ -1,0 +1,623 @@
+/* Silver glass visual system. Loaded after structural styles so layout, drag
+   geometry and user-selected item colors remain owned by the dashboard. */
+/* Give the root canvas a matching base, including below the viewport when
+   the browser composites fixed backgrounds behind backdrop-filter panes. */
+html:has(body[data-style="glass"]) { background: #cfd0d2; }
+html:has(body[data-style="glass"][data-theme="dark"]) { background: #181d25; }
+body[data-style="glass"][data-theme] {
+  min-height: 100vh;
+  height: auto;
+  --bg: #cfd0d2;
+  --card: #e2e3e5;
+  --text: #27292e;
+  --muted: #585d66;
+  --brand: #42699b;
+  --radius: 28px;
+  --glass-fill: rgb(237 238 240 / 24%);
+  --glass-dialog: rgb(232 233 236 / 56%);
+  --glass-field: rgb(255 255 255 / 26%);
+  --glass-hover: rgb(255 255 255 / 38%);
+  --glass-edge: rgb(255 255 255 / 64%);
+  --glass-divider: rgb(74 80 91 / 15%);
+  --glass-light: rgb(255 255 255 / 88%);
+  --glass-shade: rgb(70 75 86 / 25%);
+  --glass-scrim: rgb(67 71 81 / 14%);
+  --glass-action: #42699b;
+  --glass-reflection: linear-gradient(135deg, rgb(255 255 255 / 28%), transparent 38%, transparent 68%, rgb(255 255 255 / 16%));
+  --glass-rim: inset 1px 1px 1px var(--glass-light), inset -1px -1px 1px var(--glass-light), inset -1px 1px 2px var(--glass-shade), inset 1px -1px 2px var(--glass-shade);
+  --glass-shadow: 9px 14px 26px -12px rgb(47 51 61 / 28%), 0 3px 7px rgb(47 51 61 / 7%), var(--glass-rim), inset 0 0 18px rgb(255 255 255 / 14%);
+  --glass-control-shadow: 3px 5px 10px -5px rgb(47 51 61 / 30%), var(--glass-rim);
+  --shadow: var(--glass-shadow);
+  color-scheme: light;
+}
+
+body[data-style="glass"][data-theme][data-theme="dark"] {
+  --bg: #181d25;
+  --card: #2a303a;
+  --text: #edf0f5;
+  --muted: #adb5c2;
+  --brand: #a6c8f5;
+  --glass-fill: rgb(58 65 78 / 24%);
+  --glass-dialog: rgb(30 36 47 / 64%);
+  --glass-field: rgb(13 19 29 / 26%);
+  --glass-hover: rgb(183 202 229 / 12%);
+  --glass-edge: rgb(207 221 241 / 22%);
+  --glass-divider: rgb(207 221 241 / 13%);
+  --glass-light: rgb(224 234 250 / 40%);
+  --glass-shade: rgb(0 0 0 / 48%);
+  --glass-scrim: rgb(4 8 16 / 24%);
+  --glass-reflection: linear-gradient(135deg, rgb(222 234 255 / 10%), transparent 38%, transparent 68%, rgb(222 234 255 / 6%));
+  --glass-shadow: 10px 18px 32px -12px rgb(0 0 0 / 48%), 0 3px 8px rgb(0 0 0 / 16%), var(--glass-rim), inset 0 0 18px rgb(209 224 249 / 4%);
+  --glass-control-shadow: 3px 5px 10px -5px rgb(0 0 0 / 50%), var(--glass-rim);
+  color-scheme: dark;
+}
+
+body[data-style="glass"][data-theme]:not([data-glass-theme="sunset"]) {
+  background: radial-gradient(ellipse at 88% 8%, #e7e7e8 0%, transparent 54%),
+    radial-gradient(ellipse at 12% 90%, #b9bbbf 0%, transparent 62%),
+    linear-gradient(125deg, #c8c9cc, #d5d6d8 55%, #c5c6c9);
+  background-attachment: fixed;
+}
+body[data-style="glass"][data-theme][data-theme="dark"]:not([data-glass-theme="sunset"]) {
+  background: radial-gradient(ellipse at 85% 8%, #343d4c 0%, transparent 55%),
+    linear-gradient(125deg, #222832, #151a22 65%, #252d3b);
+  background-attachment: fixed;
+}
+
+/* Large panes: a fine alternating light/dark rim gives the glass thickness. */
+body[data-style="glass"][data-theme] .card,
+body[data-style="glass"][data-theme] .app-header.card {
+  --surface-reflection-near: 85%;
+  --surface-reflection-mid: 65%;
+  --surface-reflection-far: 35%;
+  background: var(--glass-reflection), var(--glass-fill) !important;
+  border: 1px solid var(--glass-edge) !important;
+  border-radius: var(--radius);
+  box-shadow: var(--glass-shadow) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(115%) !important;
+  backdrop-filter: blur(24px) saturate(115%) !important;
+}
+body[data-style="glass"][data-theme] .app-header.card {
+  border-radius: 0 0 32px 32px;
+}
+body[data-style="glass"][data-theme] .card::before {
+  background: linear-gradient(155deg, rgb(255 255 255 / 13%), transparent 28%, transparent 78%, rgb(255 255 255 / 7%)) !important;
+}
+body[data-style="glass"][data-theme] .card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  padding: 1px;
+  border-radius: inherit;
+  /* Only nearby emitting items tint the otherwise neutral silver rim. */
+  background: var(--surface-reflected-light, none), linear-gradient(135deg, var(--glass-light), transparent 24%, var(--glass-shade) 47%, var(--glass-light) 73%, transparent) !important;
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  z-index: 2;
+}
+body[data-style="glass"][data-theme] :is(.profile-name, .card h2) {
+  letter-spacing: -0.035em;
+}
+body[data-style="glass"][data-theme] .profile-title { font-weight: 400; }
+
+/* Small panes share the same rim. Inline custom colors still take precedence. */
+body[data-style="glass"][data-theme] :is(.unified-icon-btn, .icon-btn, .icon-button,
+  .unified-reminder-item, .reminder-item, .unified-subtask-item, .list-item,
+  .unified-copypaste-item, .copy-paste-item, .search-item, .timer-item,
+  .eisenhower-task) {
+  background: var(--glass-reflection), var(--glass-fill);
+  border: 1px solid var(--glass-edge);
+  box-shadow: var(--glass-control-shadow);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  transition: background-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+}
+body[data-style="glass"][data-theme] :is(.icon-button, .unified-icon-btn) {
+  position: relative;
+  border-radius: 25%;
+}
+body[data-style="glass"][data-theme] :is(.unified-subtask-item, .list-item,
+  .unified-copypaste-item, .copy-paste-item, .reminder-item, .icon-button,
+  .eisenhower-task, .task-subtask-row.subtask-bubble)::before {
+  background: var(--glass-reflection);
+}
+body[data-style="glass"][data-theme] :is(.unified-subtask-item, .list-item,
+  .unified-copypaste-item, .copy-paste-item, .reminder-item, .icon-button,
+  .unified-reminder-item, .eisenhower-task, .task-subtask-row.subtask-bubble)::after {
+  background: var(--glass-reflection);
+  box-shadow: inset 0 1px 3px var(--glass-edge), inset 0 -1px 3px var(--glass-edge);
+}
+body[data-style="glass"][data-theme] :is(.unified-icon-btn, .icon-btn, .icon-button,
+  .unified-reminder-item, .reminder-item, .unified-subtask-item, .list-item,
+  .unified-copypaste-item, .copy-paste-item, .search-item):hover {
+  background-color: var(--glass-hover);
+  box-shadow: var(--glass-control-shadow), 0 5px 14px -7px var(--glass-shade);
+  transform: translateY(-1px);
+}
+
+/* Header navigation stays as bare icons; floating controls retain their glass. */
+body[data-style="glass"][data-theme] .fab-left {
+  background: var(--glass-reflection), var(--glass-fill);
+  border: 1px solid var(--glass-edge);
+  border-radius: 13px;
+  color: var(--text);
+  box-shadow: var(--glass-control-shadow);
+}
+body[data-style="glass"][data-theme] .header-icons-row button {
+  width: 36px;
+  height: 36px;
+}
+body[data-style="glass"][data-theme] .fab-left:hover {
+  background-color: var(--glass-hover);
+  color: var(--brand);
+  transform: translateY(-1px);
+}
+body[data-style="glass"][data-theme] :is(.header-icons-row button, .device-mode-toggle) {
+  background: transparent;
+  border: 0;
+  box-shadow: none !important;
+  color: var(--text);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+body[data-style="glass"][data-theme] :is(.header-icons-row button, .device-mode-toggle):hover {
+  background: transparent;
+  color: var(--brand);
+  transform: translateY(-1px);
+}
+body[data-style="glass"][data-theme] .auth-toggle.logged-in { color: var(--accent); }
+body[data-style="glass"][data-theme] .fab {
+  box-shadow: var(--glass-control-shadow);
+  border: 1px solid var(--glass-edge);
+}
+body[data-style="glass"][data-theme] .add-tile {
+  background: var(--glass-field);
+  border-color: var(--glass-divider);
+  box-shadow: none;
+}
+
+/* Shared optical material. Components supply one RGB hue; body, shaded
+   pocket, edge light, near bloom and downward spill all derive from it.
+   Keep the task defaults stable while allowing stronger reminder fills. */
+body[data-style="glass"][data-theme] :is(.eisenhower-task-pinned,
+  .unified-reminder-item, [data-glass-glow="material"]) {
+  --light-color: rgb(var(--light-rgb));
+  --light-highlight: color-mix(in srgb, var(--light-color) 80%, white);
+  --light-shade: color-mix(in srgb, var(--light-color) 76%, #18202b);
+  --light-body: radial-gradient(ellipse 75% 140% at 18% 0%,
+      color-mix(in srgb, var(--light-highlight) 38%, transparent), transparent 78%),
+    radial-gradient(ellipse 65% 120% at 82% 95%,
+      color-mix(in srgb, var(--light-shade) 40%, transparent), transparent 82%),
+    linear-gradient(125deg, rgb(var(--light-rgb) / var(--light-fill-start, 60%)),
+      rgb(var(--light-rgb) / var(--light-fill-middle, 42%)) 58%,
+      rgb(var(--light-rgb) / var(--light-fill-end, 52%)));
+  --light-contact: 0 5px 7px -5px color-mix(in srgb, var(--light-shade) 42%, transparent);
+  --light-bloom: inset 0 0 9px rgb(var(--light-rgb) / 24%),
+    0 0 5px rgb(var(--light-rgb) / 30%),
+    0 0 13px 1px rgb(var(--light-rgb) / 28%),
+    0 10px 23px -5px rgb(var(--light-rgb) / 23%);
+  --light-rim: inset 0 1px 2px color-mix(in srgb, var(--light-highlight) 70%, transparent),
+    inset 1px 0 3px rgb(var(--light-rgb) / 35%),
+    inset 0 -1px 3px rgb(var(--light-rgb) / 56%);
+}
+body[data-style="glass"][data-theme="dark"] :is(.eisenhower-task-pinned,
+  .unified-reminder-item, [data-glass-glow="material"]) {
+  --light-body: radial-gradient(ellipse 75% 140% at 18% 0%,
+      rgb(var(--light-rgb) / 24%), transparent 78%),
+    radial-gradient(ellipse 65% 120% at 82% 95%,
+      color-mix(in srgb, var(--light-shade) 35%, transparent), transparent 82%),
+    linear-gradient(125deg, rgb(var(--light-rgb) / var(--light-fill-start, 30%)),
+      rgb(var(--light-rgb) / var(--light-fill-middle, 16%)) 58%,
+      rgb(var(--light-rgb) / var(--light-fill-end, 25%)));
+}
+
+/* Light suspended in smoked glass: the fill is soft and saturated, with a
+   stronger internal bloom at its leading edge and a gentler spill outside. */
+body[data-style="glass"][data-theme] :is(.days-green, .green, [data-progress-state="green"], .reminder-item:has(.days-green), .unified-reminder-item:has(.green)) { --glow-rgb: 24 211 116; }
+body[data-style="glass"][data-theme] :is(.days-warn, .yellow, [data-progress-state="yellow"], .reminder-item:has(.days-warn), .unified-reminder-item:has(.yellow)) { --glow-rgb: 242 189 24; }
+body[data-style="glass"][data-theme] :is(.days-orange, .orange, [data-progress-state="orange"], .reminder-item:has(.days-orange), .unified-reminder-item:has(.orange)) { --glow-rgb: 255 133 35; }
+body[data-style="glass"][data-theme] :is(.days-danger, .red, [data-progress-state="red"], .reminder-item:has(.days-danger), .unified-reminder-item:has(.red)) { --glow-rgb: 249 76 100; }
+/* Interval reminders carry a status color but no calendar fill width; their
+   capsule uses the full row rather than inventing a time-based percentage. */
+body[data-style="glass"][data-theme] .unified-reminder-item:is([data-progress-state], :has(> .days-badge:is(.green, .yellow, .orange, .red)))::before {
+  top: 2px;
+  left: 2px;
+  width: clamp(0px, calc(var(--progress-width, 100%) - 4px), calc(100% - 4px));
+  height: calc(100% - 4px);
+  border-radius: 999px;
+  background: var(--light-body);
+  box-shadow: var(--light-rim), var(--light-contact), var(--light-bloom);
+  filter: blur(0.7px);
+  opacity: clamp(0%, calc(var(--progress-width, 100%) * 100), 100%);
+  pointer-events: none;
+  z-index: 0;
+}
+body[data-style="glass"][data-theme] .unified-reminder-item:is([data-progress-state], :has(> .days-badge:is(.green, .yellow, .orange, .red))) {
+  --light-rgb: var(--glow-rgb);
+  --light-fill-start: 82%;
+  --light-fill-middle: 66%;
+  --light-fill-end: 76%;
+  /* Titles already ellipsize in their own wrappers. Only the light needs
+     to escape the item; the full-track diffusion stays rounded inside it. */
+  overflow: visible;
+  background: linear-gradient(180deg, rgb(46 58 65 / 17%), rgb(91 106 111 / 9%) 48%, rgb(48 62 68 / 14%));
+  border-color: rgb(110 121 126 / 24%);
+  box-shadow: 0 4px 12px -7px rgb(28 34 42 / 22%),
+    inset 0 3px 9px rgb(37 43 53 / 12%), inset 0 -1px 3px rgb(255 255 255 / 17%);
+}
+body[data-style="glass"][data-theme="dark"] .unified-reminder-item:is([data-progress-state], :has(> .days-badge:is(.green, .yellow, .orange, .red))) {
+  --light-fill-start: 48%;
+  --light-fill-middle: 32%;
+  --light-fill-end: 42%;
+  background: linear-gradient(180deg, rgb(2 8 15 / 44%), rgb(8 20 29 / 18%) 50%, rgb(2 9 16 / 32%));
+  border-color: rgb(171 193 201 / 16%);
+}
+body[data-style="glass"][data-theme] .unified-reminder-item:is([data-progress-state], :has(> .days-badge:is(.green, .yellow, .orange, .red)))::after {
+  /* The glass carries light beyond the fill, fading into the empty chamber.
+     This layer is bounded by the track; only ::before spills onto the card. */
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 999px;
+  /* Concentric light around the rounded cap, not a vertical gradient stop.
+     The cap's center is inset 21px; a 63px radius keeps the 42px spill. */
+  background: radial-gradient(circle 63px at
+    max(calc(var(--progress-width, 100%) / 2), calc(var(--progress-width, 100%) - 21px)) 50%,
+    rgb(var(--glow-rgb) / 52%) 0%, rgb(var(--glow-rgb) / 44%) 30%,
+    rgb(var(--glow-rgb) / 25%) 50%, rgb(var(--glow-rgb) / 11%) 65%,
+    rgb(var(--glow-rgb) / 3.5%) 80%, rgb(var(--glow-rgb) / 0.6%) 92%,
+    rgb(var(--glow-rgb) / 0%) 100%);
+  box-shadow: none;
+  opacity: clamp(0%, calc(var(--progress-width, 100%) * 100), 100%);
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+body[data-style="glass"][data-theme] .days-badge {
+  position: relative;
+  border-radius: 0;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+body[data-style="glass"][data-theme] .days-badge::before {
+  content: none;
+}
+body[data-style="glass"][data-theme] .unified-reminder-item .days-badge {
+  padding: 0;
+  margin-right: 0;
+}
+
+
+/* Backdrops only soften the room slightly. The pane supplies the deep blur,
+   so underlying task colors remain visible through stacked dialogs. Do not
+   put opacity/filter on modal wrappers: that cuts off backdrop sampling. */
+body[data-style="glass"][data-theme] :is(.media-backdrop, .breakdown-backdrop,
+  .appearance-backdrop, .copy-text-backdrop, .image-editor-backdrop,
+  .note-viewer-backdrop, .tasks-summary-backdrop, .ideas-backdrop,
+  .task-editor-backdrop, .subtask-template-name-backdrop, .subtask-desc-backdrop,
+  .item-tasks-backdrop, .item-selector-backdrop, .item-task-picker-backdrop,
+  .meetings-backdrop, .meeting-editor-backdrop, .completed-tasks-backdrop,
+  .projects-backdrop, .auth-backdrop, .calendar-view-backdrop, .card-edit-backdrop) {
+  background: var(--glass-scrim);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+}
+body[data-style="glass"][data-theme] :is(.quick-link-modal, .reorder-subtitles-modal,
+  .color-picker-modal, .reminder-links-modal, .reminder-tasks-modal) {
+  background: var(--glass-scrim);
+  /* These wrappers contain their dialogs, so blur belongs on the pane. */
+}
+body[data-style="glass"][data-theme] :is(.media-dialog, .breakdown-dialog,
+  .appearance-dialog, .copy-text-dialog, .image-editor-dialog,
+  .note-viewer-dialog, .tasks-summary-dialog, .ideas-dialog,
+  .task-editor-dialog, .subtask-template-name-dialog, .subtask-desc-dialog,
+  .item-tasks-dialog, .item-selector-dialog, .item-task-picker-dialog,
+  .meetings-dialog, .meeting-editor-dialog, .completed-tasks-dialog,
+  .projects-dialog, .auth-dialog, .calendar-view-dialog, .quick-link-dialog,
+  .reorder-modal-content, .color-picker-dialog, .reminder-links-dialog,
+  .reminder-tasks-dialog, .icon-links-dialog),
+body[data-style="glass"][data-theme] .card-edit-body > .card {
+  background: var(--glass-reflection), var(--glass-dialog) !important;
+  border: 1px solid var(--glass-edge) !important;
+  border-radius: var(--radius);
+  box-shadow: 0 24px 70px -24px var(--glass-shade), var(--glass-shadow);
+  -webkit-backdrop-filter: blur(36px) saturate(145%) !important;
+  backdrop-filter: blur(36px) saturate(145%) !important;
+}
+body[data-style="glass"][data-theme] :is(.edit-popover, .calendar-popover, .interval-popover,
+  .confirm-popover, .notification-popover, .auth-user-popover, .notepad-popover,
+  .link-color-popover, .highlight-context-menu, .task-subtask-menu-dropdown) {
+  background: var(--glass-reflection), var(--glass-dialog) !important;
+  border: 1px solid var(--glass-edge);
+  border-radius: 18px;
+  box-shadow: var(--glass-shadow);
+  -webkit-backdrop-filter: blur(28px) saturate(135%);
+  backdrop-filter: blur(28px) saturate(135%);
+}
+
+/* Translucent inner chrome lets the pane remain visible throughout editors. */
+body[data-style="glass"][data-theme] :is(.tasks-summary-header, .task-editor-header,
+  .meeting-editor-header, .subtask-desc-header, .ideas-header, .meetings-header,
+  .projects-header, .projects-title-bar, .appearance-header, .auth-header,
+  .note-viewer-header, .calendar-view-header, .image-editor-header,
+  .task-editor-actions, .meeting-editor-actions, .subtask-desc-footer,
+  .image-editor-footer, .reorder-modal-header, .reorder-modal-footer,
+  .notepad-toolbar, .projects-editor-toolbar, .task-desc-toolbar,
+  .ideas-editor-toolbar, .task-desc-editor-wrap) {
+  background: transparent !important;
+  border-color: var(--glass-divider);
+}
+body[data-style="glass"][data-theme] :is(.search-input, .edit-popover input,
+  .edit-popover select, .edit-popover textarea, .task-editor-field input[type="text"],
+  .task-editor-field input[type="date"], .meeting-editor-field input,
+  .meeting-editor-field select, .auth-field input, .appearance-select,
+  .task-desc-editor, .ideas-editor, .notepad-editor, .task-desc-view,
+  .task-editor-item-selector) {
+  background: var(--glass-field);
+  border-color: var(--glass-divider);
+  color: var(--text);
+  box-shadow: inset 0 1px 3px rgb(40 46 56 / 5%), 0 1px 0 var(--glass-edge);
+}
+body[data-style="glass"][data-theme] :is(.task-desc-editor, .ideas-editor, .notepad-editor) {
+  border-radius: 14px;
+}
+body[data-style="glass"][data-theme] :is(input, textarea)::placeholder { color: var(--muted); }
+body[data-style="glass"][data-theme] :is(button, a, input, select, textarea, [contenteditable="true"]):focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 3px;
+}
+body[data-style="glass"][data-theme] :is(.eisenhower-priority-card, .timer-item) {
+  border: 1px solid var(--glass-edge);
+  border-radius: 20px;
+  box-shadow: var(--glass-control-shadow);
+}
+/* Horizontal scrolling also clips vertically. Reserve paint space inside
+   the scrollport; negative margins preserve the existing card positions. */
+body[data-style="glass"][data-theme] .eisenhower-columns-grid {
+  padding: 16px;
+  margin: -16px;
+}
+body[data-style="glass"][data-theme] .eisenhower-priority-card-blue { --priority-rgb: 61 151 248; }
+body[data-style="glass"][data-theme] .eisenhower-priority-card-yellow { --priority-rgb: 242 189 24; }
+body[data-style="glass"][data-theme] .eisenhower-priority-card-orange { --priority-rgb: 255 133 35; }
+body[data-style="glass"][data-theme] .eisenhower-priority-card-red { --priority-rgb: 249 76 100; }
+body[data-style="glass"][data-theme] .eisenhower-priority-card {
+  --task-reflection-near: rgb(var(--priority-rgb) / 95%);
+  --task-reflection-mid: rgb(var(--priority-rgb) / 78%);
+  --task-reflection-far: rgb(var(--priority-rgb) / 50%);
+  position: relative;
+  background: linear-gradient(150deg, rgb(var(--priority-rgb) / 34%), rgb(var(--priority-rgb) / 16%));
+  color: var(--text);
+}
+body[data-style="glass"][data-theme="dark"] .eisenhower-priority-card {
+  background: linear-gradient(150deg, rgb(var(--priority-rgb) / 26%), rgb(var(--priority-rgb) / 12%));
+}
+/* The receiving glass is quieter than the light source. Reflections are
+   anchored to actual task positions, so empty/distant edges stay neutral. */
+body[data-style="glass"][data-theme] .eisenhower-priority-card:has(.eisenhower-task-pinned) {
+  background: linear-gradient(150deg, rgb(var(--priority-rgb) / 16%), rgb(var(--priority-rgb) / 6%));
+  box-shadow: 3px 5px 10px -5px var(--glass-shade),
+    inset 1px 1px 1px var(--glass-edge),
+    inset -1px -1px 1px rgb(var(--priority-rgb) / 12%);
+}
+body[data-style="glass"][data-theme] .eisenhower-priority-card::after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  padding: 1.5px;
+  border-radius: inherit;
+  background: var(--task-reflected-light, none);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  filter: drop-shadow(0 0 2px rgb(var(--priority-rgb) / 30%));
+  pointer-events: none;
+}
+body[data-style="glass"][data-theme] :is(.eisenhower-section-heading, .eisenhower-card-header, .eisenhower-card-empty) {
+  color: var(--text);
+  opacity: 1;
+}
+body[data-style="glass"][data-theme] .eisenhower-task {
+  background: var(--glass-field);
+  color: var(--text);
+  font-weight: 500;
+  border-color: rgb(var(--priority-rgb) / 28%);
+  transition: transform 160ms ease, background-color 160ms ease;
+}
+/* One light recipe for any priority hue. The translucent body carries a
+   broad colored highlight and a softer, hue-preserving shaded pocket.
+   Near bloom, downward spill, contact shadow and rim have separate roles;
+   no opaque fill, white center wash or filter on the task text. */
+body[data-style="glass"][data-theme] .eisenhower-task.eisenhower-task-pinned {
+  --light-rgb: var(--priority-rgb);
+  background: var(--light-body);
+  border-color: rgb(var(--priority-rgb) / 54%);
+  border-radius: 16px;
+  box-shadow: var(--light-contact);
+  font-weight: 600;
+  overflow: visible;
+}
+body[data-style="glass"][data-theme] .eisenhower-task.eisenhower-task-pinned::before {
+  inset: 0;
+  background: none;
+  box-shadow: var(--light-bloom);
+  filter: none;
+  z-index: 0;
+}
+body[data-style="glass"][data-theme] .eisenhower-task.eisenhower-task-pinned::after {
+  background: transparent;
+  box-shadow: var(--light-rim);
+}
+/* A neighboring source catches the next item's upper edge. Its body stays
+   translucent, so the source's soft spill is visible through the glass. */
+body[data-style="glass"][data-theme] .eisenhower-task-pinned + .eisenhower-task-pinned::after {
+  box-shadow: inset 0 2px 5px color-mix(in srgb, var(--light-highlight) 64%, transparent),
+    inset 1px 0 3px rgb(var(--priority-rgb) / 35%),
+    inset 0 -1px 3px rgb(var(--priority-rgb) / 56%);
+}
+body[data-style="glass"][data-theme] .eisenhower-task:hover {
+  background-color: var(--glass-hover);
+  transform: translateY(-1px);
+}
+body[data-style="glass"][data-theme] .eisenhower-task.eisenhower-task-pinned:hover {
+  background: var(--light-body);
+  box-shadow: var(--light-contact), 0 0 10px rgb(var(--priority-rgb) / 14%);
+}
+/* Copy colors must remain recognizable: an exact source-colored core with
+   same-hue light confined to the rim, not a luminous wash across the center. */
+body[data-style="glass"][data-theme] :is(.unified-copypaste-item, .copy-paste-item)[data-glass-glow="material"] {
+  --light-rgb: var(--control-glow-rgb);
+  --copy-edge: color-mix(in srgb, var(--copy-base) 70%, white);
+  --copy-edge-hot: color-mix(in srgb, var(--copy-base) 46%, white);
+  --copy-contact: 0 4px 7px -5px color-mix(in srgb, var(--copy-base) 65%, #18202b);
+  background: var(--copy-base) !important;
+  border-color: rgb(var(--light-rgb) / 42%) !important;
+  color: var(--copy-ink) !important;
+  box-shadow: var(--copy-contact) !important;
+  overflow: visible;
+}
+body[data-style="glass"][data-theme] :is(.unified-copypaste-item, .copy-paste-item)[data-glass-glow="material"]::before {
+  background: none;
+  box-shadow: inset 0 0 4px color-mix(in srgb, var(--copy-edge) 25%, transparent),
+    0 0 5px color-mix(in srgb, var(--copy-edge) 34%, transparent),
+    0 3px 12px -3px rgb(var(--light-rgb) / 22%);
+  opacity: var(--copy-alpha, 1);
+}
+body[data-style="glass"][data-theme] :is(.unified-copypaste-item, .copy-paste-item)[data-glass-glow="material"]::after {
+  padding: 1.5px;
+  background: radial-gradient(ellipse at 35% 0%, var(--copy-edge-hot), transparent 65%),
+    radial-gradient(ellipse at 85% 100%, var(--copy-edge-hot), transparent 65%),
+    linear-gradient(125deg, var(--copy-edge), rgb(var(--light-rgb) / 32%) 45%, var(--copy-edge));
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  box-shadow: none;
+  filter: drop-shadow(0 0 2px rgb(var(--light-rgb) / 32%));
+  opacity: var(--copy-alpha, 1);
+}
+body[data-style="glass"][data-theme] :is(.unified-copypaste-item, .copy-paste-item)[data-glass-glow="material"]:hover {
+  box-shadow: var(--copy-contact), 0 0 9px rgb(var(--light-rgb) / 16%) !important;
+}
+body[data-style="glass"][data-theme] [data-glass-glow="material"] :is(.unified-copypaste-text, .copy-paste-text) {
+  color: inherit;
+}
+/* Item actions share the label's contrast ink in every state. Selection is
+   shown by a filled target center, never by a less-legible brand color. */
+body[data-style="glass"][data-theme] :is(.unified-copypaste-item, .copy-paste-item,
+  .unified-subtask-item, .list-item, .unified-reminder-item, .reminder-item,
+  .eisenhower-task) :is(.priority-toggle-btn, .copy-paste-icon,
+  .list-item-links-toggle, .list-item-tasks-toggle, .list-item-links-btn,
+  .list-item-tasks-btn, .reminder-links-toggle, .reminder-tasks-toggle,
+  .eisenhower-task-link-btn, .calendar-btn, .hashtag-btn, .links-btn, .tasks-btn) {
+  color: var(--copy-ink, var(--text));
+  transition: transform 180ms ease, background-color 180ms ease;
+}
+body[data-style="glass"][data-theme] :is(.unified-copypaste-item, .copy-paste-item) .copy-paste-icon:hover {
+  background: color-mix(in srgb, currentColor 12%, transparent);
+}
+body[data-style="glass"][data-theme] .priority-toggle-btn.active svg circle:last-child {
+  fill: currentColor;
+}
+body[data-style="glass"][data-theme] .card-edit-modal::after {
+  background: linear-gradient(transparent, var(--glass-scrim));
+}
+body[data-style="glass"][data-theme] .task-subtask-row.subtask-bubble .task-subtask-title-input.locked {
+  background: transparent;
+  box-shadow: none;
+}
+body[data-style="glass"][data-theme] .task-subtask-row.subtask-bubble:not(.subtask-bubble-important):not(.subtask-bubble-completed) {
+  background: var(--glass-reflection), var(--glass-fill);
+  border-color: var(--glass-edge);
+  box-shadow: var(--glass-control-shadow);
+}
+body[data-style="glass"][data-theme] :is(.btn:not(.primary):not(.danger), .btn-secondary) {
+  background: var(--glass-field);
+  border-color: var(--glass-divider);
+  color: var(--text);
+  box-shadow: var(--glass-control-shadow);
+}
+body[data-style="glass"][data-theme] :is(.btn.primary, .btn-primary) {
+  background: var(--glass-action);
+  border-color: var(--glass-action);
+  color: #fff;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 22%), 0 3px 8px rgb(30 50 80 / 12%);
+}
+
+/* Actual control hues are supplied by glass-glow.js, including custom colors.
+   Shadows paint outside the button without changing its hit area or stacking. */
+body[data-style="glass"][data-theme] [data-glass-glow="surface"]:not(:disabled):not([aria-disabled="true"]) {
+  box-shadow: inset 0 1px 2px rgb(255 255 255 / 48%),
+    inset 0 -2px 5px rgb(var(--control-glow-rgb) / 44%),
+    0 0 8px rgb(var(--control-glow-rgb) / 32%),
+    0 4px 20px -4px rgb(var(--control-glow-rgb) / 40%) !important;
+}
+body[data-style="glass"][data-theme] [data-glass-glow="surface"]:not(:disabled):not([aria-disabled="true"]):hover {
+  box-shadow: inset 0 1px 2px rgb(255 255 255 / 58%),
+    inset 0 -2px 6px rgb(var(--control-glow-rgb) / 54%),
+    0 0 10px rgb(var(--control-glow-rgb) / 42%),
+    0 5px 26px -4px rgb(var(--control-glow-rgb) / 46%) !important;
+}
+/* Bare colored icons emit light from the glyph, without acquiring a box. */
+body[data-style="glass"][data-theme] [data-glass-glow="ink"]:not(:disabled):not([aria-disabled="true"]),
+body[data-style="glass"][data-theme] [data-glass-glow="ink"]:not(:disabled):not([aria-disabled="true"]):hover {
+  box-shadow: none !important;
+  filter: drop-shadow(0 0 3px rgb(var(--control-glow-rgb) / 48%)) drop-shadow(0 0 8px rgb(var(--control-glow-rgb) / 24%));
+}
+body[data-style="glass"][data-theme] :is(.task-color-btn, .sticky-color-btn)[data-glass-glow]:is(.active, .selected) {
+  outline: 2px solid var(--text);
+  outline-offset: 3px;
+}
+body[data-style="glass"][data-theme] [data-glass-glow]:is(:disabled, [aria-disabled="true"]) { box-shadow: none !important; filter: none; }
+
+@media (max-width: 600px) {
+  body[data-style="glass"][data-theme] { --radius: 22px; }
+  body[data-style="glass"][data-theme] .app-header.card {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 20px;
+    padding: 24px;
+    border-radius: 0 0 24px 24px;
+  }
+  /* Zoom the entire image frame so saved image positioning still matches. */
+  body[data-style="glass"][data-theme] .company-logo-container { zoom: 0.667; }
+  body[data-style="glass"][data-theme] .header-right { justify-content: flex-start; gap: 16px; }
+  body[data-style="glass"][data-theme] .profile-info { min-width: 0; }
+  body[data-style="glass"][data-theme] .profile-name { font-size: 26px; overflow-wrap: anywhere; }
+  body[data-style="glass"][data-theme] .profile-title { font-size: 15px; overflow-wrap: anywhere; }
+  body[data-style="glass"][data-theme] .profile-photo-wrapper { zoom: 0.75; }
+  body[data-style="glass"][data-theme] :is(.header-search-row, .header-icons-row) {
+    position: static;
+    width: 100%;
+    min-width: 0;
+  }
+  body[data-style="glass"][data-theme] .search-container { flex: 1; width: auto; min-width: 0; }
+  body[data-style="glass"][data-theme] .header-icons-row { justify-content: space-between; }
+  body[data-style="glass"][data-theme] .header-icons-spacer { width: 12px; flex-shrink: 1; }
+  body[data-style="glass"][data-theme] .header-icons-left { gap: 8px; }
+  body[data-style="glass"][data-theme] .header-icons-row button { width: 34px; height: 34px; border-radius: 11px; flex-shrink: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  body[data-style="glass"][data-theme] *, body[data-style="glass"][data-theme] *::before, body[data-style="glass"][data-theme] *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+/* Opaque fallbacks keep text legible when compositing is unavailable/unwanted. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  body[data-style="glass"][data-theme] { --glass-fill: var(--card); --glass-dialog: var(--card); }
+}
+@media (prefers-reduced-transparency: reduce) {
+  body[data-style="glass"][data-theme] { --glass-fill: var(--card); --glass-dialog: var(--card); }
+  body[data-style="glass"][data-theme] *, body[data-style="glass"][data-theme] *::before, body[data-style="glass"][data-theme] *::after {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+}

@@ -2371,6 +2371,14 @@ function openTaskEditorModal(taskData, titleText) {
     attachChecklistHandler(descEditor);
     attachHighlighterContextMenu(descEditor);
     descEditor.addEventListener('input', handleEditorInput);
+    // Click on hyperlinks opens in new tab
+    descEditor.addEventListener('click', (e) => {
+      const link = e.target.closest('a[href]');
+      if (link && descEditor.contains(link)) {
+        e.preventDefault();
+        window.open(link.href, '_blank', 'noopener,noreferrer');
+      }
+    });
 
     // Handle Tab/Shift+Tab for list nesting + toolbar updates on Ctrl+B/I/U
     descEditor.addEventListener('keydown', (e) => {
@@ -2679,6 +2687,14 @@ function openTaskEditorModal(taskData, titleText) {
   const descEditorWrap = $('#task-desc-editor-wrap');
   const hasDescription = normalizeDescHtml(taskData.description || '');
   descViewContent.innerHTML = taskData.description || '';
+  // Make links in description view clickable
+  descViewContent.onclick = (e) => {
+    const link = e.target.closest('a[href]');
+    if (link && descViewContent.contains(link)) {
+      e.preventDefault();
+      window.open(link.href, '_blank', 'noopener,noreferrer');
+    }
+  };
 
   if (hasDescription) {
     // Has content: show view mode
@@ -2757,14 +2773,19 @@ function openTaskEditorModal(taskData, titleText) {
           if (window.removeProjectTaskHighlight) {
             window.removeProjectTaskHighlight(projectId, taskData.id);
           }
-          // Remove projectHighlight from task
-          if (currentEditingTaskId) {
-            const task = getTaskById(currentEditingTaskId);
-            if (task) {
-              delete task.projectHighlight;
-              saveModel();
-            }
+          // Remove projectHighlight from task — use model.tasks directly
+          // (currentData() may return edit-mode working copy while saveModel() saves model)
+          const taskId = currentEditingTaskId || taskData.id;
+          const realTask = (model.tasks || []).find(t => t.id === taskId);
+          if (realTask) {
+            delete realTask.projectHighlight;
           }
+          // Also update working copy if in edit mode
+          if (editState.enabled && editState.working) {
+            const wTask = (editState.working.tasks || []).find(t => t.id === taskId);
+            if (wTask) delete wTask.projectHighlight;
+          }
+          saveModel();
           projectLinkField.hidden = true;
           showToast('Task unlinked from project');
         } else {
@@ -2798,13 +2819,17 @@ function openTaskEditorModal(taskData, titleText) {
           if (window.removeMeetingTaskHighlight) {
             window.removeMeetingTaskHighlight(meetingId, taskData.id);
           }
-          if (currentEditingTaskId) {
-            const task = getTaskById(currentEditingTaskId);
-            if (task) {
-              delete task.meetingHighlight;
-              saveModel();
-            }
+          // Remove meetingHighlight from task — use model.tasks directly
+          const taskId = currentEditingTaskId || taskData.id;
+          const realTask = (model.tasks || []).find(t => t.id === taskId);
+          if (realTask) {
+            delete realTask.meetingHighlight;
           }
+          if (editState.enabled && editState.working) {
+            const wTask = (editState.working.tasks || []).find(t => t.id === taskId);
+            if (wTask) delete wTask.meetingHighlight;
+          }
+          saveModel();
           projectLinkField.hidden = true;
           showToast('Task unlinked from meeting');
         } else {
@@ -3526,6 +3551,13 @@ function openSubtaskDescriptionModal(subtask) {
     attachChecklistHandler(editorEl);
     attachHighlighterContextMenu(editorEl);
     editorEl.addEventListener('input', handleEditorInput);
+    editorEl.addEventListener('click', (e) => {
+      const link = e.target.closest('a[href]');
+      if (link && editorEl.contains(link)) {
+        e.preventDefault();
+        window.open(link.href, '_blank', 'noopener,noreferrer');
+      }
+    });
 
     editorEl.addEventListener('keydown', (e) => {
       handleEditorKeydown(e);
@@ -4018,11 +4050,18 @@ export function openIdeasModal() {
     }
 
     // Markdown auto-convert + toolbar state update
-    const editorEl = modal.querySelector('#ideas-editor');
-    attachChecklistHandler(editorEl);
-    attachHighlighterContextMenu(editorEl);
-    editorEl.addEventListener('input', handleEditorInput);
-    editorEl.addEventListener('keydown', (e) => {
+    const ideasEditorEl = modal.querySelector('#ideas-editor');
+    attachChecklistHandler(ideasEditorEl);
+    attachHighlighterContextMenu(ideasEditorEl);
+    ideasEditorEl.addEventListener('input', handleEditorInput);
+    ideasEditorEl.addEventListener('click', (e) => {
+      const link = e.target.closest('a[href]');
+      if (link && ideasEditorEl.contains(link)) {
+        e.preventDefault();
+        window.open(link.href, '_blank', 'noopener,noreferrer');
+      }
+    });
+    ideasEditorEl.addEventListener('keydown', (e) => {
       handleEditorKeydown(e);
       if ((e.ctrlKey || e.metaKey) && ['b', 'i', 'u'].includes(e.key.toLowerCase())) {
         setTimeout(updateIdeasToolbarState, 0);

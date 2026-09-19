@@ -294,9 +294,15 @@ function showMeetingsViewMode(meeting) {
     }
   }
 
-  // Click on task highlights in view mode to open linked task
+  // Click on task highlights or links in view mode
   if (viewContent) {
     viewContent.addEventListener('click', (e) => {
+      const link = e.target.closest('a[href]');
+      if (link && viewContent.contains(link)) {
+        e.preventDefault();
+        window.open(link.href, '_blank', 'noopener,noreferrer');
+        return;
+      }
       const highlight = e.target.closest('span.project-task-highlight');
       if (highlight && !highlight.classList.contains('completed')) {
         const taskId = highlight.dataset.taskId;
@@ -612,6 +618,13 @@ function showMeetingsEditMode(meeting) {
   // Click on highlights to open linked task
   const descEditor = $('#meetings-inline-desc-editor');
   descEditor.addEventListener('click', (e) => {
+    // Hyperlinks — open in new tab
+    const link = e.target.closest('a[href]');
+    if (link && descEditor.contains(link)) {
+      e.preventDefault();
+      window.open(link.href, '_blank', 'noopener,noreferrer');
+      return;
+    }
     const highlight = e.target.closest('span.project-task-highlight');
     if (highlight && !highlight.classList.contains('completed')) {
       const taskId = highlight.dataset.taskId;

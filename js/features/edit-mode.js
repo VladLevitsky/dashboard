@@ -2186,8 +2186,15 @@ export function wireNotepadEvents() {
       }
     });
 
-    // Click on task highlights in notepad editor to open linked task
+    // Click on task highlights or links in notepad editor
     editor.addEventListener('click', (e) => {
+      // Hyperlinks — open in new tab
+      const link = e.target.closest('a[href]');
+      if (link && editor.contains(link)) {
+        e.preventDefault();
+        window.open(link.href, '_blank', 'noopener,noreferrer');
+        return;
+      }
       const highlight = e.target.closest('span.project-task-highlight');
       if (highlight && !highlight.classList.contains('completed')) {
         const taskId = highlight.dataset.taskId;
@@ -2699,39 +2706,30 @@ export function handleEditorInput(e) {
 
 // --- Convert text to heading (h1-h6)
 function convertToHeading(editor, textNode, level, selection) {
+  // Walk up from the text node to find the element that is a direct child
+  // of the editor. Inline wrappers (b, i, span, mark, etc.) should not
+  // prevent heading conversion.
   let blockToReplace = textNode.parentElement;
-
-  // If parent is the editor itself (text node is a direct child)
-  if (blockToReplace === editor) {
-    const heading = document.createElement(`h${level}`);
-    heading.appendChild(document.createElement('br'));
-    // Replace only the text node, preserving all other editor content
-    editor.replaceChild(heading, textNode);
-
-    const newRange = document.createRange();
-    newRange.setStart(heading, 0);
-    newRange.collapse(true);
-    selection.removeAllRanges();
-    selection.addRange(newRange);
-    return;
+  while (blockToReplace && blockToReplace !== editor && blockToReplace.parentElement !== editor) {
+    blockToReplace = blockToReplace.parentElement;
   }
 
-  // Block must be a div or p that's a direct child of the editor
-  if ((blockToReplace.tagName !== 'DIV' && blockToReplace.tagName !== 'P') ||
-      blockToReplace.parentElement !== editor) {
-    return;
-  }
+  // Determine what to replace: the text node itself (if direct child of editor)
+  // or the block/inline wrapper that is a direct child of the editor
+  const nodeToReplace = (blockToReplace === editor) ? textNode : blockToReplace;
+  if (!nodeToReplace || !nodeToReplace.parentElement) return;
 
-  // Verify this block ONLY contains the heading trigger (no other meaningful content)
-  const blockContent = blockToReplace.textContent.replace(/\u00A0/g, ' ');
+  // Verify the block only contains the heading trigger text (no other meaningful content)
+  const blockContent = (nodeToReplace === textNode ? textNode.textContent : blockToReplace.textContent)
+    .replace(/\u00A0/g, ' ');
   if (!/^#{1,6} $/.test(blockContent)) return;
 
   // Create the heading element
   const heading = document.createElement(`h${level}`);
   heading.appendChild(document.createElement('br'));
 
-  // Replace the block with the heading
-  blockToReplace.parentElement.replaceChild(heading, blockToReplace);
+  // Replace the node with the heading
+  nodeToReplace.parentElement.replaceChild(heading, nodeToReplace);
 
   // Place cursor in the heading
   const newRange = document.createRange();
@@ -2876,8 +2874,39 @@ export function toggleChecklist(editorEl) {
       return;
     }
   }
-  // Not in a list — create one then add checklist class
-  // Snapshot existing ULs so we can find the new one reliably (selection may be stale)
+  // Not in a list — create a checklist.
+  // Find the block element containing the cursor so we can wrap it manually
+  // if it contains contenteditable="false" elements (e.g. task highlights),
+  // since execCommand('insertUnorderedList') loses such content.
+  const sel = window.getSelection();
+  let cursorNode = sel && sel.rangeCount ? sel.getRangeAt(0).startContainer : null;
+  let block = cursorNode;
+  while (block && block !== editorEl && block.parentElement !== editorEl) {
+    block = block.parentElement;
+  }
+  // Check if the block (or the line) contains non-editable elements
+  const hasNonEditable = block && block !== editorEl &&
+    block.querySelector && block.querySelector('[contenteditable="false"]');
+
+  if (hasNonEditable && block.parentElement === editorEl) {
+    // Manual wrapping — move all child nodes into a new checklist li
+    const ul = document.createElement('ul');
+    ul.className = 'checklist';
+    const newLi = document.createElement('li');
+    while (block.firstChild) newLi.appendChild(block.firstChild);
+    if (!newLi.childNodes.length) newLi.appendChild(document.createElement('br'));
+    ul.appendChild(newLi);
+    block.parentElement.replaceChild(ul, block);
+    // Restore cursor
+    const range = document.createRange();
+    range.selectNodeContents(newLi);
+    range.collapse(false);
+    sel.removeAllRanges();
+    sel.addRange(range);
+    return;
+  }
+
+  // Standard path — use execCommand for simple text lines
   const priorULs = editorEl ? new Set(editorEl.querySelectorAll('ul')) : null;
   document.execCommand('insertUnorderedList');
   // Try selection-based detection first
@@ -3023,6 +3052,28 @@ function getHighlightContextMenu() {
         <line x1="9" y1="15" x2="15" y2="15"></line>
       </svg>
       Link task
+    </button>
+    <div class="highlight-context-divider ctx-edit-link-divider"></div>
+    <button type="button" class="highlight-context-item ctx-edit-link-text-btn">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+      </svg>
+      Edit link text
+    </button>
+    <button type="button" class="highlight-context-item ctx-edit-link-url-btn">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+      </svg>
+      Edit link URL
+    </button>
+    <button type="button" class="highlight-context-item ctx-remove-link-btn">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="18" y1="6" x2="6" y2="18"></line>
+        <line x1="6" y1="6" x2="18" y2="18"></line>
+      </svg>
+      Remove link
     </button>
   `;
   document.body.appendChild(highlightContextMenu);
@@ -3379,6 +3430,47 @@ export function attachHighlighterContextMenu(editor, options) {
     } else {
       linkTaskDivider.style.display = 'none';
       linkTaskBtn.style.display = 'none';
+    }
+
+    // --- Edit/Remove hyperlink (only when right-clicking on a link) ---
+    const contextLink = e.target.closest('a[href]');
+    const onLink = contextLink && editor.contains(contextLink);
+    const editLinkDivider = menu.querySelector('.ctx-edit-link-divider');
+    const editLinkTextBtn = rewire('.ctx-edit-link-text-btn', () => {
+      if (contextLink) {
+        const newText = prompt('Edit link text:', contextLink.textContent);
+        if (newText !== null && newText.trim()) {
+          contextLink.textContent = newText.trim();
+        }
+      }
+      hideHighlightContextMenu();
+    });
+    const editLinkUrlBtn = rewire('.ctx-edit-link-url-btn', () => {
+      if (contextLink) {
+        const newUrl = prompt('Edit link URL:', contextLink.href);
+        if (newUrl !== null && newUrl.trim()) {
+          contextLink.href = newUrl.trim();
+        }
+      }
+      hideHighlightContextMenu();
+    });
+    const removeLinkBtn = rewire('.ctx-remove-link-btn', () => {
+      if (contextLink) {
+        const text = document.createTextNode(contextLink.textContent);
+        contextLink.parentNode.replaceChild(text, contextLink);
+      }
+      hideHighlightContextMenu();
+    });
+    if (onLink) {
+      editLinkDivider.style.display = '';
+      editLinkTextBtn.style.display = '';
+      editLinkUrlBtn.style.display = '';
+      removeLinkBtn.style.display = '';
+    } else {
+      editLinkDivider.style.display = 'none';
+      editLinkTextBtn.style.display = 'none';
+      editLinkUrlBtn.style.display = 'none';
+      removeLinkBtn.style.display = 'none';
     }
 
     // Show offscreen to measure, then clamp to viewport

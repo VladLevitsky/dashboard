@@ -1562,6 +1562,24 @@ h2, h3 { margin: 0 0 16px; }
 .orange { background: #fed7aa; }
 .red { background: #fecaca; }
 
+/* Glowing badges — light bleeding through glass (light glass mode only) */
+body[data-style="glass"]:not([data-theme="dark"]) .days-green,
+body[data-style="glass"]:not([data-theme="dark"]) .green {
+  box-shadow: 0 0 10px rgba(34, 197, 94, 0.35), 0 0 3px rgba(34, 197, 94, 0.2);
+}
+body[data-style="glass"]:not([data-theme="dark"]) .days-warn,
+body[data-style="glass"]:not([data-theme="dark"]) .yellow {
+  box-shadow: 0 0 10px rgba(234, 179, 8, 0.4), 0 0 3px rgba(234, 179, 8, 0.25);
+}
+body[data-style="glass"]:not([data-theme="dark"]) .days-orange,
+body[data-style="glass"]:not([data-theme="dark"]) .orange {
+  box-shadow: 0 0 10px rgba(249, 115, 22, 0.35), 0 0 3px rgba(249, 115, 22, 0.2);
+}
+body[data-style="glass"]:not([data-theme="dark"]) .days-danger,
+body[data-style="glass"]:not([data-theme="dark"]) .red {
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.35), 0 0 3px rgba(239, 68, 68, 0.2);
+}
+
 /* Original icon-grid rule removed - using the one with !important below */
 .icon-row { display: flex; align-items: center; gap: 24px; flex-wrap: wrap; }
 .icon-separator { height: 42px; }
@@ -4237,7 +4255,7 @@ section.card[id^="new-card-"].card-size-full {
 /* Glass mode - Body background (Classic theme - grey shades, default) */
 body[data-style="glass"],
 body[data-style="glass"][data-glass-theme="classic"] {
-  background: linear-gradient(135deg, #e2e8f0 0%, #cbd5e1 50%, #94a3b8 100%);
+  background: linear-gradient(145deg, #d5dae2 0%, #c7cdd7 30%, #b5bcc9 60%, #a3acbb 100%);
   background-attachment: fixed;
 }
 
@@ -4273,82 +4291,126 @@ body[data-theme="dark"][data-style="glass"][data-glass-theme="sunset"] .app-head
   -webkit-backdrop-filter: blur(40px) !important;
 }
 
-/* Glass mode - Light theme cards */
+/* Glass mode - Light theme cards (neumorphic glass) */
 body[data-style="glass"] .card,
 body[data-style="glass"] .app-header.card {
-  background: rgba(255, 255, 255, 0.7) !important;
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: none !important;
+  background: rgba(255, 255, 255, 0.6) !important;
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.5) !important;
   box-shadow:
-    0 8px 32px rgba(0, 0, 0, 0.1),
-    inset 0 0 0 2px rgba(255,255,255,0.5),
-    inset 0 6px 20px rgba(255,255,255,0.5),
-    inset 0 -6px 20px rgba(0,0,0,0.04),
-    inset 6px 0 20px rgba(255,255,255,0.15),
-    inset -6px 0 20px rgba(255,255,255,0.15) !important;
+    6px 6px 20px rgba(0, 0, 0, 0.1),
+    -3px -3px 12px rgba(255, 255, 255, 0.65),
+    inset 0 1px 1px rgba(255, 255, 255, 0.9),
+    inset 1px 0 1px rgba(255, 255, 255, 0.6) !important;
+}
+
+/* Prismatic border shimmer (light classic glass only) */
+body[data-style="glass"]:not([data-theme="dark"]):not([data-glass-theme="sunset"]) .card::after,
+body[data-style="glass"][data-glass-theme="classic"]:not([data-theme="dark"]) .card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(
+    160deg,
+    rgba(255, 255, 255, 0.7) 0%,
+    rgba(180, 210, 255, 0.25) 25%,
+    rgba(255, 190, 180, 0.15) 50%,
+    rgba(180, 255, 210, 0.15) 75%,
+    rgba(255, 255, 255, 0.5) 100%
+  );
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* Enhanced glass shine — top-left light catch */
+body[data-style="glass"]:not([data-theme="dark"]) .card::before {
+  background:
+    linear-gradient(
+      155deg,
+      rgba(255,255,255,0.3) 0%,
+      rgba(255,255,255,0.1) 15%,
+      transparent 40%,
+      rgba(255,255,255,0.02) 75%,
+      rgba(255,255,255,0.06) 100%
+    ) !important;
 }
 
 body[data-style="glass"] .unified-icon-btn,
 body[data-style="glass"] .icon-btn,
 body[data-style="glass"] .icon-button {
-  background: rgba(255, 255, 255, 0.55);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.45);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  box-shadow: 3px 3px 8px rgba(0,0,0,0.06), -1px -1px 4px rgba(255,255,255,0.5);
 }
 
 body[data-style="glass"] .unified-icon-btn:hover,
 body[data-style="glass"] .icon-btn:hover,
 body[data-style="glass"] .icon-button:hover {
-  background: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.65);
+  box-shadow: 3px 3px 10px rgba(0,0,0,0.08), -1px -1px 6px rgba(255,255,255,0.6);
 }
 
 body[data-style="glass"] .unified-reminder-item,
 body[data-style="glass"] .reminder-item {
-  background: rgba(255, 255, 255, 0.55);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border: none;
+  background: rgba(255, 255, 255, 0.4);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  box-shadow: 3px 3px 8px rgba(0,0,0,0.05), -1px -1px 4px rgba(255,255,255,0.4);
 }
 
 body[data-style="glass"] .unified-reminder-item:hover,
 body[data-style="glass"] .reminder-item:hover {
-  background: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.6);
+  box-shadow: 3px 3px 10px rgba(0,0,0,0.07), -1px -1px 6px rgba(255,255,255,0.5);
 }
 
 body[data-style="glass"] .unified-subtask-item,
 body[data-style="glass"] .list-item {
-  background: rgba(255, 255, 255, 0.55);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border: none;
+  background: rgba(255, 255, 255, 0.4);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  box-shadow: 3px 3px 8px rgba(0,0,0,0.05), -1px -1px 4px rgba(255,255,255,0.4);
 }
 
 body[data-style="glass"] .unified-subtask-item:hover,
 body[data-style="glass"] .list-item:hover {
-  background: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.6);
+  box-shadow: 3px 3px 10px rgba(0,0,0,0.07), -1px -1px 6px rgba(255,255,255,0.5);
 }
 
 body[data-style="glass"] .unified-copypaste-item,
 body[data-style="glass"] .copy-paste-item {
-  background: rgba(255, 255, 255, 0.55);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border: none;
+  background: rgba(255, 255, 255, 0.4);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  box-shadow: 3px 3px 8px rgba(0,0,0,0.05), -1px -1px 4px rgba(255,255,255,0.4);
 }
 
 body[data-style="glass"] .unified-copypaste-item:hover,
 body[data-style="glass"] .copy-paste-item:hover {
-  background: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.6);
+  box-shadow: 3px 3px 10px rgba(0,0,0,0.07), -1px -1px 6px rgba(255,255,255,0.5);
 }
 
 /* Glass mode - Add tiles */
 body[data-style="glass"] .add-tile {
-  background: rgba(255, 255, 255, 0.35);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border: 2px dashed rgba(255, 255, 255, 0.5);
+  background: rgba(255, 255, 255, 0.25);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 2px dashed rgba(255, 255, 255, 0.45);
+  box-shadow: 3px 3px 10px rgba(0,0,0,0.04), -2px -2px 8px rgba(255,255,255,0.4);
 }
 
 /* Glass mode - Dark theme cards */
@@ -4431,14 +4493,16 @@ body[data-theme="dark"][data-style="glass"] .add-tile {
 
 /* Glass mode - Search results */
 body[data-style="glass"] .search-item {
-  background: rgba(255, 255, 255, 0.6);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.45);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  box-shadow: 3px 3px 8px rgba(0,0,0,0.05), -1px -1px 4px rgba(255,255,255,0.4);
 }
 
 body[data-style="glass"] .search-item:hover {
-  background: rgba(255, 255, 255, 0.75);
+  background: rgba(255, 255, 255, 0.65);
+  box-shadow: 3px 3px 10px rgba(0,0,0,0.07), -1px -1px 6px rgba(255,255,255,0.5);
 }
 
 body[data-theme="dark"][data-style="glass"] .search-item {
@@ -4458,9 +4522,11 @@ body[data-theme="dark"][data-style="glass"] .search-item:hover {
 body[data-style="glass"] .edit-popover,
 body[data-style="glass"] .calendar-popover,
 body[data-style="glass"] .interval-popover {
-  background: rgba(255, 255, 255, 0.9) !important;
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  background: rgba(255, 255, 255, 0.85) !important;
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  box-shadow: 6px 6px 20px rgba(0,0,0,0.1), -3px -3px 12px rgba(255,255,255,0.5);
 }
 
 body[data-theme="dark"][data-style="glass"] .edit-popover,
@@ -12120,6 +12186,26 @@ body[data-theme="dark"][data-style="glass"][data-glass-theme="sunset"] .tasks-su
   list-style-type: decimal !important;
 }
 
+/* Hyperlinks in editors and view panels — clickable with pointer cursor */
+.project-editor a[href],
+.task-desc-editor a[href],
+.task-desc-view-content a[href],
+.ideas-editor a[href],
+.notepad-editor a[href],
+.meetings-view-content a[href] {
+  cursor: pointer;
+  color: #3b82f6;
+  text-decoration: underline;
+}
+[data-theme="dark"] .project-editor a[href],
+[data-theme="dark"] .task-desc-editor a[href],
+[data-theme="dark"] .task-desc-view-content a[href],
+[data-theme="dark"] .ideas-editor a[href],
+[data-theme="dark"] .notepad-editor a[href],
+[data-theme="dark"] .meetings-view-content a[href] {
+  color: #60a5fa;
+}
+
 /* Project Task Highlights (pill-shaped, non-editable) */
 .project-task-highlight {
   border-radius: 999px;
@@ -12905,8 +12991,12 @@ mark.text-highlight {
 /* ============================================================
    CHECKLIST (inside contenteditable editors)
    ============================================================ */
-ul.checklist {
-  list-style: none;
+ul.checklist,
+.project-editor ul.checklist,
+.task-desc-editor ul.checklist,
+.ideas-editor ul.checklist,
+.notepad-editor ul.checklist {
+  list-style: none !important;
   padding-left: 8px;
   margin: 4px 0;
 }
@@ -12915,6 +13005,7 @@ ul.checklist > li {
   padding-left: 28px;
   margin: 3px 0;
   min-height: 22px;
+  list-style-type: none !important;
 }
 ul.checklist > li::before {
   content: '';
