@@ -1327,14 +1327,23 @@ function saveSubtitleOrder() {
 let currentNotepadSectionId = null;
 let currentNoteKey = null; // Key of the note being edited (null = new note)
 let notepadInitialState = null; // For unsaved changes detection
+let currentNoteContextType = null; // 'card' or 'subtask'
+let currentSubtaskNoteId = null; // For subtask notes: "sectionId:subtitle:itemKey"
 
 // --- Generate unique key for notes
 function generateNoteKey() {
   return 'note_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
 }
 
-// --- Get notes array for a section (handles migration from old string format)
-function getNotesForSection(sectionId) {
+// --- Get notes array for a section or subtask (handles migration from old string format)
+export function getNotesForSection(sectionId, contextType = 'card', subtaskId = null) {
+  if (contextType === 'subtask' && subtaskId) {
+    if (!model.subtaskNotes) return [];
+    const notes = model.subtaskNotes[subtaskId];
+    if (!notes) return [];
+    return Array.isArray(notes) ? notes : [];
+  }
+
   if (!model.cardNotes) return [];
   const notes = model.cardNotes[sectionId];
   if (!notes) return [];
@@ -1433,7 +1442,7 @@ function renderSavedNotesList() {
   const listContainer = $('#notepad-saved-list');
   if (!listContainer) return;
 
-  const notes = getNotesForSection(currentNotepadSectionId);
+  const notes = getNotesForSection(currentNotepadSectionId, currentNoteContextType, currentSubtaskNoteId);
 
   if (notes.length === 0) {
     listContainer.hidden = true;
@@ -1574,12 +1583,18 @@ function clearNotepadEditor() {
 }
 
 // --- Open Notepad Popover
-export function openNotepad(sectionId, cursorPos) {
+export function openNotepad(sectionId, cursorPos, contextType = 'card', subtaskId = null) {
   const pop = $('#notepad-popover');
   if (!pop) return;
 
   currentNotepadSectionId = sectionId;
   currentNoteKey = null;
+  currentNoteContextType = contextType;
+  currentSubtaskNoteId = subtaskId;
+
+  // Update header text based on context
+  const header = pop.querySelector('.notepad-popover-header h4');
+  if (header) header.textContent = contextType === 'subtask' ? 'Subtask Notes' : 'Card Notes';
 
   // Render saved notes at top
   renderSavedNotesList();
@@ -1646,7 +1661,7 @@ export function enterNotepadEditMode(noteKey) {
   if (!noteKey) return;
   currentNoteKey = noteKey;
 
-  const notes = getNotesForSection(currentNotepadSectionId);
+  const notes = getNotesForSection(currentNotepadSectionId, currentNoteContextType, currentSubtaskNoteId);
   const note = notes.find(n => n.key === noteKey);
   if (!note) return;
 
@@ -1712,6 +1727,8 @@ export function closeNotepad(force) {
   currentNotepadSectionId = null;
   currentNoteKey = null;
   notepadInitialState = null;
+  currentNoteContextType = null;
+  currentSubtaskNoteId = null;
 }
 
 // --- Convert contenteditable HTML back to plain text
@@ -1810,14 +1827,21 @@ export function saveNote() {
     return;
   }
 
-  if (!model.cardNotes) {
-    model.cardNotes = {};
-  }
-  if (!model.cardNotes[currentNotepadSectionId] || typeof model.cardNotes[currentNotepadSectionId] === 'string') {
-    model.cardNotes[currentNotepadSectionId] = [];
-  }
+  // Determine which storage to use based on context
+  const isSubtask = currentNoteContextType === 'subtask' && currentSubtaskNoteId;
+  let notes;
 
-  const notes = model.cardNotes[currentNotepadSectionId];
+  if (isSubtask) {
+    if (!model.subtaskNotes) model.subtaskNotes = {};
+    if (!model.subtaskNotes[currentSubtaskNoteId]) model.subtaskNotes[currentSubtaskNoteId] = [];
+    notes = model.subtaskNotes[currentSubtaskNoteId];
+  } else {
+    if (!model.cardNotes) model.cardNotes = {};
+    if (!model.cardNotes[currentNotepadSectionId] || typeof model.cardNotes[currentNotepadSectionId] === 'string') {
+      model.cardNotes[currentNotepadSectionId] = [];
+    }
+    notes = model.cardNotes[currentNotepadSectionId];
+  }
 
   if (currentNoteKey) {
     // Update existing note
@@ -1840,14 +1864,22 @@ export function saveNote() {
   }
 
   if (editState.working) {
-    if (!editState.working.cardNotes) {
-      editState.working.cardNotes = {};
+    if (isSubtask) {
+      if (!editState.working.subtaskNotes) editState.working.subtaskNotes = {};
+      editState.working.subtaskNotes[currentSubtaskNoteId] = [...notes];
+    } else {
+      if (!editState.working.cardNotes) editState.working.cardNotes = {};
+      editState.working.cardNotes[currentNotepadSectionId] = [...notes];
     }
-    editState.working.cardNotes[currentNotepadSectionId] = [...notes];
   }
 
   saveModel();
-  updateNotepadButtonIndicator(currentNotepadSectionId);
+  if (isSubtask) {
+    // Re-render to update subtask note indicators
+    if (window.renderAllSections) window.renderAllSections();
+  } else {
+    updateNotepadButtonIndicator(currentNotepadSectionId);
+  }
 
   // Clear editor and refresh saved notes list
   clearNotepadEditor();
@@ -1862,20 +1894,32 @@ export function saveNote() {
 export function deleteNote(noteKey) {
   if (!currentNotepadSectionId || !noteKey) return;
 
-  const notes = getNotesForSection(currentNotepadSectionId);
+  const isSubtask = currentNoteContextType === 'subtask' && currentSubtaskNoteId;
+  const notes = getNotesForSection(currentNotepadSectionId, currentNoteContextType, currentSubtaskNoteId);
   const noteIndex = notes.findIndex(n => n.key === noteKey);
 
   if (noteIndex === -1) return;
 
   notes.splice(noteIndex, 1);
-  model.cardNotes[currentNotepadSectionId] = notes;
 
-  if (editState.working?.cardNotes) {
-    editState.working.cardNotes[currentNotepadSectionId] = [...notes];
+  if (isSubtask) {
+    model.subtaskNotes[currentSubtaskNoteId] = notes;
+    if (editState.working?.subtaskNotes) {
+      editState.working.subtaskNotes[currentSubtaskNoteId] = [...notes];
+    }
+  } else {
+    model.cardNotes[currentNotepadSectionId] = notes;
+    if (editState.working?.cardNotes) {
+      editState.working.cardNotes[currentNotepadSectionId] = [...notes];
+    }
   }
 
   saveModel();
-  updateNotepadButtonIndicator(currentNotepadSectionId);
+  if (isSubtask) {
+    if (window.renderAllSections) window.renderAllSections();
+  } else {
+    updateNotepadButtonIndicator(currentNotepadSectionId);
+  }
 }
 
 // --- Reconcile all task highlights in a DOM element based on actual task status
@@ -2026,7 +2070,7 @@ export function openNoteViewer(noteKey) {
   const modal = $('#note-viewer-modal');
   if (!modal) return;
 
-  const notes = getNotesForSection(currentNotepadSectionId);
+  const notes = getNotesForSection(currentNotepadSectionId, currentNoteContextType, currentSubtaskNoteId);
   const note = notes.find(n => n.key === noteKey);
   if (!note) return;
 

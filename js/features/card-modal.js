@@ -36,6 +36,7 @@ export function openCardEditModal(sectionId) {
 
   // Render a full card element with edit mode into the panel
   const body = $('#card-edit-body');
+  const prevScrollTop = panel ? panel.scrollTop : 0;
   body.innerHTML = '';
 
   // Render the card exactly as it appears in inline edit mode
@@ -80,7 +81,10 @@ export function openCardEditModal(sectionId) {
   const backdrop = modal.querySelector('.card-edit-backdrop');
   if (backdrop) backdrop.onclick = closeCardEditModal;
 
-  // Wire Escape key
+  // Wire Escape key (remove any previous handler first to avoid duplicates on refresh)
+  if (modal._escHandler) {
+    document.removeEventListener('keydown', modal._escHandler);
+  }
   modal._escHandler = (e) => {
     if (e.key === 'Escape') closeCardEditModal();
   };
@@ -88,6 +92,11 @@ export function openCardEditModal(sectionId) {
 
   // Show modal
   modal.hidden = false;
+
+  // Restore scroll position when refreshing an already-open modal
+  if (prevScrollTop && panel) {
+    panel.scrollTop = prevScrollTop;
+  }
 }
 
 export function closeCardEditModal() {

@@ -8,9 +8,9 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Caveat:wght@500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=2026-01-14">
-  <link rel="stylesheet" href="glass.css?v=2026-09-18-item-contrast">
-  <script type="module" src="js/features/glass-glow.js?v=2026-09-18-copy-rims"></script>
+  <link rel="stylesheet" href="styles.css?v=2026-09-23-soft-glass-pulse">
+  <link rel="stylesheet" href="glass.css?v=2026-09-23-quick-access-item-light">
+  <script type="module" src="js/features/glass-glow.js?v=2026-09-23-card-bevels"></script>
   <!-- Emoji Picker Element - Web Component -->
   <script type="module" src="https://cdn.jsdelivr.net/npm/emoji-picker-element@^1/index.js"></script>
   <!-- Cloudflare Turnstile (explicit render mode for registration) -->
@@ -236,10 +236,15 @@
         <div class="field-link-type" id="edit-link-type-field">
           <label>
             Link Type
-            <select id="edit-link-type">
-              <option value="url">URL</option>
-              <option value="file">File Upload</option>
-            </select>
+            <span class="link-type-select">
+              <select id="edit-link-type">
+                <option value="url">URL</option>
+                <option value="file">File Upload</option>
+              </select>
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+                <path d="m6 9 6 6 6-6"></path>
+              </svg>
+            </span>
           </label>
         </div>
         <label class="field-url" id="edit-url-field">
@@ -299,7 +304,9 @@
             &check;
           </button>
           <button type="button" id="edit-cancel" class="btn-cancel" title="Cancel" aria-label="Cancel">
-            &times;
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false">
+              <path d="m6 6 12 12M18 6 6 18"></path>
+            </svg>
           </button>
         </div>
         <div id="move-card-selector" class="move-card-selector" hidden>

@@ -140,6 +140,13 @@ export function renderAllSections() {
   // Restore scroll position after re-rendering
   window.scrollTo(scrollX, scrollY);
 
+  // If the card edit modal is open, refresh its content so newly added/removed
+  // items appear immediately without closing and reopening
+  const modalSectionId = window.getCurrentModalSectionId ? window.getCurrentModalSectionId() : null;
+  if (modalSectionId && window.openCardEditModal) {
+    window.openCardEditModal(modalSectionId);
+  }
+
   // Update notification badge
   if (window.updateNotificationBadge) window.updateNotificationBadge();
 }
@@ -1736,7 +1743,19 @@ export function renderUnifiedCard(sectionEl, sectionId) {
       const remindersGroup = document.createElement('div');
       remindersGroup.className = 'unified-reminders-group';
 
-      remindersArray.forEach(rem => {
+      // In view mode, sort prioritized items to the top
+      let remindersToRender = remindersArray;
+      if (!editState.enabled && window.isItemInQuickAccess) {
+        remindersToRender = [...remindersArray].sort((a, b) => {
+          const aInQA = window.isItemInQuickAccess({ type: 'reminder', text: a.title, url: a.url, name: a.key, sectionType: sectionId });
+          const bInQA = window.isItemInQuickAccess({ type: 'reminder', text: b.title, url: b.url, name: b.key, sectionType: sectionId });
+          if (aInQA && !bInQA) return -1;
+          if (!aInQA && bInQA) return 1;
+          return 0;
+        });
+      }
+
+      remindersToRender.forEach(rem => {
         const div = createUnifiedReminderItem(rem, sectionId, subtitle, subtitleColor);
         remindersGroup.appendChild(div);
       });
@@ -1866,7 +1885,7 @@ function createUnifiedIconButton(item, sectionId, subtitle, subtitleColor) {
   const isInQuickAccess = !editState.enabled && window.isItemInQuickAccess && window.isItemInQuickAccess(iconQAData);
   if (isInQuickAccess) {
     btn.classList.add('icon-in-quick-access');
-    const svgBorder = createAnimatedBorder('#4478e0', '#a8cfff', 14);
+    const svgBorder = createAnimatedBorder('#23a8ff', '#94ebff', 14);
     btn.appendChild(svgBorder);
   }
 
@@ -2103,6 +2122,12 @@ function createUnifiedSeparator(item, sectionId, subtitle) {
   return separatorEl;
 }
 
+// Text pills carry the same quick-access pulse as icons, close to their rim.
+function addQuickAccessItemLight(element) {
+  element.classList.add('quick-access-lit');
+  element.appendChild(createAnimatedBorder('#23a8ff', '#94ebff', 22, 2, 0.45, 1.15));
+}
+
 // --- Create subtask item for unified card
 function createUnifiedSubtaskItem(item, sectionId, subtitle, subtitleColor) {
   const data = currentData();
@@ -2122,6 +2147,7 @@ function createUnifiedSubtaskItem(item, sectionId, subtitle, subtitleColor) {
     sectionType: sectionId
   };
   const isPrioritized = !editState.enabled && window.isItemInQuickAccess && window.isItemInQuickAccess(priorityItemData);
+  if (isPrioritized) addQuickAccessItemLight(div);
 
   // Apply custom color if set
   const defaultColorLight = '#f7fafc';
@@ -2131,11 +2157,6 @@ function createUnifiedSubtaskItem(item, sectionId, subtitle, subtitleColor) {
     : (window.model && window.model.darkMode ? defaultColorDark : defaultColorLight);
 
   const isDarkMode = window.model && window.model.darkMode;
-
-  // Make color more vibrant if prioritized (light mode only)
-  if (isPrioritized && !isDarkMode && window.makeColorMoreVibrant) {
-    effectiveColor = window.makeColorMoreVibrant(effectiveColor);
-  }
 
   // Store original color for toggle functionality
   div.dataset.originalColor = subtitleColor
@@ -2154,13 +2175,6 @@ function createUnifiedSubtaskItem(item, sectionId, subtitle, subtitleColor) {
     div.style.webkitBackdropFilter = 'blur(8px)';
   } else {
     div.style.background = effectiveColor;
-  }
-
-  // Dark mode prioritized: soft glow around the pill edge
-  if (isPrioritized && isDarkMode) {
-    const glowColor = window.makePriorityGlowColor ? window.makePriorityGlowColor(effectiveColor) : effectiveColor;
-    const outerGlow = glowColor.replace(/[\d.]+\)$/, '0.25)');
-      div.style.boxShadow = `0 0 8px 4px ${outerGlow}, inset 0 0 6px 2px ${glowColor}`;
   }
 
   const a = document.createElement('a');
@@ -2256,119 +2270,123 @@ function createUnifiedSubtaskItem(item, sectionId, subtitle, subtitleColor) {
       leftContainer.appendChild(tasksToggleBtn);
     }
 
-    div.appendChild(leftContainer);
-
-    // Priority toggle button (Quick Access integration) — skip if item has linked tasks
-    if (linkedTasks.length > 0) {
-      // Items with linked tasks should not appear in Quick Access
-    } else {
-    const itemData = {
-      type: 'list',
-      text: item.text,
-      url: item.url,
-      name: item.key,
-      sectionType: sectionId
-    };
-    const isHighlighted = window.isItemInQuickAccess && window.isItemInQuickAccess(itemData);
-
-    const priorityBtn = document.createElement('button');
-    priorityBtn.type = 'button';
-    priorityBtn.className = 'priority-toggle-btn' + (isHighlighted ? ' active' : '');
-    priorityBtn.title = isHighlighted ? 'Remove from Quick Access' : 'Add to Quick Access';
-    priorityBtn.innerHTML = `
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="12" cy="12" r="10"></circle>
-        <circle cx="12" cy="12" r="6"></circle>
-        <circle cx="12" cy="12" r="2"></circle>
-      </svg>
-    `;
-    priorityBtn.addEventListener('click', (e) => {
+    // Subtask notes button (view mode — always visible)
+    const subtaskNoteId = `${sectionId}:${subtitle}:${item.key}`;
+    const subtaskNotes = window.getNotesForSection ? window.getNotesForSection(sectionId, 'subtask', subtaskNoteId) : [];
+    const notesBtn = document.createElement('button');
+    notesBtn.type = 'button';
+    notesBtn.className = 'list-item-notes-toggle' + (subtaskNotes.length > 0 ? ' has-note' : '');
+    notesBtn.title = subtaskNotes.length > 0 ? `${subtaskNotes.length} note${subtaskNotes.length > 1 ? 's' : ''}` : 'Add note';
+    notesBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>`;
+    notesBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       e.preventDefault();
-      if (window.toggleItemQuickAccess) {
-        const nowActive = window.toggleItemQuickAccess(itemData);
-        priorityBtn.classList.toggle('active', nowActive);
-        priorityBtn.title = nowActive ? 'Remove from Quick Access' : 'Add to Quick Access';
-
-        // Apply or remove vibrant color inline
-        const originalColor = div.dataset.originalColor;
-        const isDark = window.model && window.model.darkMode;
-        if (nowActive) {
-          if (isDark) {
-            // Dark mode: add glow instead of vibrant color
-            const glowColor = window.makePriorityGlowColor ? window.makePriorityGlowColor(originalColor) : originalColor;
-            const outerGlow = glowColor.replace(/[\d.]+\)$/, '0.25)');
-      div.style.boxShadow = `0 0 8px 4px ${outerGlow}, inset 0 0 6px 2px ${glowColor}`;
-          } else if (window.makeColorMoreVibrant) {
-            const vibrantColor = window.makeColorMoreVibrant(originalColor);
-            if (isGlassModeActive()) {
-              div.style.background = colorToGlassRgba(vibrantColor, 0.55);
-            } else {
-              div.style.background = vibrantColor;
-            }
-          }
-        } else {
-          if (isDark) {
-            div.style.boxShadow = '';
-          }
-          if (isGlassModeActive()) {
-            div.style.background = colorToGlassRgba(originalColor, 0.55);
-          } else {
-            div.style.background = originalColor;
-          }
-        }
+      if (window.openNotepad) {
+        window.openNotepad(sectionId, { x: e.clientX, y: e.clientY }, 'subtask', subtaskNoteId);
       }
     });
-    div.appendChild(priorityBtn);
-  }
-  } // end: skip priority toggle for items with linked tasks
+    leftContainer.appendChild(notesBtn);
 
-  div.addEventListener('click', (e) => {
-    if (!editState.enabled) {
-      if (e.target.closest('.list-item-links-toggle') || e.target.closest('.list-item-tasks-toggle') || e.target.closest('.priority-toggle-btn')) return;
+    div.appendChild(leftContainer);
+
+    // Long-press to toggle Quick Access (view mode only)
+    let longPressTimer = null;
+    let longPressTriggered = false;
+
+    const startLongPress = (e) => {
+      if (e.target.closest('.list-item-links-toggle') || e.target.closest('.list-item-tasks-toggle') || e.target.closest('.list-item-notes-toggle')) return;
+      longPressTriggered = false;
+      longPressTimer = setTimeout(() => {
+        longPressTriggered = true;
+        if (window.toggleItemQuickAccess) {
+          const itemData = {
+            type: 'list',
+            text: item.text,
+            url: item.url,
+            name: item.key,
+            sectionType: sectionId
+          };
+          const isNowInQuickAccess = window.toggleItemQuickAccess(itemData);
+          if (window.showToast) {
+            window.showToast(isNowInQuickAccess ? 'Added to Quick Access' : 'Removed from Quick Access');
+          }
+        }
+      }, 750);
+    };
+
+    const cancelLongPress = () => {
+      if (longPressTimer) {
+        clearTimeout(longPressTimer);
+        longPressTimer = null;
+      }
+    };
+
+    div.addEventListener('mousedown', startLongPress);
+    div.addEventListener('mouseup', cancelLongPress);
+    div.addEventListener('mouseleave', cancelLongPress);
+    div.addEventListener('touchstart', startLongPress, { passive: true });
+    div.addEventListener('touchend', cancelLongPress);
+    div.addEventListener('touchcancel', cancelLongPress);
+
+    div.addEventListener('click', (e) => {
+      if (longPressTriggered) {
+        e.preventDefault();
+        e.stopPropagation();
+        longPressTriggered = false;
+        return;
+      }
+      if (e.target.closest('.list-item-links-toggle') || e.target.closest('.list-item-tasks-toggle') || e.target.closest('.list-item-notes-toggle')) return;
       e.preventDefault();
       const url = div.dataset.url;
       if (url && url !== PLACEHOLDER_URL) {
         window.open(url, '_blank', 'noopener,noreferrer');
       }
-      return;
-    }
-    if (e.target.closest('.list-item-links-btn') || e.target.closest('.list-item-tasks-btn')) return;
-    e.preventDefault();
-    openEditPopover(div, {
-      text: item.text,
-      url: item.url,
-      linkType: item.linkType,
-      fileId: item.fileId,
-      fileName: item.fileName,
-      allowDelete: true,
-      allowFileLink: true,
-      moveContext: { sectionId, subtitle, itemType: 'subtasks', itemKey: item.key }
-    }, ({ text, url, linkType, fileId, fileName, delete: doDelete, accept }) => {
-      if (!accept) return;
-      const cardData = currentData()[sectionId];
-      const subtitleData = cardData[subtitle];
-
-      if (doDelete) {
-        const orphanFileId = getItemR2FileId(item);
-        if (window.cleanupTasksForItem) {
-          window.cleanupTasksForItem('subtask', item.key, sectionId);
-        }
-        const idx = subtitleData.subtasks.findIndex(i => i.key === item.key);
-        if (idx !== -1) subtitleData.subtasks.splice(idx, 1);
-        markDirtyAndSave();
-        renderAllSections();
-        if (orphanFileId && window.cleanupOrphanedR2Files) window.cleanupOrphanedR2Files([orphanFileId]);
-        return;
-      }
-      item.text = text || item.text;
-      applyLinkToItem(item, { url, linkType, fileId, fileName });
-      markDirtyAndSave();
-      renderAllSections();
-    }, { x: e.clientX, y: e.clientY });
-  });
+    });
+  }
 
   if (editState.enabled) {
+    div.addEventListener('click', (e) => {
+      if (e.target.closest('.list-item-links-btn') || e.target.closest('.list-item-tasks-btn')) return;
+      e.preventDefault();
+      openEditPopover(div, {
+        text: item.text,
+        url: item.url,
+        linkType: item.linkType,
+        fileId: item.fileId,
+        fileName: item.fileName,
+        allowDelete: true,
+        allowFileLink: true,
+        moveContext: { sectionId, subtitle, itemType: 'subtasks', itemKey: item.key }
+      }, ({ text, url, linkType, fileId, fileName, delete: doDelete, accept }) => {
+        if (!accept) return;
+        const cardData = currentData()[sectionId];
+        const subtitleData = cardData[subtitle];
+
+        if (doDelete) {
+          const orphanFileId = getItemR2FileId(item);
+          if (window.cleanupTasksForItem) {
+            window.cleanupTasksForItem('subtask', item.key, sectionId);
+          }
+          // Clean up subtask notes
+          const noteId = `${sectionId}:${subtitle}:${item.key}`;
+          const data = currentData();
+          if (data.subtaskNotes && data.subtaskNotes[noteId]) {
+            delete data.subtaskNotes[noteId];
+          }
+          const idx = subtitleData.subtasks.findIndex(i => i.key === item.key);
+          if (idx !== -1) subtitleData.subtasks.splice(idx, 1);
+          markDirtyAndSave();
+          renderAllSections();
+          if (orphanFileId && window.cleanupOrphanedR2Files) window.cleanupOrphanedR2Files([orphanFileId]);
+          return;
+        }
+        item.text = text || item.text;
+        applyLinkToItem(item, { url, linkType, fileId, fileName });
+        markDirtyAndSave();
+        renderAllSections();
+      }, { x: e.clientX, y: e.clientY });
+    });
+
     initializeItemDragHandlers(div, item.key, `${sectionId}:${subtitle}:subtasks`);
   }
 
@@ -2385,24 +2403,40 @@ function createUnifiedReminderItem(rem, sectionId, subtitle, subtitleColor) {
   div.dataset.subtitle = subtitle;
   div.dataset.key = rem.key;
 
+  // Check if item is in Quick Access (prioritized)
+  const reminderQAData = {
+    type: 'reminder',
+    text: rem.title,
+    url: rem.url,
+    name: rem.key,
+    sectionType: sectionId
+  };
+  const isPrioritized = !editState.enabled && window.isItemInQuickAccess && window.isItemInQuickAccess(reminderQAData);
+  if (isPrioritized) addQuickAccessItemLight(div);
+
   // Apply custom color if set
+  const defaultColorLight = '#f7fafc';
+  const defaultColorDark = '#334155';
+  let effectiveColor = subtitleColor
+    ? getColorForCurrentMode(subtitleColor, defaultColorLight, defaultColorDark)
+    : (window.model && window.model.darkMode ? defaultColorDark : defaultColorLight);
+
+  const isDarkMode = window.model && window.model.darkMode;
+
+  // In dark mode, compensate color for glass overlay
+  if (isDarkMode && window.glassCompensateColor) {
+    effectiveColor = window.glassCompensateColor(effectiveColor);
+  }
+
+  // Apply glass mode transparency if active
+  if (isGlassModeActive()) {
+    div.style.background = colorToGlassRgba(effectiveColor, 0.55);
+    div.style.backdropFilter = 'blur(8px)';
+    div.style.webkitBackdropFilter = 'blur(8px)';
+  } else {
+    div.style.background = effectiveColor;
+  }
   if (subtitleColor) {
-    const defaultColorLight = '#f7fafc';
-    const defaultColorDark = '#334155';
-    let effectiveColor = getColorForCurrentMode(subtitleColor, defaultColorLight, defaultColorDark);
-    // In dark mode, compensate color for glass overlay
-    const isDarkMode = window.model && window.model.darkMode;
-    if (isDarkMode && window.glassCompensateColor) {
-      effectiveColor = window.glassCompensateColor(effectiveColor);
-    }
-    // Apply glass mode transparency if active
-    if (isGlassModeActive()) {
-      div.style.background = colorToGlassRgba(effectiveColor, 0.55);
-      div.style.backdropFilter = 'blur(8px)';
-      div.style.webkitBackdropFilter = 'blur(8px)';
-    } else {
-      div.style.background = effectiveColor;
-    }
     div.dataset.customColor = JSON.stringify(subtitleColor);
   }
 
@@ -2660,6 +2694,47 @@ function createUnifiedReminderItem(rem, sectionId, subtitle, subtitleColor) {
     div.dataset.url = rem.url || PLACEHOLDER_URL;
   }
 
+  // Long-press to toggle Quick Access (view mode only)
+  let longPressTimer = null;
+  let longPressTriggered = false;
+
+  if (!editState.enabled) {
+    const startLongPress = (e) => {
+      if (e.target.closest('.reminder-links-toggle') || e.target.closest('.reminder-tasks-toggle')) return;
+      longPressTriggered = false;
+      longPressTimer = setTimeout(() => {
+        longPressTriggered = true;
+        if (window.toggleItemQuickAccess) {
+          const itemData = {
+            type: 'reminder',
+            text: rem.title,
+            url: rem.url,
+            name: rem.key,
+            sectionType: sectionId
+          };
+          const isNowInQuickAccess = window.toggleItemQuickAccess(itemData);
+          if (window.showToast) {
+            window.showToast(isNowInQuickAccess ? 'Added to Quick Access' : 'Removed from Quick Access');
+          }
+        }
+      }, 750);
+    };
+
+    const cancelLongPress = () => {
+      if (longPressTimer) {
+        clearTimeout(longPressTimer);
+        longPressTimer = null;
+      }
+    };
+
+    div.addEventListener('mousedown', startLongPress);
+    div.addEventListener('mouseup', cancelLongPress);
+    div.addEventListener('mouseleave', cancelLongPress);
+    div.addEventListener('touchstart', startLongPress, { passive: true });
+    div.addEventListener('touchend', cancelLongPress);
+    div.addEventListener('touchcancel', cancelLongPress);
+  }
+
   // Click handler for editing (edit mode) or opening URL (view mode)
   div.addEventListener('click', (e) => {
     if (e.target.closest('.calendar-btn') || e.target.closest('.hashtag-btn') ||
@@ -2702,6 +2777,12 @@ function createUnifiedReminderItem(rem, sectionId, subtitle, subtitleColor) {
         renderAllSections();
       }, { x: e.clientX, y: e.clientY });
     } else {
+      if (longPressTriggered) {
+        e.preventDefault();
+        e.stopPropagation();
+        longPressTriggered = false;
+        return;
+      }
       e.preventDefault();
       const url = div.dataset.url;
       if (url && url !== PLACEHOLDER_URL) {
@@ -2727,6 +2808,16 @@ function createUnifiedCopyPasteItem(item, sectionId, subtitle, subtitleColor) {
   div.dataset.subtitle = subtitle;
   div.dataset.key = item.key;
 
+  const priorityItemData = {
+    type: 'copyPaste',
+    text: item.text,
+    copyText: item.copyText || item.text,
+    name: item.key,
+    sectionType: sectionId
+  };
+  const isPrioritized = !editState.enabled && window.isItemInQuickAccess && window.isItemInQuickAccess(priorityItemData);
+  if (isPrioritized) addQuickAccessItemLight(div);
+
   // Check if the copyText is a color code - if so, render as a color swatch
   const copyTextToCheck = (item.copyText || '').trim();
   const isColorSwatch = isColorCode(copyTextToCheck);
@@ -2740,16 +2831,6 @@ function createUnifiedCopyPasteItem(item, sectionId, subtitle, subtitleColor) {
     div.style.color = contrastColor;
     div.dataset.originalColor = copyTextToCheck;
   } else {
-    // Check if item is in Quick Access (prioritized)
-    const priorityItemData = {
-      type: 'copyPaste',
-      text: item.text,
-      copyText: item.copyText || item.text,
-      name: item.key,
-      sectionType: sectionId
-    };
-    const isPrioritized = !editState.enabled && window.isItemInQuickAccess && window.isItemInQuickAccess(priorityItemData);
-
     // Apply custom color if set
     const defaultColorLight = '#f7fafc';
     const defaultColorDark = '#334155';
@@ -2758,11 +2839,6 @@ function createUnifiedCopyPasteItem(item, sectionId, subtitle, subtitleColor) {
       : (window.model && window.model.darkMode ? defaultColorDark : defaultColorLight);
 
     const isDarkMode = window.model && window.model.darkMode;
-
-    // Make color more vibrant if prioritized (light mode only)
-    if (isPrioritized && !isDarkMode && window.makeColorMoreVibrant) {
-      effectiveColor = window.makeColorMoreVibrant(effectiveColor);
-    }
 
     // In dark mode, compensate color for glass overlay
     if (isDarkMode && window.glassCompensateColor) {
@@ -2783,13 +2859,6 @@ function createUnifiedCopyPasteItem(item, sectionId, subtitle, subtitleColor) {
     } else {
       div.style.background = effectiveColor;
       div.style.borderColor = darkenColor(effectiveColor);
-    }
-
-    // Dark mode prioritized: soft glow around the pill edge
-    if (isPrioritized && isDarkMode) {
-      const glowColor = window.makePriorityGlowColor ? window.makePriorityGlowColor(effectiveColor) : effectiveColor;
-      const outerGlow = glowColor.replace(/[\d.]+\)$/, '0.25)');
-      div.style.boxShadow = `0 0 8px 4px ${outerGlow}, inset 0 0 6px 2px ${glowColor}`;
     }
   }
 
@@ -2856,72 +2925,54 @@ function createUnifiedCopyPasteItem(item, sectionId, subtitle, subtitleColor) {
 
     initializeItemDragHandlers(div, item.key, `${sectionId}:${subtitle}:copyPaste`);
   } else {
-    // Priority toggle button (Quick Access integration)
-    const itemData = {
-      type: 'copyPaste',
-      text: item.text,
-      copyText: item.copyText || item.text,
-      name: item.key,
-      sectionType: sectionId
-    };
-    const isHighlighted = window.isItemInQuickAccess && window.isItemInQuickAccess(itemData);
+    // Long-press to toggle Quick Access (view mode only)
+    let longPressTimer = null;
+    let longPressTriggered = false;
 
-    const priorityBtn = document.createElement('button');
-    priorityBtn.type = 'button';
-    priorityBtn.className = 'priority-toggle-btn' + (isHighlighted ? ' active' : '');
-    priorityBtn.title = isHighlighted ? 'Remove from Quick Access' : 'Add to Quick Access';
-    priorityBtn.innerHTML = `
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="12" cy="12" r="10"></circle>
-        <circle cx="12" cy="12" r="6"></circle>
-        <circle cx="12" cy="12" r="2"></circle>
-      </svg>
-    `;
-    priorityBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      e.preventDefault();
-      if (window.toggleItemQuickAccess) {
-        const nowActive = window.toggleItemQuickAccess(itemData);
-        priorityBtn.classList.toggle('active', nowActive);
-        priorityBtn.title = nowActive ? 'Remove from Quick Access' : 'Add to Quick Access';
-
-        // Apply or remove vibrant color inline
-        const originalColor = div.dataset.originalColor;
-        const isDark = window.model && window.model.darkMode;
-        if (nowActive) {
-          if (isDark) {
-            const glowColor = window.makePriorityGlowColor ? window.makePriorityGlowColor(originalColor) : originalColor;
-            const outerGlow = glowColor.replace(/[\d.]+\)$/, '0.25)');
-      div.style.boxShadow = `0 0 8px 4px ${outerGlow}, inset 0 0 6px 2px ${glowColor}`;
-          } else if (window.makeColorMoreVibrant) {
-            const vibrantColor = window.makeColorMoreVibrant(originalColor);
-            if (isGlassModeActive()) {
-              div.style.background = colorToGlassRgba(vibrantColor, 0.55);
-              div.style.borderColor = colorToGlassRgba(darkenColor(vibrantColor), 0.5);
-            } else {
-              div.style.background = vibrantColor;
-              div.style.borderColor = darkenColor(vibrantColor);
-            }
-          }
-        } else {
-          if (isDark) {
-            div.style.boxShadow = '';
-          }
-          if (isGlassModeActive()) {
-            div.style.background = colorToGlassRgba(originalColor, 0.55);
-            div.style.borderColor = colorToGlassRgba(darkenColor(originalColor), 0.5);
-          } else {
-            div.style.background = originalColor;
-            div.style.borderColor = darkenColor(originalColor);
+    const startLongPress = (e) => {
+      if (e.target.closest('.copy-paste-icon')) return;
+      longPressTriggered = false;
+      longPressTimer = setTimeout(() => {
+        longPressTriggered = true;
+        if (window.toggleItemQuickAccess) {
+          const itemData = {
+            type: 'copyPaste',
+            text: item.text,
+            copyText: item.copyText || item.text,
+            name: item.key,
+            sectionType: sectionId
+          };
+          const isNowInQuickAccess = window.toggleItemQuickAccess(itemData);
+          if (window.showToast) {
+            window.showToast(isNowInQuickAccess ? 'Added to Quick Access' : 'Removed from Quick Access');
           }
         }
+      }, 750);
+    };
+
+    const cancelLongPress = () => {
+      if (longPressTimer) {
+        clearTimeout(longPressTimer);
+        longPressTimer = null;
       }
-    });
-    div.appendChild(priorityBtn);
+    };
+
+    div.addEventListener('mousedown', startLongPress);
+    div.addEventListener('mouseup', cancelLongPress);
+    div.addEventListener('mouseleave', cancelLongPress);
+    div.addEventListener('touchstart', startLongPress, { passive: true });
+    div.addEventListener('touchend', cancelLongPress);
+    div.addEventListener('touchcancel', cancelLongPress);
 
     // View mode: clicking anywhere on bubble copies text
     div.addEventListener('click', (e) => {
-      if (e.target.closest('.copy-paste-icon') || e.target.closest('.priority-toggle-btn')) return;
+      if (longPressTriggered) {
+        e.preventDefault();
+        e.stopPropagation();
+        longPressTriggered = false;
+        return;
+      }
+      if (e.target.closest('.copy-paste-icon')) return;
       e.preventDefault();
       copyToClipboard();
     });

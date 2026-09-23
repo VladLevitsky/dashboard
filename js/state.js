@@ -44,6 +44,7 @@ export const model = {
   subtitleColors: {},  // Custom colors for subtitles within sections (per light/dark mode)
   collapsedSubtitles: {},  // Track collapsed state of subtitles: { "sectionId:subtitle": true }
   cardNotes: {},  // Notes for each card: { "sectionId": "note text" }
+  subtaskNotes: {},  // Notes for subtasks: { "sectionId:subtitle:itemKey": [...notes...] }
   collapsedCards: {},  // Track collapsed state of cards: { "sectionId": true }
   // Centralized task storage (Eisenhower Matrix)
   // Each task: { id, title, color: 'blue'|'yellow'|'orange'|'red', linkedItems: [{ type, key, sectionId, subtitle }], order }
@@ -125,7 +126,7 @@ const MODEL_STATIC_KEYS = new Set([
   'schemaVersion', 'sections', 'timers', 'lastActiveMode',
   'timeTrackingExpanded', 'quickAccessExpanded', 'selectorModeActive',
   'quickAccessItems', 'sectionTitles', 'sectionIcons',
-  'sectionColors', 'subtitleColors', 'collapsedSubtitles', 'cardNotes',
+  'sectionColors', 'subtitleColors', 'collapsedSubtitles', 'cardNotes', 'subtaskNotes',
   'collapsedCards', 'tasks', 'ideas', 'meetings', 'completedTasks', 'projects', 'subtaskTemplates',
   'header', 'darkMode', 'glassMode', 'glassTheme',
   'reminders', 'dailyTasks', 'dailyTools', 'contentCreation', 'ads',
@@ -150,6 +151,7 @@ export function resetModel() {
   model.subtitleColors = {};
   model.collapsedSubtitles = {};
   model.cardNotes = {};
+  model.subtaskNotes = {};
   model.collapsedCards = {};
   model.tasks = [];
   model.ideas = [];

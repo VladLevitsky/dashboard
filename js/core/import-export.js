@@ -132,6 +132,7 @@ export function extractUrlOverrides() {
     collapsedSubtitles: data.collapsedSubtitles || {},
     collapsedCards: data.collapsedCards || {},
     cardNotes: data.cardNotes || {},
+    subtaskNotes: data.subtaskNotes || {},
     header: data.header
   };
 
@@ -653,6 +654,9 @@ export function applyUrlOverrides(data) {
   if (structure.cardNotes && typeof structure.cardNotes === 'object') {
     current.cardNotes = structure.cardNotes;
   }
+  if (structure.subtaskNotes && typeof structure.subtaskNotes === 'object') {
+    current.subtaskNotes = structure.subtaskNotes;
+  }
   if (structure.header) {
     current.header = structure.header;
   }
@@ -898,6 +902,7 @@ export function applyUrlOverrides(data) {
       collapsedSubtitles: current.collapsedSubtitles,
       collapsedCards: current.collapsedCards,
       cardNotes: current.cardNotes,
+      subtaskNotes: current.subtaskNotes,
       header: current.header,
       darkMode: current.darkMode,
       glassMode: current.glassMode,

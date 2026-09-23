@@ -64,7 +64,7 @@ body[data-style="glass"][data-theme][data-theme="dark"]:not([data-glass-theme="s
   background-attachment: fixed;
 }
 
-/* Large panes: a fine alternating light/dark rim gives the glass thickness. */
+/* Shared panes retain their existing material; outer shells refine the rim below. */
 body[data-style="glass"][data-theme] .card,
 body[data-style="glass"][data-theme] .app-header.card {
   --surface-reflection-near: 85%;
@@ -98,6 +98,79 @@ body[data-style="glass"][data-theme] .card::after {
   pointer-events: none;
   z-index: 2;
 }
+
+/* Sculpt only the dashboard's outer shells. Alternating bright/dark edges
+   curl into a soft bevel, like thick rounded glass. Keep shared item and
+   dialog tokens untouched; section.card also covers the real card editor. */
+body[data-style="glass"][data-theme] :is(section.card, .app-header.card, .time-tracking-card, .quick-access-card, .eisenhower-card) {
+  --card-edge-light: rgb(255 255 255 / 98%);
+  --card-edge-dark: rgb(40 47 58 / 44%);
+  /* Corner-anchored light stays consistent on tall, wide and collapsed cards.
+     Each arc fades out before the middle of the adjoining straight edges. */
+  --card-highlight-contour:
+    radial-gradient(ellipse 62% 82% at 100% 0%, var(--card-edge-light) 4%, transparent 78%),
+    radial-gradient(ellipse 62% 82% at 0% 100%, var(--card-edge-light) 4%, transparent 78%);
+  --card-shade-mask:
+    radial-gradient(ellipse 58% 78% at 0% 0%, #000, transparent 76%),
+    radial-gradient(ellipse 58% 78% at 100% 100%, #000, transparent 76%);
+  --card-cast-shadow: 9px 16px 28px -14px rgb(40 46 56 / 34%),
+    0 2px 5px -2px rgb(40 46 56 / 18%);
+  /* Preserve the border's layout width; the contour supplies its color. */
+  border-color: transparent !important;
+  box-shadow: var(--card-cast-shadow) !important;
+  /* Retain content clipping, with just enough paint room for the outer feather. */
+  overflow: clip;
+  overflow-clip-margin: 6px;
+}
+body[data-style="glass"][data-theme="dark"] :is(section.card, .app-header.card, .time-tracking-card, .quick-access-card, .eisenhower-card) {
+  --card-edge-light: rgb(226 235 249 / 60%);
+  --card-edge-dark: rgb(0 4 10 / 71.5%);
+  --card-cast-shadow: 10px 18px 30px -14px rgb(0 0 0 / 54%),
+    0 3px 6px -2px rgb(0 0 0 / 30%);
+}
+body[data-style="glass"][data-theme] :is(section.card, .app-header.card, .time-tracking-card, .quick-access-card, .eisenhower-card)::before {
+  /* One continuous rounded shape avoids seams between corner/edge tiles.
+     The shallow exterior feather is shorter than the inward bevel. */
+  inset: -1px;
+  background: none !important;
+  box-shadow: inset 0 0 10px 1px var(--card-edge-dark),
+    0 0 3px 0.4px var(--card-edge-dark);
+  -webkit-mask: var(--card-shade-mask);
+  mask: var(--card-shade-mask);
+  -webkit-mask-size: calc(100% + 12px) calc(100% + 12px);
+  mask-size: calc(100% + 12px) calc(100% + 12px);
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-clip: no-clip;
+  mask-clip: no-clip;
+  opacity: 0.85;
+}
+body[data-style="glass"][data-theme] .card > .glass-card-highlight {
+  inset: -1px;
+  border-radius: inherit;
+  box-shadow: inset 0 0 10px 1px var(--card-edge-light);
+  -webkit-mask: radial-gradient(ellipse 62% 82% at 100% 0%, #000 4%, transparent 78%),
+    radial-gradient(ellipse 62% 82% at 0% 100%, #000 4%, transparent 78%);
+  mask: radial-gradient(ellipse 62% 82% at 100% 0%, #000 4%, transparent 78%),
+    radial-gradient(ellipse 62% 82% at 0% 100%, #000 4%, transparent 78%);
+  opacity: 0.85;
+  pointer-events: none;
+  z-index: 0;
+}
+/* Collapse hides content children, but the decorative bevel still follows
+   the shortened shell. Absolute positioning keeps it out of layout math. */
+body[data-style="glass"][data-theme] section.card.collapsed > .glass-card-highlight {
+  display: block !important;
+  height: auto !important;
+}
+body[data-style="glass"][data-theme] :is(section.card, .app-header.card, .time-tracking-card, .quick-access-card, .eisenhower-card)::after {
+  padding: 1.5px;
+  /* Keep the thin specular highlights; shaded corners live entirely in
+     the feathered bevel underneath, never in this hard ring mask. */
+  background: var(--surface-reflected-light, none), var(--card-highlight-contour) !important;
+}
 body[data-style="glass"][data-theme] :is(.profile-name, .card h2) {
   letter-spacing: -0.035em;
 }
@@ -116,8 +189,9 @@ body[data-style="glass"][data-theme] :is(.unified-icon-btn, .icon-btn, .icon-but
   transition: background-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
 }
 body[data-style="glass"][data-theme] :is(.icon-button, .unified-icon-btn) {
+  --animated-border-radius: 25%;
   position: relative;
-  border-radius: 25%;
+  border-radius: var(--animated-border-radius);
 }
 body[data-style="glass"][data-theme] :is(.unified-subtask-item, .list-item,
   .unified-copypaste-item, .copy-paste-item, .reminder-item, .icon-button,
@@ -136,6 +210,32 @@ body[data-style="glass"][data-theme] :is(.unified-icon-btn, .icon-btn, .icon-but
   background-color: var(--glass-hover);
   box-shadow: var(--glass-control-shadow), 0 5px 14px -7px var(--glass-shade);
   transform: translateY(-1px);
+}
+
+/* The selected icon's light follows the border box, using the same radius as
+   the glass. Clip its broad bloom inward and replace the neutral white rim. */
+body[data-style="glass"][data-theme] .icon-button.icon-in-quick-access,
+body[data-style="glass"][data-theme] .icon-button.icon-in-quick-access:hover {
+  /* Blue owns the outermost pixel too; neutral glass reflections must not
+     show through the feather or leave a white rim outside it. */
+  border-color: #23a8ff;
+  background: linear-gradient(145deg, rgb(95 191 255 / 12%), transparent 60%), var(--glass-fill);
+  background-clip: padding-box;
+  box-shadow: 0 4px 10px -5px var(--glass-shade),
+    0 0 4px rgb(35 168 255 / 35%), 0 0 10px rgb(35 168 255 / 22%);
+}
+body[data-style="glass"][data-theme] .icon-button.icon-in-quick-access::before,
+body[data-style="glass"][data-theme] .icon-button.icon-in-quick-access::after {
+  background: none;
+  box-shadow: none;
+}
+body[data-style="glass"][data-theme] .icon-button.icon-in-quick-access > .animated-border-svg {
+  inset: -1px;
+  width: calc(100% + 2px);
+  height: calc(100% + 2px);
+  border-radius: inherit;
+  overflow: hidden;
+  z-index: 4;
 }
 
 /* Header navigation stays as bare icons; floating controls retain their glass. */
@@ -320,13 +420,18 @@ body[data-style="glass"][data-theme] :is(.media-dialog, .breakdown-dialog,
   .projects-dialog, .auth-dialog, .calendar-view-dialog, .quick-link-dialog,
   .reorder-modal-content, .color-picker-dialog, .reminder-links-dialog,
   .reminder-tasks-dialog, .icon-links-dialog),
-body[data-style="glass"][data-theme] .card-edit-body > .card {
+body[data-style="glass"][data-theme] .card-edit-body > section.card {
   background: var(--glass-reflection), var(--glass-dialog) !important;
   border: 1px solid var(--glass-edge) !important;
   border-radius: var(--radius);
   box-shadow: 0 24px 70px -24px var(--glass-shade), var(--glass-shadow);
   -webkit-backdrop-filter: blur(36px) saturate(145%) !important;
   backdrop-filter: blur(36px) saturate(145%) !important;
+}
+/* The card editor reuses the real card, including its sculpted shell. */
+body[data-style="glass"][data-theme] .card-edit-body > .card {
+  border-color: transparent !important;
+  box-shadow: var(--card-cast-shadow) !important;
 }
 body[data-style="glass"][data-theme] :is(.edit-popover, .calendar-popover, .interval-popover,
   .confirm-popover, .notification-popover, .auth-user-popover, .notepad-popover,
@@ -512,7 +617,7 @@ body[data-style="glass"][data-theme] [data-glass-glow="material"] :is(.unified-c
 body[data-style="glass"][data-theme] :is(.unified-copypaste-item, .copy-paste-item,
   .unified-subtask-item, .list-item, .unified-reminder-item, .reminder-item,
   .eisenhower-task) :is(.priority-toggle-btn, .copy-paste-icon,
-  .list-item-links-toggle, .list-item-tasks-toggle, .list-item-links-btn,
+  .list-item-links-toggle, .list-item-tasks-toggle, .list-item-notes-toggle, .list-item-links-btn,
   .list-item-tasks-btn, .reminder-links-toggle, .reminder-tasks-toggle,
   .eisenhower-task-link-btn, .calendar-btn, .hashtag-btn, .links-btn, .tasks-btn) {
   color: var(--copy-ink, var(--text));
@@ -529,6 +634,7 @@ body[data-style="glass"][data-theme] .card-edit-modal::after {
 }
 body[data-style="glass"][data-theme] .task-subtask-row.subtask-bubble .task-subtask-title-input.locked {
   background: transparent;
+  border-color: transparent;
   box-shadow: none;
 }
 body[data-style="glass"][data-theme] .task-subtask-row.subtask-bubble:not(.subtask-bubble-important):not(.subtask-bubble-completed) {
@@ -551,21 +657,21 @@ body[data-style="glass"][data-theme] :is(.btn.primary, .btn-primary) {
 
 /* Actual control hues are supplied by glass-glow.js, including custom colors.
    Shadows paint outside the button without changing its hit area or stacking. */
-body[data-style="glass"][data-theme] [data-glass-glow="surface"]:not(:disabled):not([aria-disabled="true"]) {
+body[data-style="glass"][data-theme] [data-glass-glow="surface"]:not(.quick-access-lit):not(:disabled):not([aria-disabled="true"]) {
   box-shadow: inset 0 1px 2px rgb(255 255 255 / 48%),
     inset 0 -2px 5px rgb(var(--control-glow-rgb) / 44%),
     0 0 8px rgb(var(--control-glow-rgb) / 32%),
     0 4px 20px -4px rgb(var(--control-glow-rgb) / 40%) !important;
 }
-body[data-style="glass"][data-theme] [data-glass-glow="surface"]:not(:disabled):not([aria-disabled="true"]):hover {
+body[data-style="glass"][data-theme] [data-glass-glow="surface"]:not(.quick-access-lit):not(:disabled):not([aria-disabled="true"]):hover {
   box-shadow: inset 0 1px 2px rgb(255 255 255 / 58%),
     inset 0 -2px 6px rgb(var(--control-glow-rgb) / 54%),
     0 0 10px rgb(var(--control-glow-rgb) / 42%),
     0 5px 26px -4px rgb(var(--control-glow-rgb) / 46%) !important;
 }
 /* Bare colored icons emit light from the glyph, without acquiring a box. */
-body[data-style="glass"][data-theme] [data-glass-glow="ink"]:not(:disabled):not([aria-disabled="true"]),
-body[data-style="glass"][data-theme] [data-glass-glow="ink"]:not(:disabled):not([aria-disabled="true"]):hover {
+body[data-style="glass"][data-theme] [data-glass-glow="ink"]:not(.quick-access-lit):not(:disabled):not([aria-disabled="true"]),
+body[data-style="glass"][data-theme] [data-glass-glow="ink"]:not(.quick-access-lit):not(:disabled):not([aria-disabled="true"]):hover {
   box-shadow: none !important;
   filter: drop-shadow(0 0 3px rgb(var(--control-glow-rgb) / 48%)) drop-shadow(0 0 8px rgb(var(--control-glow-rgb) / 24%));
 }
@@ -574,6 +680,38 @@ body[data-style="glass"][data-theme] :is(.task-color-btn, .sticky-color-btn)[dat
   outline-offset: 3px;
 }
 body[data-style="glass"][data-theme] [data-glass-glow]:is(:disabled, [aria-disabled="true"]) { box-shadow: none !important; filter: none; }
+
+/* Quick-access text pills keep their original fill and progress colors. Only
+   the edge gains the blue pulse; its SVG uses a much shallower inward bloom. */
+body[data-style="glass"][data-theme] :is(.unified-subtask-item, .unified-reminder-item, .unified-copypaste-item).quick-access-lit,
+body[data-style="glass"][data-theme] :is(.unified-subtask-item, .unified-reminder-item, .unified-copypaste-item).quick-access-lit:hover {
+  /* These pills are 44px tall. SVG needs the resolved capsule radius, since
+     999px would clamp each axis separately and produce an ellipse. */
+  --animated-border-radius: 22px;
+  border-color: #23a8ff !important;
+  box-shadow: 0 4px 10px -5px var(--glass-shade),
+    0 0 3px rgb(35 168 255 / 22%) !important;
+  filter: none;
+  overflow: visible;
+}
+body[data-style="glass"][data-theme] .quick-access-lit:not(.unified-reminder-item)::before,
+body[data-style="glass"][data-theme] .quick-access-lit:not(.unified-reminder-item)::after {
+  background: none;
+  box-shadow: none;
+  filter: none;
+}
+body[data-style="glass"][data-theme] .quick-access-lit.unified-reminder-item::after {
+  box-shadow: none;
+}
+body[data-style="glass"][data-theme] .quick-access-lit > .animated-border-svg {
+  position: absolute;
+  inset: -1px;
+  width: calc(100% + 2px);
+  height: calc(100% + 2px);
+  border-radius: inherit;
+  overflow: hidden;
+  z-index: 4;
+}
 
 @media (max-width: 600px) {
   body[data-style="glass"][data-theme] { --radius: 22px; }
@@ -603,6 +741,10 @@ body[data-style="glass"][data-theme] [data-glass-glow]:is(:disabled, [aria-disab
   body[data-style="glass"][data-theme] .header-icons-row button { width: 34px; height: 34px; border-radius: 11px; flex-shrink: 0; }
 }
 @media (prefers-reduced-motion: reduce) {
+  body[data-style="glass"][data-theme] .animated-border-light {
+    animation: none !important;
+    opacity: 0.5;
+  }
   body[data-style="glass"][data-theme] *, body[data-style="glass"][data-theme] *::before, body[data-style="glass"][data-theme] *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;

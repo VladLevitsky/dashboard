@@ -182,6 +182,17 @@ queue(document.body);
       if (!tracked.has(element)) { sizes.observe(element); tracked.add(element); }
     }
     for (const [card, property, light] of updates) {
+      // A separate decorative layer keeps the broad white bevel independent
+      // of the shaded bevel and the thin rim that receives colored item light.
+      if (card.matches('section.card, .app-header.card, .time-tracking-card, .quick-access-card, .eisenhower-card') &&
+          !card.querySelector(':scope > .glass-card-highlight')) {
+        const highlight = document.createElement('span');
+        highlight.className = 'glass-card-highlight';
+        highlight.setAttribute('aria-hidden', 'true');
+        // Always exclude decoration from card content measurements.
+        highlight.style.position = 'absolute';
+        card.append(highlight);
+      }
       if (card.style.getPropertyValue(property) !== light) {
         card.style.setProperty(property, light);
         ownStyles.set(card, card.getAttribute('style'));

@@ -35,94 +35,86 @@ export function generateKey(prefix, collection) {
   return newKey;
 }
 
-// --- SVG animated border for pinned/quick-access items
-// Uses real SVG stroke for perfectly uniform borders
-// Gaussian blur on the light dash creates a smooth feathered glow
-export function createAnimatedBorder(borderColor, lightColor, cornerRadius, strokeWidth = 2.5) {
+// --- Light carried inside the glass rim of quick-access items.
+// Every layer follows the same rounded path. CSS supplies the actual corner
+// radius and clips the broad diffusion to the glass, leaving the image sharp.
+// Separate stroke reach from feathering so pills can have a narrow luminous
+// core with a long, smooth inward falloff. Defaults preserve the icon material.
+export function createAnimatedBorder(borderColor, lightColor, cornerRadius, strokeWidth = 2.5, glowDepth = 1, glowFeather = glowDepth) {
   const ns = 'http://www.w3.org/2000/svg';
   const svg = document.createElementNS(ns, 'svg');
   svg.setAttribute('class', 'animated-border-svg');
-  svg.setAttribute('preserveAspectRatio', 'none');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.setAttribute('focusable', 'false');
 
   const halfStroke = strokeWidth / 2;
   const cssW = `calc(100% - ${strokeWidth}px)`;
   const cssH = `calc(100% - ${strokeWidth}px)`;
-  const filterId = 'glow-' + Math.random().toString(36).substr(2, 6);
+  const uid = 'rim-' + Math.random().toString(36).slice(2, 10);
+  const defs = document.createElementNS(ns, 'defs');
+  for (const [name, blur] of [['bloom', 5], ['diffuse', 3.5], ['soft', 1.8], ['core', 0.75]]) {
+    const filter = document.createElementNS(ns, 'filter');
+    filter.id = `${uid}-${name}`;
+    filter.setAttribute('x', '-25%');
+    filter.setAttribute('y', '-25%');
+    filter.setAttribute('width', '150%');
+    filter.setAttribute('height', '150%');
+    filter.setAttribute('color-interpolation-filters', 'sRGB');
+    const gaussian = document.createElementNS(ns, 'feGaussianBlur');
+    gaussian.setAttribute('stdDeviation', blur * glowFeather);
+    filter.appendChild(gaussian);
+    defs.appendChild(filter);
+  }
+  svg.appendChild(defs);
 
-  // Helper to create a rect with common attributes
-  function makeRect() {
+  function addLight(color, width, opacity, filter, dash = null, center = 0, parent = svg) {
     const r = document.createElementNS(ns, 'rect');
-    r.setAttribute('rx', cornerRadius);
-    r.setAttribute('ry', cornerRadius);
     r.setAttribute('fill', 'none');
     r.setAttribute('pathLength', '100');
-    r.setAttribute('stroke-width', strokeWidth);
+    r.setAttribute('stroke', color);
+    r.setAttribute('stroke-width', width);
+    r.setAttribute('opacity', opacity);
+    r.setAttribute('filter', `url(#${uid}-${filter})`);
+    r.style.rx = `calc(var(--animated-border-radius, ${cornerRadius}px) - ${halfStroke}px)`;
+    r.style.ry = `calc(var(--animated-border-radius, ${cornerRadius}px) - ${halfStroke}px)`;
     r.style.width = cssW;
     r.style.height = cssH;
     r.style.x = `${halfStroke}px`;
     r.style.y = `${halfStroke}px`;
-    return r;
+    if (dash !== null) {
+      r.setAttribute('stroke-linecap', 'round');
+      r.setAttribute('stroke-dasharray', `${dash} ${100 - dash}`);
+      // Fixed position: only the containing glow's brightness changes.
+      r.setAttribute('stroke-dashoffset', dash / 2 - center);
+    }
+    parent.appendChild(r);
   }
 
-  // Base border - solid stroke
-  const baseRect = makeRect();
-  baseRect.setAttribute('stroke', borderColor);
-  svg.appendChild(baseRect);
-
-  // Generate smooth gradient glow with many crisp layers
-  // Each layer gets its own keyframes with centering offset baked in
-  const steps = 18;
-  const maxDash = 40;
-  const minDash = 2;
-  const uid = Math.random().toString(36).substr(2, 6);
-
-  // Base keyframe values (acceleration curve)
-  const keyStops = [
-    { pct: 0,   val: 0 },
-    { pct: 30,  val: -6 },
-    { pct: 55,  val: -14 },
-    { pct: 70,  val: -24 },
-    { pct: 82,  val: -44 },
-    { pct: 90,  val: -62 },
-    { pct: 100, val: -100 }
-  ];
-
-  // Inject per-layer keyframes into SVG <style>
-  const defs = document.createElementNS(ns, 'defs');
-  const styleEl = document.createElementNS(ns, 'style');
-  let css = '';
-
-  for (let i = 0; i < steps; i++) {
-    const t = i / (steps - 1);
-    const dash = maxDash - (maxDash - minDash) * t;
-    const offset = (dash - minDash) / 2;
-    const name = `bdt-${uid}-${i}`;
-
-    const frames = keyStops.map(s =>
-      `${s.pct}% { stroke-dashoffset: ${(s.val + offset).toFixed(1)}; }`
-    ).join(' ');
-    css += `@keyframes ${name} { ${frames} }\n`;
+  // Overlapping soft falloffs carry the edge light well into the glass.
+  // The wide, faint layer fades before the icon image; the narrower layers
+  // build intensity smoothly, without a flat band behind the bright edge.
+  addLight(borderColor, 28 * glowDepth, 0.22, 'bloom');
+  addLight(borderColor, 18 * glowDepth, 0.35, 'diffuse');
+  addLight(borderColor, 8 * glowDepth, 0.35, 'soft');
+  addLight(borderColor, strokeWidth + 1, 0.65, 'core');
+  // Paired, offset pulses always overlap: the rim stays alive while bright
+  // blue catches different fixed spots. Two slow periods give an uneven beat
+  // without bringing back a circulating streak or long all-dim pauses.
+  // Keep the original 38% rise and 49% fall in real seconds, but hold the
+  // near-peak light for one third of its former 13% interval. CSS keyframe
+  // offsets are normalized to this shorter cycle; paired spots stay in phase.
+  const cycleScale = 0.38 + 0.13 / 3 + 0.49;
+  for (const [center, duration, delay] of [[7, 8.4, -3.2], [44, 9.6, -6.8], [82, 8.4, -7.4], [21, 9.6, -2]]) {
+    const glow = document.createElementNS(ns, 'g');
+    glow.setAttribute('class', 'animated-border-light');
+    glow.style.setProperty('--rim-glow-duration', `${(duration * cycleScale).toFixed(3)}s`);
+    glow.style.setProperty('--rim-glow-delay', `${(delay * cycleScale).toFixed(3)}s`);
+    // Keep each bright catch local while retaining its soft inward falloff.
+    addLight(lightColor, 20 * glowDepth, 0.65, 'bloom', 24, center, glow);
+    addLight(lightColor, 11 * glowDepth, 0.95, 'diffuse', 17, center, glow);
+    addLight(lightColor, 5 * glowDepth, 1, 'soft', 10, center, glow);
+    svg.appendChild(glow);
   }
-
-  styleEl.textContent = css;
-  defs.appendChild(styleEl);
-  svg.appendChild(defs);
-
-  for (let i = 0; i < steps; i++) {
-    const t = i / (steps - 1);
-    const dash = maxDash - (maxDash - minDash) * t;
-    const opacity = t * t * t * 0.85 + 0.04;
-    const name = `bdt-${uid}-${i}`;
-
-    const r = makeRect();
-    r.setAttribute('stroke', lightColor);
-    r.setAttribute('stroke-linecap', 'round');
-    r.setAttribute('stroke-dasharray', `${dash.toFixed(1)} ${(100 - dash).toFixed(1)}`);
-    r.setAttribute('opacity', opacity.toFixed(3));
-    r.style.animation = `${name} 3s linear infinite`;
-    svg.appendChild(r);
-  }
-
   return svg;
 }
 

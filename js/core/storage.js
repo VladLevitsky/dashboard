@@ -449,6 +449,7 @@ export function saveModel() {
     collapsedSubtitles: data.collapsedSubtitles,
     collapsedCards: data.collapsedCards,
     cardNotes: data.cardNotes,
+    subtaskNotes: data.subtaskNotes,
     header: data.header,
     darkMode: data.darkMode,
     glassMode: data.glassMode,
@@ -600,6 +601,10 @@ export async function restoreModel() {
 
     if (saved.cardNotes) {
       model.cardNotes = { ...model.cardNotes, ...saved.cardNotes };
+    }
+
+    if (saved.subtaskNotes) {
+      model.subtaskNotes = { ...model.subtaskNotes, ...saved.subtaskNotes };
     }
 
     if (saved.header) {
@@ -818,6 +823,9 @@ export function deepMergeModel(target, source) {
   }
   if (source.cardNotes) {
     target.cardNotes = { ...(target.cardNotes || {}), ...source.cardNotes };
+  }
+  if (source.subtaskNotes) {
+    target.subtaskNotes = { ...(target.subtaskNotes || {}), ...source.subtaskNotes };
   }
   if (source.collapsedCards) {
     target.collapsedCards = { ...(target.collapsedCards || {}), ...source.collapsedCards };

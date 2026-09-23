@@ -1684,7 +1684,7 @@ body[data-style="glass"]:not([data-theme="dark"]) .red {
   height: 48px;
 }
 
-/* Icons in Quick Access get SVG border via JS */
+/* Icons in Quick Access carry an animated light inside their glass rim. */
 .icon-button.icon-in-quick-access {
   border-color: transparent;
 }
@@ -2292,18 +2292,21 @@ body[data-style="glass"]:not([data-theme="dark"]) .red {
 .edit-popover input, .edit-popover select { padding: 10px 12px; border: 1px solid #e5e7eb; border-radius: 8px; font-size: 14px; background: var(--card); color: var(--text); }
 .field-link-type { margin-bottom: 10px; }
 .field-link-type label { display: grid; gap: 6px; font-size: 12px; color: var(--muted); }
-/* Custom chevron so it can sit ~10px further left than the native arrow */
+/* Keep the chevron separate from the field background so glass fills cannot
+   erase it. The native select retains keyboard and pointer interaction. */
+.link-type-select { position: relative; display: block; }
 .field-link-type select {
+  width: 100%;
   appearance: none;
   -webkit-appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 12px center; /* standard position — custom chevron just renders cleaner than native */
-  background-size: 16px;
   padding-right: 36px; /* keep text clear of the chevron */
 }
-[data-theme="dark"] .field-link-type select {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+.link-type-select > svg {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
 }
 .file-upload-row { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
 .file-upload-row .btn { padding: 6px 12px; font-size: 12px; }
@@ -2345,6 +2348,8 @@ body[data-style="glass"]:not([data-theme="dark"]) .red {
 .btn-accept:hover, .btn-cancel:hover { transform: scale(1.1); }
 .btn-accept { background: #d1fae5; color: #065f46; }
 .btn-cancel { background: #fee2e2; color: #7f1d1d; }
+#edit-cancel { padding: 0; line-height: 1; }
+#edit-cancel > svg { display: block; }
 .btn-delete, .btn-breakdown { border-radius: 8px; }
 .btn-delete { background: transparent; color: #6b7280; }
 .btn-delete:hover { color: #111827; }
@@ -5541,6 +5546,45 @@ section.card.collapsed .section-icon {
   color: #f1f5f9;
 }
 
+/* Subtask notes toggle button */
+.list-item-notes-toggle {
+  width: 22px;
+  height: 22px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #94a3b8;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+  opacity: 0.4;
+}
+.list-item-notes-toggle.has-note {
+  color: var(--brand);
+  opacity: 0.7;
+}
+.list-item-notes-toggle:hover {
+  transform: scale(1.1);
+  opacity: 1;
+}
+.list-item-notes-toggle svg {
+  width: 14px;
+  height: 14px;
+}
+[data-theme="dark"] .list-item-notes-toggle {
+  color: #64748b;
+}
+[data-theme="dark"] .list-item-notes-toggle.has-note {
+  color: #cbd5e1;
+}
+[data-theme="dark"] .list-item-notes-toggle:hover {
+  color: #f1f5f9;
+}
+
 /* Expanded tasks container */
 .reminder-tasks-expanded {
   position: absolute;
@@ -6493,6 +6537,8 @@ section.card.collapsed .section-icon {
   min-height: 44px;
   max-height: 44px;
   box-sizing: border-box;
+  min-width: 0;
+  overflow: hidden;
   position: relative;
   box-shadow:
     0 4px 16px rgba(0,0,0,0.06),
@@ -6602,10 +6648,17 @@ section.card.collapsed .section-icon {
   align-items: center;
   gap: 4px;
   flex: 1;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .unified-subtask-left > a {
   margin-right: 4px;
+  min-width: 0;
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* Priority Toggle Button (Quick Access integration) */
@@ -6887,6 +6940,8 @@ section.card.collapsed .section-icon {
   min-height: 44px;
   max-height: 44px;
   box-sizing: border-box;
+  min-width: 0;
+  overflow: hidden;
   position: relative;
   box-shadow:
     0 4px 16px rgba(0,0,0,0.06),
@@ -6999,6 +7054,7 @@ section.card.collapsed .section-icon {
 
 .unified-copypaste-text {
   flex: 1;
+  min-width: 0;
   font-weight: 600;
   font-size: 14px !important;
   color: var(--text);
@@ -8794,16 +8850,18 @@ body[data-theme="dark"][data-style="glass"][data-glass-theme="sunset"] .tasks-su
 .animated-border-light {
   fill: none;
   stroke-linecap: round;
+  opacity: 0;
+  animation: glassRimShimmer var(--rim-glow-duration) cubic-bezier(0.4, 0, 0.2, 1) var(--rim-glow-delay) infinite;
 }
 
-@keyframes borderDashTravel {
-  0% { stroke-dashoffset: 0; }
-  30% { stroke-dashoffset: -6; }
-  55% { stroke-dashoffset: -14; }
-  70% { stroke-dashoffset: -24; }
-  82% { stroke-dashoffset: -44; }
-  90% { stroke-dashoffset: -62; }
-  100% { stroke-dashoffset: -100; }
+@keyframes glassRimShimmer {
+  /* Only the peak hold is shortened. These offsets preserve the original
+     fade segment lengths after the cycle is reduced to 137/150 of its size. */
+  0%, 100% { opacity: 0.04; }
+  19.708029% { opacity: 0.7; }
+  41.605839% { opacity: 1; }
+  46.350365% { opacity: 0.95; }
+  73.722628% { opacity: 0.28; }
 }
 
 /* Task Link Bubble */

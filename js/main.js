@@ -37,6 +37,7 @@ import {
   closeNotepad,
   saveNote,
   enterNotepadEditMode,
+  getNotesForSection,
   updateNotepadButtonIndicator,
   wireNotepadEvents,
   toggleSavedNotesList,
@@ -127,7 +128,7 @@ import {
   clearSearch
 } from './core/init.js';
 
-import { openCardEditModal, closeCardEditModal } from './features/card-modal.js';
+import { openCardEditModal, closeCardEditModal, getCurrentModalSectionId } from './features/card-modal.js';
 import { initializeResizeHandles, removeResizeHandles, snapshotGridPositions } from './features/card-resize.js';
 import { applyCellSize, initResizeObserver, autoAssignGridPositions, getCellSize, switchDeviceMode, getActiveMode, getGridCols, persistActiveLayout } from './features/grid-engine.js';
 
@@ -485,6 +486,7 @@ window.clearSearch = clearSearch;
 // Card Edit Modal
 window.openCardEditModal = openCardEditModal;
 window.closeCardEditModal = closeCardEditModal;
+window.getCurrentModalSectionId = getCurrentModalSectionId;
 window.initializeResizeHandles = initializeResizeHandles;
 window.removeResizeHandles = removeResizeHandles;
 window.snapshotGridPositions = snapshotGridPositions;
@@ -689,6 +691,7 @@ window.openNotepad = openNotepad;
 window.closeNotepad = closeNotepad;
 window.saveNote = saveNote;
 window.enterNotepadEditMode = enterNotepadEditMode;
+window.getNotesForSection = getNotesForSection;
 window.updateNotepadButtonIndicator = updateNotepadButtonIndicator;
 window.wireNotepadEvents = wireNotepadEvents;
 window.toggleSavedNotesList = toggleSavedNotesList;
