@@ -5,47 +5,48 @@ import { API_BASE } from '../constants.js';
 import { isLoggedIn, getAuthToken } from '../core/auth.js';
 import { deleteR2File, fetchFileBlobUrl, getAllReferencedFileIds, classifyImageRef } from '../core/file-service.js';
 import { $, showToast } from '../utils.js';
-import { model } from '../state.js';
+import { model, editState } from '../state.js';
 import { saveModel } from '../core/storage.js';
 
 let cachedFiles = null;
 
-// --- Remove all references to a fileId from the model
-function removeFileReferences(fileId) {
-  if (!model || !fileId) return false;
+// --- Remove all references to a fileId from a data object
+function scrubFileId(data, fileId) {
+  if (!data || !fileId) return false;
   let changed = false;
 
   // Header images
-  if (model.header) {
-    const logoRef = classifyImageRef(model.header.companyLogoSrc);
+  if (data.header) {
+    const logoRef = classifyImageRef(data.header.companyLogoSrc);
     if (logoRef.type === 'r2' && logoRef.value === fileId) {
-      model.header.companyLogoSrc = 'assets/icons/placeholder-logo.svg';
+      data.header.companyLogoSrc = 'assets/icons/placeholder-logo.svg';
       changed = true;
     }
-    const profileRef = classifyImageRef(model.header.profilePhotoSrc);
+    const profileRef = classifyImageRef(data.header.profilePhotoSrc);
     if (profileRef.type === 'r2' && profileRef.value === fileId) {
-      model.header.profilePhotoSrc = 'assets/icons/placeholder-profile.svg';
+      data.header.profilePhotoSrc = 'assets/icons/placeholder-profile.svg';
       changed = true;
     }
   }
 
   // Card items: icons, reminders, subtasks
-  (model.sections || []).forEach(section => {
-    const cardData = model[section.id];
+  (data.sections || []).forEach(section => {
+    const cardData = data[section.id];
     if (!cardData || typeof cardData !== 'object') return;
     Object.values(cardData).forEach(group => {
       if (!group || typeof group !== 'object') return;
 
       // Icon images
       if (group.icons) {
+        const before = group.icons.length;
         group.icons = group.icons.filter(item => {
           const ref = classifyImageRef(item.icon);
-          if (ref.type === 'r2' && ref.value === fileId) { changed = true; return false; }
-          return true;
+          return !(ref.type === 'r2' && ref.value === fileId);
         });
+        if (group.icons.length < before) changed = true;
       }
 
-      // Direct file links on items (linkType === 'file')
+      // Direct file links on items + file entries in item.links[]
       ['icons', 'reminders', 'subtasks'].forEach(key => {
         if (group[key]) {
           group[key].forEach(item => {
@@ -55,7 +56,6 @@ function removeFileReferences(fileId) {
               delete item.fileName;
               changed = true;
             }
-            // File entries inside item.links[]
             if (item.links) {
               const before = item.links.length;
               item.links = item.links.filter(l => !(l.type === 'file' && l.fileId === fileId));
@@ -68,7 +68,7 @@ function removeFileReferences(fileId) {
   });
 
   // Task links
-  [model.tasks, model.completedTasks].forEach(arr => {
+  [data.tasks, data.completedTasks].forEach(arr => {
     (arr || []).forEach(task => {
       if (task.taskLinks) {
         const before = task.taskLinks.length;
@@ -79,7 +79,7 @@ function removeFileReferences(fileId) {
   });
 
   // Meeting files
-  (model.meetings || []).forEach(meeting => {
+  (data.meetings || []).forEach(meeting => {
     if (meeting.files) {
       const before = meeting.files.length;
       meeting.files = meeting.files.filter(f => f.fileId !== fileId);
@@ -87,12 +87,20 @@ function removeFileReferences(fileId) {
     }
   });
 
-  if (changed) {
-    saveModel();
-    if (window.renderAllSections) window.renderAllSections();
-  }
-
   return changed;
+}
+
+// --- Remove all references to a fileId from model + working copy
+function removeFileReferences(fileId) {
+  const changedModel = scrubFileId(model, fileId);
+  // Also clean the edit-mode working copy if active
+  if (editState.enabled && editState.working) {
+    scrubFileId(editState.working, fileId);
+  }
+  if (changedModel) {
+    saveModel();
+  }
+  if (window.renderAllSections) window.renderAllSections();
 }
 
 function formatBytes(bytes) {
