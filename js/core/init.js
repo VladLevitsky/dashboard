@@ -690,6 +690,8 @@ export async function init() {
   wireNotepadEvents();
   wireMoveButtonEvents();
   wireAppearanceModalEvents();
+  if (window.wireFileManagerEvents) window.wireFileManagerEvents();
+  if (window.updateFileManagerVisibility) window.updateFileManagerVisibility();
   ensureSectionPlusButtons();
   refreshEditingClasses();
   initStickyNotes();

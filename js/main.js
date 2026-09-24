@@ -131,6 +131,7 @@ import {
 import { openCardEditModal, closeCardEditModal, getCurrentModalSectionId } from './features/card-modal.js';
 import { initializeResizeHandles, removeResizeHandles, snapshotGridPositions } from './features/card-resize.js';
 import { applyCellSize, initResizeObserver, autoAssignGridPositions, getCellSize, switchDeviceMode, getActiveMode, getGridCols, persistActiveLayout } from './features/grid-engine.js';
+import { wireFileManagerEvents, updateFileManagerVisibility } from './features/file-manager.js';
 
 import {
   renderAllSections,
@@ -705,4 +706,8 @@ window.deleteNoteFromViewer = deleteNoteFromViewer;
 window.copyNoteFromViewer = copyNoteFromViewer;
 window.openNoteColorPicker = openNoteColorPicker;
 window.wireMoveButtonEvents = wireMoveButtonEvents;
+
+// File Manager
+window.wireFileManagerEvents = wireFileManagerEvents;
+window.updateFileManagerVisibility = updateFileManagerVisibility;
 

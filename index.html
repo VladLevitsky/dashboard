@@ -8,8 +8,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Caveat:wght@500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=2026-09-23-soft-glass-pulse">
-  <link rel="stylesheet" href="glass.css?v=2026-09-23-quick-access-item-light">
+  <link rel="stylesheet" href="styles.css?v=2026-09-23-file-manager">
+  <link rel="stylesheet" href="glass.css?v=2026-09-23-file-manager">
   <script type="module" src="js/features/glass-glow.js?v=2026-09-23-card-bevels"></script>
   <!-- Emoji Picker Element - Web Component -->
   <script type="module" src="https://cdn.jsdelivr.net/npm/emoji-picker-element@^1/index.js"></script>
@@ -602,6 +602,17 @@
               <option value="sunset">Sunset</option>
             </select>
           </div>
+          <!-- File Manager -->
+          <div class="appearance-divider"></div>
+          <div class="appearance-section" id="file-manager-section">
+            <div class="appearance-label">Cloud Storage</div>
+            <button type="button" id="settings-file-manager-btn" class="appearance-backup-btn" style="width: 100%;">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+              </svg>
+              File Manager
+            </button>
+          </div>
           <!-- JSON File Backup -->
           <div class="appearance-divider"></div>
           <div class="appearance-section">
@@ -630,6 +641,24 @@
         <div class="appearance-actions">
           <button type="button" id="appearance-cancel" class="appearance-btn secondary">Cancel</button>
           <button type="button" id="appearance-accept" class="appearance-btn primary">Accept</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- File Manager Modal -->
+    <div id="file-manager-modal" class="file-manager-modal" hidden>
+      <div class="file-manager-backdrop" onclick="document.getElementById('file-manager-modal').classList.remove('active')"></div>
+      <div class="file-manager-dialog">
+        <div class="file-manager-header">
+          <h4>File Manager</h4>
+          <button type="button" id="file-manager-close" class="file-manager-close-btn" title="Close" onclick="document.getElementById('file-manager-modal').classList.remove('active')">&times;</button>
+        </div>
+        <div class="file-manager-storage-bar">
+          <div class="file-manager-storage-fill" id="file-manager-storage-fill"></div>
+          <span class="file-manager-storage-text" id="file-manager-storage-text">Loading...</span>
+        </div>
+        <div class="file-manager-list" id="file-manager-list">
+          <div class="file-manager-loading">Loading files...</div>
         </div>
       </div>
     </div>
@@ -716,7 +745,7 @@
     </div>
 
     <!-- ES6 Modules - fully modularized, no app.js dependency -->
-    <script type="module" src="js/main.js"></script>
+    <script type="module" src="js/main.js?v=2026-09-23-file-manager"></script>
   </body>
   </html>
 

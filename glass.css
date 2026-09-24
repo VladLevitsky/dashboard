@@ -193,6 +193,116 @@ body[data-style="glass"][data-theme] :is(.icon-button, .unified-icon-btn) {
   position: relative;
   border-radius: var(--animated-border-radius);
 }
+/* Inset glass beads form a vertical column: purple links above green tasks,
+   with a clear gap and enough room between the beads and the icon's rim. */
+body[data-style="glass"][data-theme] .icon-button:has(> .icon-link-indicator, > .icon-task-indicator) {
+  overflow: visible;
+}
+body[data-style="glass"][data-theme] .icon-button > :is(.icon-link-indicator, .icon-task-indicator) {
+  --rim-glow-duration: 7.672s;
+  --rim-glow-delay: -2.923s;
+  top: 10px;
+  right: 6px;
+  bottom: auto;
+  left: auto;
+  width: 20px;
+  height: 20px;
+  box-sizing: border-box;
+  border: 1px solid rgb(255 255 255 / 42%);
+  border-radius: 50%;
+  background: linear-gradient(145deg,
+    rgb(var(--indicator-rgb) / 48%), rgb(var(--indicator-rgb) / 78%));
+  box-shadow: inset 0 1px 2px rgb(255 255 255 / 66%),
+    inset 0 -2px 3px color-mix(in srgb, rgb(var(--indicator-rgb)) 45%, rgb(21 31 48 / 60%)),
+    0 2px 4px rgb(21 31 48 / 24%);
+  -webkit-backdrop-filter: blur(4px) saturate(135%);
+  backdrop-filter: blur(4px) saturate(135%);
+  transition: filter 180ms ease;
+  z-index: 5;
+}
+body[data-style="glass"][data-theme] .icon-button > :is(.icon-link-indicator, .icon-task-indicator)::before,
+body[data-style="glass"][data-theme] .icon-button > :is(.icon-link-indicator, .icon-task-indicator)::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+}
+body[data-style="glass"][data-theme] .icon-button > :is(.icon-link-indicator, .icon-task-indicator)::before {
+  background: radial-gradient(ellipse 65% 50% at 30% 20%,
+    rgb(255 255 255 / 72%), rgb(255 255 255 / 18%) 45%, transparent 80%);
+}
+body[data-style="glass"][data-theme] .icon-button > :is(.icon-link-indicator, .icon-task-indicator)::after {
+  background: radial-gradient(ellipse 75% 65% at 35% 28%,
+    rgb(255 255 255 / 40%), rgb(var(--indicator-rgb) / 28%) 45%, transparent 85%);
+  box-shadow: inset 0 0 4px 1px rgb(var(--indicator-rgb) / 62%);
+  filter: blur(0.4px);
+  animation: glassRimShimmer var(--rim-glow-duration) cubic-bezier(0.4, 0, 0.2, 1) var(--rim-glow-delay) infinite;
+}
+body[data-style="glass"][data-theme] .icon-button > :is(.icon-link-indicator, .icon-task-indicator):hover {
+  filter: brightness(1.15);
+}
+body[data-style="glass"][data-theme] .icon-button > .icon-link-indicator {
+  --indicator-rgb: 174 100 255;
+  --rim-glow-duration: 8.768s;
+  --rim-glow-delay: -6.211s;
+  z-index: 6;
+}
+body[data-style="glass"][data-theme] .icon-button > .icon-task-indicator {
+  --indicator-rgb: 24 211 116;
+}
+body[data-style="glass"][data-theme] .icon-button:has(> .icon-link-indicator) > .icon-task-indicator {
+  top: 34px;
+}
+/* Unified purple indicator glass bead */
+body[data-style="glass"][data-theme] .icon-button:has(> .icon-indicator) {
+  overflow: visible;
+}
+body[data-style="glass"][data-theme] .icon-button > .icon-indicator {
+  --indicator-rgb: 46 184 255;
+  --rim-glow-duration: 8.768s;
+  --rim-glow-delay: -6.211s;
+  top: 6px;
+  right: 4px;
+  width: 20px;
+  height: 20px;
+  box-sizing: border-box;
+  border: 1px solid rgb(var(--indicator-rgb) / 55%);
+  border-radius: 50%;
+  background: linear-gradient(145deg,
+    rgb(var(--indicator-rgb) / 48%), rgb(var(--indicator-rgb) / 78%));
+  box-shadow: inset 0 1px 2px rgb(var(--indicator-rgb) / 45%),
+    inset 0 -2px 3px color-mix(in srgb, rgb(var(--indicator-rgb)) 45%, rgb(21 31 48 / 60%)),
+    0 2px 4px rgb(21 31 48 / 24%),
+    0 0 10px 3px rgb(var(--indicator-rgb) / 35%),
+    0 0 20px 6px rgb(var(--indicator-rgb) / 15%);
+  -webkit-backdrop-filter: blur(4px) saturate(135%);
+  backdrop-filter: blur(4px) saturate(135%);
+  transition: filter 180ms ease;
+  z-index: 5;
+}
+body[data-style="glass"][data-theme] .icon-button > .icon-indicator::before,
+body[data-style="glass"][data-theme] .icon-button > .icon-indicator::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+}
+body[data-style="glass"][data-theme] .icon-button > .icon-indicator::before {
+  background: radial-gradient(ellipse 65% 50% at 30% 20%,
+    rgb(190 230 255 / 60%), rgb(var(--indicator-rgb) / 15%) 45%, transparent 80%);
+}
+body[data-style="glass"][data-theme] .icon-button > .icon-indicator::after {
+  background: radial-gradient(ellipse 75% 65% at 35% 28%,
+    rgb(255 255 255 / 40%), rgb(var(--indicator-rgb) / 28%) 45%, transparent 85%);
+  box-shadow: inset 0 0 4px 1px rgb(var(--indicator-rgb) / 62%);
+  filter: blur(0.4px);
+  animation: glassRimShimmer var(--rim-glow-duration) cubic-bezier(0.4, 0, 0.2, 1) var(--rim-glow-delay) infinite;
+}
+body[data-style="glass"][data-theme] .icon-button > .icon-indicator:hover {
+  filter: brightness(1.15);
+}
 body[data-style="glass"][data-theme] :is(.unified-subtask-item, .list-item,
   .unified-copypaste-item, .copy-paste-item, .reminder-item, .icon-button,
   .eisenhower-task, .task-subtask-row.subtask-bubble)::before {
@@ -412,7 +522,7 @@ body[data-style="glass"][data-theme] :is(.quick-link-modal, .reorder-subtitles-m
   /* These wrappers contain their dialogs, so blur belongs on the pane. */
 }
 body[data-style="glass"][data-theme] :is(.media-dialog, .breakdown-dialog,
-  .appearance-dialog, .copy-text-dialog, .image-editor-dialog,
+  .appearance-dialog, .copy-text-dialog, .image-editor-dialog, .file-manager-dialog,
   .note-viewer-dialog, .tasks-summary-dialog, .ideas-dialog,
   .task-editor-dialog, .subtask-template-name-dialog, .subtask-desc-dialog,
   .item-tasks-dialog, .item-selector-dialog, .item-task-picker-dialog,
@@ -459,10 +569,16 @@ body[data-style="glass"][data-theme] :is(.tasks-summary-header, .task-editor-hea
 body[data-style="glass"][data-theme] :is(.search-input, .edit-popover input,
   .edit-popover select, .edit-popover textarea, .task-editor-field input[type="text"],
   .task-editor-field input[type="date"], .meeting-editor-field input,
-  .meeting-editor-field select, .auth-field input, .appearance-select,
+  .meeting-editor-field select, .auth-field input,
   .task-desc-editor, .ideas-editor, .notepad-editor, .task-desc-view,
   .task-editor-item-selector) {
   background: var(--glass-field);
+  border-color: var(--glass-divider);
+  color: var(--text);
+  box-shadow: inset 0 1px 3px rgb(40 46 56 / 5%), 0 1px 0 var(--glass-edge);
+}
+body[data-style="glass"][data-theme] .appearance-select {
+  background-color: var(--glass-field);
   border-color: var(--glass-divider);
   color: var(--text);
   box-shadow: inset 0 1px 3px rgb(40 46 56 / 5%), 0 1px 0 var(--glass-edge);
@@ -741,7 +857,8 @@ body[data-style="glass"][data-theme] .quick-access-lit > .animated-border-svg {
   body[data-style="glass"][data-theme] .header-icons-row button { width: 34px; height: 34px; border-radius: 11px; flex-shrink: 0; }
 }
 @media (prefers-reduced-motion: reduce) {
-  body[data-style="glass"][data-theme] .animated-border-light {
+  body[data-style="glass"][data-theme] .animated-border-light,
+  body[data-style="glass"][data-theme] .icon-button > :is(.icon-link-indicator, .icon-task-indicator)::after {
     animation: none !important;
     opacity: 0.5;
   }

@@ -2919,10 +2919,35 @@ export function toggleChecklist(editorEl) {
     }
   }
   // Not in a list — create a checklist.
+  const sel = window.getSelection();
+
+  // If the editor is empty (or only has a <br>), directly create checklist markup
+  // instead of relying on execCommand which may produce a plain bullet list.
+  const activeEditor = editorEl || (sel && sel.rangeCount ? sel.getRangeAt(0).startContainer : null)?.closest?.('[contenteditable="true"]')
+    || document.querySelector('[contenteditable="true"]:focus');
+  if (activeEditor) {
+    const content = activeEditor.innerHTML.replace(/<br\s*\/?>/gi, '').trim();
+    if (!content || content === '<div></div>') {
+      activeEditor.innerHTML = '';
+      const ul = document.createElement('ul');
+      ul.className = 'checklist';
+      const li = document.createElement('li');
+      li.appendChild(document.createElement('br'));
+      ul.appendChild(li);
+      activeEditor.appendChild(ul);
+      // Place cursor inside the new li
+      const range = document.createRange();
+      range.setStart(li, 0);
+      range.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(range);
+      return;
+    }
+  }
+
   // Find the block element containing the cursor so we can wrap it manually
   // if it contains contenteditable="false" elements (e.g. task highlights),
   // since execCommand('insertUnorderedList') loses such content.
-  const sel = window.getSelection();
   let cursorNode = sel && sel.rangeCount ? sel.getRangeAt(0).startContainer : null;
   let block = cursorNode;
   while (block && block !== editorEl && block.parentElement !== editorEl) {

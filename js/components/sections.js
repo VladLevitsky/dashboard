@@ -1869,6 +1869,103 @@ export function renderUnifiedCard(sectionEl, sectionId) {
   sectionEl.appendChild(container);
 }
 
+// --- Toggle unified icon indicator popup (links + tasks in one bubble list)
+function toggleIconIndicator(item, tasks, sectionId, subtitle, indicatorEl) {
+  // Close if already open
+  if (indicatorEl._indicatorContainer) {
+    const existing = indicatorEl._indicatorContainer;
+    existing.classList.add('closing');
+    setTimeout(() => existing.remove(), 200);
+    indicatorEl._indicatorContainer = null;
+    return;
+  }
+
+  const container = document.createElement('div');
+  container.className = 'icon-indicator-expanded';
+  indicatorEl._indicatorContainer = container;
+
+  const links = item.links || [];
+  let bubbleIndex = 0;
+
+  // --- Tasks section
+  if (tasks.length > 0) {
+    const header = document.createElement('div');
+    header.className = 'icon-indicator-section-title';
+    header.textContent = 'Tasks';
+    header.style.animationDelay = `${bubbleIndex * 50}ms`;
+    container.appendChild(header);
+    bubbleIndex++;
+
+    tasks.forEach(task => {
+      const bubble = document.createElement('div');
+      bubble.className = `reminder-task-bubble task-bubble-${task.color}`;
+      bubble.textContent = task.title;
+      bubble.style.animationDelay = `${bubbleIndex * 50}ms`;
+      bubble.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (window.openEditTaskModal) window.openEditTaskModal(task.id);
+      });
+      container.appendChild(bubble);
+      bubbleIndex++;
+    });
+  }
+
+  // --- Links section
+  if (links.length > 0) {
+    const header = document.createElement('div');
+    header.className = 'icon-indicator-section-title' + (tasks.length > 0 ? ' section-gap' : '');
+    header.textContent = 'Links';
+    header.style.animationDelay = `${bubbleIndex * 50}ms`;
+    container.appendChild(header);
+    bubbleIndex++;
+
+    links.forEach(link => {
+      if (link.type === 'section') {
+        const divider = document.createElement('div');
+        divider.className = 'link-section-divider';
+        divider.textContent = link.title || '';
+        divider.style.animationDelay = `${bubbleIndex * 50}ms`;
+        container.appendChild(divider);
+      } else {
+        const bubble = document.createElement('a');
+        bubble.className = 'reminder-link-bubble';
+        bubble.href = link.url || '#';
+        bubble.target = '_blank';
+        bubble.rel = 'noopener noreferrer';
+        bubble.textContent = link.title || link.url || 'Link';
+        bubble.style.background = link.color || '#e2e8f0';
+        bubble.style.animationDelay = `${bubbleIndex * 50}ms`;
+        bubble.addEventListener('click', (e) => e.stopPropagation());
+        container.appendChild(bubble);
+      }
+      bubbleIndex++;
+    });
+  }
+
+  // Position relative to indicator
+  const rect = indicatorEl.getBoundingClientRect();
+  const scrollX = window.scrollX || window.pageXOffset;
+  const scrollY = window.scrollY || window.pageYOffset;
+  container.style.position = 'absolute';
+  container.style.left = `${rect.right + 8 + scrollX}px`;
+  container.style.top = `${rect.top + scrollY - 10}px`;
+  container.style.zIndex = '10002';
+
+  document.body.appendChild(container);
+  requestAnimationFrame(() => container.classList.add('open'));
+
+  // Close on outside click
+  const closeOnOutside = (e) => {
+    if (!container.contains(e.target) && !indicatorEl.contains(e.target)) {
+      container.classList.add('closing');
+      setTimeout(() => container.remove(), 250);
+      indicatorEl._indicatorContainer = null;
+      document.removeEventListener('click', closeOnOutside);
+    }
+  };
+  setTimeout(() => document.addEventListener('click', closeOnOutside), 0);
+}
+
 // --- Create icon button for unified card
 function createUnifiedIconButton(item, sectionId, subtitle, subtitleColor) {
   const data = currentData();
@@ -1902,46 +1999,31 @@ function createUnifiedIconButton(item, sectionId, subtitle, subtitleColor) {
     btn.appendChild(img);
   }
 
-  // Add link indicator if icon has links (show in both edit and view mode)
-  if (item.links && item.links.length > 0) {
-    const linkIndicator = document.createElement('div');
-    linkIndicator.className = 'icon-link-indicator';
-    linkIndicator.title = `${item.links.length} link${item.links.length > 1 ? 's' : ''}`;
-    // Only add click handler in view mode
-    if (!editState.enabled) {
-      linkIndicator.addEventListener('click', (e) => {
-        e.stopPropagation();
-        e.preventDefault();
-        if (window.toggleIconLinks) {
-          window.toggleIconLinks(item.key, subtitle, sectionId, linkIndicator);
-        }
-      });
-    }
-    btn.appendChild(linkIndicator);
-  }
-
-  // Add task indicator if icon has tasks (show in both view and edit mode)
+  // Unified indicator: single purple bubble for links + tasks
+  const hasLinks = item.links && item.links.length > 0;
   const iconTasks = window.getTasksForItem ? window.getTasksForItem('icon', item.key, sectionId) : [];
-  if (iconTasks.length > 0) {
-    const taskIndicator = document.createElement('div');
-    taskIndicator.className = 'icon-task-indicator';
-    taskIndicator.title = `${iconTasks.length} task${iconTasks.length > 1 ? 's' : ''}`;
-    taskIndicator.addEventListener('click', (e) => {
+  const hasTasks = iconTasks.length > 0;
+
+  if (hasLinks || hasTasks) {
+    const indicator = document.createElement('div');
+    indicator.className = 'icon-indicator';
+    const parts = [];
+    if (hasLinks) parts.push(`${item.links.length} link${item.links.length > 1 ? 's' : ''}`);
+    if (hasTasks) parts.push(`${iconTasks.length} task${iconTasks.length > 1 ? 's' : ''}`);
+    indicator.title = parts.join(', ');
+
+    indicator.addEventListener('click', (e) => {
       e.stopPropagation();
       e.preventDefault();
       if (editState.enabled) {
-        // In edit mode, open the item tasks modal
-        if (window.openItemTasksModal) {
+        if (hasTasks && window.openItemTasksModal) {
           window.openItemTasksModal('icon', item.key, sectionId, subtitle);
         }
       } else {
-        // In view mode, toggle the tasks popup
-        if (window.toggleIconTasks) {
-          window.toggleIconTasks(item.key, subtitle, sectionId, taskIndicator);
-        }
+        toggleIconIndicator(item, iconTasks, sectionId, subtitle, indicator);
       }
     });
-    btn.appendChild(taskIndicator);
+    btn.appendChild(indicator);
   }
 
   // Long-press detection for adding to Quick Access (view mode only)
@@ -1951,7 +2033,7 @@ function createUnifiedIconButton(item, sectionId, subtitle, subtitleColor) {
   const startLongPress = (e) => {
     if (editState.enabled) return;
     // Don't trigger on indicator clicks
-    if (e.target.classList.contains('icon-link-indicator') || e.target.classList.contains('icon-task-indicator')) return;
+    if (e.target.classList.contains('icon-link-indicator') || e.target.classList.contains('icon-task-indicator') || e.target.classList.contains('icon-indicator')) return;
 
     longPressTriggered = false;
 
@@ -1998,7 +2080,7 @@ function createUnifiedIconButton(item, sectionId, subtitle, subtitleColor) {
       return;
     }
     // In view mode, if clicking the link or task indicator, don't navigate
-    if (!editState.enabled && (e.target.classList.contains('icon-link-indicator') || e.target.classList.contains('icon-task-indicator'))) {
+    if (!editState.enabled && (e.target.classList.contains('icon-link-indicator') || e.target.classList.contains('icon-task-indicator') || e.target.classList.contains('icon-indicator'))) {
       return;
     }
     if (!editState.enabled) {
