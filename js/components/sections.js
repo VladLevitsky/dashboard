@@ -1870,15 +1870,29 @@ export function renderUnifiedCard(sectionEl, sectionId) {
 }
 
 // --- Toggle unified icon indicator popup (links + tasks in one bubble list)
-function toggleIconIndicator(item, tasks, sectionId, subtitle, indicatorEl) {
-  // Close if already open
-  if (indicatorEl._indicatorContainer) {
-    const existing = indicatorEl._indicatorContainer;
-    existing.classList.add('closing');
-    setTimeout(() => existing.remove(), 200);
+// Track currently open indicator so only one is open at a time
+let _activeIndicator = null;
+
+function closeActiveIndicator() {
+  if (_activeIndicator) {
+    const { container, indicatorEl, cleanup } = _activeIndicator;
+    container.classList.add('closing');
+    setTimeout(() => container.remove(), 200);
     indicatorEl._indicatorContainer = null;
+    if (cleanup) document.removeEventListener('click', cleanup);
+    _activeIndicator = null;
+  }
+}
+
+function toggleIconIndicator(item, tasks, sectionId, subtitle, indicatorEl) {
+  // Close if this same indicator is already open
+  if (indicatorEl._indicatorContainer) {
+    closeActiveIndicator();
     return;
   }
+
+  // Close any other open indicator first
+  closeActiveIndicator();
 
   const container = document.createElement('div');
   container.className = 'icon-indicator-expanded';
@@ -1889,12 +1903,14 @@ function toggleIconIndicator(item, tasks, sectionId, subtitle, indicatorEl) {
 
   // --- Tasks section
   if (tasks.length > 0) {
-    const header = document.createElement('div');
-    header.className = 'icon-indicator-section-title';
-    header.textContent = 'Tasks';
-    header.style.animationDelay = `${bubbleIndex * 50}ms`;
-    container.appendChild(header);
-    bubbleIndex++;
+    if (links.length > 0) {
+      const header = document.createElement('div');
+      header.className = 'icon-indicator-section-title';
+      header.textContent = 'Tasks';
+      header.style.animationDelay = `${bubbleIndex * 50}ms`;
+      container.appendChild(header);
+      bubbleIndex++;
+    }
 
     tasks.forEach(task => {
       const bubble = document.createElement('div');
@@ -1910,14 +1926,14 @@ function toggleIconIndicator(item, tasks, sectionId, subtitle, indicatorEl) {
     });
   }
 
-  // --- Links section
+  // --- Links/files section (no title — self-explanatory)
   if (links.length > 0) {
-    const header = document.createElement('div');
-    header.className = 'icon-indicator-section-title' + (tasks.length > 0 ? ' section-gap' : '');
-    header.textContent = 'Links';
-    header.style.animationDelay = `${bubbleIndex * 50}ms`;
-    container.appendChild(header);
-    bubbleIndex++;
+    if (tasks.length > 0) {
+      // Add spacing between tasks and links
+      const spacer = document.createElement('div');
+      spacer.style.height = '8px';
+      container.appendChild(spacer);
+    }
 
     links.forEach(link => {
       if (link.type === 'section') {
@@ -1926,14 +1942,28 @@ function toggleIconIndicator(item, tasks, sectionId, subtitle, indicatorEl) {
         divider.textContent = link.title || '';
         divider.style.animationDelay = `${bubbleIndex * 50}ms`;
         container.appendChild(divider);
+      } else if (link.type === 'file') {
+        const fileBubble = document.createElement('div');
+        fileBubble.className = 'reminder-link-bubble reminder-file-bubble';
+        fileBubble.textContent = link.title || link.fileName || 'File';
+        fileBubble.style.animationDelay = `${bubbleIndex * 50}ms`;
+        fileBubble.style.cursor = 'pointer';
+        fileBubble.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (link.fileId && window.openFile) window.openFile(link.fileId, link.fileName);
+        });
+        container.appendChild(fileBubble);
       } else {
+        const bubbleColor = link.color
+          ? getColorForCurrentMode(link.color, '#f7fafc', '#475569')
+          : '#e2e8f0';
         const bubble = document.createElement('a');
         bubble.className = 'reminder-link-bubble';
         bubble.href = link.url || '#';
         bubble.target = '_blank';
         bubble.rel = 'noopener noreferrer';
         bubble.textContent = link.title || link.url || 'Link';
-        bubble.style.background = link.color || '#e2e8f0';
+        bubble.style.background = bubbleColor;
         bubble.style.animationDelay = `${bubbleIndex * 50}ms`;
         bubble.addEventListener('click', (e) => e.stopPropagation());
         container.appendChild(bubble);
@@ -1954,15 +1984,13 @@ function toggleIconIndicator(item, tasks, sectionId, subtitle, indicatorEl) {
   document.body.appendChild(container);
   requestAnimationFrame(() => container.classList.add('open'));
 
-  // Close on outside click
+  // Track this as the active indicator
   const closeOnOutside = (e) => {
     if (!container.contains(e.target) && !indicatorEl.contains(e.target)) {
-      container.classList.add('closing');
-      setTimeout(() => container.remove(), 250);
-      indicatorEl._indicatorContainer = null;
-      document.removeEventListener('click', closeOnOutside);
+      closeActiveIndicator();
     }
   };
+  _activeIndicator = { container, indicatorEl, cleanup: closeOnOutside };
   setTimeout(() => document.addEventListener('click', closeOnOutside), 0);
 }
 

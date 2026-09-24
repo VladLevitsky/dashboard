@@ -5117,14 +5117,23 @@ section.card.collapsed .section-icon {
   flex-direction: column;
   gap: 6px;
   pointer-events: none;
-  padding: 12px 16px;
-  border-radius: 16px;
+  padding: 20px 24px;
+}
+.icon-indicator-expanded::before {
+  content: '';
+  position: absolute;
+  inset: -20px;
+  border-radius: 32px;
   background: radial-gradient(ellipse at center, rgba(255, 255, 255, 0.25) 0%, rgba(255, 255, 255, 0.08) 50%, transparent 75%);
   -webkit-backdrop-filter: blur(12px);
   backdrop-filter: blur(12px);
+  -webkit-mask-image: radial-gradient(ellipse at center, black 50%, transparent 80%);
+  mask-image: radial-gradient(ellipse at center, black 50%, transparent 80%);
+  pointer-events: none;
+  z-index: -1;
 }
-[data-theme="dark"] .icon-indicator-expanded {
-  background: radial-gradient(ellipse at center, rgba(30, 41, 59, 0.35) 0%, rgba(30, 41, 59, 0.1) 50%, transparent 75%);
+[data-theme="dark"] .icon-indicator-expanded::before {
+  background: radial-gradient(ellipse at center, rgba(30, 41, 59, 0.35) 0%, rgba(30, 41, 59, 0.1) 55%, transparent 75%);
 }
 .icon-indicator-expanded.open {
   pointer-events: auto;
@@ -5479,7 +5488,7 @@ section.card.collapsed .section-icon {
   border-radius: 12px;
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
   padding: 12px;
-  z-index: 2000;
+  z-index: 2600;
   min-width: 200px;
 }
 
