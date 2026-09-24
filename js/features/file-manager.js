@@ -3,10 +3,97 @@
 
 import { API_BASE } from '../constants.js';
 import { isLoggedIn, getAuthToken } from '../core/auth.js';
-import { deleteR2File, fetchFileBlobUrl, getAllReferencedFileIds } from '../core/file-service.js';
+import { deleteR2File, fetchFileBlobUrl, getAllReferencedFileIds, classifyImageRef } from '../core/file-service.js';
 import { $, showToast } from '../utils.js';
+import { model } from '../state.js';
+import { saveModel } from '../core/storage.js';
 
 let cachedFiles = null;
+
+// --- Remove all references to a fileId from the model
+function removeFileReferences(fileId) {
+  if (!model || !fileId) return false;
+  let changed = false;
+
+  // Header images
+  if (model.header) {
+    const logoRef = classifyImageRef(model.header.companyLogoSrc);
+    if (logoRef.type === 'r2' && logoRef.value === fileId) {
+      model.header.companyLogoSrc = 'assets/icons/placeholder-logo.svg';
+      changed = true;
+    }
+    const profileRef = classifyImageRef(model.header.profilePhotoSrc);
+    if (profileRef.type === 'r2' && profileRef.value === fileId) {
+      model.header.profilePhotoSrc = 'assets/icons/placeholder-profile.svg';
+      changed = true;
+    }
+  }
+
+  // Card items: icons, reminders, subtasks
+  (model.sections || []).forEach(section => {
+    const cardData = model[section.id];
+    if (!cardData || typeof cardData !== 'object') return;
+    Object.values(cardData).forEach(group => {
+      if (!group || typeof group !== 'object') return;
+
+      // Icon images
+      if (group.icons) {
+        group.icons = group.icons.filter(item => {
+          const ref = classifyImageRef(item.icon);
+          if (ref.type === 'r2' && ref.value === fileId) { changed = true; return false; }
+          return true;
+        });
+      }
+
+      // Direct file links on items (linkType === 'file')
+      ['icons', 'reminders', 'subtasks'].forEach(key => {
+        if (group[key]) {
+          group[key].forEach(item => {
+            if (item.linkType === 'file' && item.fileId === fileId) {
+              delete item.linkType;
+              delete item.fileId;
+              delete item.fileName;
+              changed = true;
+            }
+            // File entries inside item.links[]
+            if (item.links) {
+              const before = item.links.length;
+              item.links = item.links.filter(l => !(l.type === 'file' && l.fileId === fileId));
+              if (item.links.length < before) changed = true;
+            }
+          });
+        }
+      });
+    });
+  });
+
+  // Task links
+  [model.tasks, model.completedTasks].forEach(arr => {
+    (arr || []).forEach(task => {
+      if (task.taskLinks) {
+        const before = task.taskLinks.length;
+        task.taskLinks = task.taskLinks.filter(l => !(l.type === 'file' && l.fileId === fileId));
+        if (task.taskLinks.length < before) changed = true;
+      }
+    });
+  });
+
+  // Meeting files
+  (model.meetings || []).forEach(meeting => {
+    if (meeting.files) {
+      const before = meeting.files.length;
+      meeting.files = meeting.files.filter(f => f.fileId !== fileId);
+      if (meeting.files.length < before) changed = true;
+    }
+  });
+
+  if (changed) {
+    saveModel();
+    if (window.renderAllSections) window.renderAllSections();
+  }
+
+  return changed;
+}
 
 function formatBytes(bytes) {
   if (!bytes || bytes === 0) return '0 B';
@@ -205,6 +292,7 @@ async function handleDeleteClick(e) {
   const result = await deleteR2File(fileId);
   if (result.ok) {
     if (row) row.remove();
+    removeFileReferences(fileId);
     showToast('File deleted');
     refreshAfterDelete();
   } else {
