@@ -2,8 +2,10 @@
 // Handles reminder and list item links modals and toggles
 
 import { currentData, model } from '../state.js';
-import { $, lightenColorBy20Percent, getColorForCurrentMode, setColorForCurrentMode } from '../utils.js';
+import { $, lightenColorBy20Percent, getColorForCurrentMode, setColorForCurrentMode, showToast } from '../utils.js';
 import { markDirtyAndSave } from './edit-mode.js';
+import { uploadFile, openFile } from '../core/file-service.js';
+import { isLoggedIn } from '../core/auth.js';
 
 // Module state
 let currentLinksReminder = null;
@@ -138,9 +140,10 @@ function createTopDropZone(linksArray, renderFn) {
 // --- Shared function to create a link or section row with drag support
 function createLinkOrSectionRow(item, index, linksArray, renderFn) {
   const isSection = item.type === 'section';
+  const isFile = item.type === 'file';
 
   const rowDiv = document.createElement('div');
-  rowDiv.className = isSection ? 'reminder-link-row section-row' : 'reminder-link-row';
+  rowDiv.className = isSection ? 'reminder-link-row section-row' : isFile ? 'reminder-link-row file-row' : 'reminder-link-row';
   rowDiv.draggable = true;
   rowDiv.dataset.index = index;
 
@@ -242,6 +245,38 @@ function createLinkOrSectionRow(item, index, linksArray, renderFn) {
     });
 
     rowDiv.appendChild(titleInput);
+    rowDiv.appendChild(deleteBtn);
+  } else if (isFile) {
+    // File row: title, filename badge, delete
+    const titleInput = document.createElement('input');
+    titleInput.type = 'text';
+    titleInput.placeholder = 'File title';
+    titleInput.value = item.title || '';
+    titleInput.className = 'link-title-input';
+    titleInput.addEventListener('input', (e) => {
+      item.title = e.target.value;
+    });
+
+    const fileBadge = document.createElement('span');
+    fileBadge.className = 'link-file-badge';
+    fileBadge.textContent = item.fileName || 'file';
+    fileBadge.title = item.fileName || '';
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.type = 'button';
+    deleteBtn.className = 'btn-delete-link';
+    deleteBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+      <polyline points="3 6 5 6 21 6"></polyline>
+      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+    </svg>`;
+    deleteBtn.title = 'Delete file';
+    deleteBtn.addEventListener('click', () => {
+      linksArray.splice(index, 1);
+      renderFn();
+    });
+
+    rowDiv.appendChild(titleInput);
+    rowDiv.appendChild(fileBadge);
     rowDiv.appendChild(deleteBtn);
   } else {
     // Link row: title, url, color, delete
@@ -628,20 +663,30 @@ export function openListItemLinksModal(item, sectionId) {
         <div class="reminder-links-content">
           <div id="list-item-links-list" class="reminder-links-list"></div>
           <div class="links-modal-add-buttons">
-            <button type="button" id="add-list-item-link-btn" class="btn-add-link">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
-                <line x1="12" y1="5" x2="12" y2="19"></line>
-                <line x1="5" y1="12" x2="19" y2="12"></line>
-              </svg>
-              Add Link
-            </button>
-            <button type="button" id="add-list-item-section-btn" class="btn-add-link btn-add-section">
+            <button type="button" id="add-list-item-section-btn" class="btn-add-link btn-add-section btn-full-width">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
                 <line x1="12" y1="5" x2="12" y2="19"></line>
                 <line x1="5" y1="12" x2="19" y2="12"></line>
               </svg>
               Add Section
             </button>
+            <div class="links-modal-add-row">
+              <button type="button" id="add-list-item-link-btn" class="btn-add-link">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="12" y1="5" x2="12" y2="19"></line>
+                  <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+                Add Link
+              </button>
+              <button type="button" id="add-list-item-file-btn" class="btn-add-link">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="12" y1="5" x2="12" y2="19"></line>
+                  <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+                Add File
+              </button>
+              <input type="file" id="list-item-file-input" hidden />
+            </div>
           </div>
         </div>
         <div class="reminder-links-actions">
@@ -654,6 +699,32 @@ export function openListItemLinksModal(item, sectionId) {
 
     $('#add-list-item-link-btn').addEventListener('click', addListItemLinkRow);
     $('#add-list-item-section-btn').addEventListener('click', addListItemSection);
+    $('#add-list-item-file-btn').addEventListener('click', () => {
+      if (!isLoggedIn()) {
+        showToast('Sign in to upload files');
+        return;
+      }
+      $('#list-item-file-input').click();
+    });
+    $('#list-item-file-input').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      e.target.value = '';
+      const result = await uploadFile(file, file.name);
+      if (result.ok) {
+        if (!currentLinksListItem.links) currentLinksListItem.links = [];
+        currentLinksListItem.links.push({
+          type: 'file',
+          title: file.name.replace(/\.[^/.]+$/, ''),
+          fileId: result.fileId,
+          fileName: file.name
+        });
+        renderListItemLinkRows();
+        showToast('File uploaded');
+      } else {
+        showToast(result.error || 'Upload failed');
+      }
+    });
     $('#list-item-links-cancel').addEventListener('click', cancelListItemLinksModal);
     $('#list-item-links-save').addEventListener('click', saveListItemLinksModal);
 
@@ -732,10 +803,13 @@ export function cancelListItemLinksModal() {
 export function saveListItemLinksModal() {
   if (!currentLinksListItem) return;
 
-  // Filter: keep sections with titles, keep links with title or url
+  // Filter: keep sections with titles, keep links with title or url, keep files with fileId
   currentLinksListItem.links = currentLinksListItem.links.filter(item => {
     if (item.type === 'section') {
       return item.title && item.title.trim();
+    }
+    if (item.type === 'file') {
+      return item.fileId;
     }
     return (item.title && item.title.trim()) || (item.url && item.url.trim());
   });
@@ -805,6 +879,21 @@ export function toggleListItemLinks(item, sectionId, buttonEl) {
         sectionDiv.textContent = linkItem.title || 'Section';
         sectionDiv.style.animationDelay = `${index * 50}ms`;
         linksContainer.appendChild(sectionDiv);
+      } else if (linkItem.type === 'file') {
+        // Render file bubble
+        const fileBubble = document.createElement('div');
+        fileBubble.className = 'reminder-link-bubble reminder-file-bubble';
+        fileBubble.textContent = linkItem.title || linkItem.fileName || 'File';
+        fileBubble.style.animationDelay = `${index * 50}ms`;
+        fileBubble.style.background = fallbackColor;
+        fileBubble.style.cursor = 'pointer';
+        fileBubble.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (linkItem.fileId && window.openFile) {
+            window.openFile(linkItem.fileId, linkItem.fileName);
+          }
+        });
+        linksContainer.appendChild(fileBubble);
       } else {
         // Each link can have its own color
         let bubbleColor;

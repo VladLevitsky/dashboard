@@ -460,6 +460,12 @@ export function getAllReferencedFileIds() {
             if (item.linkType === 'file' && item.fileId) ids.add(item.fileId);
             const iconRef = classifyImageRef(item.icon);
             if (iconRef.type === 'r2') ids.add(iconRef.value);
+            // Scan item.links[] for file entries
+            if (item.links) {
+              item.links.forEach(link => {
+                if (link.type === 'file' && link.fileId) ids.add(link.fileId);
+              });
+            }
           });
         }
       });

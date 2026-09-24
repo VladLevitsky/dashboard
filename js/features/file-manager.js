@@ -44,6 +44,8 @@ async function fetchFileList() {
     }
     const data = await res.json();
     console.log('[File Manager] API response keys:', Object.keys(data));
+    console.log('[File Manager] storage object:', JSON.stringify(data.storage));
+    if (data.files && data.files.length > 0) console.log('[File Manager] first file keys:', Object.keys(data.files[0]));
     // Normalize: API might return { files: [...] } or just [...]
     const files = Array.isArray(data) ? data : (data.files || []);
     const storage = data.storage || {};
@@ -98,8 +100,8 @@ function createFileRow(file, isOrphan) {
 
 // --- Update storage bar
 function updateStorageBar(storage) {
-  const maxBytes = storage.limit || (100 * 1024 * 1024);
-  const usedBytes = storage.used || 0;
+  const maxBytes = storage.max_bytes || storage.limit || (100 * 1024 * 1024);
+  const usedBytes = storage.used_bytes || storage.used || 0;
   const pct = Math.min(100, (usedBytes / maxBytes) * 100);
   const fillEl = $('#file-manager-storage-fill');
   const textEl = $('#file-manager-storage-text');
@@ -288,7 +290,11 @@ export function wireFileManagerEvents() {
   if (backdrop) backdrop.addEventListener('click', closeFileManager);
 
   const openBtn = $('#settings-file-manager-btn');
-  if (openBtn) openBtn.addEventListener('click', openFileManager);
+  console.log('[File Manager] Open button found:', !!openBtn);
+  if (openBtn) openBtn.addEventListener('click', () => {
+    console.log('[File Manager] Button clicked, isLoggedIn:', isLoggedIn());
+    openFileManager();
+  });
 
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
