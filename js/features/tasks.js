@@ -2245,7 +2245,7 @@ function openTaskEditorModal(taskData, titleText) {
               </div>
             </div>
             <div class="task-editor-field">
-              <label>Subtasks</label>
+              <label>Subtasks <span id="task-subtasks-pct" class="task-subtasks-pct"></span></label>
               <div class="task-subtasks-list" id="task-subtasks-list"></div>
               <div class="task-subtasks-actions-row">
                 <button type="button" id="task-subtasks-add-btn" class="task-subtasks-add-btn">
@@ -3214,6 +3214,31 @@ function renderEditorSubtasks() {
   const list = $('#task-subtasks-list');
   if (!list) return;
   list.innerHTML = '';
+
+  // Update completion percentage
+  let pctEl = $('#task-subtasks-pct');
+  if (!pctEl) {
+    // Inject if not in the template (cached modal from before this feature)
+    const label = list.closest('.task-editor-field')?.querySelector('label');
+    if (label) {
+      pctEl = document.createElement('span');
+      pctEl.id = 'task-subtasks-pct';
+      pctEl.className = 'task-subtasks-pct';
+      label.appendChild(pctEl);
+    }
+  }
+  if (pctEl) {
+    const withTitles = editorSubtasks.filter(s => s.title && s.title.trim());
+    if (withTitles.length > 0) {
+      const completed = withTitles.filter(s => s.completed).length;
+      const pct = Math.round((completed / withTitles.length) * 100);
+      pctEl.textContent = `${completed}/${withTitles.length} Completed (${pct}%)`;
+      pctEl.style.display = '';
+    } else {
+      pctEl.textContent = '';
+      pctEl.style.display = 'none';
+    }
+  }
 
   // Sort before rendering
   sortEditorSubtasks();
