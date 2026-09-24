@@ -6,7 +6,7 @@ export const PLACEHOLDER_URL = 'https://telcobridges.com';
 // Configuration constants
 export const TIMER_UPDATE_INTERVAL_MS = 100; // Update timer display every 100ms for smooth millisecond display
 export const ANIMATION_DELAY_MS = 10; // Delay for CSS transition triggers
-export const CARD_HIDE_DELAY_MS = 400; // Delay before hiding cards (matches CSS transition)
+export const CARD_HIDE_DELAY_MS = 180; // Delay before hiding cards (matches CSS opacity fade)
 export const APP_VERSION = '3.1'; // Current app version for exports
 
 // Storage keys

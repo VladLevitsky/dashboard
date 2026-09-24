@@ -39,7 +39,8 @@
       "Bash(grep -v \"//\")",
       "Bash(grep -n \"export.*addCardButtons\\\\|function addCardButtons\" \"/c/Users/vlevitsky/Documents/Personal Dashboard - New\"/js/**/*.js)",
       "Bash(sed:*)",
-      "Bash(grep -n \"export function openFile\\\\|window.openFile\" \"/c/Users/vlevitsky/Documents/Personal Dashboard - New/js/features/\"*.js)"
+      "Bash(grep -n \"export function openFile\\\\|window.openFile\" \"/c/Users/vlevitsky/Documents/Personal Dashboard - New/js/features/\"*.js)",
+      "Read(//c/Users/vlevitsky/Documents/Personal Dashboard - New/**)"
     ],
     "deny": [],
     "ask": []

@@ -92,13 +92,20 @@ function scrubFileId(data, fileId) {
 
 // --- Remove all references to a fileId from model + working copy
 function removeFileReferences(fileId) {
+  console.log('[File Manager] Scrubbing fileId:', fileId);
   const changedModel = scrubFileId(model, fileId);
+  console.log('[File Manager] Model changed:', changedModel);
   // Also clean the edit-mode working copy if active
   if (editState.enabled && editState.working) {
-    scrubFileId(editState.working, fileId);
+    const changedWorking = scrubFileId(editState.working, fileId);
+    console.log('[File Manager] Working copy changed:', changedWorking);
   }
   if (changedModel) {
     saveModel();
+  }
+  // Also sync to cloud so the old profile doesn't restore the reference
+  if (window.immediateCloudSave) {
+    window.immediateCloudSave();
   }
   if (window.renderAllSections) window.renderAllSections();
 }

@@ -95,7 +95,7 @@ body {
 /* Header and time tracking sections should never collapse */
 .app-header.collapsed,
 .time-tracking-card.collapsed {
-  padding: 28px 40px 42px 40px !important;
+  padding: 12px 40px 32px 40px !important;
   margin-bottom: 40px !important;
 }
 
@@ -111,9 +111,9 @@ body {
   padding: 57.6px 103.2192px 60.48px 103.2192px; /* -20% L/R and -50% bottom vs previous header padding */
 }
 
-/* Header (top section) has no outer gaps above or on sides, only 40px bottom gap */
+/* Header (top section) has no outer gaps above or on sides */
 .app-header.card {
-  margin: 0 0 40px 0;
+  margin: 0 0 16px 0;
   border-radius: 0;
 }
 /* Company logo with transform support */
@@ -576,24 +576,27 @@ body {
 
 /* Time tracking card */
 .time-tracking-card {
-  margin: 0 auto !important; /* Remove all vertical margins when hidden */
-  max-width: 100%; /* follow the active device-mode container width */
-  max-height: 0;
-  overflow: hidden;
-  opacity: 0;
-  padding: 0 !important; /* Remove padding when hidden */
-  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  max-width: 100%;
   position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
 }
-
+.time-tracking-card[hidden] { display: none; }
+.time-tracking-card:not(.active) {
+  opacity: 0;
+  height: 0;
+  padding: 0 !important;
+  margin: 0 auto !important;
+  overflow: hidden;
+  pointer-events: none;
+  transition: opacity 0.15s ease-out;
+}
 .time-tracking-card.active {
-  max-height: none;
-  margin: 0 auto 40px auto !important; /* Add bottom margin when active, consistent with other cards */
   opacity: 1;
-  padding: 28px 40px 42px 40px !important; /* Restore padding when active */
+  margin: 0 auto 12px auto !important;
+  padding: 12px 40px 20px 40px !important;
+  transition: opacity 0.2s ease-in;
 }
 
 .time-tracking-card h3 {
@@ -604,7 +607,7 @@ body {
 /* Timer container */
 .timer-container {
   display: flex;
-  gap: 24px;
+  gap: 32px;
   align-items: flex-start;
   flex-wrap: wrap;
   justify-content: center;
@@ -617,8 +620,14 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
+  gap: 16px;
   min-width: 100px;
+  padding: 12px 16px;
+  background: none !important;
+  border: none !important;
+  box-shadow: none !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
 }
 
 .timer-title {
@@ -797,34 +806,30 @@ body {
 
 /* Quick access card */
 .quick-access-card {
-  margin: 0 auto !important;
-  max-width: calc(100% - 32px); /* follow the active device-mode container width, minus side padding */
-  max-height: 0;
-  overflow: hidden;
-  opacity: 0;
-  padding: 0 !important;
-  transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1),
-              padding 0.4s cubic-bezier(0.4, 0, 0.2, 1),
-              margin 0.4s cubic-bezier(0.4, 0, 0.2, 1),
-              opacity 0.15s ease-out;
+  max-width: calc(100% - 32px);
   position: relative;
   display: flex;
   flex-direction: column;
 }
-
+.quick-access-card[hidden] { display: none; }
+.quick-access-card:not(.active) {
+  opacity: 0;
+  height: 0;
+  padding: 0 !important;
+  margin: 0 auto !important;
+  overflow: hidden;
+  pointer-events: none;
+  transition: opacity 0.15s ease-out;
+}
 .quick-access-card.active {
-  max-height: 2000px;
-  margin: 0 auto 40px auto !important;
   opacity: 1;
-  padding: 28px 40px 42px 40px !important;
-  transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1),
-              padding 0.4s cubic-bezier(0.4, 0, 0.2, 1),
-              margin 0.4s cubic-bezier(0.4, 0, 0.2, 1),
-              opacity 0.3s ease-in 0.1s;
+  margin: 0 auto 12px auto !important;
+  padding: 12px 40px 20px 40px !important;
+  transition: opacity 0.2s ease-in;
 }
 
 .quick-access-card.collapsed {
-  padding: 28px 40px 42px 40px !important;
+  padding: 12px 40px 32px 40px !important;
   margin-bottom: 40px !important;
 }
 
@@ -3010,13 +3015,13 @@ section.card[id^="new-card-"]:not(.card-size-medium):not(.card-size-large):not(.
 
 .card.card-size-large {
   min-height: 200px !important;
-  padding: 28px 40px 42px 40px !important;
+  padding: 12px 40px 32px 40px !important;
   position: relative !important;
 }
 
 .card.card-size-full {
   min-height: 240px !important;
-  padding: 28px 40px 42px 40px !important;
+  padding: 12px 40px 32px 40px !important;
   position: relative !important;
 }
 
@@ -3035,13 +3040,13 @@ section.card[id^="new-card-"].card-size-medium {
 
 section.card[id^="new-card-"].card-size-large {
   min-height: 200px !important;
-  padding: 28px 40px 42px 40px !important;
+  padding: 12px 40px 32px 40px !important;
   position: relative !important;
 }
 
 section.card[id^="new-card-"].card-size-full {
   min-height: 240px !important;
-  padding: 28px 40px 42px 40px !important;
+  padding: 12px 40px 32px 40px !important;
   position: relative !important;
 }
 
@@ -8258,34 +8263,26 @@ body[data-theme="dark"][data-style="glass"][data-glass-theme="sunset"] .tasks-su
 
 /* Slide-out card container (like quick-access-card) */
 .eisenhower-card {
-  margin: 0 auto !important;
-  max-width: calc(100% - 32px); /* follow the active device-mode container width, minus side padding */
-  max-height: 0;
-  overflow: hidden;
-  opacity: 0;
-  padding: 0 !important;
-  transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1),
-              padding 0.4s cubic-bezier(0.4, 0, 0.2, 1),
-              margin 0.4s cubic-bezier(0.4, 0, 0.2, 1),
-              opacity 0.15s ease-out;
+  max-width: calc(100% - 32px);
   position: relative;
   display: flex;
   flex-direction: column;
 }
-
-.eisenhower-card[hidden] {
-  display: none;
+.eisenhower-card[hidden] { display: none; }
+.eisenhower-card:not(.active) {
+  opacity: 0;
+  height: 0;
+  padding: 0 !important;
+  margin: 0 auto !important;
+  overflow: hidden;
+  pointer-events: none;
+  transition: opacity 0.15s ease-out;
 }
-
 .eisenhower-card.active {
-  max-height: 20000px;
-  margin: 0 auto 40px auto !important;
   opacity: 1;
-  padding: 28px 40px 42px 40px !important;
-  transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1),
-              padding 0.4s cubic-bezier(0.4, 0, 0.2, 1),
-              margin 0.4s cubic-bezier(0.4, 0, 0.2, 1),
-              opacity 0.3s ease-in 0.1s;
+  margin: 0 auto 12px auto !important;
+  padding: 12px 40px 20px 40px !important;
+  transition: opacity 0.2s ease-in;
 }
 
 .eisenhower-header {
