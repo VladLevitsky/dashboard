@@ -425,20 +425,24 @@ function iconRefsMatch(a, b) {
 export function isItemSelected(itemData, data) {
   if (itemData.type === 'icon') {
     return data.quickAccessItems.icons.some(item =>
-      iconRefsMatch(item.icon, itemData.icon) && item.url === itemData.url
+      iconRefsMatch(item.icon, itemData.icon) && item.url === itemData.url &&
+      item.sectionType === itemData.sectionType && item.subtitle === itemData.subtitle
     );
   } else if (itemData.type === 'list') {
     return data.quickAccessItems.listItems.some(item =>
-      item.type === 'list' && item.text === itemData.text && item.url === itemData.url && !item.copyText
+      item.type === 'list' && item.sectionType === itemData.sectionType && item.subtitle === itemData.subtitle &&
+      item.text === itemData.text && item.url === itemData.url && !item.copyText
     );
   } else if (itemData.type === 'copyPaste') {
     return data.quickAccessItems.listItems.some(item =>
-      (item.name && itemData.name && item.name === itemData.name) ||
-      (item.text === itemData.text && item.copyText === itemData.copyText)
+      item.sectionType === itemData.sectionType && item.subtitle === itemData.subtitle &&
+      ((item.name && itemData.name && item.name === itemData.name) ||
+       (item.text === itemData.text && item.copyText === itemData.copyText))
     );
   } else if (itemData.type === 'reminder') {
     return data.quickAccessItems.listItems.some(item =>
-      item.type === 'reminder' && item.text === itemData.text && item.url === itemData.url
+      item.type === 'reminder' && item.sectionType === itemData.sectionType && item.subtitle === itemData.subtitle &&
+      item.text === itemData.text && item.url === itemData.url
     );
   }
   return false;
@@ -466,20 +470,24 @@ export function toggleItemQuickAccess(itemData) {
     // Remove from quick access
     if (itemData.type === 'icon') {
       data.quickAccessItems.icons = data.quickAccessItems.icons.filter(item =>
-        !(iconRefsMatch(item.icon, itemData.icon) && item.url === itemData.url)
+        !(iconRefsMatch(item.icon, itemData.icon) && item.url === itemData.url &&
+          item.sectionType === itemData.sectionType && item.subtitle === itemData.subtitle)
       );
     } else if (itemData.type === 'list') {
       data.quickAccessItems.listItems = data.quickAccessItems.listItems.filter(item =>
-        !(item.type === 'list' && item.text === itemData.text && item.url === itemData.url && !item.copyText)
+        !(item.type === 'list' && item.sectionType === itemData.sectionType && item.subtitle === itemData.subtitle &&
+          item.text === itemData.text && item.url === itemData.url && !item.copyText)
       );
     } else if (itemData.type === 'copyPaste') {
       data.quickAccessItems.listItems = data.quickAccessItems.listItems.filter(item =>
-        !((item.name && itemData.name && item.name === itemData.name) ||
-          (item.text === itemData.text && item.copyText === itemData.copyText))
+        !(item.sectionType === itemData.sectionType && item.subtitle === itemData.subtitle &&
+          ((item.name && itemData.name && item.name === itemData.name) ||
+           (item.text === itemData.text && item.copyText === itemData.copyText)))
       );
     } else if (itemData.type === 'reminder') {
       data.quickAccessItems.listItems = data.quickAccessItems.listItems.filter(item =>
-        !(item.type === 'reminder' && item.text === itemData.text && item.url === itemData.url)
+        !(item.type === 'reminder' && item.sectionType === itemData.sectionType && item.subtitle === itemData.subtitle &&
+          item.text === itemData.text && item.url === itemData.url)
       );
     }
   } else {

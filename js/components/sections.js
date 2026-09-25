@@ -1693,8 +1693,8 @@ export function renderUnifiedCard(sectionEl, sectionId) {
     if (!editState.enabled && window.isItemInQuickAccess) {
       iconsToRender = [...items.icons].sort((a, b) => {
         if (a.isDivider || b.isDivider) return 0; // Don't sort dividers
-        const aInQA = window.isItemInQuickAccess({ type: 'icon', icon: a.icon, url: a.url, title: a.title || a.key, name: a.key });
-        const bInQA = window.isItemInQuickAccess({ type: 'icon', icon: b.icon, url: b.url, title: b.title || b.key, name: b.key });
+        const aInQA = window.isItemInQuickAccess({ type: 'icon', icon: a.icon, url: a.url, title: a.title || a.key, name: a.key, sectionType: sectionId, subtitle });
+        const bInQA = window.isItemInQuickAccess({ type: 'icon', icon: b.icon, url: b.url, title: b.title || b.key, name: b.key, sectionType: sectionId, subtitle });
         if (aInQA && !bInQA) return -1;
         if (!aInQA && bInQA) return 1;
         return 0;
@@ -1747,8 +1747,8 @@ export function renderUnifiedCard(sectionEl, sectionId) {
       let remindersToRender = remindersArray;
       if (!editState.enabled && window.isItemInQuickAccess) {
         remindersToRender = [...remindersArray].sort((a, b) => {
-          const aInQA = window.isItemInQuickAccess({ type: 'reminder', text: a.title, url: a.url, name: a.key, sectionType: sectionId });
-          const bInQA = window.isItemInQuickAccess({ type: 'reminder', text: b.title, url: b.url, name: b.key, sectionType: sectionId });
+          const aInQA = window.isItemInQuickAccess({ type: 'reminder', text: a.title, url: a.url, name: a.key, sectionType: sectionId, subtitle });
+          const bInQA = window.isItemInQuickAccess({ type: 'reminder', text: b.title, url: b.url, name: b.key, sectionType: sectionId, subtitle });
           if (aInQA && !bInQA) return -1;
           if (!aInQA && bInQA) return 1;
           return 0;
@@ -1776,8 +1776,8 @@ export function renderUnifiedCard(sectionEl, sectionId) {
       let subtasksToRender = items.subtasks;
       if (!editState.enabled && window.isItemInQuickAccess) {
         subtasksToRender = [...items.subtasks].sort((a, b) => {
-          const aInQA = window.isItemInQuickAccess({ type: 'list', text: a.text, url: a.url, name: a.key, sectionType: sectionId });
-          const bInQA = window.isItemInQuickAccess({ type: 'list', text: b.text, url: b.url, name: b.key, sectionType: sectionId });
+          const aInQA = window.isItemInQuickAccess({ type: 'list', text: a.text, url: a.url, name: a.key, sectionType: sectionId, subtitle });
+          const bInQA = window.isItemInQuickAccess({ type: 'list', text: b.text, url: b.url, name: b.key, sectionType: sectionId, subtitle });
           if (aInQA && !bInQA) return -1;
           if (!aInQA && bInQA) return 1;
           return 0;
@@ -1807,8 +1807,8 @@ export function renderUnifiedCard(sectionEl, sectionId) {
       let swatchesToRender = colorSwatches;
       if (!editState.enabled && window.isItemInQuickAccess) {
         const sortByQA = (a, b) => {
-          const aInQA = window.isItemInQuickAccess({ type: 'copyPaste', text: a.text, copyText: a.copyText || a.text, name: a.key, sectionType: sectionId });
-          const bInQA = window.isItemInQuickAccess({ type: 'copyPaste', text: b.text, copyText: b.copyText || b.text, name: b.key, sectionType: sectionId });
+          const aInQA = window.isItemInQuickAccess({ type: 'copyPaste', text: a.text, copyText: a.copyText || a.text, name: a.key, sectionType: sectionId, subtitle });
+          const bInQA = window.isItemInQuickAccess({ type: 'copyPaste', text: b.text, copyText: b.copyText || b.text, name: b.key, sectionType: sectionId, subtitle });
           if (aInQA && !bInQA) return -1;
           if (!aInQA && bInQA) return 1;
           return 0;
@@ -2006,7 +2006,7 @@ function createUnifiedIconButton(item, sectionId, subtitle, subtitleColor) {
   btn.title = item.title || '';
 
   // Check if icon is in Quick Access and add persistent glow
-  const iconQAData = { type: 'icon', icon: item.icon, url: item.url, title: item.title || item.key, name: item.key };
+  const iconQAData = { type: 'icon', icon: item.icon, url: item.url, title: item.title || item.key, name: item.key, sectionType: sectionId, subtitle };
   const isInQuickAccess = !editState.enabled && window.isItemInQuickAccess && window.isItemInQuickAccess(iconQAData);
   if (isInQuickAccess) {
     btn.classList.add('icon-in-quick-access');
@@ -2075,7 +2075,9 @@ function createUnifiedIconButton(item, sectionId, subtitle, subtitleColor) {
           icon: item.icon,
           url: item.url,
           title: item.title || item.key,
-          name: item.key
+          name: item.key,
+          sectionType: sectionId,
+          subtitle
         };
         const isNowInQuickAccess = window.toggleItemQuickAccess(iconData);
         if (window.showToast) {
@@ -2254,7 +2256,8 @@ function createUnifiedSubtaskItem(item, sectionId, subtitle, subtitleColor) {
     text: item.text,
     url: item.url,
     name: item.key,
-    sectionType: sectionId
+    sectionType: sectionId,
+    subtitle
   };
   const isPrioritized = !editState.enabled && window.isItemInQuickAccess && window.isItemInQuickAccess(priorityItemData);
   if (isPrioritized) addQuickAccessItemLight(div);
@@ -2414,7 +2417,8 @@ function createUnifiedSubtaskItem(item, sectionId, subtitle, subtitleColor) {
             text: item.text,
             url: item.url,
             name: item.key,
-            sectionType: sectionId
+            sectionType: sectionId,
+            subtitle
           };
           const isNowInQuickAccess = window.toggleItemQuickAccess(itemData);
           if (window.showToast) {
@@ -2519,7 +2523,8 @@ function createUnifiedReminderItem(rem, sectionId, subtitle, subtitleColor) {
     text: rem.title,
     url: rem.url,
     name: rem.key,
-    sectionType: sectionId
+    sectionType: sectionId,
+    subtitle
   };
   const isPrioritized = !editState.enabled && window.isItemInQuickAccess && window.isItemInQuickAccess(reminderQAData);
   if (isPrioritized) addQuickAccessItemLight(div);
@@ -2820,7 +2825,8 @@ function createUnifiedReminderItem(rem, sectionId, subtitle, subtitleColor) {
             text: rem.title,
             url: rem.url,
             name: rem.key,
-            sectionType: sectionId
+            sectionType: sectionId,
+            subtitle
           };
           const isNowInQuickAccess = window.toggleItemQuickAccess(itemData);
           if (window.showToast) {
@@ -2923,7 +2929,8 @@ function createUnifiedCopyPasteItem(item, sectionId, subtitle, subtitleColor) {
     text: item.text,
     copyText: item.copyText || item.text,
     name: item.key,
-    sectionType: sectionId
+    sectionType: sectionId,
+    subtitle
   };
   const isPrioritized = !editState.enabled && window.isItemInQuickAccess && window.isItemInQuickAccess(priorityItemData);
   if (isPrioritized) addQuickAccessItemLight(div);
@@ -3050,7 +3057,8 @@ function createUnifiedCopyPasteItem(item, sectionId, subtitle, subtitleColor) {
             text: item.text,
             copyText: item.copyText || item.text,
             name: item.key,
-            sectionType: sectionId
+            sectionType: sectionId,
+            subtitle
           };
           const isNowInQuickAccess = window.toggleItemQuickAccess(itemData);
           if (window.showToast) {
