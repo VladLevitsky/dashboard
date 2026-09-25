@@ -4,10 +4,10 @@
 
 import { model, editState, currentData, currentSections } from '../state.js';
 import { $, showToast, createAnimatedBorder, normalizeDescHtml, openUrl } from '../utils.js';
-import { markDirtyAndSave, handleEditorInput, handleEditorKeydown, createHighlighterButton, attachHighlighterContextMenu, toggleChecklist, isInChecklist, attachChecklistHandler } from './edit-mode.js';
+import { markDirtyAndSave, handleEditorInput, handleEditorKeydown, createHighlighterButton, attachHighlighterContextMenu, toggleChecklist, isInChecklist, attachChecklistHandler, attachImageResizeHandler } from './edit-mode.js';
 import { saveModel } from '../core/storage.js';
 import { immediateCloudSave } from '../core/sync.js';
-import { uploadFile, openFile, setImageFromRef } from '../core/file-service.js';
+import { uploadFile, openFile, setImageFromRef, deleteR2File } from '../core/file-service.js';
 import { TASK_COLORS, TASK_COLOR_LABELS, ANIMATION_DELAY_MS, CARD_HIDE_DELAY_MS } from '../constants.js';
 
 // Module state
@@ -2369,6 +2369,7 @@ function openTaskEditorModal(taskData, titleText) {
     // Markdown auto-convert in description editor (reuse Card Notes handler)
     const descEditor = modal.querySelector('#task-desc-editor');
     attachChecklistHandler(descEditor);
+    attachImageResizeHandler(descEditor);
     attachHighlighterContextMenu(descEditor);
     descEditor.addEventListener('input', handleEditorInput);
     // Click on hyperlinks opens in new tab
@@ -2554,6 +2555,14 @@ function openTaskEditorModal(taskData, titleText) {
           // File upload mode
           const fileRow = document.createElement('div');
           fileRow.className = 'task-editor-file-row';
+          const titleInput = document.createElement('input');
+          titleInput.type = 'text';
+          titleInput.className = 'task-editor-file-title';
+          titleInput.placeholder = 'Title (optional)';
+          titleInput.value = linkItem._pendingTitle || '';
+          titleInput.addEventListener('input', () => {
+            linkItem._pendingTitle = titleInput.value;
+          });
           const chooseBtn = document.createElement('button');
           chooseBtn.type = 'button';
           chooseBtn.className = 'task-editor-file-btn';
@@ -2573,14 +2582,17 @@ function openTaskEditorModal(taskData, titleText) {
             if (result.ok && result.fileId) {
               linkItem.fileId = result.fileId;
               linkItem.fileName = file.name;
+              linkItem.title = (linkItem._pendingTitle || '').trim() || '';
               delete linkItem._editing;
               delete linkItem._typeChosen;
+              delete linkItem._pendingTitle;
               renderEditorLinks();
             } else {
               nameSpan.textContent = 'Upload failed';
               showToast('File upload failed: ' + (result.error || 'Unknown error'));
             }
           });
+          fileRow.appendChild(titleInput);
           fileRow.appendChild(chooseBtn);
           fileRow.appendChild(nameSpan);
           fileRow.appendChild(fileInput);
@@ -2605,39 +2617,68 @@ function openTaskEditorModal(taskData, titleText) {
         input.type = 'text';
         input.className = 'task-subtask-title-input locked';
         input.readOnly = true;
-        input.value = linkItem.type === 'file' ? (linkItem.fileName || linkItem.fileId) : (linkItem.value || '');
         if (linkItem.type === 'file') {
+          input.value = linkItem.title || linkItem.fileName || linkItem.fileId;
           input.style.color = 'var(--accent)';
+          input.style.cursor = 'pointer';
+          input.addEventListener('click', () => {
+            openFile(linkItem.fileId, linkItem.fileName);
+          });
+        } else {
+          input.value = linkItem.value || '';
+          input.addEventListener('click', () => {
+            if (linkItem.value) {
+              navigator.clipboard.writeText(linkItem.value).then(() => showToast('URL copied'));
+            }
+          });
         }
-        // Click to copy
-        input.addEventListener('click', () => {
-          if (linkItem.type === 'url' && linkItem.value) {
-            navigator.clipboard.writeText(linkItem.value).then(() => showToast('URL copied'));
-          }
-        });
-        const editBtn = document.createElement('button');
-        editBtn.type = 'button';
-        editBtn.className = 'task-editor-link-inline-btn task-editor-link-edit-btn';
-        editBtn.title = 'Edit';
-        editBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>';
-        editBtn.addEventListener('click', () => {
-          linkItem._editing = true;
-          linkItem._typeChosen = true;
-          renderEditorLinks();
-        });
+
+        if (linkItem.type === 'file') {
+          // Open button for files
+          const openBtn = document.createElement('button');
+          openBtn.type = 'button';
+          openBtn.className = 'task-editor-link-inline-btn task-editor-link-edit-btn';
+          openBtn.title = 'Open file';
+          openBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>';
+          openBtn.addEventListener('click', () => {
+            openFile(linkItem.fileId, linkItem.fileName);
+          });
+          wrap.appendChild(input);
+          wrap.appendChild(openBtn);
+        } else {
+          // Edit button for URLs
+          const editBtn = document.createElement('button');
+          editBtn.type = 'button';
+          editBtn.className = 'task-editor-link-inline-btn task-editor-link-edit-btn';
+          editBtn.title = 'Edit';
+          editBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>';
+          editBtn.addEventListener('click', () => {
+            linkItem._editing = true;
+            linkItem._typeChosen = true;
+            renderEditorLinks();
+          });
+          wrap.appendChild(input);
+          wrap.appendChild(editBtn);
+        }
 
         const deleteBtn = document.createElement('button');
         deleteBtn.type = 'button';
         deleteBtn.className = 'task-editor-link-inline-btn task-editor-link-delete-btn';
         deleteBtn.title = 'Remove';
         deleteBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
-        deleteBtn.addEventListener('click', () => {
+        deleteBtn.addEventListener('click', async () => {
+          if (linkItem.type === 'file' && linkItem.fileId) {
+            const result = await deleteR2File(linkItem.fileId);
+            if (result.ok) {
+              showToast('File deleted');
+            } else {
+              showToast('Failed to delete file from storage');
+            }
+          }
           editorLinks.splice(idx, 1);
           renderEditorLinks();
         });
 
-        wrap.appendChild(input);
-        wrap.appendChild(editBtn);
         wrap.appendChild(deleteBtn);
         row.appendChild(wrap);
       }
@@ -2863,7 +2904,11 @@ function openTaskEditorModal(taskData, titleText) {
       .filter(l => !l._editing)
       .filter(l => (l.type === 'url' && l.value) || (l.type === 'file' && l.fileId))
       .map(l => {
-        if (l.type === 'file') return { type: 'file', fileId: l.fileId, fileName: l.fileName || '' };
+        if (l.type === 'file') {
+          const fileLink = { type: 'file', fileId: l.fileId, fileName: l.fileName || '' };
+          if (l.title) fileLink.title = l.title;
+          return fileLink;
+        }
         return { type: 'url', value: l.value };
       });
 
@@ -3574,6 +3619,7 @@ function openSubtaskDescriptionModal(subtask) {
     // Markdown auto-convert
     const editorEl = modal.querySelector('#subtask-desc-editor');
     attachChecklistHandler(editorEl);
+    attachImageResizeHandler(editorEl);
     attachHighlighterContextMenu(editorEl);
     editorEl.addEventListener('input', handleEditorInput);
     editorEl.addEventListener('click', (e) => {
@@ -4077,6 +4123,7 @@ export function openIdeasModal() {
     // Markdown auto-convert + toolbar state update
     const ideasEditorEl = modal.querySelector('#ideas-editor');
     attachChecklistHandler(ideasEditorEl);
+    attachImageResizeHandler(ideasEditorEl);
     attachHighlighterContextMenu(ideasEditorEl);
     ideasEditorEl.addEventListener('input', handleEditorInput);
     ideasEditorEl.addEventListener('click', (e) => {

@@ -4,7 +4,7 @@
 
 import { currentData } from '../state.js';
 import { $, showToast, moveCursorAfterNode, normalizeDescHtml, escapeAttr } from '../utils.js';
-import { handleEditorInput, handleEditorKeydown, createHighlighterButton, attachHighlighterContextMenu, toggleChecklist, isInChecklist, attachChecklistHandler } from './edit-mode.js';
+import { handleEditorInput, handleEditorKeydown, createHighlighterButton, attachHighlighterContextMenu, toggleChecklist, isInChecklist, attachChecklistHandler, attachImageResizeHandler } from './edit-mode.js';
 import { saveModel } from '../core/storage.js';
 import { HIGHLIGHT_COLORS, HIGHLIGHT_BORDER_COLORS, hyperlinkSelection, canHyperlink, attachTaskMention } from './projects.js';
 import { uploadFile, openFile } from '../core/file-service.js';
@@ -565,6 +565,7 @@ function showMeetingsEditMode(meeting) {
   // Checklist click handler on meetings editor
   const meetingsDescEditor = $('#meetings-inline-desc-editor');
   attachChecklistHandler(meetingsDescEditor);
+  attachImageResizeHandler(meetingsDescEditor);
 
   // Highlighter context menu on meetings editor
   attachHighlighterContextMenu(meetingsDescEditor, {

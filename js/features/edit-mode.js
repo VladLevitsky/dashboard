@@ -2257,6 +2257,7 @@ export function wireNotepadEvents() {
 
   // Checklist click handler on card notes editor
   attachChecklistHandler(editor);
+  attachImageResizeHandler(editor);
 
   // Toolbar button handlers
   const toolbarBtns = $$('.notepad-toolbar-btn');
@@ -3555,5 +3556,125 @@ export function attachHighlighterContextMenu(editor, options) {
     const menuTop = Math.max(8, Math.min(e.clientY, window.innerHeight - mh - 8));
     menu.style.left = `${menuLeft}px`;
     menu.style.top = `${menuTop}px`;
+  });
+}
+
+// ============================================================
+// IMAGE RESIZE (shared across all rich-text editors)
+// ============================================================
+
+let _activeResizeOverlay = null;
+
+function dismissImageResize() {
+  if (_activeResizeOverlay && _activeResizeOverlay.parentNode) {
+    const img = _activeResizeOverlay.querySelector('img');
+    if (img) {
+      _activeResizeOverlay.parentNode.insertBefore(img, _activeResizeOverlay);
+    }
+    _activeResizeOverlay.remove();
+    _activeResizeOverlay = null;
+  }
+}
+
+export function attachImageResizeHandler(editor) {
+  editor.addEventListener('click', (e) => {
+    if (e.target.tagName !== 'IMG') {
+      // Click on non-image inside editor — dismiss any active overlay
+      if (_activeResizeOverlay && _activeResizeOverlay.parentElement === editor) {
+        dismissImageResize();
+      }
+      return;
+    }
+
+    e.preventDefault();
+    const img = e.target;
+
+    // If already selected (inside a resize wrapper), ignore
+    if (img.parentElement && img.parentElement.classList.contains('editor-img-resize-wrap')) return;
+
+    // Dismiss previous overlay if any
+    dismissImageResize();
+
+    // Wrap image in a resize container
+    const wrapper = document.createElement('span');
+    wrapper.className = 'editor-img-resize-wrap';
+    wrapper.contentEditable = 'false';
+    img.parentNode.insertBefore(wrapper, img);
+    wrapper.appendChild(img);
+
+    // Corner handles
+    const handles = ['nw', 'ne', 'sw', 'se'];
+    handles.forEach(pos => {
+      const h = document.createElement('span');
+      h.className = `editor-img-resize-handle ${pos}`;
+      h.dataset.handle = pos;
+      wrapper.appendChild(h);
+    });
+
+    _activeResizeOverlay = wrapper;
+
+    // Resize logic
+    wrapper.addEventListener('mousedown', (ev) => {
+      const handle = ev.target.dataset && ev.target.dataset.handle;
+      if (!handle) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+
+      const startX = ev.clientX;
+      const startY = ev.clientY;
+      const startW = img.offsetWidth;
+      const startH = img.offsetHeight;
+      const aspect = startW / startH;
+      const editorRect = editor.getBoundingClientRect();
+      const maxW = editor.clientWidth - 24; // account for padding
+
+      const onMove = (me) => {
+        me.preventDefault();
+        let dx = me.clientX - startX;
+        let dy = me.clientY - startY;
+
+        // Mirror delta for left-side handles
+        if (handle === 'nw' || handle === 'sw') dx = -dx;
+        if (handle === 'nw' || handle === 'ne') dy = -dy;
+
+        // Use whichever delta is larger (aspect-ratio locked)
+        let newW;
+        if (Math.abs(dx) > Math.abs(dy)) {
+          newW = startW + dx;
+        } else {
+          newW = startW + dy * aspect;
+        }
+
+        newW = Math.max(40, Math.min(newW, maxW));
+        img.style.width = `${Math.round(newW)}px`;
+        img.style.height = 'auto';
+      };
+
+      const onUp = () => {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+      };
+
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+
+    // Dismiss on click outside the wrapper (but inside editor)
+    // Use a one-time mousedown listener on document
+    const onDocClick = (ev) => {
+      if (!wrapper.contains(ev.target)) {
+        // Unwrap: move img out, remove wrapper
+        if (wrapper.parentNode) {
+          wrapper.parentNode.insertBefore(img, wrapper);
+          wrapper.remove();
+        }
+        _activeResizeOverlay = null;
+        document.removeEventListener('mousedown', onDocClick, true);
+      }
+    };
+    // Delay so this click doesn't immediately dismiss
+    setTimeout(() => {
+      document.addEventListener('mousedown', onDocClick, true);
+    }, 0);
   });
 }

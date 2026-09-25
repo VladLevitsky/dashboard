@@ -9322,6 +9322,25 @@ body[data-theme="dark"][data-style="glass"][data-glass-theme="sunset"] .tasks-su
   display: flex;
   align-items: center;
   gap: 10px;
+  flex-wrap: wrap;
+}
+.task-editor-file-title {
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.task-editor-file-title:focus {
+  border-color: var(--brand);
+}
+[data-theme="dark"] .task-editor-file-title {
+  border-color: #475569;
 }
 .task-editor-file-btn {
   padding: 8px 14px;
@@ -13890,4 +13909,55 @@ body[data-device="mobile"] .card-resize-handle-left {
 [data-theme="dark"] .file-manager-thumb { background: rgba(255,255,255,0.06); }
 [data-theme="dark"] .file-manager-close-btn:hover { background: rgba(255,255,255,0.08); }
 [data-theme="dark"] .file-manager-delete-btn:hover { background: rgba(239, 68, 68, 0.15); }
+
+/* ============================================================
+   EDITOR IMAGE RESIZE
+   ============================================================ */
+
+/* Base image styling in all contenteditable editors */
+.task-desc-editor img,
+.notepad-editor img,
+#project-editor img,
+#meetings-inline-desc-editor img,
+#ideas-editor img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+  cursor: pointer;
+  display: block;
+  margin: 6px 0;
+}
+
+/* Resize wrapper */
+.editor-img-resize-wrap {
+  display: inline-block;
+  position: relative;
+  line-height: 0;
+  outline: 2px solid var(--brand, #2c7be5);
+  outline-offset: 2px;
+  border-radius: 6px;
+  margin: 6px 0;
+}
+.editor-img-resize-wrap img {
+  display: block;
+  border-radius: 6px;
+  margin: 0;
+  outline: none;
+}
+
+/* Corner handles */
+.editor-img-resize-handle {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  background: var(--brand, #2c7be5);
+  border: 2px solid #fff;
+  border-radius: 50%;
+  z-index: 5;
+  box-shadow: 0 0 3px rgba(0,0,0,0.3);
+}
+.editor-img-resize-handle.nw { top: -5px; left: -5px; cursor: nwse-resize; }
+.editor-img-resize-handle.ne { top: -5px; right: -5px; cursor: nesw-resize; }
+.editor-img-resize-handle.sw { bottom: -5px; left: -5px; cursor: nesw-resize; }
+.editor-img-resize-handle.se { bottom: -5px; right: -5px; cursor: nwse-resize; }
 

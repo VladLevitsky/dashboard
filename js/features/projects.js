@@ -5,7 +5,7 @@
 
 import { model, editState, currentData } from '../state.js';
 import { $, showToast, moveCursorAfterNode } from '../utils.js';
-import { handleEditorInput, handleEditorKeydown, createHighlighterButton, attachHighlighterContextMenu, toggleChecklist, isInChecklist, attachChecklistHandler } from './edit-mode.js';
+import { handleEditorInput, handleEditorKeydown, createHighlighterButton, attachHighlighterContextMenu, toggleChecklist, isInChecklist, attachChecklistHandler, attachImageResizeHandler } from './edit-mode.js';
 import { saveModel } from '../core/storage.js';
 import { TASK_COLORS, TASK_COLOR_LABELS } from '../constants.js';
 
@@ -614,6 +614,7 @@ export function openProjectsModal(openToProjectId) {
     // Checklist click handler on project editor
     const projectEditor = modal.querySelector('#project-editor');
     attachChecklistHandler(projectEditor);
+    attachImageResizeHandler(projectEditor);
 
     // Highlighter context menu on project editor
     attachHighlighterContextMenu(projectEditor, {
