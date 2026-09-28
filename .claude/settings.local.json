@@ -41,7 +41,13 @@
       "Bash(sed:*)",
       "Bash(grep -n \"export function openFile\\\\|window.openFile\" \"/c/Users/vlevitsky/Documents/Personal Dashboard - New/js/features/\"*.js)",
       "Read(//c/Users/vlevitsky/Documents/Personal Dashboard - New/**)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(npm install:*)",
+      "Bash(npx playwright:*)",
+      "Bash(netstat -ano)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://127.0.0.1:5500/)",
+      "Bash(npx serve:*)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://127.0.0.1:8765/)"
     ],
     "deny": [],
     "ask": []
