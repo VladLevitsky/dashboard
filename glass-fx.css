@@ -343,7 +343,10 @@ html[data-fx="v2"] body[data-style="glass"][data-theme] :is(.unified-subtask-ite
    progress width (a 3% fill casts almost nothing). The fill gains a thin
    top specular line, a gloss band and a hot leading edge. overflow stays
    hidden. Red / due-today chambers hold an ember at the leading cap that
-   breathes and drifts a few px, staggered. */
+   breathes and drifts a few px, staggered.
+   A fill is never narrower than it is tall: aspect-ratio sizes it from its
+   own height and min-width carries the progress, so a few percent reads as a
+   small round cap that follows the pill's left end, not a clipped sliver. */
 html[data-fx="v2"] body[data-style="glass"][data-theme] .unified-reminder-item:is([data-progress-state], :has(> .days-badge:is(.green, .yellow, .orange, .red))):not(.quick-access-lit) {
   box-shadow: 0 1px 1px rgb(var(--fx-ink) / 8%),
     0 4px 12px -7px rgb(28 34 42 / 22%),
@@ -361,6 +364,19 @@ html[data-fx="v2"] body[data-style="glass"][data-theme] .unified-reminder-item:i
     radial-gradient(circle 16px at calc(100% - 13px) 50%, color-mix(in srgb, rgb(var(--glow-rgb)) 40%, white), transparent 100%),
     var(--light-body);
   filter: blur(0.4px);
+  width: auto;
+  aspect-ratio: 1;
+  min-width: clamp(0px, calc(var(--progress-width, 100%) - 4px), calc(100% - 4px));
+  max-width: calc(100% - 4px);
+}
+/* The chamber light stays centred on the fill's cap, including the minimum
+   cap (inset 21px). Red chambers are always full and carry their own ember. */
+html[data-fx="v2"] body[data-style="glass"][data-theme] .unified-reminder-item:is([data-progress-state], :has(> .days-badge:is(.green, .yellow, .orange, .red))):not([data-progress-state="red"])::after {
+  background: radial-gradient(circle 63px at max(21px, calc(var(--progress-width, 100%) - 21px)) 50%,
+    rgb(var(--glow-rgb) / 52%) 0%, rgb(var(--glow-rgb) / 44%) 30%,
+    rgb(var(--glow-rgb) / 25%) 50%, rgb(var(--glow-rgb) / 11%) 65%,
+    rgb(var(--glow-rgb) / 3.5%) 80%, rgb(var(--glow-rgb) / 0.6%) 92%,
+    rgb(var(--glow-rgb) / 0%) 100%);
 }
 /* Ember: a same-hue, saturated light over the original cap spill, so the
    urgent end glows red instead of fading to pink. Red chambers also take a

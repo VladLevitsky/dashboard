@@ -29,7 +29,7 @@ const model = {
   // Card data stored by sectionId:
   [sectionId]: {
     "SubtitleName": {
-      icons: [{ key, icon, url, title, linkType?, fileId?, fileName? }],
+      icons: [{ key, icon, url, title, linkType?, fileId?, fileName?, invertDark? }],
       reminders: [{ key, title, url, type, schedule?, interval?, currentNumber?, intervalType?, intervalUnit?, breakdown?, links?, linkType?, fileId?, fileName? }],
       subtasks: [{ key, text, url, links?, linkType?, fileId?, fileName? }],
       copyPaste: [{ key, text, copyText }]
@@ -57,7 +57,7 @@ const model = {
   cardNotes: { [sectionId]: [{ key, title, content, color? }] },
   quickAccessItems: { icons: [], listItems: [], quickLinks: [] },
   timers: [],
-  header: { profilePhotoSrc, companyLogoSrc, profilePhotoZoom, ... }
+  header: { profilePhotoSrc, companyLogoSrc, profilePhotoZoom, companyLogoInvertDark, ... }
 }
 ```
 
@@ -285,6 +285,7 @@ Prioritized items panel with state-based reconciliation — automatically remove
 ### Dark Mode
 - Toggle in Settings modal
 - Colors stored as `{ light, dark }` objects for independent theming
+- **Invert colors in dark mode** (for dark logos): a toggle in the icon edit popover (`icon.invertDark`, key deleted when off) and in the logo image editor (`header.companyLogoInvertDark`, explicit boolean because header objects merge key-by-key). Both toggles are shown only in dark mode; hidden, they leave the saved value unchanged. Renderers add `.invert-dark` to the image; `body[data-theme="dark"] .invert-dark` applies the inline SVG filter `#invert-dark-filter` (index.html): each pixel keeps the brighter of itself and its hue-preserving inverse (invert → hueRotate 180 → feBlend lighten), so dark greys flip toward white proportionally, dark colours lift to their light tone, bright pixels stay. Applied to card icons, the header logo, Quick Access copies (matched to the source icon by image + url), search results and task linked-item minis. `invertDark` is in the JSON export/import icon whitelist
 - Glass mode always active with Classic or Sunset theme
 
 ---

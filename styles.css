@@ -137,6 +137,28 @@ body {
 [data-theme="dark"] .company-logo {
   filter: brightness(1.3);
 }
+
+/* "Invert colors in dark mode" (per-icon and header-logo toggle): the SVG
+   filter in index.html flips dark greys toward white in proportion and lifts
+   dark colours to their light tone, keeping hue; bright pixels are untouched.
+   Light mode shows the image unchanged. */
+body[data-theme="dark"] .invert-dark {
+  filter: url(#invert-dark-filter);
+}
+.edit-popover .invert-dark-toggle,
+.image-editor-controls .invert-dark-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 12px 0 0;
+  font-size: 13px;
+  color: var(--text);
+  cursor: pointer;
+  user-select: none;
+}
+.image-editor-controls .invert-dark-toggle { margin: 0; font-size: 14px; }
+.invert-dark-toggle[hidden] { display: none !important; }
+.invert-dark-toggle .appearance-toggle-switch { flex-shrink: 0; }
 .header-left { display: flex; flex-direction: column; align-items: flex-start; }
 .header-right { display: flex; align-items: center; gap: 26px; }
 .profile-name { font-weight: 700; font-size: 36px; }

@@ -467,9 +467,10 @@ function renderSearchIcon(icon) {
                   !icon.icon.startsWith('http') && !icon.icon.startsWith('data:') &&
                   icon.icon.length <= 10;
 
+  const invertClass = icon.invertDark ? ' invert-dark' : '';
   const iconHtml = isEmoji ?
-    `<span class="search-icon-emoji">${icon.icon}</span>` :
-    `<img class="search-icon-img" src="${escapeAttr(icon.icon)}" alt="" />`;
+    `<span class="search-icon-emoji${invertClass}">${icon.icon}</span>` :
+    `<img class="search-icon-img${invertClass}" src="${escapeAttr(icon.icon)}" alt="" />`;
 
   // Add links toggle if icon has links (same style as reminders/subtasks)
   const hasLinks = icon.links && icon.links.length > 0;
@@ -912,6 +913,9 @@ export function renderHeaderAndTitles() {
       }
     };
 
+    // User toggle: invert the logo in dark mode only (styles.css .invert-dark)
+    logoEl.classList.toggle('invert-dark', data.header.companyLogoInvertDark === true);
+
     // Always set onload handler first, then set/refresh src
     logoEl.onload = applyLogoTransformFn;
     const logoRef = classifyImageRef(data.header.companyLogoSrc);
@@ -1096,6 +1100,10 @@ export function wireUI() {
       linkType: linkType,
       accept: true
     };
+    const invertField = $('#edit-invert-dark-field');
+    if (invertField && !invertField.hidden) {
+      payload.invertDark = $('#edit-invert-dark').checked;
+    }
 
     // Handle file upload if file type selected
     if (linkType === 'file') {
@@ -1222,7 +1230,7 @@ export function wireUI() {
             data.header.companyLogoZoom || 1,
             xPixels,
             yPixels,
-            async ({ src, zoom, xPercent, yPercent }) => {
+            async ({ src, zoom, xPercent, yPercent, invertDark }) => {
               let newSrc = src;
               // Upload to R2 if authenticated and src is a data URL
               if (isLoggedIn() && typeof src === 'string' && src.startsWith('data:') && !src.startsWith('data:image/svg')) {
@@ -1242,10 +1250,13 @@ export function wireUI() {
               data.header.companyLogoZoom = zoom;
               data.header.companyLogoXPercent = xPercent;
               data.header.companyLogoYPercent = yPercent;
+              // Explicit boolean: header objects are merged key-by-key on restore
+              data.header.companyLogoInvertDark = invertDark === true;
               markDirtyAndSave();
               renderHeaderAndTitles();
             },
-            'logo'
+            'logo',
+            data.header.companyLogoInvertDark === true
           );
         });
       }

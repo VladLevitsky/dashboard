@@ -110,6 +110,12 @@ export function toggleEditMode() {
 // --- Hide Edit Popover
 export function hideEditPopover() {
   $('#edit-popover').hidden = true;
+  // Undo the live invert preview; a saved change re-renders from the model
+  if (editState.invertPreview) {
+    const { els, original } = editState.invertPreview;
+    els.forEach(el => el.classList.toggle('invert-dark', original));
+    editState.invertPreview = null;
+  }
   editState.currentTarget = null;
   currentMoveContext = null;
   const moveSelector = $('#move-card-selector');
@@ -224,6 +230,23 @@ export function openEditPopover(targetEl, values, onDone, cursorPos) {
 
   $('#edit-image-field').hidden = values.allowImage ? false : true;
   $('#chosen-image-name').textContent = '';
+
+  // "Invert colors in dark mode" toggle (icons only, shown in dark mode only since
+  // it has no effect in light mode); flipping it previews on the icon
+  const invertField = $('#edit-invert-dark-field');
+  const invertInput = $('#edit-invert-dark');
+  if (invertField && invertInput) {
+    const showInvert = values.allowInvertDark === true && document.body.dataset.theme === 'dark';
+    invertField.hidden = !showInvert;
+    invertInput.checked = showInvert && values.invertDark === true;
+    const previewEls = showInvert ? [...targetEl.querySelectorAll(':scope > img, :scope > .icon-emoji')] : [];
+    editState.invertPreview = previewEls.length ? { els: previewEls, original: invertInput.checked } : null;
+    invertInput.onchange = () => {
+      if (editState.invertPreview) {
+        editState.invertPreview.els.forEach(el => el.classList.toggle('invert-dark', invertInput.checked));
+      }
+    };
+  }
   editState.chosenMedia = null;
   editState.chosenEmoji = null;
   // Hide emoji picker when opening popover

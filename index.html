@@ -8,10 +8,10 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Caveat:wght@500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=2026-09-23-file-manager">
+  <link rel="stylesheet" href="styles.css?v=2026-09-29-invert">
   <link rel="stylesheet" href="glass.css?v=2026-09-23-file-manager">
   <!-- Glass FX v2 layer: every rule is scoped under html[data-fx="v2"] -->
-  <link rel="stylesheet" href="glass-fx.css?v=2026-09-28-fx">
+  <link rel="stylesheet" href="glass-fx.css?v=2026-09-29-invert">
   <script type="module" src="js/features/glass-glow.js?v=2026-09-23-card-bevels"></script>
   <script type="module" src="js/features/glass-fx.js?v=2026-09-28-fx"></script>
   <!-- Emoji Picker Element - Web Component -->
@@ -20,6 +20,20 @@
   <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>
 </head>
   <body>
+    <!-- "Invert colors in dark mode" (styles.css .invert-dark): each pixel keeps the
+         brighter of itself and its hue-preserving inverse, so dark greys flip toward
+         white in proportion, dark colours lift to their light tone, bright ones stay. -->
+    <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+      <filter id="invert-dark-filter" color-interpolation-filters="sRGB">
+        <feComponentTransfer in="SourceGraphic" result="inverted">
+          <feFuncR type="table" tableValues="1 0" />
+          <feFuncG type="table" tableValues="1 0" />
+          <feFuncB type="table" tableValues="1 0" />
+        </feComponentTransfer>
+        <feColorMatrix in="inverted" type="hueRotate" values="180" result="lightTone" />
+        <feBlend in="SourceGraphic" in2="lightTone" mode="lighten" />
+      </filter>
+    </svg>
     <header class="app-header card" id="top-header">
       <div class="header-left">
         <div class="company-logo-container">
@@ -288,6 +302,13 @@
           <div id="emoji-picker-container" class="emoji-picker-container" hidden>
             <emoji-picker></emoji-picker>
           </div>
+          <label class="invert-dark-toggle" id="edit-invert-dark-field" hidden>
+            <span class="appearance-toggle-switch">
+              <input type="checkbox" id="edit-invert-dark" />
+              <span class="appearance-toggle-slider"></span>
+            </span>
+            <span>Invert colors in dark mode</span>
+          </label>
         </div>
         <div class="edit-actions">
           <button type="button" id="edit-move" class="btn-move" title="Move to another card" aria-label="Move to another card" hidden>
@@ -685,6 +706,13 @@
               <input type="range" id="image-editor-scale" min="0.5" max="3" step="0.005" value="1" />
               <span id="image-editor-scale-value">100%</span>
             </div>
+            <label class="invert-dark-toggle" id="image-editor-invert-field" hidden>
+              <span class="appearance-toggle-switch">
+                <input type="checkbox" id="image-editor-invert" />
+                <span class="appearance-toggle-slider"></span>
+              </span>
+              <span>Invert colors in dark mode</span>
+            </label>
             <button type="button" id="image-editor-choose" class="btn">Choose Different Image...</button>
           </div>
         </div>
@@ -748,7 +776,7 @@
     </div>
 
     <!-- ES6 Modules - fully modularized, no app.js dependency -->
-    <script type="module" src="js/main.js?v=2026-09-23-file-manager"></script>
+    <script type="module" src="js/main.js?v=2026-09-29-invert"></script>
   </body>
   </html>
 

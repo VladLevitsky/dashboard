@@ -3151,10 +3151,12 @@ function buildLinkedItemMini(ref, onRemove) {
     visual.className = 'task-linked-mini-icon-visual';
     if (item.icon && typeof item.icon === 'string' && !item.icon.includes('/') && !item.icon.includes('.') && !item.icon.startsWith('http') && !item.icon.startsWith('data:') && item.icon.length <= 10) {
       visual.textContent = item.icon; // Emoji icon
+      if (item.invertDark) visual.classList.add('invert-dark');
     } else {
       const img = document.createElement('img');
       setImageFromRef(img, item.icon);
       img.alt = item.title || item.key || 'Icon';
+      if (item.invertDark) img.classList.add('invert-dark');
       visual.appendChild(img);
     }
     wrap.appendChild(visual);

@@ -2015,15 +2015,18 @@ function createUnifiedIconButton(item, sectionId, subtitle, subtitleColor) {
   }
 
   // Check if icon is emoji or image URL
+  // invert-dark: user toggle, inverts the image in dark mode only (styles.css)
   if (isEmojiIcon(item.icon)) {
     const emojiSpan = document.createElement('span');
     emojiSpan.className = 'icon-emoji';
+    if (item.invertDark) emojiSpan.classList.add('invert-dark');
     emojiSpan.textContent = item.icon;
     btn.appendChild(emojiSpan);
   } else {
     const img = document.createElement('img');
     setImageFromRef(img, item.icon);
     img.alt = item.key;
+    if (item.invertDark) img.classList.add('invert-dark');
     btn.appendChild(img);
   }
 
@@ -2132,11 +2135,13 @@ function createUnifiedIconButton(item, sectionId, subtitle, subtitleColor) {
         allowFileLink: true,
         allowIconLinks: true,
         allowIconTasks: true,
+        allowInvertDark: true,
+        invertDark: item.invertDark === true,
         iconRef: item,
         iconSectionId: sectionId,
         iconSubtitle: subtitle,
         moveContext: { sectionId, subtitle, itemType: 'icons', itemKey: item.key }
-      }, async ({ url, chosenMedia, chosenEmoji, linkType, fileId, fileName, delete: doDelete, accept }) => {
+      }, async ({ url, chosenMedia, chosenEmoji, linkType, fileId, fileName, invertDark, delete: doDelete, accept }) => {
         if (!accept) return;
         const cardData = currentData()[sectionId];
         const subtitleData = cardData[subtitle];
@@ -2155,6 +2160,11 @@ function createUnifiedIconButton(item, sectionId, subtitle, subtitleColor) {
           return;
         }
         applyLinkToItem(item, { url, linkType, fileId, fileName });
+        // Set before any await so the immediate re-render already shows it
+        if (invertDark !== undefined) {
+          if (invertDark) item.invertDark = true;
+          else delete item.invertDark;
+        }
         // Emoji takes precedence over image (last choice wins)
         if (chosenEmoji) {
           // Queue old R2 icon image for cleanup if being replaced

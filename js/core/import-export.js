@@ -88,6 +88,7 @@ export function extractUrlOverrides() {
             if (i.links && i.links.length > 0) {
               icon.links = i.links;
             }
+            if (i.invertDark) icon.invertDark = true;
           }
           return icon;
         }) : [],
@@ -785,6 +786,7 @@ export function applyUrlOverrides(data) {
             if (i.links && i.links.length > 0) {
               icon.links = i.links;
             }
+            if (i.invertDark) icon.invertDark = true;
           }
           return icon;
         }) : [],

@@ -305,14 +305,32 @@ export function renderQuickAccess() {
 
   // Render icons second
   if (icons.length > 0) {
+    // Quick access keeps copies; follow the source icon's dark-mode invert toggle.
+    // Matched on image + url, the same identity reconciliation uses.
+    const iconIdentity = icon => {
+      const ref = classifyImageRef(icon.icon);
+      return `${ref.type === 'r2' ? `r2:${ref.value}` : String(icon.icon)}::${icon.url}`;
+    };
+    const invertedIcons = new Set();
+    (data.sections || []).forEach(section => {
+      const cardData = data[section.id];
+      if (!cardData || typeof cardData !== 'object') return;
+      Object.values(cardData).forEach(group => {
+        if (group && Array.isArray(group.icons)) {
+          group.icons.forEach(icon => { if (icon.invertDark) invertedIcons.add(iconIdentity(icon)); });
+        }
+      });
+    });
+
     html += '<div class="quick-access-icons">';
     icons.forEach((item, idx) => {
       const classified = classifyImageRef(item.icon);
       const imgSrc = (classified.type === 'r2') ? '' : (classified.value || '');
       const fileIdAttr = (classified.type === 'r2') ? ` data-r2-file-id="${classified.value}"` : '';
+      const invertAttr = invertedIcons.has(iconIdentity(item)) ? ' class="invert-dark"' : '';
       html += `
         <div class="icon-button quick-access-icon" data-qa-url="${item.url}" style="cursor: pointer;">
-          <img src="${imgSrc}" alt="${item.title || item.name || ''}"${fileIdAttr} />
+          <img src="${imgSrc}" alt="${item.title || item.name || ''}"${fileIdAttr}${invertAttr} />
         </div>
       `;
     });

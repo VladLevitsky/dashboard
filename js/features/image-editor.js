@@ -27,7 +27,8 @@ let editorState = {
 
 // --- Open image editor modal
 // type: 'profile' (circle frame) or 'logo' (square frame)
-export function openImageEditor(currentSrc, currentZoom, currentX, currentY, onSave, type = 'profile') {
+// invertDark: logo only, initial state of the "Invert colors in dark mode" toggle
+export function openImageEditor(currentSrc, currentZoom, currentX, currentY, onSave, type = 'profile', invertDark = false) {
   const modal = $('#image-editor-modal');
   const img = $('#image-editor-img');
   const scaleSlider = $('#image-editor-scale');
@@ -50,6 +51,16 @@ export function openImageEditor(currentSrc, currentZoom, currentX, currentY, onS
   } else {
     titleEl.textContent = 'Adjust Profile Photo';
     frame.classList.remove('square-frame');
+  }
+
+  // Invert toggle is offered for the logo, in dark mode only (it has no effect in
+  // light mode); the preview image follows it. Hidden, it keeps the saved value.
+  const invertField = $('#image-editor-invert-field');
+  const invertInput = $('#image-editor-invert');
+  if (invertField && invertInput) {
+    invertField.hidden = type !== 'logo' || document.body.dataset.theme !== 'dark';
+    invertInput.checked = type === 'logo' && invertDark === true;
+    img.classList.toggle('invert-dark', invertInput.checked);
   }
 
   // Show modal first so we can measure
@@ -140,9 +151,11 @@ function setupEditorListeners() {
   const cancelBtn = $('#image-editor-cancel');
   const closeBtn = $('#image-editor-close');
   const backdrop = $('.image-editor-backdrop');
+  const invertInput = $('#image-editor-invert');
 
   // Scale slider
   scaleSlider.addEventListener('input', handleScaleChange);
+  if (invertInput) invertInput.addEventListener('change', handleInvertChange);
 
   // Drag handlers for the frame
   frame.addEventListener('mousedown', handleDragStart);
@@ -166,10 +179,12 @@ function setupEditorListeners() {
 function removeEditorListeners() {
   const frame = $('.image-editor-frame');
   const scaleSlider = $('#image-editor-scale');
+  const invertInput = $('#image-editor-invert');
 
   if (scaleSlider) {
     scaleSlider.removeEventListener('input', handleScaleChange);
   }
+  if (invertInput) invertInput.removeEventListener('change', handleInvertChange);
 
   if (frame) {
     frame.removeEventListener('mousedown', handleDragStart);
@@ -188,6 +203,12 @@ function handleScaleChange(e) {
   editorState.zoomFactor = parseFloat(e.target.value);
   scaleValue.textContent = Math.round(editorState.zoomFactor * 100) + '%';
   updateImageTransform();
+}
+
+// --- Handle invert toggle (preview only; saved on Save)
+function handleInvertChange(e) {
+  const img = $('#image-editor-img');
+  if (img) img.classList.toggle('invert-dark', e.target.checked);
 }
 
 // --- Handle drag start
@@ -301,11 +322,13 @@ function handleChooseImage() {
 function handleSave() {
   if (editorState.onSave) {
     // Save x/y as percentage of frame size so it scales correctly to profile
+    const invertInput = $('#image-editor-invert');
     editorState.onSave({
       src: editorState.imageSrc,
       zoom: editorState.zoomFactor,
       xPercent: editorState.x / editorState.frameSize,
-      yPercent: editorState.y / editorState.frameSize
+      yPercent: editorState.y / editorState.frameSize,
+      invertDark: editorState.editorType === 'logo' && !!invertInput && invertInput.checked
     });
   }
   closeImageEditor();
