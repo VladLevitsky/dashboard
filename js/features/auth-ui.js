@@ -240,6 +240,9 @@ async function handleAuthSubmit(e) {
 
     if (window.applyCellSize) window.applyCellSize();
     if (window.ensureSectionPlusButtons) window.ensureSectionPlusButtons();
+    if (window.refreshTimeTrackingUI) window.refreshTimeTrackingUI();
+    // Stored images shown while signed out can load now
+    if (window.hydrateRichTextImages) window.hydrateRichTextImages();
 
     // Start background sync timer
     startSyncTimer();
@@ -282,6 +285,7 @@ async function handleLogout() {
   if (window.applyGlassTheme) window.applyGlassTheme();
   if (window.applyCellSize) window.applyCellSize();
   if (window.ensureSectionPlusButtons) window.ensureSectionPlusButtons();
+  if (window.refreshTimeTrackingUI) window.refreshTimeTrackingUI();
 
   renderAuthUI();
   showToast('Signed out');
@@ -407,6 +411,7 @@ export async function postRestoreAuthSync() {
   
       if (window.applyCellSize) window.applyCellSize();
       if (window.ensureSectionPlusButtons) window.ensureSectionPlusButtons();
+      if (window.refreshTimeTrackingUI) window.refreshTimeTrackingUI();
     }
   } catch (err) {
     // Cloud sync failed — proceed with local data

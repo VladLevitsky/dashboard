@@ -8,6 +8,8 @@ import { handleEditorInput, handleEditorKeydown, createHighlighterButton, attach
 import { saveModel } from '../core/storage.js';
 import { HIGHLIGHT_COLORS, HIGHLIGHT_BORDER_COLORS, hyperlinkSelection, canHyperlink, attachTaskMention } from './projects.js';
 import { uploadFile, openFile } from '../core/file-service.js';
+import { attachImageUpload } from './rich-text-images.js';
+import { stripHydratedImageSrc } from '../core/rich-text-refs.js';
 
 // Module state
 let meetingsEditingId = null;
@@ -566,6 +568,7 @@ function showMeetingsEditMode(meeting) {
   const meetingsDescEditor = $('#meetings-inline-desc-editor');
   attachChecklistHandler(meetingsDescEditor);
   attachImageResizeHandler(meetingsDescEditor);
+  attachImageUpload(meetingsDescEditor, { label: 'Meeting', getTitle: () => $('#meetings-inline-name')?.value });
 
   // Highlighter context menu on meetings editor
   attachHighlighterContextMenu(meetingsDescEditor, {
@@ -576,7 +579,7 @@ function showMeetingsEditMode(meeting) {
       }
       const meeting = getAllMeetings().find(m => m.id === meetingsEditingId);
       if (meeting) {
-        meeting.description = $('#meetings-inline-desc-editor').innerHTML;
+        meeting.description = stripHydratedImageSrc($('#meetings-inline-desc-editor').innerHTML);
         saveModel();
       }
     }
@@ -654,7 +657,7 @@ function showMeetingsEditMode(meeting) {
     // Save the updated description
     const meeting = getAllMeetings().find(m => m.id === meetingsEditingId);
     if (meeting) {
-      meeting.description = descEditor.innerHTML;
+      meeting.description = stripHydratedImageSrc(descEditor.innerHTML);
       saveModel();
     }
   });
@@ -952,7 +955,7 @@ function convertMeetingSelectionToTask(meetingId) {
     // Save the updated description to the meeting
     const meeting = getAllMeetings().find(m => m.id === meetingId);
     if (meeting) {
-      meeting.description = editor.innerHTML;
+      meeting.description = stripHydratedImageSrc(editor.innerHTML);
       saveModel();
     }
   });

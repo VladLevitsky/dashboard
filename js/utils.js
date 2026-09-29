@@ -4,6 +4,8 @@
 // Note: We access model via window.model to avoid circular dependencies
 // model is set on window by main.js after all modules load
 
+import { stripHydratedImageSrc } from './core/rich-text-refs.js';
+
 // --- DOM Utilities
 export const $ = (sel, root = document) => root.querySelector(sel);
 export const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -728,11 +730,13 @@ export function moveCursorAfterNode(node) {
   sel.addRange(range);
 }
 
-// --- Normalize description HTML (strip lone <br> and whitespace)
+// --- Normalize description HTML (strip lone <br> and whitespace). Images kept
+// in file storage lose their session-only src, so the saved HTML (and the
+// unsaved-changes checks that compare it) only carry the file reference.
 export function normalizeDescHtml(html) {
   if (!html) return '';
   const stripped = html.replace(/<br\s*\/?>/gi, '').replace(/&nbsp;/gi, ' ').trim();
-  return stripped ? html : '';
+  return stripped ? stripHydratedImageSrc(html) : '';
 }
 
 // --- Escape string for use in HTML attributes

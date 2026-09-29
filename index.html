@@ -8,10 +8,10 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Caveat:wght@500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=2026-09-29-invert">
+  <link rel="stylesheet" href="styles.css?v=2026-09-29-pasted-images">
   <link rel="stylesheet" href="glass.css?v=2026-09-23-file-manager">
   <!-- Glass FX v2 layer: every rule is scoped under html[data-fx="v2"] -->
-  <link rel="stylesheet" href="glass-fx.css?v=2026-09-29-invert">
+  <link rel="stylesheet" href="glass-fx.css?v=2026-09-29-task-timers">
   <script type="module" src="js/features/glass-glow.js?v=2026-09-23-card-bevels"></script>
   <script type="module" src="js/features/glass-fx.js?v=2026-09-28-fx"></script>
   <!-- Emoji Picker Element - Web Component -->
@@ -124,13 +124,18 @@
     </header>
 
     <div id="time-tracking-card" class="card time-tracking-card" hidden>
-      <h3>Time Spent on Tasks</h3>
-      <div id="timer-container" class="timer-container">
-        <!-- Timers will be dynamically added here -->
+      <div class="tt-header">
+        <h3>Time Tracking</h3>
       </div>
-      <div class="timer-buttons-container" id="timer-buttons-container" hidden>
-        <button id="reset-all-timers" class="reset-timers-btn" title="Reset all timers">Reset All</button>
-        <button id="add-timer-btn" class="add-timer-btn" title="Add timer">+ Add Timer</button>
+      <div class="tt-body">
+        <section class="tt-section tt-section-tasks" aria-labelledby="tt-tasks-heading">
+          <h4 class="eisenhower-section-heading tt-section-heading" id="tt-tasks-heading">Tasks</h4>
+          <div id="tt-task-list" class="tt-task-list"></div>
+        </section>
+        <section class="tt-section tt-section-categories" aria-labelledby="tt-categories-heading">
+          <h4 class="eisenhower-section-heading tt-section-heading" id="tt-categories-heading">Categories</h4>
+          <div id="tt-category-chart" class="tt-category-chart"></div>
+        </section>
       </div>
     </div>
 
@@ -626,6 +631,19 @@
               <option value="sunset">Sunset</option>
             </select>
           </div>
+          <!-- Task Settings -->
+          <div class="appearance-divider"></div>
+          <div class="appearance-section" id="task-settings-section">
+            <div class="appearance-label">Tasks</div>
+            <button type="button" id="settings-task-settings-btn" class="appearance-backup-btn" style="width: 100%;">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M6.2 5.1h12.9c1 0 1.8.6 1.8 1.4v4.1c0 .8-.8 1.4-1.8 1.4H4.7c-1 0-1.8.6-1.8 1.4v4.1c0 .8.8 1.4 1.8 1.4h13.1"/>
+                <circle cx="19.4" cy="18.9" r="1.6"/>
+                <circle cx="4.6" cy="5.1" r="1.6"/>
+              </svg>
+              Tasks
+            </button>
+          </div>
           <!-- File Manager -->
           <div class="appearance-divider"></div>
           <div class="appearance-section" id="file-manager-section">
@@ -776,7 +794,7 @@
     </div>
 
     <!-- ES6 Modules - fully modularized, no app.js dependency -->
-    <script type="module" src="js/main.js?v=2026-09-29-invert"></script>
+    <script type="module" src="js/main.js?v=2026-09-29-pasted-images"></script>
   </body>
   </html>
 

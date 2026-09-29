@@ -4,7 +4,6 @@
 export const PLACEHOLDER_URL = 'https://telcobridges.com';
 
 // Configuration constants
-export const TIMER_UPDATE_INTERVAL_MS = 100; // Update timer display every 100ms for smooth millisecond display
 export const ANIMATION_DELAY_MS = 10; // Delay for CSS transition triggers
 export const CARD_HIDE_DELAY_MS = 180; // Delay before hiding cards (matches CSS opacity fade)
 export const APP_VERSION = '3.1'; // Current app version for exports
@@ -70,6 +69,18 @@ export const TASKS_ICON_SVG = `
     <circle cx="4.6" cy="5.1" r="1.6"/>
   </svg>
 `;
+
+// Task categories (Settings → Tasks). Each category owns one of 8 chart color
+// slots (styles.css --task-cat-1..8) so its color never changes. Default ids
+// are fixed so two devices seeding the defaults agree on them.
+export const MAX_TASK_CATEGORIES = 8;
+export const DEFAULT_TASK_CATEGORIES = [
+  { id: 'cat-content', name: 'Content', slot: 1 },
+  { id: 'cat-campaigns', name: 'Campaigns', slot: 2 },
+  { id: 'cat-analytics', name: 'Analytics', slot: 3 },
+  { id: 'cat-operational', name: 'Operational', slot: 4 },
+  { id: 'cat-strategy', name: 'Strategy', slot: 5 },
+];
 
 // Task colors for Eisenhower Matrix (4-quadrant priority system)
 export const TASK_COLORS = ['blue', 'yellow', 'orange', 'red'];

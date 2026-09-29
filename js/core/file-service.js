@@ -4,6 +4,7 @@
 
 import { API_BASE } from '../constants.js';
 import { isLoggedIn, getAuthToken } from './auth.js';
+import { collectRichTextFileIds, forEachString, findInlineImages, mapStringsDeep, replaceInlineImage, richTextLabel, imageFileBase } from './rich-text-refs.js';
 
 // ============================================================
 // BLOB URL LIFECYCLE MANAGEMENT
@@ -25,6 +26,14 @@ function storeBlobUrl(fileId, blobUrl) {
 export function revokeAllBlobUrls() {
   _activeBlobUrls.forEach(url => URL.revokeObjectURL(url));
   _activeBlobUrls.clear();
+}
+
+// Seed the cache with bytes we already have (e.g. an image just uploaded),
+// so showing it doesn't download it again. Returns the blob URL.
+export function cacheFileBlob(fileId, blob) {
+  const blobUrl = URL.createObjectURL(blob);
+  storeBlobUrl(fileId, blobUrl);
+  return blobUrl;
 }
 
 // ============================================================
@@ -335,7 +344,8 @@ export function filenameFromDataUrl(dataUrl, prefix) {
 // ============================================================
 
 /**
- * Migrate legacy Base64 images to R2 storage.
+ * Migrate legacy Base64 images to R2 storage: header images, card icons, and
+ * images embedded in rich text (which then become <img data-r2-file-id>).
  * Called once after authenticated profile load.
  * Safe, idempotent, non-blocking.
  */
@@ -388,7 +398,18 @@ export async function migrateBase64ToR2() {
     });
   });
 
-  if (migrations.length === 0) return;
+  // Images pasted into rich text (descriptions, projects, meetings, ideas,
+  // notes) before pasting uploaded them: dataUrl → file name
+  const inlineImages = new Map();
+  forEachString(model, (value, context) => {
+    for (const dataUrl of findInlineImages(value)) {
+      if (!inlineImages.has(dataUrl)) {
+        inlineImages.set(dataUrl, imageFileBase(richTextLabel(context.rootKey), context.title));
+      }
+    }
+  });
+
+  if (migrations.length === 0 && inlineImages.size === 0) return;
 
   // Migrate sequentially for reliability
   for (const m of migrations) {
@@ -402,6 +423,24 @@ export async function migrateBase64ToR2() {
         migrated = true;
       }
       // If upload fails, leave the Base64 value intact
+    } catch {
+      // Skip this image, try the rest
+    }
+  }
+
+  for (const [dataUrl, baseName] of inlineImages) {
+    try {
+      const blob = dataURLtoBlob(dataUrl);
+      const result = await uploadFile(blob, filenameFromDataUrl(dataUrl, baseName));
+      if (result.ok && result.fileId) {
+        cacheFileBlob(result.fileId, blob);
+        const toReference = (html) => replaceInlineImage(html, dataUrl, result.fileId);
+        mapStringsDeep(model, toReference);
+        // Keep an open edit session in step, or Confirm would restore the Base64 copy
+        if (window.editState && window.editState.working) mapStringsDeep(window.editState.working, toReference);
+        migrated = true;
+      }
+      // If upload fails, the image stays inline and is retried next sign-in
     } catch {
       // Skip this image, try the rest
     }
@@ -491,6 +530,14 @@ export function getAllReferencedFileIds() {
       });
     }
   });
+
+  // Images inside rich text (descriptions, projects, meetings, ideas, notes).
+  // The edit-mode working copy counts too: an image pasted into a task
+  // mid-edit is in use even before Confirm.
+  collectRichTextFileIds(model, ids);
+  if (window.editState && window.editState.working) {
+    collectRichTextFileIds(window.editState.working, ids);
+  }
 
   return ids;
 }

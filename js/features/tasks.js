@@ -9,6 +9,9 @@ import { saveModel } from '../core/storage.js';
 import { immediateCloudSave } from '../core/sync.js';
 import { uploadFile, openFile, setImageFromRef, deleteR2File } from '../core/file-service.js';
 import { TASK_COLORS, TASK_COLOR_LABELS, ANIMATION_DELAY_MS, CARD_HIDE_DELAY_MS } from '../constants.js';
+import { createTaskTimerControl, isTaskTimerRunning, stopTimerForTask, syncTaskTimeMeta, refreshTimeTrackingUI } from './time-tracking.js';
+import { getTaskCategories, categoryColor } from './task-categories.js';
+import { attachImageUpload } from './rich-text-images.js';
 
 // Module state
 let currentTasksReminder = null;
@@ -190,6 +193,8 @@ export function updateTask(taskId, updates) {
   }
 
   Object.assign(task, updates);
+  // Keep the time log's copy of the title/category current
+  syncTaskTimeMeta(task);
   saveModel();
 
   // If color changed and task has a highlight, refresh it
@@ -213,6 +218,9 @@ export function deleteTask(taskId) {
   if (taskIndex === -1) return false;
 
   const task = tasks[taskIndex];
+
+  // A running timer stops first; the task's tracked time stays in the log
+  stopTimerForTask(taskId);
 
   // Remove reference from linked items
   getLinkedItems(task).forEach(ref => {
@@ -260,6 +268,9 @@ export function completeTask(taskId) {
   if (taskIndex === -1) return false;
 
   const task = tasks[taskIndex];
+
+  // Completing a task stops (and records) its running timer
+  stopTimerForTask(taskId);
 
   // Remove reference from linked items
   getLinkedItems(task).forEach(ref => {
@@ -448,6 +459,7 @@ export function cleanupTasksForItem(type, key, sectionId) {
   );
 
   tasksToRemove.forEach(task => {
+    stopTimerForTask(task.id);
     const idx = tasks.findIndex(t => t.id === task.id);
     if (idx !== -1) {
       tasks.splice(idx, 1);
@@ -1522,6 +1534,9 @@ function renderEisenhowerMatrix() {
 
   // Initialize delete drop zone
   initDeleteDropZone();
+
+  // Task titles/categories/completion may have changed: keep the Time Tracking panel in step
+  refreshTimeTrackingUI();
 }
 
 // --- Create a single Eisenhower card for a color
@@ -1625,16 +1640,18 @@ function createEisenhowerTaskElement(task, color) {
     iconsContainer.appendChild(linkedIndicator);
   }
 
-  if (iconsContainer.children.length > 0) {
-    taskEl.appendChild(iconsContainer);
-  }
+  // Stopwatch (rightmost): toggles this task's timer; elapsed time ticks above it
+  iconsContainer.appendChild(createTaskTimerControl(task));
+  if (isTaskTimerRunning(task.id)) taskEl.classList.add('is-timing');
+
+  taskEl.appendChild(iconsContainer);
 
   // Long-press detection for pinning (view mode)
   let longPressTimer = null;
   let longPressTriggered = false;
 
   const startLongPress = (e) => {
-    if (e.target.closest('.eisenhower-task-link-btn')) return;
+    if (e.target.closest('.eisenhower-task-link-btn, .task-timer-btn')) return;
     longPressTriggered = false;
     longPressTimer = setTimeout(() => {
       longPressTriggered = true;
@@ -1667,7 +1684,7 @@ function createEisenhowerTaskElement(task, color) {
       longPressTriggered = false;
       return;
     }
-    if (e.target.closest('.eisenhower-task-link-btn')) return;
+    if (e.target.closest('.eisenhower-task-link-btn, .task-timer-btn')) return;
     e.stopPropagation();
     openEditTaskModal(task.id);
   });
@@ -2271,6 +2288,10 @@ function openTaskEditorModal(taskData, titleText) {
               </div>
               <div class="task-editor-linked-items" id="task-editor-linked-items"></div>
             </div>
+            <div class="task-editor-field">
+              <label id="task-editor-category-label">Category</label>
+              <div class="task-editor-categories" id="task-editor-categories" role="group" aria-labelledby="task-editor-category-label"></div>
+            </div>
           </div>
           <div class="task-editor-description">
             <label>Description</label>
@@ -2370,6 +2391,7 @@ function openTaskEditorModal(taskData, titleText) {
     const descEditor = modal.querySelector('#task-desc-editor');
     attachChecklistHandler(descEditor);
     attachImageResizeHandler(descEditor);
+    attachImageUpload(descEditor, { label: 'Task', getTitle: () => $('#task-editor-name')?.value });
     attachHighlighterContextMenu(descEditor);
     descEditor.addEventListener('input', handleEditorInput);
     // Click on hyperlinks opens in new tab
@@ -2720,6 +2742,44 @@ function openTaskEditorModal(taskData, titleText) {
   const primaryCheckbox = $('#task-editor-primary-checkbox');
   primaryCheckbox.checked = !!taskData.pinned;
 
+  // Category chips (click the selected one again to clear). A category that
+  // was deleted in Task Settings shows as none selected.
+  const categoriesContainer = $('#task-editor-categories');
+  let selectedCategoryId = getTaskCategories().some(c => c.id === taskData.categoryId) ? taskData.categoryId : null;
+  const renderCategoryChips = () => {
+    categoriesContainer.innerHTML = '';
+    const categories = getTaskCategories();
+    if (categories.length === 0) {
+      const hint = document.createElement('span');
+      hint.className = 'task-editor-categories-empty';
+      hint.textContent = 'No categories yet. Add them in edit mode → Settings → Tasks.';
+      categoriesContainer.appendChild(hint);
+      return;
+    }
+    categories.forEach(category => {
+      const isSelected = selectedCategoryId === category.id;
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'task-category-chip' + (isSelected ? ' active' : '');
+      chip.dataset.categoryId = category.id;
+      chip.setAttribute('aria-pressed', String(isSelected));
+      chip.title = isSelected ? 'Click again to clear' : category.name;
+      chip.style.setProperty('--chip-color', categoryColor(category));
+      const dot = document.createElement('span');
+      dot.className = 'task-category-dot';
+      const name = document.createElement('span');
+      name.className = 'task-category-name';
+      name.textContent = category.name;
+      chip.append(dot, name);
+      chip.addEventListener('click', () => {
+        selectedCategoryId = isSelected ? null : category.id;
+        renderCategoryChips();
+      });
+      categoriesContainer.appendChild(chip);
+    });
+  };
+  renderCategoryChips();
+
   // Populate description - auto-enter edit mode if empty
   descriptionEditing = false;
   const descViewContent = $('#task-desc-view-content');
@@ -2943,7 +3003,8 @@ function openTaskEditorModal(taskData, titleText) {
         dueDate: dueDate,
         description: description,
         subtasks: subtasks.length > 0 ? subtasks : null,
-        pinned: primaryCheckbox.checked
+        pinned: primaryCheckbox.checked,
+        categoryId: selectedCategoryId
       };
       updateTask(currentEditingTaskId, taskUpdate);
       showToast('Task updated');
@@ -2951,6 +3012,7 @@ function openTaskEditorModal(taskData, titleText) {
       // Create new task
       const task = createTask(title, selectedColor, linkedItems[0] || null, link);
       const updates = { pinned: primaryCheckbox.checked };
+      if (selectedCategoryId) updates.categoryId = selectedCategoryId;
       if (linkedItems.length > 0) updates.linkedItems = linkedItems;
       if (dueDate) updates.dueDate = dueDate;
       if (description) updates.description = description;
@@ -3011,7 +3073,8 @@ function openTaskEditorModal(taskData, titleText) {
     link: taskData.link || '',
     pinned: !!taskData.pinned,
     description: taskData.description || '',
-    subtasks: JSON.stringify(taskData.subtasks || [])
+    subtasks: JSON.stringify(taskData.subtasks || []),
+    categoryId: selectedCategoryId
   };
 }
 
@@ -3034,6 +3097,8 @@ function taskEditorHasChanges() {
   if ((primaryCheckbox?.checked || false) !== taskEditorInitialState.pinned) return true;
   if (desc !== taskEditorInitialState.description) return true;
   if (JSON.stringify(editorSubtasks.filter(s => s.title && s.title.trim())) !== taskEditorInitialState.subtasks) return true;
+  const activeCategory = $('#task-editor-categories .task-category-chip.active');
+  if ((activeCategory?.dataset.categoryId || null) !== taskEditorInitialState.categoryId) return true;
   return false;
 }
 
@@ -3622,6 +3687,10 @@ function openSubtaskDescriptionModal(subtask) {
     const editorEl = modal.querySelector('#subtask-desc-editor');
     attachChecklistHandler(editorEl);
     attachImageResizeHandler(editorEl);
+    attachImageUpload(editorEl, {
+      label: 'Subtask',
+      getTitle: () => ($('#subtask-desc-title')?.textContent || '').replace(/^Subtask:\s*/, '').replace(/^Subtask Description$/, '')
+    });
     attachHighlighterContextMenu(editorEl);
     editorEl.addEventListener('input', handleEditorInput);
     editorEl.addEventListener('click', (e) => {
@@ -4126,6 +4195,7 @@ export function openIdeasModal() {
     const ideasEditorEl = modal.querySelector('#ideas-editor');
     attachChecklistHandler(ideasEditorEl);
     attachImageResizeHandler(ideasEditorEl);
+    attachImageUpload(ideasEditorEl, { label: 'Idea', getTitle: () => $('#ideas-title-input')?.value });
     attachHighlighterContextMenu(ideasEditorEl);
     ideasEditorEl.addEventListener('input', handleEditorInput);
     ideasEditorEl.addEventListener('click', (e) => {

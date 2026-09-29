@@ -5,11 +5,12 @@
 // complexity and extensive dependencies. This module provides the interface for
 // future migration. The window.* exports allow gradual transition.
 
-import { model, editState, currentData } from '../state.js';
+import { model, editState, currentData, normalizeTaskCategories } from '../state.js';
 import { PLACEHOLDER_URL, APP_VERSION, LINKS_FILE_PATH } from '../constants.js';
 import { saveModel, cleanupOldBackups, migrateToUnifiedCards, migrateToHalfWidthCards } from './storage.js';
 import { migrateToDeviceLayouts, hydrateLayout, getActiveMode } from '../features/grid-engine.js';
 import { getActiveStorageKey, markCloudDirty } from './sync.js';
+import { normalizeTimeLog, prepareImportedTimeLog } from './time-log.js';
 
 // --- Helper to convert reminder from internal format to JSON for export
 // Exports in the same format as the internal model (compatible with old app)
@@ -153,6 +154,9 @@ export function extractUrlOverrides() {
   obj.ideas = data.ideas || [];
   obj.meetings = data.meetings || [];
   obj.subtaskTemplates = data.subtaskTemplates || [];
+  // Always from `model`: these never live on the edit-mode working copy
+  obj.taskCategories = model.taskCategories || [];
+  obj.timeTracking = normalizeTimeLog(model.timeTracking);
 
   // Metadata
   obj._metadata = {
@@ -884,6 +888,19 @@ export function applyUrlOverrides(data) {
     current.subtaskTemplates = data.subtaskTemplates;
   }
 
+  // Apply task categories
+  if (Array.isArray(data.taskCategories)) {
+    current.taskCategories = normalizeTaskCategories(data.taskCategories);
+  }
+
+  // Apply the task time log. It replaces history older than now (so cloud
+  // sync won't merge the pre-import log back in); a timer that was running
+  // in the backup closes at the export time.
+  if (data.timeTracking && typeof data.timeTracking === 'object') {
+    const exportedAt = Date.parse(data._metadata?.exportDate || '');
+    current.timeTracking = prepareImportedTimeLog(data.timeTracking, exportedAt, Date.now());
+  }
+
   // Synchronize editState.working if in edit mode
   if (editState.enabled && editState.working) {
     editState.working = JSON.parse(JSON.stringify(model));
@@ -911,6 +928,8 @@ export function applyUrlOverrides(data) {
       glassTheme: current.glassTheme,
       timers: current.timers,
       timeTrackingExpanded: current.timeTrackingExpanded,
+      timeTracking: current.timeTracking,
+      taskCategories: current.taskCategories,
       quickAccessExpanded: current.quickAccessExpanded,
       selectorModeActive: current.selectorModeActive,
       quickAccessItems: current.quickAccessItems,

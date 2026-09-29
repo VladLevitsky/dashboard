@@ -2,9 +2,10 @@
 // Handles saving and restoring the model to/from localStorage
 
 import { PLACEHOLDER_URL, APP_VERSION } from '../constants.js';
-import { model, currentData } from '../state.js';
+import { model, currentData, normalizeTaskCategories } from '../state.js';
 import { showToast } from '../utils.js';
 import { getActiveStorageKey, markCloudDirty } from './sync.js';
+import { normalizeTimeLog } from './time-log.js';
 import { migrateToGrid24, migrateToDeviceLayouts, hydrateLayout, persistActiveLayout, getActiveMode, DEFAULT_COL_SPAN, DEFAULT_ROW_SPAN } from '../features/grid-engine.js';
 
 // --- Migrate legacy card types to unified card structure (schemaVersion 3)
@@ -456,6 +457,8 @@ export function saveModel() {
     glassTheme: data.glassTheme,
     timers: data.timers,
     timeTrackingExpanded: data.timeTrackingExpanded,
+    timeTracking: data.timeTracking,
+    taskCategories: data.taskCategories,
     quickAccessExpanded: data.quickAccessExpanded,
     selectorModeActive: data.selectorModeActive,
     quickAccessItems: data.quickAccessItems,
@@ -626,18 +629,22 @@ export async function restoreModel() {
     // Note: Legacy reminders/dailyTasks/etc. arrays are now migrated to unified format
     // by migrateToUnifiedCards above, so we restore all section data uniformly
 
-    // Restore timers
+    // Legacy standalone timers (no longer shown, kept so old data isn't lost)
     if (saved.timers && Array.isArray(saved.timers)) {
       model.timers = saved.timers;
-      model.timers.forEach(timer => {
-        timer.isRunning = false;
-        timer.lastTick = null;
-      });
     }
 
-    // Restore time tracking state
+    // Restore time tracking panel state
     if (typeof saved.timeTrackingExpanded === 'boolean') {
       model.timeTrackingExpanded = saved.timeTrackingExpanded;
+    }
+
+    // Task time log — a running timer keeps running across reloads (it's timestamp-based)
+    model.timeTracking = normalizeTimeLog(saved.timeTracking);
+
+    // Task categories (profiles saved before categories existed keep the defaults)
+    if (Array.isArray(saved.taskCategories)) {
+      model.taskCategories = normalizeTaskCategories(saved.taskCategories);
     }
 
     // Restore quick access state
@@ -728,6 +735,10 @@ export function exportBackupFile() {
 }
 
 // --- Deep merge function to properly merge working copy back to main model
+// Deliberately NOT merged: timeTracking and taskCategories. Both are written
+// straight to `model` (timers tick and Task Settings save outside the
+// edit-mode confirm/cancel cycle), so the working copy's snapshot of them is
+// stale and must never overwrite the model.
 export function deepMergeModel(target, source) {
   // Handle arrays - replace them completely
   if (Array.isArray(source.sections)) {

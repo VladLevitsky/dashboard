@@ -522,51 +522,82 @@ html[data-fx="v2"] body[data-style="glass"][data-theme] :is(.eisenhower-priority
   box-shadow: var(--fx-lift-pill), var(--glass-rim);
 }
 
-/* --- 9b. Timers -------------------------------------------------------------
-   Idle / paused circles become glass lenses (timers.js rewrites an inline
-   background-color every tick, hence the one !important) with a key-light
-   pool TR and tile lift. The timer hue, inline as border-color (idle) or
-   background-color (running), feathers outside the rim: ::before inherits
-   it, sits behind the lens (the circle's backdrop-filter makes it the
-   stacking context) and is statically blurred. Running timers drop
-   styles.css's box-shadow pulse for an opacity breath on that halo. */
-html[data-fx="v2"] body[data-style="glass"][data-theme] .timer-circle {
-  box-shadow: var(--fx-lift-tile), var(--glass-rim);
+/* --- 9b. Task timers ----------------------------------------------------------
+   The stopwatch on each task pill (and in the Time Tracking list) is a plain
+   glyph at rest, with a frosted lens on hover. While it runs it becomes a
+   small emerald crystal lit from inside: a deep green body with the key-light
+   specular top-right and a caustic bottom-left, the shared rim (lit TR / BL,
+   shaded TL / BR), a feathered halo that breathes behind it (::before) and a
+   thin light arc that sweeps the rim like a second hand (::after, rotation
+   only). The body is background-image only, so glass-glow.js samples a
+   transparent colour and leaves the crystal's own light alone. No transform,
+   filter or backdrop-filter on the button itself: any of them would make it a
+   stacking context and pull the halo in front of the body. The header
+   stopwatch shows the same light as a white-hot core. */
+html[data-fx="v2"] body[data-style="glass"][data-theme] {
+  --fx-live-rgb: 24 211 116;
+  --fx-live-deep: 6 122 66;
 }
-html[data-fx="v2"] body[data-style="glass"][data-theme] .timer-circle:hover {
-  box-shadow: var(--fx-lift-tile-hover), var(--glass-rim);
+html[data-fx="v2"] body[data-style="glass"][data-theme] .task-timer-btn:not(.is-running):hover,
+html[data-fx="v2"] body[data-style="glass"][data-theme] .task-timer:not(.is-running) .task-timer-btn:hover {
+  background: radial-gradient(circle at 70% 24%, rgb(255 255 255 / 42%), transparent 62%), var(--glass-hover);
+  box-shadow: var(--glass-rim);
 }
-html[data-fx="v2"] body[data-style="glass"][data-theme] .timer-circle:not(.active) {
-  background-color: var(--glass-field) !important;
-  background-image: radial-gradient(circle 40px at 72% 22%, rgb(255 255 255 / 52%), rgb(255 255 255 / 10%) 55%, transparent 100%),
-    var(--glass-reflection);
-  -webkit-backdrop-filter: blur(12px) saturate(140%);
-  backdrop-filter: blur(12px) saturate(140%);
+html[data-fx="v2"] body[data-style="glass"][data-theme] :is(.task-timer.is-running .task-timer-btn, .task-timer-btn.is-running) {
+  color: #fff;
+  background-color: transparent;
+  background-image:
+    radial-gradient(circle at 70% 22%, rgb(255 255 255 / 80%) 0%, rgb(255 255 255 / 22%) 22%, transparent 44%),
+    radial-gradient(circle at 26% 86%, rgb(196 255 226 / 46%) 0%, transparent 48%),
+    linear-gradient(150deg, rgb(var(--fx-live-rgb) / 82%), rgb(var(--fx-live-deep) / 96%));
+  box-shadow:
+    inset -1px 1px 1px rgb(255 255 255 / 72%),
+    inset 1px -1px 1px rgb(255 255 255 / 30%),
+    inset 1px 1px 2px rgb(0 44 22 / 36%),
+    inset -1px -1px 3px rgb(0 44 22 / 44%),
+    0 0 0 0.5px rgb(var(--fx-live-rgb) / 55%),
+    0 3px 6px -2px rgb(var(--fx-live-deep) / 72%),
+    0 0 10px rgb(var(--fx-live-rgb) / 38%);
 }
-html[data-fx="v2"] body[data-style="glass"][data-theme] .timer-circle::before {
+html[data-fx="v2"] body[data-style="glass"][data-theme] :is(.task-timer.is-running .task-timer-btn, .task-timer-btn.is-running) svg {
+  filter: drop-shadow(0 0 1.5px rgb(0 56 28 / 70%));
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] :is(.task-timer.is-running .task-timer-btn, .task-timer-btn.is-running)::before {
   content: '';
   position: absolute;
-  inset: -3px;
-  border-radius: 50%;
-  border: 3px solid;
-  border-color: inherit;
-  filter: blur(5px);
-  opacity: 0.6;
-  pointer-events: none;
+  inset: -6px;
   z-index: -1;
+  border-radius: 50%;
+  background: radial-gradient(circle closest-side, rgb(var(--fx-live-rgb) / 58%), rgb(var(--fx-live-rgb) / 20%) 58%, rgb(var(--fx-live-rgb) / 0%) 100%);
+  pointer-events: none;
+  opacity: 0.8;
+  animation: fxBreath 3.7s var(--fx-breathe) -0.8s infinite;
 }
-html[data-fx="v2"] body[data-style="glass"][data-theme] .timer-circle.active {
-  animation: none;
-  background-image: radial-gradient(circle 40px at 72% 22%, rgb(255 255 255 / 40%), rgb(255 255 255 / 8%) 55%, transparent 100%);
-  box-shadow: var(--fx-lift-tile), inset 0 1px 2px rgb(255 255 255 / 45%), inset 0 -3px 7px rgb(0 0 0 / 12%);
+html[data-fx="v2"] body[data-style="glass"][data-theme] :is(.task-timer.is-running .task-timer-btn, .task-timer-btn.is-running)::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(from 0deg, transparent 0turn 0.56turn, rgb(236 255 245 / 0%) 0.56turn,
+    rgb(236 255 245 / 55%) 0.84turn, rgb(255 255 255 / 95%) 0.92turn, transparent 0.92turn);
+  -webkit-mask: radial-gradient(closest-side, transparent calc(100% - 2px), #000 calc(100% - 1.5px));
+  mask: radial-gradient(closest-side, transparent calc(100% - 2px), #000 calc(100% - 1.5px));
+  pointer-events: none;
+  animation: fxSweep 3s linear infinite;
 }
-html[data-fx="v2"] body[data-style="glass"][data-theme] .timer-circle.active::before {
-  inset: 3px;
-  border: 0;
-  background-color: inherit;
-  filter: blur(10px);
-  opacity: 0.75;
-  animation: fxBreath 5.3s var(--fx-breathe) -1.4s infinite;
+html[data-fx="v2"] body[data-style="glass"][data-theme] :is(.task-timer.is-running .task-timer-btn, .task-timer-btn.is-running):hover::before {
+  opacity: 1;
+  animation-play-state: paused;
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .time-tracking-toggle.is-running::after {
+  top: 0;
+  right: 0;
+  width: 10px;
+  height: 10px;
+  background: radial-gradient(circle closest-side, #fff 0%, rgb(236 255 244 / 96%) 18%,
+    rgb(var(--fx-live-rgb) / 86%) 42%, rgb(var(--fx-live-rgb) / 32%) 70%, rgb(var(--fx-live-rgb) / 0%) 100%);
+  box-shadow: none;
+  animation: fxCore 4.3s ease-in-out -0.9s infinite;
 }
 
 /* --- 10. Header controls, FABs, badge -------------------------------------
@@ -847,9 +878,10 @@ html[data-fx="v2"] body[data-style="glass"][data-theme="dark"] [data-glass-glow=
     0 0 20px -2px rgb(var(--control-glow-rgb) / 28%),
     0 10px 24px -10px rgb(var(--control-glow-rgb) / 50%) !important;
 }
-html[data-fx="v2"] body[data-style="glass"][data-theme="dark"] .timer-circle:not(.active) {
-  background-image: radial-gradient(circle 40px at 72% 22%, rgb(210 226 255 / 13%), transparent 100%),
-    var(--glass-reflection);
+/* Running task timer: a brighter emerald so the crystal reads on the dark canvas */
+html[data-fx="v2"] body[data-style="glass"][data-theme="dark"] {
+  --fx-live-rgb: 52 224 140;
+  --fx-live-deep: 8 112 62;
 }
 html[data-fx="v2"] body[data-style="glass"][data-theme="dark"] :is(.wrench-btn, .sticky-note-btn) {
   background: radial-gradient(circle 34px at 72% 20%, rgb(210 226 255 / 14%), rgb(210 226 255 / 3%) 55%, transparent 100%),
@@ -971,6 +1003,10 @@ html[data-fx="v2"] body[data-style="glass"][data-theme="dark"][data-glass-theme=
   71% { opacity: 0.36; transform: translateX(-2px); }
   86% { opacity: 0.78; transform: translateX(-4px); }
 }
+/* Running task timer: a light arc sweeps the crystal rim once every 3s. */
+@keyframes fxSweep {
+  to { transform: rotate(1turn); }
+}
 
 /* --- 16. Accessibility guards --------------------------------------------
    Reduced motion: every FX animation stops and rests at a calm static value
@@ -989,7 +1025,9 @@ html[data-fx="v2"] body[data-style="glass"][data-theme="dark"][data-glass-theme=
   html[data-fx="v2"] body[data-style="glass"][data-theme] .unified-reminder-item::after,
   html[data-fx="v2"] body[data-style="glass"][data-theme] .unified-reminder-item[data-progress-state="red"]::after,
   html[data-fx="v2"] body[data-style="glass"][data-theme] .eisenhower-task::before,
-  html[data-fx="v2"] body[data-style="glass"][data-theme] .timer-circle.active::before,
+  html[data-fx="v2"] body[data-style="glass"][data-theme] :is(.task-timer.is-running .task-timer-btn, .task-timer-btn.is-running)::before,
+  html[data-fx="v2"] body[data-style="glass"][data-theme] :is(.task-timer.is-running .task-timer-btn, .task-timer-btn.is-running)::after,
+  html[data-fx="v2"] body[data-style="glass"][data-theme] .time-tracking-toggle.is-running::after,
   html[data-fx="v2"] body[data-style="glass"][data-theme] .notification-badge::after {
     animation: none !important;
     will-change: auto;

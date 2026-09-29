@@ -1,6 +1,41 @@
 // Personal Dashboard - Global State Management
 // Central state objects that are shared across all modules
 
+import { DEFAULT_TASK_CATEGORIES, MAX_TASK_CATEGORIES } from './constants.js';
+import { createEmptyTimeLog } from './core/time-log.js';
+
+export function defaultTaskCategories() {
+  return DEFAULT_TASK_CATEGORIES.map(c => ({ ...c }));
+}
+
+// Validate saved/imported categories: unique ids, names, and one unique color
+// slot (1..MAX) each. Categories past the limit are dropped.
+export function normalizeTaskCategories(raw) {
+  if (!Array.isArray(raw)) return defaultTaskCategories();
+  const ids = new Set();
+  const slots = new Set();
+  const out = [];
+  raw.forEach(c => {
+    if (!c || typeof c.id !== 'string' || !c.id || ids.has(c.id)) return;
+    const name = typeof c.name === 'string' ? c.name.trim() : '';
+    if (!name || out.length >= MAX_TASK_CATEGORIES) return;
+    ids.add(c.id);
+    out.push({ id: c.id, name, slot: Number.isInteger(c.slot) ? c.slot : 0 });
+  });
+  // Keep valid unique slots; give the rest the lowest free slot
+  out.forEach(c => {
+    if (c.slot >= 1 && c.slot <= MAX_TASK_CATEGORIES && !slots.has(c.slot)) slots.add(c.slot);
+    else c.slot = 0;
+  });
+  out.forEach(c => {
+    if (c.slot) return;
+    for (let s = 1; s <= MAX_TASK_CATEGORIES; s++) {
+      if (!slots.has(s)) { c.slot = s; slots.add(s); break; }
+    }
+  });
+  return out;
+}
+
 // --- Data Model
 // All text + URLs live in one object to support edit mode.
 // Default state is blank - users add their own content via edit mode
@@ -26,11 +61,13 @@ export const model = {
   // Track the order and structure of sections
   // Empty by default - users add cards via the + button
   sections: [],
-  timers: [
-    { id: 'timer-1', title: 'Task 1', elapsed: 0, isRunning: false, lastTick: null },
-    { id: 'timer-2', title: 'Task 2', elapsed: 0, isRunning: false, lastTick: null },
-  ],
+  timers: [],  // Legacy standalone timers (replaced by per-task timers); kept so old data isn't lost
   timeTrackingExpanded: false,
+  // Per-task time log (js/core/time-log.js). Always read/written on `model`,
+  // never on the edit-mode working copy, so confirm/cancel can't rewind it.
+  timeTracking: createEmptyTimeLog(),
+  // Task categories: [{ id, name, slot }] — tasks reference them via task.categoryId
+  taskCategories: defaultTaskCategories(),
   quickAccessExpanded: false,
   selectorModeActive: false,
   quickAccessItems: {
@@ -124,7 +161,7 @@ export const dragState = {
 // --- Known static keys on the model (everything else is dynamic section data)
 const MODEL_STATIC_KEYS = new Set([
   'schemaVersion', 'sections', 'timers', 'lastActiveMode',
-  'timeTrackingExpanded', 'quickAccessExpanded', 'selectorModeActive',
+  'timeTrackingExpanded', 'timeTracking', 'taskCategories', 'quickAccessExpanded', 'selectorModeActive',
   'quickAccessItems', 'sectionTitles', 'sectionIcons',
   'sectionColors', 'subtitleColors', 'collapsedSubtitles', 'cardNotes', 'subtaskNotes',
   'collapsedCards', 'tasks', 'ideas', 'meetings', 'completedTasks', 'projects', 'subtaskTemplates',
@@ -160,10 +197,9 @@ export function resetModel() {
   model.projects = [];
   model.subtaskTemplates = [];
   model.quickAccessItems = { icons: [], listItems: [], quickLinks: [] };
-  model.timers = [
-    { id: 'timer-1', title: 'Task 1', elapsed: 0, isRunning: false, lastTick: null },
-    { id: 'timer-2', title: 'Task 2', elapsed: 0, isRunning: false, lastTick: null },
-  ];
+  model.timers = [];
+  model.timeTracking = createEmptyTimeLog();
+  model.taskCategories = defaultTaskCategories();
   model.header = {
     companyLogoSrc: 'assets/icons/placeholder-logo.svg',
     companyLogoZoom: 1, companyLogoXPercent: 0, companyLogoYPercent: 0,

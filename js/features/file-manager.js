@@ -7,6 +7,7 @@ import { deleteR2File, fetchFileBlobUrl, getAllReferencedFileIds, classifyImageR
 import { $, showToast } from '../utils.js';
 import { model, editState } from '../state.js';
 import { saveModel } from '../core/storage.js';
+import { mapStringsDeep, removeRichTextImage } from '../core/rich-text-refs.js';
 
 let cachedFiles = null;
 
@@ -86,6 +87,9 @@ function scrubFileId(data, fileId) {
       if (meeting.files.length < before) changed = true;
     }
   });
+
+  // Images inside rich text (descriptions, projects, meetings, ideas, notes)
+  if (mapStringsDeep(data, html => removeRichTextImage(html, fileId))) changed = true;
 
   return changed;
 }
@@ -272,22 +276,32 @@ function renderFileList(data) {
     }
   }
 
-  // --- Active files section
-  if (activeFiles.length > 0) {
-    if (orphanFiles.length > 0) {
-      const header = document.createElement('div');
-      header.className = 'file-manager-section-header';
-      header.innerHTML = `<span>Active Files (${activeFiles.length})</span>`;
-      listEl.appendChild(header);
-    }
-
-    activeFiles.forEach(file => {
+  // --- Files in use, grouped: Images (incl. images pasted into notes and
+  // descriptions), then Documents
+  const isImageFile = f => /^image\//.test(f.content_type || '');
+  const groups = [
+    { title: 'Images', files: activeFiles.filter(isImageFile) },
+    { title: 'Documents', files: activeFiles.filter(f => !isImageFile(f)) }
+  ];
+  groups.forEach(group => {
+    if (group.files.length === 0) return;
+    const header = document.createElement('div');
+    header.className = 'file-manager-section-header';
+    const label = document.createElement('span');
+    label.textContent = `${group.title} (${group.files.length})`;
+    header.appendChild(label);
+    listEl.appendChild(header);
+    group.files.forEach(file => {
       listEl.appendChild(createFileRow(file, false));
     });
-  }
+  });
 
-  // Wire individual delete buttons via delegation
-  listEl.addEventListener('click', handleDeleteClick);
+  // Wire individual delete buttons via delegation (once: the list re-renders
+  // after every delete, and a second listener would confirm/delete twice)
+  if (!listEl._deleteClickWired) {
+    listEl.addEventListener('click', handleDeleteClick);
+    listEl._deleteClickWired = true;
+  }
 }
 
 // --- Handle individual file delete

@@ -8,6 +8,8 @@ import { $, showToast, moveCursorAfterNode } from '../utils.js';
 import { handleEditorInput, handleEditorKeydown, createHighlighterButton, attachHighlighterContextMenu, toggleChecklist, isInChecklist, attachChecklistHandler, attachImageResizeHandler } from './edit-mode.js';
 import { saveModel } from '../core/storage.js';
 import { TASK_COLORS, TASK_COLOR_LABELS } from '../constants.js';
+import { attachImageUpload } from './rich-text-images.js';
+import { stripHydratedImageSrc } from '../core/rich-text-refs.js';
 
 // Module state
 let currentProjectId = null;
@@ -508,7 +510,7 @@ export function refreshProjectHighlights() {
   if (currentProjectId) {
     const project = getProjectById(currentProjectId);
     if (project) {
-      project.content = editor.innerHTML;
+      project.content = stripHydratedImageSrc(editor.innerHTML);
       saveModel();
     }
   }
@@ -615,6 +617,7 @@ export function openProjectsModal(openToProjectId) {
     const projectEditor = modal.querySelector('#project-editor');
     attachChecklistHandler(projectEditor);
     attachImageResizeHandler(projectEditor);
+    attachImageUpload(projectEditor, { label: 'Project', getTitle: () => getProjectById(currentProjectId)?.title });
 
     // Highlighter context menu on project editor
     attachHighlighterContextMenu(projectEditor, {
@@ -869,7 +872,7 @@ function saveCurrentProject() {
   if (!editor) return;
   const project = getProjectById(currentProjectId);
   if (!project) return;
-  project.content = editor.innerHTML;
+  project.content = stripHydratedImageSrc(editor.innerHTML);
   saveModel();
 }
 

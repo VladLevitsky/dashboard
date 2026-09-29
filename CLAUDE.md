@@ -46,9 +46,22 @@ const model = {
     link?, dueDate?, order, pinned: boolean,
     taskLinks?: [{ type: 'url', value } | { type: 'file', fileId, fileName }],
     description?, subtasks?: [{ id, title, completed, important, description?, dueDate? }],
-    projectHighlight?, meetingHighlight?, noteHighlight?
+    projectHighlight?, meetingHighlight?, noteHighlight?,
+    categoryId?   // → taskCategories[].id; unknown/deleted ids read as Uncategorized
   }],
   completedTasks: [{ ...task, completed: true, completedAt }],
+
+  // Task categories (Settings → Tasks). A setting: always read/written on `model`
+  taskCategories: [{ id, name, slot }],  // slot 1-8 = fixed chart color (--task-cat-N), max 8
+
+  // Task time log (js/core/time-log.js). Always read/written on `model`, NEVER the
+  // edit-mode working copy, and deliberately not merged by deepMergeModel
+  timeTracking: {
+    active: null | { taskId, start },   // the one running timer (epoch ms)
+    changedAt, resetAt,                 // merge bookkeeping (last start/stop; last import)
+    tasks: { [taskId]: { title, categoryId, sessions: [[startMs, endMs], ...] } },
+    removed: ['taskId@startMs', ...]    // tombstones so a cloud merge can't resurrect deleted sessions
+  },
 
   // Feature data
   projects: [{ id, title, content }],
@@ -56,7 +69,7 @@ const model = {
   ideas: [{ id, title, content }],
   cardNotes: { [sectionId]: [{ key, title, content, color? }] },
   quickAccessItems: { icons: [], listItems: [], quickLinks: [] },
-  timers: [],
+  timers: [],   // legacy standalone timers: no longer shown, kept so old data isn't lost
   header: { profilePhotoSrc, companyLogoSrc, profilePhotoZoom, companyLogoInvertDark, ... }
 }
 ```
@@ -69,6 +82,7 @@ Images use explicit format objects (or legacy strings for backward compatibility
 { type: 'url', url: 'https://...' }  // External URL
 // Legacy: 'data:image/...' (Base64), 'assets/...' (string path) — auto-migrated to R2
 ```
+Images inside rich text (descriptions, projects, meetings, ideas, notes) are stored as `<img data-r2-file-id="..." alt="">` with NO src; the page fills src in at render time (see Rich-Text Images below).
 
 ### File Structure
 ```
@@ -87,12 +101,16 @@ Images use explicit format objects (or legacy strings for backward compatibility
 │   │   ├── storage.js       # localStorage, deepMergeModel, schema migrations
 │   │   ├── import-export.js # JSON export/import with migration
 │   │   ├── auth.js          # Authentication (login/register/logout/session)
-│   │   ├── sync.js          # Cloud sync (D1 profiles, dirty tracking, 20-min interval)
+│   │   ├── sync.js          # Cloud sync (D1 profiles, dirty tracking, 20-min interval, time-log merge)
+│   │   ├── time-log.js      # Pure time-log rules: start/stop, totals, merge, import (no DOM, Node-testable)
+│   │   ├── rich-text-refs.js # Pure string rules for <img data-r2-file-id> in rich text (no DOM, Node-testable)
 │   │   └── file-service.js  # R2 file operations, image ref classification, Base64 migration
 │   ├── features/
 │   │   ├── edit-mode.js     # Toggle, popovers, color pickers, notepad, highlighter, context menu
 │   │   ├── drag-drop.js     # Card and item reordering
-│   │   ├── timers.js
+│   │   ├── time-tracking.js # Pill stopwatches, 1s tick, Time Tracking panel (task list + category donut)
+│   │   ├── task-categories.js # Category helpers + Task Settings modal
+│   │   ├── rich-text-images.js # Paste/drop images → R2 upload; fills in stored images wherever rich text renders
 │   │   ├── quick-access.js  # Quick access panel with reconciliation
 │   │   ├── media-library.js
 │   │   ├── image-editor.js  # Profile/logo positioning
@@ -114,7 +132,10 @@ Images use explicit format objects (or legacy strings for backward compatibility
 ├── assets/
 └── Reference/               # (gitignored) Backend docs, screenshots, working context
     ├── migration-test.mjs   # Node smoke test: schema migrations + device-profile round-trip
-    └── collapse-test.mjs    # Node smoke test: collapse display-layout compaction
+    ├── collapse-test.mjs    # Node smoke test: collapse display-layout compaction
+    ├── time-log-test.mjs    # Node smoke test: time-log start/stop, totals, merge, import
+    ├── sync-merge-test.mjs  # Node smoke test: cloudSave() time-log merge against a fake API
+    └── rich-text-refs-test.mjs # Node smoke test: rich-text image reference rules
 ```
 
 ### Storage & Sync
@@ -122,6 +143,8 @@ Images use explicit format objects (or legacy strings for backward compatibility
 - **D1**: Durable cloud profile via `PUT /profile` (2MB max)
 - **R2**: Private file/image storage via `POST /files` (5MB/file, 100MB/user)
 - **Sync model**: localStorage for immediate edits → cloud sync on confirm, every 20 min, and on import
+- **Time-log merge**: the profile is saved whole (last write wins), so before every `PUT /profile`, `cloudSave()` fetches the cloud copy and folds its `timeTracking` into the local log (`mergeTimeLogs`): sessions union (deduped by start, earliest stop wins), tombstones win, the newer start/stop decides the running timer, and sessions older than an import only come from the importing side. Other profile data is still last-write-wins
+- **Dirty generation**: a save only clears the dirty flag if nothing changed while the upload was in flight
 
 ---
 
@@ -152,6 +175,24 @@ Central task store in `model.tasks[]` with 4-color priority system:
 - Task editor: "Link to Item (Optional)" sits at the bottom below Subtasks. "Select Item" appends refs; linked items render below it as functional miniatures (order: reminders → subtasks → copy-paste → icons) — click opens the item's link/file (copy-paste copies), × unlinks
 - Item "Add Task" button (in the item tasks modal) opens a task PICKER (`#item-task-picker-modal`, styled like the @ mention dropdown: per-color columns red/orange/yellow/blue, pinned first, search filter) to link an EXISTING task to the item — it no longer creates a new task
 - Primary (pinned) tasks float to top within their color group
+- **Category**: chips below "Link to Item" in the task editor (click the selected chip again to clear) → `task.categoryId`
+- **Stopwatch**: rightmost control on every pill (`createTaskTimerControl`); see Task Time Tracking
+
+### Task Time Tracking (`js/features/time-tracking.js` + `js/core/time-log.js`)
+- Pill stopwatch toggles that task's timer; ONE timer runs at a time (starting another stops and records the first, with a toast). While running, the task's total (`0:45` → `12:05` → `1:02:33`) sits to the LEFT of the icon, and the pill never changes height
+- Running look = an emerald glass crystal (glass-fx.css 9b): gradient body + specular, shared rim, breathing halo (`::before`) and a rim light that sweeps like a second hand (`::after`, `fxSweep`). No transform/filter/backdrop-filter on the button (that would make it a stacking context and pull the halo in front); body is background-image only so glass-glow.js doesn't add its generic glow. `--fx-live-rgb` / `--fx-live-deep` tokens (dark overrides in section 13)
+- Every start/stop stores exact epoch-ms `[start, end]` sessions per task in `model.timeTracking` (saved with the profile). Sessions under 1s are dropped. A running timer survives reloads (timestamp-based) and keeps running while the tab is closed
+- The 1-second tick only rewrites existing text nodes (`Text.data`), never replaces elements, so glass-glow.js's MutationObservers (childList/attributes) don't re-measure the page every second; it pauses while the tab is hidden and catches up on return
+- Completing or deleting a task stops its timer first; its history stays in the log (title/category kept in `timeTracking.tasks[id]`), so deleted tasks still count and show as "Deleted"
+- Header stopwatch (`#time-tracking-toggle`) opens the Time Tracking panel (`#time-tracking-card`) and shows a live green dot while a timer runs. Panel: tasks with time > 0 (running first, then by total; completed/deleted in a collapsed "Completed" group), each row expands to its sessions (delete one, or "Clear all time"); below the list, the Categories donut + legend (legend doubles as the table view)
+- Donut rules (dataviz): ≤6 segments (smallest categories fold into "Other"), 2px gaps, slices in category order, colors from the validated categorical palette per category slot (`--task-cat-1..8`, `--task-cat-none`, `--task-cat-other` in styles.css, light + dark), chart figures in minutes (refresh once a minute)
+- `refreshTimeTrackingUI()` repaints pill controls, header dot and the panel; it also closes a running timer whose task vanished (import, other device, or a task created in a cancelled edit)
+- The old standalone timers (timers.js, Reset All / Add Timer) were removed; `model.timers` is kept untouched
+
+### Task Categories (`js/features/task-categories.js`)
+- Edit mode → Settings → **Tasks** opens the Task Settings modal (reuses the appearance-modal classes, z-index 2100 above Settings): add / rename / delete categories, max 8, colors auto-assigned by the lowest free slot
+- Draft + Save/Cancel; saved straight to `model.taskCategories` (like the theme, outside the edit-mode confirm/cancel). Deleting a category that tasks use asks first; those tasks read as Uncategorized
+- Defaults (fixed ids so devices agree): Content, Campaigns, Analytics, Operational, Strategy
 
 ### Task Highlight System
 Tasks can be linked to text in Projects, Meetings, and Card Notes:
@@ -208,7 +249,8 @@ Notes viewer reconciles task highlights on open.
 Accessible via gear icon in edit mode. Contains:
 - Theme: Light / Dark toggle
 - Theme: Classic (Grey) / Sunset dropdown
-- JSON File Backup: Download and Upload with overwrite warning
+- Tasks: opens Task Settings (categories)
+- JSON File Backup: Download and Upload with overwrite warning (includes `taskCategories` and `timeTracking`; importing a log resets history older than the import)
 
 ### Quick Access
 Prioritized items panel with state-based reconciliation — automatically removes items whose source cards/items have been deleted.
@@ -221,6 +263,17 @@ Prioritized items panel with state-based reconciliation — automatically remove
 - Meeting editor has dedicated Files section for R2 attachments
 - File-linked items open via authenticated fetch (images/PDFs inline, HTML via isolated viewer)
 - Image refs use `classifyImageRef()` → `setImageFromRef()` for rendering
+- **Two limits**: the profile JSON (all dashboard data, one D1 row) is capped at 2 MB (`MAX_PROFILE_BYTES`, and D1's own 2 MB row limit); R2 file storage is 100 MB/user (5 MB/file) — what the File Manager bar shows. Anything image-sized belongs in R2
+- **File Manager**: Orphaned files (not referenced anywhere in the profile or the edit-mode working copy) on top with Delete All, then Images and Documents. Deleting a file also scrubs its references, including `<img data-r2-file-id>` in rich text
+
+### Rich-Text Images (`js/features/rich-text-images.js` + `js/core/rich-text-refs.js`)
+- Pasting or dropping an image into any of the 6 rich-text editors uploads it to R2 (`attachImageUpload(editor, { label, getTitle })`, attached next to `attachImageResizeHandler`). Files are named after where they were pasted: `Task - <title> 2026-09-29 10.32.15.png` (dropped files keep their own name)
+- Flow: instant local preview → `data:` copy (so a note saved mid-upload keeps the picture) marked `data-r2-uploading="<token>"` → on upload the token becomes `data-r2-file-id` in the live DOM AND in any saved copy in the model / working copy. Signed out or upload failed → the image stays inline (Base64) with a toast. Non-PNG/JPG/GIF/WebP images are re-encoded to PNG; over 5 MB they're tried as WebP, else refused
+- Text pasted with images (Word, web pages): the browser pastes, then any embedded `data:` images are uploaded the same way
+- Showing: a document-wide MutationObserver (`startRichTextImages()`, init.js) fills in src for every `img[data-r2-file-id]` added anywhere, from the blob cache or one authenticated fetch per file. It drops a stale saved src first (no broken-image flash); a `:not([src])` CSS frame shows while loading / signed out / deleted
+- Saved HTML stays canonical: `normalizeDescHtml()` (utils.js) and the notepad's `sanitizeHtml()` strip the session-only src; projects and meetings wrap their direct `editor.innerHTML` saves in `stripHydratedImageSrc()`. A leftover stale src is harmless (the observer replaces it)
+- Existing Base64 images in rich text are moved to R2 by `migrateBase64ToR2()` on the next signed-in load (deduped by data URL, named after the item)
+- Removing an image from a note does NOT delete the file automatically (cut/paste between notes would lose it); unused images appear under Orphaned Files in the File Manager
 
 ### Authentication & Cloud Sync
 - Username/password auth via Cloudflare Workers
@@ -304,7 +357,9 @@ Prioritized items panel with state-based reconciliation — automatically remove
 - `openFile(fileId, fileName)` - Open file (HTML via viewer, others via blob)
 - `setImageFromRef(img, ref, placeholder)` - Resolve any image ref to img.src
 - `classifyImageRef(ref)` - Detect r2/asset/url/base64/none
-- `migrateBase64ToR2()` - Auto-migrate legacy Base64 images
+- `migrateBase64ToR2()` - Auto-migrate legacy Base64 images (header, icons, and images embedded in rich text)
+- `cacheFileBlob(fileId, blob)` - Seed the blob cache with bytes already in hand (just-uploaded images)
+- `getAllReferencedFileIds()` - Every fileId the profile (and edit-mode working copy, for rich text) still uses
 - `reconcileTaskHighlights(container)` - State-based highlight reconciliation
 
 ### Tasks
@@ -312,6 +367,13 @@ Prioritized items panel with state-based reconciliation — automatically remove
 - `getTasksByColor(color)` / `getAllTasks()` / `getCompletedTasks()`
 - `openAddTaskModal()` / `openEditTaskModal(taskId)`
 - `openItemTasksModal(type, key, sectionId, subtitle)`
+
+### Time Tracking & Categories
+- `toggleTaskTimer(taskId)` / `stopTaskTimer()` / `isTaskTimerRunning(taskId)`
+- `stopTimerForTask(taskId)` (before complete/delete) / `syncTaskTimeMeta(task)` (after title/category edits)
+- `toggleTimeTracking()` / `renderTimeTrackingPanel()` / `refreshTimeTrackingUI()`
+- `getTaskCategories()` / `getTaskCategory(id)` / `categoryColor(category)` / `openTaskSettingsModal()`
+- time-log.js: `startTaskTimer` / `stopActiveTimer` / `getTaskTotalMs` / `getTaskTotals` / `removeSession` / `clearTaskTime` / `mergeTimeLogs` / `prepareImportedTimeLog`
 
 ### Projects & Meetings
 - `openProjectsModal()` / `closeProjectsModal()`
@@ -387,7 +449,7 @@ All 6 editors share the same toolbar features and must be updated together:
 | Meetings | `meetings.js` | `#meetings-inline-desc-editor` | `.meetings-inline-toolbar-btn` | `updateInlineToolbarState()` |
 | Card Notes | `edit-mode.js` + `index.html` | `#notepad-editor` | `.notepad-toolbar-btn` | `updateToolbarState()` |
 
-Each editor needs: toolbar HTML buttons, click handlers, `attachHighlighterContextMenu()`, `attachChecklistHandler()`, toolbar state update with checklist support, `handleEditorInput`/`handleEditorKeydown` wiring.
+Each editor needs: toolbar HTML buttons, click handlers, `attachHighlighterContextMenu()`, `attachChecklistHandler()`, `attachImageResizeHandler()` + `attachImageUpload()` (pasted images → R2), toolbar state update with checklist support, `handleEditorInput`/`handleEditorKeydown` wiring. Save the editor's HTML through `normalizeDescHtml()` / `stripHydratedImageSrc()` so stored images keep only their file reference.
 
 Shared logic lives in `edit-mode.js`: `handleEditorKeydown`, `handleEditorInput`, `toggleChecklist`, `isInChecklist`, `attachChecklistHandler`, `attachHighlighterContextMenu`, `createHighlighterButton`.
 
@@ -406,7 +468,13 @@ Shared logic lives in `edit-mode.js`: `handleEditorKeydown`, `handleEditorInput`
 
 ## Version History
 
-### v5.1 (Current)
+### v5.2 (Current)
+- **Task time tracking**: stopwatch on every task pill, exact start/end sessions saved with the profile, Time Tracking panel (tracked tasks + sessions, category donut) replaces the old standalone timers
+- **Task categories**: category chips in the task editor; Settings → Tasks → Task Settings to manage them
+- Cloud sync merges the time log before each upload (multi-device safe for time data) and no longer drops changes made during an upload
+- **Pasted images go to R2 file storage** (not the 2 MB profile): paste/drop in any rich-text editor uploads, the note keeps `<img data-r2-file-id>`, existing embedded images migrate on sign-in; File Manager groups Images / Documents and its delete no longer double-fires
+
+### v5.1
 - **Glass FX v2** overlay (`glass-fx.css`, `glass-fx.js`): more lift and 3D, fluid pulsing indicator light, feathered colored glows, playful transparency
 
 ### v5.0

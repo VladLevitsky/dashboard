@@ -3,7 +3,7 @@
 
 // Import core modules
 import { model, editState, dragState, currentData, currentSections, resetModel } from './state.js';
-import { PLACEHOLDER_URL, icons, LINK_ICON_SVG, TASKS_ICON_SVG, TIMER_UPDATE_INTERVAL_MS, ANIMATION_DELAY_MS, CARD_HIDE_DELAY_MS, APP_VERSION, STORAGE_KEY, MEDIA_STORAGE_KEY, LINKS_FILE_PATH, MEDIA_MANIFEST_PATH, API_BASE, TURNSTILE_SITE_KEY, AUTH_TOKEN_KEY, AUTH_USERNAME_KEY, SCOPED_KEY_PREFIX, SYNC_INTERVAL_MS } from './constants.js';
+import { PLACEHOLDER_URL, icons, LINK_ICON_SVG, TASKS_ICON_SVG, ANIMATION_DELAY_MS, CARD_HIDE_DELAY_MS, APP_VERSION, STORAGE_KEY, MEDIA_STORAGE_KEY, LINKS_FILE_PATH, MEDIA_MANIFEST_PATH, API_BASE, TURNSTILE_SITE_KEY, AUTH_TOKEN_KEY, AUTH_USERNAME_KEY, SCOPED_KEY_PREFIX, SYNC_INTERVAL_MS } from './constants.js';
 import { $, $$, openUrl, deepClone, generateKey, showToast, getColorForCurrentMode, setColorForCurrentMode, lightenAndDesaturateColor, darkenColor, glassCompensateColor, makePriorityGlowColor, convertToDarkModeColor, makeColorMoreVibrant, lightenColorBy20Percent, colorToGlassRgba, isGlassModeActive, getSectionDataKey, generateSectionId, generateUniqueCardTitle, fileToDataURL, copyToClipboard } from './utils.js';
 import { saveModel, restoreModel, exportBackupFile, deepMergeModel, cleanupOldBackups, migrateToGridLayout } from './core/storage.js';
 
@@ -65,22 +65,23 @@ import {
 } from './features/drag-drop.js';
 
 import {
-  formatTime,
-  getTimerColor,
-  startTimer,
-  stopTimer,
-  toggleTimer,
-  resetAllTimers,
-  addNewTimer,
-  deleteTimer,
-  updateTimerDisplay,
-  renderTimers,
   toggleTimeTracking,
-  getTimerInterval,
-  setTimerInterval,
-  clearTimerInterval,
-  startTimerInterval
-} from './features/timers.js';
+  toggleTaskTimer,
+  stopTaskTimer,
+  isTaskTimerRunning,
+  refreshTimeTrackingUI,
+  renderTimeTrackingPanel
+} from './features/time-tracking.js';
+
+import {
+  getTaskCategories,
+  openTaskSettingsModal
+} from './features/task-categories.js';
+
+import {
+  attachImageUpload,
+  hydrateRichTextImages
+} from './features/rich-text-images.js';
 
 import {
   closeQuickAccess,
@@ -349,7 +350,6 @@ window.PLACEHOLDER_URL = PLACEHOLDER_URL;
 window.icons = icons;
 window.LINK_ICON_SVG = LINK_ICON_SVG;
 window.TASKS_ICON_SVG = TASKS_ICON_SVG;
-window.TIMER_UPDATE_INTERVAL_MS = TIMER_UPDATE_INTERVAL_MS;
 window.ANIMATION_DELAY_MS = ANIMATION_DELAY_MS;
 window.CARD_HIDE_DELAY_MS = CARD_HIDE_DELAY_MS;
 window.APP_VERSION = APP_VERSION;
@@ -426,22 +426,21 @@ window.initializeReminderDragHandlers = initializeReminderDragHandlers;
 window.removeDragHandlers = removeDragHandlers;
 window.initializeCardDropZone = initializeCardDropZone;
 
-// Timers
-window.formatTime = formatTime;
-window.getTimerColor = getTimerColor;
-window.startTimer = startTimer;
-window.stopTimer = stopTimer;
-window.toggleTimer = toggleTimer;
-window.resetAllTimers = resetAllTimers;
-window.addNewTimer = addNewTimer;
-window.deleteTimer = deleteTimer;
-window.updateTimerDisplay = updateTimerDisplay;
-window.renderTimers = renderTimers;
+// Task time tracking
 window.toggleTimeTracking = toggleTimeTracking;
-window.getTimerInterval = getTimerInterval;
-window.setTimerInterval = setTimerInterval;
-window.clearTimerInterval = clearTimerInterval;
-window.startTimerInterval = startTimerInterval;
+window.toggleTaskTimer = toggleTaskTimer;
+window.stopTaskTimer = stopTaskTimer;
+window.isTaskTimerRunning = isTaskTimerRunning;
+window.refreshTimeTrackingUI = refreshTimeTrackingUI;
+window.renderTimeTrackingPanel = renderTimeTrackingPanel;
+
+// Task categories
+window.getTaskCategories = getTaskCategories;
+window.openTaskSettingsModal = openTaskSettingsModal;
+
+// Rich-text images (pasted images live in file storage)
+window.attachImageUpload = attachImageUpload;
+window.hydrateRichTextImages = hydrateRichTextImages;
 
 // Quick Access
 window.closeQuickAccess = closeQuickAccess;

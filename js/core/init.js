@@ -3,7 +3,7 @@
 
 import { model, editState, currentData, currentSections } from '../state.js';
 import { $, $$, showToast, generateKey, escapeAttr } from '../utils.js';
-import { PLACEHOLDER_URL, ANIMATION_DELAY_MS, CARD_HIDE_DELAY_MS, TIMER_UPDATE_INTERVAL_MS } from '../constants.js';
+import { PLACEHOLDER_URL, ANIMATION_DELAY_MS, CARD_HIDE_DELAY_MS } from '../constants.js';
 import { saveModel, restoreModel, exportBackupFile, deepMergeModel, cleanupOldBackups } from './storage.js';
 import { setImageFromRef, getDisplaySrc, classifyImageRef, uploadFile, dataURLtoBlob, filenameFromDataUrl } from './file-service.js';
 import { isLoggedIn } from './auth.js';
@@ -28,16 +28,9 @@ import {
   handleDragOver,
   handleDrop
 } from '../features/drag-drop.js';
-import {
-  resetAllTimers,
-  addNewTimer,
-  updateTimerDisplay,
-  renderTimers,
-  toggleTimeTracking,
-  getTimerInterval,
-  setTimerInterval,
-  clearTimerInterval
-} from '../features/timers.js';
+import { initTimeTracking } from '../features/time-tracking.js';
+import { openTaskSettingsModal } from '../features/task-categories.js';
+import { startRichTextImages } from '../features/rich-text-images.js';
 import {
   toggleQuickAccess,
   renderQuickAccess,
@@ -681,6 +674,9 @@ export async function init() {
 
   await restoreModel();
 
+  // Images kept in file storage: fill in <img data-r2-file-id> wherever rich text renders
+  startRichTextImages();
+
   applyDarkMode();
   applyGlassMode();
   applyGlassTheme();
@@ -699,25 +695,9 @@ export async function init() {
   if (window.initResizeObserver) window.initResizeObserver();
   initSearch();
 
-  // Initialize time tracking if it was expanded
-  if (model.timeTrackingExpanded) {
-    const card = $('#time-tracking-card');
-    if (card) {
-      card.hidden = false;
-      setTimeout(() => card.classList.add('active'), ANIMATION_DELAY_MS);
-      renderTimers();
-      // Start the update interval
-      const timerInterval = getTimerInterval();
-      if (timerInterval) clearInterval(timerInterval);
-      setTimerInterval(setInterval(updateTimerDisplay, TIMER_UPDATE_INTERVAL_MS));
-    }
-  }
-
-  // Ensure timer buttons are hidden initially if not in edit mode
-  const buttonsContainer = $('#timer-buttons-container');
-  if (buttonsContainer) {
-    buttonsContainer.hidden = !editState.enabled;
-  }
+  // Task timers + Time Tracking panel (reopens if it was expanded; a running
+  // timer resumes ticking from its saved start time)
+  initTimeTracking();
 
   // Initialize Quick Access if it was expanded
   if (model.quickAccessExpanded) {
@@ -970,10 +950,9 @@ export function wireUI() {
   $('#edit-toggle').addEventListener('click', toggleEditMode);
   $('#appearance-toggle').addEventListener('click', openAppearanceModal);
 
-  // Time tracking event handlers
-  $('#time-tracking-toggle').addEventListener('click', toggleTimeTracking);
-  $('#reset-all-timers').addEventListener('click', resetAllTimers);
-  $('#add-timer-btn').addEventListener('click', addNewTimer);
+  // Settings → Tasks opens Task Settings (categories) on top of Settings
+  const taskSettingsBtn = $('#settings-task-settings-btn');
+  if (taskSettingsBtn) taskSettingsBtn.addEventListener('click', openTaskSettingsModal);
 
   // Device layout mode picker (icon beside search bar shows the active mode)
   const deviceToggle = $('#device-mode-toggle');
@@ -1440,15 +1419,6 @@ export function wireUI() {
   // Card collapse/expand functionality (only in view mode)
   setupCardCollapseExpand();
 }
-
-// Cleanup on page unload
-window.addEventListener('pagehide', () => {
-  const timerInterval = getTimerInterval();
-  if (timerInterval) {
-    clearInterval(timerInterval);
-    clearTimerInterval();
-  }
-});
 
 // When coming back online, sync any pending changes
 window.addEventListener('online', () => {

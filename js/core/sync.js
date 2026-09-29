@@ -6,6 +6,7 @@ import { STORAGE_KEY, SCOPED_KEY_PREFIX, SYNC_INTERVAL_MS } from '../constants.j
 import { isLoggedIn, getUsername, getAuthToken, apiCall } from './auth.js';
 import { model } from '../state.js';
 import { showToast } from '../utils.js';
+import { mergeTimeLogs, normalizeTimeLog } from './time-log.js';
 
 // --- Scoped localStorage key management ---
 
@@ -35,6 +36,7 @@ export function migrateToScopedStorage(username) {
 // --- Dirty flag & sync timer ---
 
 let _dirty = false;
+let _dirtyGeneration = 0; // bumps on every change, so a save only clears what it uploaded
 let _syncTimerId = null;
 let _isSaving = false;
 
@@ -48,6 +50,7 @@ function getDirtyFlagKey() {
 export function markCloudDirty() {
   if (isLoggedIn()) {
     _dirty = true;
+    _dirtyGeneration++;
     try { localStorage.setItem(getDirtyFlagKey(), '1'); } catch (e) { /* quota — in-memory flag still set */ }
   }
 }
@@ -56,25 +59,58 @@ export function isCloudDirty() {
   return _dirty;
 }
 
+// --- Time log merge before upload ---
+// The profile is saved whole (last write wins), so a device that tracked time
+// while another device also did would erase the other's sessions. Before each
+// upload, fold the cloud copy of the time log into this device's log.
+// `prefetched` is a GET /profile result the caller already has.
+async function mergeCloudTimeLog(prefetched = null) {
+  const result = prefetched || await apiCall('GET', '/profile');
+  if (!result.ok) return result; // offline etc. — the upload below reports the failure
+
+  const remoteLog = result.data?.profile?.timeTracking;
+  if (!remoteLog) return result;
+
+  const localLog = normalizeTimeLog(model.timeTracking);
+  const merged = mergeTimeLogs(localLog, remoteLog);
+  if (JSON.stringify(merged) !== JSON.stringify(localLog)) {
+    model.timeTracking = merged;
+    if (window.saveModel) window.saveModel();
+    if (window.refreshTimeTrackingUI) window.refreshTimeTrackingUI();
+  }
+  return result;
+}
+
 // --- Cloud save: sends the COMPLETE profile JSON to PUT /profile ---
 
-export async function cloudSave() {
+export async function cloudSave(prefetchedProfile = null) {
   if (!isLoggedIn() || _isSaving) return { ok: false };
   _isSaving = true;
 
   try {
+    const mergeResult = await mergeCloudTimeLog(prefetchedProfile);
+    if (mergeResult.status === 401) {
+      _dirty = false; // Can't sync without auth
+      if (window.renderAuthUI) window.renderAuthUI();
+      showToast('Session expired. Please sign in again.');
+      return mergeResult;
+    }
+
     // Read the current localStorage payload (same format as what saveModel writes)
+    const generation = _dirtyGeneration;
     const raw = localStorage.getItem(getActiveStorageKey());
     if (!raw) {
-      _isSaving = false;
       return { ok: false, error: 'No local data to save.' };
     }
 
     const result = await apiCall('PUT', '/profile', JSON.parse(raw));
 
     if (result.ok) {
-      _dirty = false;
-      try { localStorage.removeItem(getDirtyFlagKey()); } catch (e) { /* ignore */ }
+      // Changes made while the upload was in flight still need a sync
+      if (generation === _dirtyGeneration) {
+        _dirty = false;
+        try { localStorage.removeItem(getDirtyFlagKey()); } catch (e) { /* ignore */ }
+      }
 
       // D1 save succeeded — flush any queued R2 file deletions
       if (window.flushPendingR2Deletions) {
@@ -181,7 +217,8 @@ export async function syncOnLogin() {
   const localDirty = localStorage.getItem(getDirtyFlagKey()) === '1';
   if (localDirty && localHasData) {
     _dirty = true;
-    const saveResult = await cloudSave();
+    // Reuse the profile just fetched for the time-log merge
+    const saveResult = await cloudSave({ ok: true, data: cloudResult });
     if (saveResult.ok) {
       return { action: 'uploaded_local' };
     }
@@ -204,7 +241,7 @@ export async function syncOnLogin() {
   if (!cloudHasData && localHasData) {
     // First-time migration: upload existing local data to cloud
     _dirty = true;
-    const saveResult = await cloudSave();
+    const saveResult = await cloudSave({ ok: true, data: cloudResult });
     if (saveResult.ok) {
       showToast('Local dashboard uploaded to your account');
     }

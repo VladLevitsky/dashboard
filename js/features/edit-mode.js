@@ -4,6 +4,7 @@
 import { model, editState, currentData, currentSections } from '../state.js';
 import { $, deepClone, showToast, getColorForCurrentMode, setColorForCurrentMode } from '../utils.js';
 import { saveModel } from '../core/storage.js';
+import { attachImageUpload } from './rich-text-images.js';
 
 // --- Toggle Edit Mode
 export function toggleEditMode() {
@@ -86,11 +87,9 @@ export function toggleEditMode() {
     if (window.addCardButtons) window.addCardButtons();
   }
 
-  // Re-render timers if the time tracking card is visible
-  const timeCard = $('#time-tracking-card');
-  if (timeCard && !timeCard.hidden) {
-    if (window.renderTimers) window.renderTimers();
-  }
+  // Task timers read tasks from the working copy while editing: repaint them
+  // (and close a timer whose task only existed in a cancelled edit)
+  if (window.refreshTimeTrackingUI) window.refreshTimeTrackingUI();
 
   if (window.refreshEditingClasses) window.refreshEditingClasses();
 
@@ -405,11 +404,6 @@ export function setDarkMode(isDark) {
     if (window.refreshEditingClasses) window.refreshEditingClasses();
   }
 
-  // Update timer displays immediately to reflect new theme
-  if (window.timerInterval && model.timeTrackingExpanded) {
-    if (window.updateTimerDisplay) window.updateTimerDisplay();
-  }
-
   // Update appearance modal buttons
   updateAppearanceModalButtons();
 }
@@ -653,6 +647,7 @@ export function wireAppearanceModalEvents() {
 
         if (window.applyUrlOverrides) window.applyUrlOverrides(json);
         if (window.renderAllSections) window.renderAllSections();
+        if (window.refreshTimeTrackingUI) window.refreshTimeTrackingUI();
 
         await new Promise(resolve => {
           requestAnimationFrame(() => requestAnimationFrame(resolve));
@@ -1830,6 +1825,9 @@ function sanitizeHtml(html) {
     });
   });
 
+  // Images kept in file storage save only their reference (the src is session-only)
+  temp.querySelectorAll('img[data-r2-file-id]').forEach(img => img.removeAttribute('src'));
+
   return temp.innerHTML;
 }
 
@@ -2281,6 +2279,7 @@ export function wireNotepadEvents() {
   // Checklist click handler on card notes editor
   attachChecklistHandler(editor);
   attachImageResizeHandler(editor);
+  attachImageUpload(editor, { label: 'Note', getTitle: () => $('#notepad-title')?.value });
 
   // Toolbar button handlers
   const toolbarBtns = $$('.notepad-toolbar-btn');
