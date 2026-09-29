@@ -73,7 +73,9 @@ Images use explicit format objects (or legacy strings for backward compatibility
 ### File Structure
 ```
 ├── index.html
-├── styles.css
+├── styles.css               # Structural styles
+├── glass.css                # Glass visual system (loaded after styles.css)
+├── glass-fx.css             # Glass FX v2 layer (loaded after glass.css; scoped under html[data-fx="v2"])
 ├── CLAUDE.md
 ├── js/
 │   ├── main.js              # Entry point, exports to window.*
@@ -104,7 +106,9 @@ Images use explicit format objects (or legacy strings for backward compatibility
 │   │   ├── projects.js      # Projects module, @ mention autocomplete, highlight management
 │   │   ├── meetings.js      # Meetings with dates and recurrence
 │   │   ├── calendar.js      # Calendar view, notification badge
-│   │   └── auth-ui.js       # Auth modal UI, cloud sync triggers
+│   │   ├── auth-ui.js       # Auth modal UI, cloud sync triggers
+│   │   ├── glass-glow.js    # Samples rendered colors into glow vars; reflected item light on card rims
+│   │   └── glass-fx.js      # FX v2 pointer-caught rim light (constructed stylesheet, no DOM writes)
 │   └── components/
 │       └── sections.js      # Section rendering (icons, lists, reminders, copy-paste)
 ├── assets/
@@ -271,6 +275,13 @@ Prioritized items panel with state-based reconciliation — automatically remove
 - Closing (X / backdrop / Escape) also closes any open item editors (`hideEditPopover`/`hideCalendarPopover`/`hideIntervalPopover`)
 - Item popovers (`.edit-popover`, `.calendar-popover`, `.interval-popover`, `.reminder-links-modal`) are z-index 2500 — MUST stay above the modal's 2000 or they render behind it
 
+### Glass FX v2 Layer (`glass-fx.css` + `js/features/glass-fx.js`)
+- The dashboard's current look, layered on top of `glass.css`: static canvas aurora, thicker corner-lit bevels (lit top-right/bottom-left, shaded top-left/bottom-right), layered lift shadows, prismatic lit-corner rims, a fluid pulsing light for the icon link/task indicator (replaces the old glossy bead), feathered colored glows, staggered "breathing" pulses, pointer-caught rim light
+- Every rule is scoped under `html[data-fx="v2"] body[data-style="glass"][data-theme]` (`index.html` sets `<html data-fx="v2">`). Keep the prefix on new rules: it also supplies the specificity these rules need over `glass.css`
+- New visual work goes in `glass-fx.css`, in its matching section (tokens → canvas → shells → tiles → indicator → quick access → reminders → pills → swatches → matrix → timers → controls → dialogs → pointer light → dark → sunset → keyframes → a11y guards)
+- Decoration only: never changes geometry (the grid engine measures content), never touches icon images, and color-swatch copy pills keep their exact `--copy-base` core
+- Animations are opacity/transform only on small pseudo layers, with staggered phases; reduced-motion and reduced-transparency guards live at the end of the file
+
 ### Dark Mode
 - Toggle in Settings modal
 - Colors stored as `{ light, dark }` objects for independent theming
@@ -394,7 +405,10 @@ Shared logic lives in `edit-mode.js`: `handleEditorKeydown`, `handleEditorInput`
 
 ## Version History
 
-### v5.0 (Current)
+### v5.1 (Current)
+- **Glass FX v2** overlay (`glass-fx.css`, `glass-fx.js`): more lift and 3D, fluid pulsing indicator light, feathered colored glows, playful transparency
+
+### v5.0
 - **Grid Engine** (schemaVersion 7): 24-column graph-paper layout, explicit cell placement, JS-computed px cell sizes, WYSIWYG edit/view parity, slide-under drop snapping, collision cascade
 - **Per-device layout profiles** (schemaVersion 8): independent mobile/tablet/desktop arrangements, device picker beside search bar, auto-detect + per-browser override, profiles sync to D1
 - Edit mode = zoomed miniature tiles; click opens the Card Edit Modal (the real card on a backdrop)

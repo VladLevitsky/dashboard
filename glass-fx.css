@@ -1,0 +1,1003 @@
+/* ==========================================================================
+   GLASS FX v2 ("Liquid Crystal") - the dashboard's visual layer over glass.css.
+   Light and motion are fluid, the material is thick crystal (bevels, lift,
+   gloss), and a static canvas aurora gives the glass something to bend.
+   One light source everywhere: lit top-right + bottom-left, shaded top-left
+   + bottom-right. One pulse language: slow, uneven, never in sync.
+
+   Every style rule sits under
+     html[data-fx="v2"] body[data-style="glass"][data-theme]
+   (index.html sets the attribute). The prefix also gives these rules the
+   specificity they need over glass.css, so keep it on new rules.
+   Decoration only: box-shadow, background(-image), masks, pseudo layers,
+   opacity/transform animations. No geometry, spacing or font changes.
+   Order: tokens -> canvas -> shells -> tiles -> indicator -> quick access ->
+   reminders -> pills -> swatches -> matrix -> timers -> controls -> dialogs ->
+   pointer light -> dark -> sunset -> keyframes -> a11y guards.
+   ========================================================================== */
+
+/* --- 0. Tokens (light values; dark overrides in 13) ---------------------- */
+html[data-fx="v2"] body[data-style="glass"][data-theme] {
+  /* Light hues */
+  --fx-ind-rgb: 22 160 255;          /* indicator / living light (azure)     */
+  --fx-ind-fringe: 132 108 255;      /* violet fringe at the edge of a bloom */
+  --fx-qa-rgb: 35 168 255;           /* quick-access blue (matches the SVG)  */
+  --fx-ind-pool-a: 90%;
+  /* Prism: white -> ice cyan -> lilac -> blush, reused by every lit rim */
+  --fx-prism-1: rgb(214 240 255 / 78%);
+  --fx-prism-2: rgb(214 204 255 / 48%);
+  --fx-prism-3: rgb(255 212 236 / 22%);
+  --fx-cyan: 118 226 255;
+  --fx-violet: 168 146 255;
+  --fx-pink: 255 146 214;
+  --fx-iris-a: 44%;
+  --fx-spec: rgb(255 255 255 / 94%);
+  /* Canvas aurora, classic light: six small near-silver pools, cool / warm
+     alternating (each canvas rule in 1 / 13 / 14 reads its own set). Low
+     chroma and close to one another in hue, so the canvas stays silver and
+     no card is washed in one colour. */
+  --fx-a1: 186 199 224; --fx-a1-a: 24%;   /* ice, top-right (key light) */
+  --fx-a2: 230 214 204; --fx-a2-a: 20%;   /* pearl warm, top            */
+  --fx-a3: 202 197 222; --fx-a3-a: 18%;   /* lilac mist, left           */
+  --fx-a4: 192 203 220; --fx-a4-a: 16%;   /* cool mist, centre          */
+  --fx-a5: 194 207 206; --fx-a5-a: 14%;   /* sea glass, bottom          */
+  --fx-a6: 228 210 216; --fx-a6-a: 20%;   /* blush, bottom-right        */
+  /* Material */
+  --fx-ink: 34 40 52;
+  --fx-lift-air: 58 72 100;          /* ambient-shadow tint: cool steel, so
+                                        deep lift reads as air, not dirt    */
+  --fx-bevel-lit: rgb(255 255 255 / 96%);
+  --fx-bevel-soft: rgb(255 255 255 / 50%);
+  --fx-bevel-shade: rgb(92 104 128 / 26%);
+  --fx-band-lit: rgb(255 255 255 / 50%);
+  --fx-band-shade: rgb(40 46 58 / 12%);
+  --fx-gloss: rgb(255 255 255 / 88%);
+  --fx-sheen: rgb(255 255 255 / 28%);
+  /* Depth ladder: canvas < cards < pills < tiles < controls < dialogs.
+     Contact + key layers stay crisp; the last layer is wide steel ambient
+     (pills get only a touch; they sit in dense grids). */
+  --fx-lift-pill: 0 1px 1px rgb(var(--fx-ink) / 9%),
+    0 2px 3px -1px rgb(var(--fx-ink) / 14%),
+    0 3px 5px -2px rgb(var(--fx-ink) / 12%),
+    4px 9px 16px -8px rgb(var(--fx-ink) / 32%),
+    0 12px 20px -14px rgb(var(--fx-lift-air) / 18%);
+  --fx-lift-pill-hover: 0 1px 1px rgb(var(--fx-ink) / 8%),
+    0 5px 8px -3px rgb(var(--fx-ink) / 13%),
+    6px 14px 24px -10px rgb(var(--fx-ink) / 30%),
+    0 18px 28px -16px rgb(var(--fx-lift-air) / 22%);
+  --fx-lift-tile: 0 1px 1px rgb(var(--fx-ink) / 10%),
+    0 4px 7px -3px rgb(var(--fx-ink) / 14%),
+    6px 12px 20px -9px rgb(var(--fx-ink) / 28%),
+    0 22px 34px -18px rgb(var(--fx-ink) / 22%),
+    2px 34px 54px -28px rgb(var(--fx-lift-air) / 34%);
+  --fx-lift-tile-hover: 0 1px 1px rgb(var(--fx-ink) / 8%),
+    0 6px 10px -4px rgb(var(--fx-ink) / 15%),
+    8px 18px 28px -11px rgb(var(--fx-ink) / 32%),
+    0 30px 42px -22px rgb(var(--fx-ink) / 24%),
+    3px 44px 64px -32px rgb(var(--fx-lift-air) / 38%);
+  --fx-lift-control: 0 1px 1px rgb(var(--fx-ink) / 12%),
+    0 5px 9px -3px rgb(var(--fx-ink) / 18%),
+    8px 16px 28px -10px rgb(var(--fx-ink) / 32%);
+  --fx-lift-dialog: 0 2px 4px rgb(var(--fx-ink) / 10%),
+    0 30px 80px -24px rgb(var(--fx-ink) / 40%),
+    20px 40px 70px -40px rgb(var(--fx-ink) / 34%);
+  --fx-dialog-glint: rgb(255 255 255 / 34%);
+  /* Motion */
+  --fx-breathe: cubic-bezier(0.45, 0, 0.3, 1);
+  /* Shared light direction for every small pane: lit TR + BL, shaded TL + BR */
+  --glass-rim: inset -1px 1px 1px var(--glass-light), inset 1px -1px 1px var(--glass-light),
+    inset 1px 1px 2px var(--glass-shade), inset -1px -1px 2px var(--glass-shade);
+}
+
+/* --- 1. Canvas: a static aurora for the glass to bend ---------------------
+   "Classic (Grey)" stays silver: small low-chroma pools spread evenly, so
+   every card sees a gentle cool / warm drift and none is washed in one hue.
+   The key light stays top-right so canvas and lit bevels agree; it sits
+   below and beside the header's profile text, not under it (contrast).
+   Static: ~120 backdrop blurs are never re-sampled per frame. */
+html[data-fx="v2"] body[data-style="glass"][data-theme]:not([data-glass-theme="sunset"]) {
+  background:
+    radial-gradient(ellipse 30vw 30vh at 93% 22%, rgb(var(--fx-a1) / var(--fx-a1-a)), transparent 70%),
+    radial-gradient(ellipse 26vw 26vh at 34% 4%, rgb(var(--fx-a2) / var(--fx-a2-a)), transparent 70%),
+    radial-gradient(ellipse 24vw 32vh at 6% 44%, rgb(var(--fx-a3) / var(--fx-a3-a)), transparent 70%),
+    radial-gradient(ellipse 28vw 30vh at 58% 50%, rgb(var(--fx-a4) / var(--fx-a4-a)), transparent 70%),
+    radial-gradient(ellipse 30vw 28vh at 30% 96%, rgb(var(--fx-a5) / var(--fx-a5-a)), transparent 70%),
+    radial-gradient(ellipse 26vw 28vh at 92% 84%, rgb(var(--fx-a6) / var(--fx-a6-a)), transparent 70%),
+    radial-gradient(ellipse at 88% 8%, #e7e7e8 0%, transparent 54%),
+    radial-gradient(ellipse at 12% 90%, #b9bbbf 0%, transparent 62%),
+    linear-gradient(125deg, #c8c9cc, #d5d6d8 55%, #c5c6c9);
+  background-attachment: fixed;
+}
+
+/* --- 2. Card shells: thick crystal with corner light ----------------------
+   Contact + key + deep ambient lift (a very wide steel pool floats the pane
+   off the canvas); wider shade pockets TL/BR; a lit rim with a refraction
+   band TR/BL; the contour shifts white -> cyan -> lilac -> blush; a soft
+   specular glint sits inside the top-right corner. Blur radius is unchanged
+   (24px; the Card Edit Modal keeps glass.css's 36px); only saturation
+   rises so canvas colour blooms through. The depth lives in the widest,
+   most offset layers, so the pane floats while the narrow gutters between
+   cards stay light (air, not trenches). */
+html[data-fx="v2"] body[data-style="glass"][data-theme] :is(section.card, .app-header.card, .time-tracking-card, .quick-access-card, .eisenhower-card) {
+  --card-edge-light: rgb(255 255 255 / 100%);
+  --card-edge-dark: rgb(34 40 52 / 50%);
+  --card-cast-shadow: 0 1px 1px rgb(34 40 52 / 10%),
+    0 3px 6px -2px rgb(34 40 52 / 13%),
+    10px 20px 36px -20px rgb(34 40 52 / 18%),
+    0 40px 80px -44px rgb(34 40 52 / 16%),
+    4px 70px 130px -56px rgb(var(--fx-lift-air) / 34%);
+  --card-highlight-contour:
+    radial-gradient(ellipse 62% 82% at 100% 0%, var(--card-edge-light) 12%, var(--fx-prism-1) 32%, var(--fx-prism-2) 50%, var(--fx-prism-3) 64%, transparent 78%),
+    radial-gradient(ellipse 62% 82% at 0% 100%, var(--card-edge-light) 4%, var(--fx-prism-1) 34%, var(--fx-prism-3) 58%, transparent 78%);
+  -webkit-backdrop-filter: blur(24px) saturate(150%) !important;
+  backdrop-filter: blur(24px) saturate(150%) !important;
+}
+/* The header sits directly above transparent overlays (the search
+   dropdown), so it keeps only the contact + key layers: no deep pool falls
+   on the dropdown's first rows. Dark (13) sets its own shadow. */
+html[data-fx="v2"] body[data-style="glass"][data-theme] .app-header.card {
+  --card-cast-shadow: 0 1px 1px rgb(34 40 52 / 10%),
+    0 3px 6px -2px rgb(34 40 52 / 13%),
+    10px 20px 36px -20px rgb(34 40 52 / 18%);
+}
+/* The Card Edit Modal shows the real card: keep glass.css's modal frost
+   (36px), which the shell rule above would otherwise outrank. */
+html[data-fx="v2"] body[data-style="glass"][data-theme] .card-edit-body > section.card {
+  -webkit-backdrop-filter: blur(36px) saturate(150%) !important;
+  backdrop-filter: blur(36px) saturate(150%) !important;
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] :is(section.card, .app-header.card, .time-tracking-card, .quick-access-card, .eisenhower-card)::before {
+  box-shadow: inset 0 0 14px 1px var(--card-edge-dark),
+    inset 0 0 3px 0 var(--card-edge-dark),
+    0 0 3px 0.4px var(--card-edge-dark);
+  opacity: 0.82;
+}
+/* The highlight span is already masked to the lit corners, so everything it
+   and its pseudo layers paint stays in those corners. */
+html[data-fx="v2"] body[data-style="glass"][data-theme] .card > .glass-card-highlight {
+  background:
+    radial-gradient(ellipse 26% 34% at 100% 0%, rgb(255 255 255 / 34%), rgb(255 255 255 / 10%) 45%, transparent 72%),
+    radial-gradient(ellipse 22% 30% at 0% 100%, rgb(255 255 255 / 15%), transparent 72%);
+  box-shadow: inset 0 0 0 1px var(--card-edge-light),
+    inset 0 0 3px 1.5px var(--card-edge-light),
+    inset 0 0 18px 3px color-mix(in srgb, var(--card-edge-light) 64%, transparent);
+  opacity: 0.95;
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .card > .glass-card-highlight::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  /* Specular streaks where the thick edge catches the light. */
+  background:
+    radial-gradient(ellipse 110px 2.5px at calc(100% - 96px) 1.5px, var(--fx-spec), transparent 100%),
+    radial-gradient(ellipse 2.5px 70px at calc(100% - 1.5px) 84px, var(--fx-spec), transparent 100%),
+    radial-gradient(ellipse 80px 2px at 90px calc(100% - 1.5px), rgb(255 255 255 / 55%), transparent 100%);
+}
+
+/* --- 3. Icon tiles: thick square crystal ---------------------------------
+   Fill: a top-right lit sheen (background-image only, so glass.css hover
+   background-color still works). ::before = refraction band hugging the rim
+   (never reaches the 48px image box). ::after = 1.5px masked bevel ring,
+   bright TR/BL, steel-shaded TL/BR, faint prism on the lit arcs only. */
+html[data-fx="v2"] body[data-style="glass"][data-theme] .icon-button:not(.icon-in-quick-access) {
+  background-image: linear-gradient(205deg, rgb(255 255 255 / 30%), rgb(255 255 255 / 8%) 48%, rgb(255 255 255 / 15%));
+  border-color: rgb(255 255 255 / 26%);
+  box-shadow: var(--fx-lift-tile);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .icon-button:not(.icon-in-quick-access):hover {
+  box-shadow: var(--fx-lift-tile-hover);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .icon-button:not(.icon-in-quick-access)::before {
+  background: radial-gradient(ellipse 30% 3px at 62% 2.5px, rgb(255 255 255 / 60%), transparent 100%);
+  box-shadow:
+    inset -4px 4px 7px -4px var(--fx-band-lit),
+    inset 4px -4px 7px -4px var(--fx-band-lit),
+    inset 4px 4px 8px -5px var(--fx-band-shade),
+    inset -4px -4px 8px -5px var(--fx-band-shade);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .icon-button:not(.icon-in-quick-access)::after {
+  inset: -1px;
+  padding: 1.5px;
+  background: var(--fx-item-ptr, linear-gradient(transparent, transparent)),
+    var(--fx-tile-catch, linear-gradient(transparent, transparent)),
+    conic-gradient(from 0deg,
+      transparent 20deg, rgb(var(--fx-cyan) / var(--fx-iris-a)) 34deg, rgb(var(--fx-violet) / var(--fx-iris-a)) 47deg,
+      rgb(var(--fx-pink) / calc(var(--fx-iris-a) * 0.8)) 60deg, transparent 74deg,
+      transparent 200deg, rgb(var(--fx-pink) / calc(var(--fx-iris-a) * 0.7)) 214deg,
+      rgb(var(--fx-violet) / calc(var(--fx-iris-a) * 0.8)) 228deg, rgb(var(--fx-cyan) / calc(var(--fx-iris-a) * 0.7)) 240deg, transparent 254deg),
+    conic-gradient(from 0deg,
+      var(--fx-bevel-soft) 0deg, var(--fx-bevel-lit) 45deg, var(--fx-bevel-soft) 90deg,
+      var(--fx-bevel-shade) 135deg, var(--fx-bevel-soft) 180deg, var(--fx-bevel-lit) 225deg,
+      var(--fx-bevel-soft) 270deg, var(--fx-bevel-shade) 315deg, var(--fx-bevel-soft) 360deg);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  box-shadow: none;
+}
+
+/* --- 4. Icon indicator: light caught in the glass corner ------------------
+   The glossy bead is gone. The same 20x20 box (same border width, now
+   transparent) stays the click target and paints nothing solid.
+     ::before  a 72px feathered azure->violet pool, stretched along the corner
+               tangent and nudged toward the rim so it spills outside rather
+               than over the icon; a bright streak sits exactly on the tile's
+               corner rim (light trapped in the bevel). It breathes mostly by
+               opacity, and a slow +/-8deg orbit about the core glides the
+               streak along the bevel arc (the core sits ~3px from the arc
+               centre, so the streak never leaves the rim) (fxPool). Turned
+               45deg so the ellipses follow the corner tangent.
+     ::after   an edgeless white-hot core on its own shorter flicker. Its glow
+               is baked into one gradient (no outer box-shadow), so there is
+               no dark moat between disc and halo.
+   Sizes are tokens: dark lifts the pool, and edit-mode tiles (zoom 0.7)
+   enlarge pool + core so the cue survives the zoom. The tile's glass holds
+   a still corner tint (under the image) and its rim ring catches the same
+   azure. Periods vary per tile AND per card. */
+html[data-fx="v2"] body[data-style="glass"][data-theme] section.card:nth-child(2n) { --fx-card-phase: -2.3s; }
+html[data-fx="v2"] body[data-style="glass"][data-theme] section.card:nth-child(3n) { --fx-card-phase: -4.1s; }
+html[data-fx="v2"] body[data-style="glass"][data-theme] section.card:nth-child(5n) { --fx-card-phase: -1.3s; }
+html[data-fx="v2"] body[data-style="glass"][data-theme] section.card:nth-child(7n) { --fx-card-phase: -5.6s; }
+html[data-fx="v2"] body[data-style="glass"][data-theme] .icon-button:has(> .icon-indicator) {
+  --fx-dur: 7.3s;  --fx-delay: -1.1s;
+  --fx-core-dur: 4.7s;  --fx-core-delay: -0.6s;
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .icon-button:nth-child(3n+2):has(> .icon-indicator) { --fx-dur: 8.9s; --fx-delay: -4.7s; --fx-core-dur: 5.3s; --fx-core-delay: -2.9s; }
+html[data-fx="v2"] body[data-style="glass"][data-theme] .icon-button:nth-child(3n):has(> .icon-indicator) { --fx-dur: 6.4s; --fx-delay: -3.2s; --fx-core-dur: 3.9s; --fx-core-delay: -1.7s; }
+html[data-fx="v2"] body[data-style="glass"][data-theme] .icon-button:nth-child(4n+1):has(> .icon-indicator) { --fx-delay: -5.9s; --fx-core-delay: -3.6s; }
+html[data-fx="v2"] body[data-style="glass"][data-theme] .icon-button:nth-child(5n+3):has(> .icon-indicator) { --fx-dur: 9.7s; --fx-core-dur: 4.3s; }
+
+html[data-fx="v2"] body[data-style="glass"][data-theme] .icon-button:not(.icon-in-quick-access):has(> .icon-indicator) {
+  /* static rim catch on the bevel ring: long and bright enough to read at 1x */
+  --fx-tile-catch: radial-gradient(circle 38px at calc(100% - 12px) 13px, rgb(230 250 255 / 100%) 0%, rgb(var(--fx-ind-rgb) / 80%) 28%, rgb(var(--fx-ind-fringe) / 34%) 60%, transparent 100%);
+  background-image: radial-gradient(circle 44px at calc(100% - 14px) 16px, rgb(var(--fx-ind-rgb) / 18%), rgb(var(--fx-ind-fringe) / 6%) 55%, transparent 100%),
+    linear-gradient(205deg, rgb(255 255 255 / 30%), rgb(255 255 255 / 8%) 48%, rgb(255 255 255 / 15%));
+  box-shadow: var(--fx-lift-tile), 7px -7px 16px -11px rgb(var(--fx-ind-rgb) / 50%);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .icon-button:not(.icon-in-quick-access):has(> .icon-indicator):hover {
+  box-shadow: var(--fx-lift-tile-hover), 8px -8px 18px -11px rgb(var(--fx-ind-rgb) / 58%);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .icon-button > .icon-indicator {
+  --fx-pool-inset: -26px;      /* 72px pool box, centred on the core */
+  --fx-pool-rx: 36px;          /* along the corner tangent */
+  --fx-pool-ry: 26px;          /* along the diagonal (toward the icon) */
+  --fx-core-inset: 0px;        /* 20px core box */
+  border-color: transparent;
+  background: transparent !important;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .icon-button > .icon-indicator::before {
+  inset: var(--fx-pool-inset);        /* centred on the core; the rim sits ~13px "up" in the rotated frame */
+  border-radius: 50%;
+  background:
+    /* rim streak + its soft glow, on the tile's corner rim */
+    radial-gradient(ellipse 14px 2.4px at calc(50% - 0.8px) calc(50% - 12.8px), rgb(240 252 255 / 100%), rgb(var(--fx-ind-rgb) / 48%) 55%, transparent 100%),
+    radial-gradient(ellipse 25px 6.5px at calc(50% - 0.8px) calc(50% - 12px), rgb(var(--fx-ind-rgb) / 42%), rgb(var(--fx-ind-fringe) / 12%) 60%, transparent 100%),
+    /* pool: luminous shoulder, soft violet fringe; biased toward the rim */
+    radial-gradient(ellipse var(--fx-pool-rx) var(--fx-pool-ry) at 50% calc(50% - 3.5px),
+      rgb(var(--fx-ind-rgb) / var(--fx-ind-pool-a)) 0%, rgb(var(--fx-ind-rgb) / calc(var(--fx-ind-pool-a) * 0.8)) 17%,
+      rgb(var(--fx-ind-rgb) / calc(var(--fx-ind-pool-a) * 0.46)) 36%, rgb(var(--fx-ind-fringe) / 16%) 55%,
+      rgb(var(--fx-ind-fringe) / 5%) 78%, transparent 100%);
+  box-shadow: none;
+  filter: none;
+  opacity: 0.8;
+  transform: rotate(45deg);
+  will-change: transform, opacity;
+  animation: fxPool var(--fx-dur) var(--fx-breathe) calc(var(--fx-delay) + var(--fx-card-phase, 0s)) infinite;
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .icon-button > .icon-indicator::after {
+  inset: var(--fx-core-inset);
+  border-radius: 50%;
+  background: radial-gradient(circle closest-side, #fff 0%, rgb(236 250 255 / 96%) 16%,
+    rgb(var(--fx-ind-rgb) / var(--fx-core-a, 74%)) 36%, rgb(var(--fx-ind-rgb) / var(--fx-core-halo-a, 28%)) 62%,
+    rgb(var(--fx-ind-rgb) / 8%) 84%, rgb(var(--fx-ind-rgb) / 0%) 100%);
+  box-shadow: none;
+  filter: none;
+  opacity: 0.94;
+  animation: fxCore var(--fx-core-dur) ease-in-out calc(var(--fx-core-delay) + var(--fx-card-phase, 0s)) infinite;
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .icon-button > .icon-indicator:hover {
+  filter: brightness(1.16) saturate(1.1);
+}
+/* Edit-mode tiles render at zoom 0.7: a larger pool and core make up for it
+   (pseudo boxes only; the 20px click box is unchanged). */
+html[data-fx="v2"] body[data-style="glass"][data-theme] .edit-mode-tiles .icon-button > .icon-indicator {
+  --fx-pool-inset: -30px;
+  --fx-pool-rx: 42px;
+  --fx-pool-ry: 30px;
+  --fx-core-inset: -3px;
+}
+
+/* --- 5. Quick-access selected light --------------------------------------
+   The SVG rim (four offset pulses) is untouched. The tile gains lift and an
+   outer halo that breathes on a third, unrelated period. The halo is an
+   outer box-shadow on ::after; the tile's overflow is left as it was. */
+html[data-fx="v2"] body[data-style="glass"][data-theme] .icon-button.icon-in-quick-access,
+html[data-fx="v2"] body[data-style="glass"][data-theme] .icon-button.icon-in-quick-access:hover {
+  box-shadow: var(--fx-lift-tile), 0 0 4px rgb(var(--fx-qa-rgb) / 35%), 0 0 10px rgb(var(--fx-qa-rgb) / 22%);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .icon-button.icon-in-quick-access::after {
+  inset: -1px;
+  background: none;
+  box-shadow: 0 0 12px 2px rgb(var(--fx-qa-rgb) / 30%), 0 0 26px 6px rgb(var(--fx-qa-rgb) / 14%);
+  opacity: 0.7;
+  animation: fxHalo 6.1s var(--fx-breathe) calc(-2.4s + var(--fx-card-phase, 0s)) infinite;
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .icon-button.icon-in-quick-access:nth-child(2n)::after { animation-duration: 7.3s; animation-delay: -5.2s; }
+html[data-fx="v2"] body[data-style="glass"][data-theme] :is(.unified-subtask-item, .unified-copypaste-item).quick-access-lit::after {
+  inset: -1px;
+  background: none;
+  box-shadow: 0 0 10px 1px rgb(var(--fx-qa-rgb) / 24%), 0 0 22px 4px rgb(var(--fx-qa-rgb) / 10%);
+  opacity: 0.7;
+  animation: fxHalo 6.7s var(--fx-breathe) -3.9s infinite;
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] :is(.unified-subtask-item, .unified-copypaste-item).quick-access-lit:nth-child(2n)::after { animation-duration: 7.9s; animation-delay: -1.3s; }
+html[data-fx="v2"] body[data-style="glass"][data-theme] :is(.unified-subtask-item, .unified-copypaste-item).quick-access-lit:nth-child(3n)::after { animation-duration: 5.6s; animation-delay: -4.6s; }
+
+/* --- 6. Reminder progress pills -------------------------------------------
+   The fill casts a same-hue glow below the pill whose strength follows the
+   progress width (a 3% fill casts almost nothing). The fill gains a thin
+   top specular line, a gloss band and a hot leading edge. overflow stays
+   hidden. Red / due-today chambers hold an ember at the leading cap that
+   breathes and drifts a few px, staggered. */
+html[data-fx="v2"] body[data-style="glass"][data-theme] .unified-reminder-item:is([data-progress-state], :has(> .days-badge:is(.green, .yellow, .orange, .red))):not(.quick-access-lit) {
+  box-shadow: 0 1px 1px rgb(var(--fx-ink) / 8%),
+    0 4px 12px -7px rgb(28 34 42 / 22%),
+    0 12px 22px -14px rgb(var(--glow-rgb) / calc(var(--progress-width, 100%) * 0.6)),
+    inset 0 3px 8px rgb(37 43 53 / 12%), inset 0 -1px 2px rgb(255 255 255 / 30%);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .unified-reminder-item:is([data-progress-state], :has(> .days-badge:is(.green, .yellow, .orange, .red)))::before {
+  --light-rim: inset 0 1.5px 1.5px -0.5px rgb(255 255 255 / 70%),
+    inset 0 1px 3px color-mix(in srgb, var(--light-highlight) 70%, transparent),
+    inset 1px 0 3px rgb(var(--light-rgb) / 35%),
+    inset 0 -1px 3px rgb(var(--light-rgb) / 56%);
+  background:
+    radial-gradient(ellipse 60% 1.5px at 50% 3px, rgb(255 255 255 / 80%), transparent 100%),
+    linear-gradient(180deg, rgb(255 255 255 / 30%), rgb(255 255 255 / 8%) 42%, transparent 56%),
+    radial-gradient(circle 16px at calc(100% - 13px) 50%, color-mix(in srgb, rgb(var(--glow-rgb)) 40%, white), transparent 100%),
+    var(--light-body);
+  filter: blur(0.4px);
+}
+/* Ember: a same-hue, saturated light over the original cap spill, so the
+   urgent end glows red instead of fading to pink. Red chambers also take a
+   lighter gloss band so they keep their red body. */
+html[data-fx="v2"] body[data-style="glass"][data-theme]:not([data-theme="dark"]) .unified-reminder-item[data-progress-state="red"]:is([data-progress-state], :has(> .days-badge:is(.green, .yellow, .orange, .red)))::before {
+  background:
+    radial-gradient(ellipse 60% 1.5px at 50% 3px, rgb(255 255 255 / 80%), transparent 100%),
+    linear-gradient(180deg, rgb(255 255 255 / 18%), rgb(255 255 255 / 5%) 42%, transparent 56%),
+    radial-gradient(circle 16px at calc(100% - 13px) 50%, rgb(255 96 122 / 70%), transparent 100%),
+    var(--light-body);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .unified-reminder-item[data-progress-state="red"]::after {
+  background:
+    radial-gradient(ellipse 120px 34px at calc(100% - 38px) 44%, rgb(255 84 112 / 58%), rgb(var(--glow-rgb) / 35%) 40%, rgb(var(--glow-rgb) / 0%) 100%),
+    radial-gradient(circle 63px at calc(100% - 21px) 50%,
+      rgb(var(--glow-rgb) / 52%) 0%, rgb(var(--glow-rgb) / 25%) 50%, rgb(var(--glow-rgb) / 3.5%) 80%, rgb(var(--glow-rgb) / 0%) 100%);
+  will-change: opacity, transform;
+  animation: fxEmber 5.9s var(--fx-breathe) -1.7s infinite;
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .unified-reminder-item[data-progress-state="red"]:nth-child(2n)::after { animation-duration: 7.1s; animation-delay: -4.2s; }
+html[data-fx="v2"] body[data-style="glass"][data-theme] .unified-reminder-item[data-progress-state="red"]:nth-child(3n)::after { animation-duration: 6.4s; animation-delay: -0.4s; }
+
+/* --- 7. Text pills (links / subtasks / copy text / search results) --------
+   Small thick capsules. ::before = gloss (specular hairline, soft upper
+   sheen, shaded lower-right pocket). ::after = 1.25px masked rim, lit at the
+   TR / BL ends with a whisper of prism, shaded at TL / BR. Inline subtitle
+   tints stay; tinted pills get a lighter gloss so the tint keeps its body. */
+html[data-fx="v2"] body[data-style="glass"][data-theme] :is(.unified-subtask-item, .list-item,
+  .unified-copypaste-item:not([data-glass-glow="material"]), .copy-paste-item:not([data-glass-glow="material"])):not(.quick-access-lit) {
+  box-shadow: var(--fx-lift-pill);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] :is(.unified-subtask-item, .list-item,
+  .unified-copypaste-item:not([data-glass-glow="material"]), .copy-paste-item:not([data-glass-glow="material"])):not(.quick-access-lit):hover {
+  box-shadow: var(--fx-lift-pill-hover);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] :is(.unified-subtask-item, .list-item,
+  .unified-copypaste-item:not([data-glass-glow="material"]), .copy-paste-item:not([data-glass-glow="material"]),
+  .eisenhower-task:not(.eisenhower-task-pinned)):not(.quick-access-lit)::before {
+  background:
+    radial-gradient(ellipse 42% 1.6px at 58% 2.5px, var(--fx-gloss), transparent 100%),
+    linear-gradient(180deg, var(--fx-sheen), rgb(255 255 255 / 5%) 46%, transparent 60%),
+    radial-gradient(ellipse 60% 120% at 96% 110%, rgb(var(--fx-ink) / 8%), transparent 70%);
+  box-shadow: none;
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] [data-glass-glow="surface"]:is(.unified-subtask-item, .list-item, .unified-copypaste-item, .copy-paste-item):not(.quick-access-lit)::before {
+  background:
+    radial-gradient(ellipse 42% 1.6px at 58% 2.5px, var(--fx-gloss), transparent 100%),
+    linear-gradient(180deg, rgb(255 255 255 / 14%), transparent 50%);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] :is(.unified-subtask-item, .list-item,
+  .unified-copypaste-item:not([data-glass-glow="material"]), .copy-paste-item:not([data-glass-glow="material"]),
+  .eisenhower-task:not(.eisenhower-task-pinned)):not(.quick-access-lit)::after {
+  padding: 1.25px;
+  background: var(--fx-item-ptr, linear-gradient(transparent, transparent)),
+    radial-gradient(ellipse 34% 90% at 100% 0%, rgb(var(--fx-violet) / 45%), transparent 70%),
+    radial-gradient(ellipse 22% 80% at 0% 100%, rgb(var(--fx-cyan) / 45%), transparent 70%),
+    radial-gradient(ellipse 80% 140% at 100% 0%, var(--fx-bevel-lit), transparent 72%),
+    radial-gradient(ellipse 70% 140% at 0% 100%, var(--fx-bevel-lit), transparent 72%),
+    linear-gradient(90deg, var(--fx-bevel-shade), var(--fx-bevel-soft) 30%, var(--fx-bevel-soft) 70%, var(--fx-bevel-shade));
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  box-shadow: none;
+}
+/* Tinted pills: no hard inset coloured edge. A tight same-hue ring keeps the
+   tint as visible as before; the rest of the colour feathers outward. */
+html[data-fx="v2"] body[data-style="glass"][data-theme] [data-glass-glow="surface"]:not(.quick-access-lit):not(:disabled):not([aria-disabled="true"]) {
+  box-shadow: inset -1px 1px 1px rgb(255 255 255 / 55%),
+    inset 1px -1px 1px rgb(255 255 255 / 28%),
+    inset 0 0 8px rgb(var(--control-glow-rgb) / 28%),
+    0 0 6px rgb(var(--control-glow-rgb) / 44%),
+    0 0 18px -2px rgb(var(--control-glow-rgb) / 26%),
+    0 10px 24px -10px rgb(var(--control-glow-rgb) / 46%) !important;
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] [data-glass-glow="surface"]:not(.quick-access-lit):not(:disabled):not([aria-disabled="true"]):hover {
+  box-shadow: inset -1px 1px 1px rgb(255 255 255 / 62%),
+    inset 1px -1px 1px rgb(255 255 255 / 32%),
+    inset 0 0 8px rgb(var(--control-glow-rgb) / 26%),
+    0 0 8px rgb(var(--control-glow-rgb) / 40%),
+    0 0 22px -2px rgb(var(--control-glow-rgb) / 30%),
+    0 14px 28px -10px rgb(var(--control-glow-rgb) / 52%) !important;
+}
+/* Search results float like the card pills instead of lying flat. */
+html[data-fx="v2"] body[data-style="glass"][data-theme] .search-item {
+  box-shadow: var(--fx-lift-pill), var(--glass-rim);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .search-item:hover {
+  box-shadow: var(--fx-lift-pill-hover), var(--glass-rim);
+}
+
+/* --- 8. Colour-swatch copy pills ------------------------------------------
+   The exact colour comes first: the core stays var(--copy-base). glass.css's
+   inward tint is removed; only a same-hue feather OUTSIDE the pill, a 1px
+   rim and a faint neutral specular line under the top edge remain. Static. */
+html[data-fx="v2"] body[data-style="glass"][data-theme] :is(.unified-copypaste-item, .copy-paste-item)[data-glass-glow="material"]::before {
+  background: radial-gradient(ellipse 38% 1.3px at 50% 3px, rgb(255 255 255 / 45%), transparent 100%);
+  box-shadow: 0 0 6px -1px rgb(var(--light-rgb) / 45%),
+    0 8px 16px -8px rgb(var(--light-rgb) / 55%);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] :is(.unified-copypaste-item, .copy-paste-item)[data-glass-glow="material"]::after {
+  padding: 1px;
+  background: linear-gradient(180deg, rgb(255 255 255 / 55%), transparent 38%),
+    linear-gradient(125deg, var(--copy-edge), rgb(var(--light-rgb) / 30%) 45%, var(--copy-edge));
+  filter: none;
+}
+
+/* --- 9. Eisenhower pinned tasks -------------------------------------------
+   Glossy light sources: specular line + gloss band over the light body, a
+   priority-hue feather beneath, and a bloom that breathes unevenly. Unpinned
+   tasks keep their priority-tinted border. Timing composes three sources so
+   neighbours never sync: duration cycles by 3n, delay by 4n (12 phases per
+   column) and each column adds its own offset. The column offsets were
+   searched so that, for up to 12 pinned tasks per column, no two tasks of
+   equal duration anywhere in the matrix sit closer than ~4% of a cycle. */
+html[data-fx="v2"] body[data-style="glass"][data-theme] .eisenhower-task.eisenhower-task-pinned,
+html[data-fx="v2"] body[data-style="glass"][data-theme] .eisenhower-task.eisenhower-task-pinned:hover {
+  background:
+    radial-gradient(ellipse 50% 1.6px at 50% 3px, rgb(255 255 255 / 80%), transparent 100%),
+    linear-gradient(180deg, rgb(255 255 255 / var(--fx-task-gloss, 24%)), transparent var(--fx-task-gloss-end, 48%)),
+    var(--light-body);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .eisenhower-task.eisenhower-task-pinned {
+  box-shadow: var(--light-contact), 0 8px 16px -9px rgb(var(--priority-rgb) / 50%);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .eisenhower-task.eisenhower-task-pinned:hover {
+  box-shadow: var(--light-contact), 0 10px 20px -9px rgb(var(--priority-rgb) / 58%), 0 0 10px rgb(var(--priority-rgb) / 16%);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .eisenhower-task.eisenhower-task-pinned::before {
+  opacity: 0.85;
+  animation: fxTaskBreath var(--fx-t-dur, 6.3s) var(--fx-breathe) calc(var(--fx-t-delay, -2.2s) + var(--fx-col-phase, 0s)) infinite;
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .eisenhower-task.eisenhower-task-pinned:nth-child(3n+2) { --fx-t-dur: 7.7s; }
+html[data-fx="v2"] body[data-style="glass"][data-theme] .eisenhower-task.eisenhower-task-pinned:nth-child(3n)   { --fx-t-dur: 5.4s; }
+html[data-fx="v2"] body[data-style="glass"][data-theme] .eisenhower-task.eisenhower-task-pinned:nth-child(4n+2) { --fx-t-delay: -5.1s; }
+html[data-fx="v2"] body[data-style="glass"][data-theme] .eisenhower-task.eisenhower-task-pinned:nth-child(4n+3) { --fx-t-delay: -0.9s; }
+html[data-fx="v2"] body[data-style="glass"][data-theme] .eisenhower-task.eisenhower-task-pinned:nth-child(4n)   { --fx-t-delay: -3.7s; }
+html[data-fx="v2"] body[data-style="glass"][data-theme] .eisenhower-priority-card-red    { --fx-col-phase: -1.7s; }
+html[data-fx="v2"] body[data-style="glass"][data-theme] .eisenhower-priority-card-orange { --fx-col-phase: -0.75s; }
+html[data-fx="v2"] body[data-style="glass"][data-theme] .eisenhower-priority-card-yellow { --fx-col-phase: -1.4s; }
+html[data-fx="v2"] body[data-style="glass"][data-theme] .eisenhower-priority-card-blue   { --fx-col-phase: -1.05s; }
+html[data-fx="v2"] body[data-style="glass"][data-theme] :is(.eisenhower-priority-card, .timer-item) {
+  box-shadow: var(--fx-lift-pill), var(--glass-rim);
+}
+
+/* --- 9b. Timers -------------------------------------------------------------
+   Idle / paused circles become glass lenses (timers.js rewrites an inline
+   background-color every tick, hence the one !important) with a key-light
+   pool TR and tile lift. The timer hue, inline as border-color (idle) or
+   background-color (running), feathers outside the rim: ::before inherits
+   it, sits behind the lens (the circle's backdrop-filter makes it the
+   stacking context) and is statically blurred. Running timers drop
+   styles.css's box-shadow pulse for an opacity breath on that halo. */
+html[data-fx="v2"] body[data-style="glass"][data-theme] .timer-circle {
+  box-shadow: var(--fx-lift-tile), var(--glass-rim);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .timer-circle:hover {
+  box-shadow: var(--fx-lift-tile-hover), var(--glass-rim);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .timer-circle:not(.active) {
+  background-color: var(--glass-field) !important;
+  background-image: radial-gradient(circle 40px at 72% 22%, rgb(255 255 255 / 52%), rgb(255 255 255 / 10%) 55%, transparent 100%),
+    var(--glass-reflection);
+  -webkit-backdrop-filter: blur(12px) saturate(140%);
+  backdrop-filter: blur(12px) saturate(140%);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .timer-circle::before {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  border: 3px solid;
+  border-color: inherit;
+  filter: blur(5px);
+  opacity: 0.6;
+  pointer-events: none;
+  z-index: -1;
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .timer-circle.active {
+  animation: none;
+  background-image: radial-gradient(circle 40px at 72% 22%, rgb(255 255 255 / 40%), rgb(255 255 255 / 8%) 55%, transparent 100%);
+  box-shadow: var(--fx-lift-tile), inset 0 1px 2px rgb(255 255 255 / 45%), inset 0 -3px 7px rgb(0 0 0 / 12%);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .timer-circle.active::before {
+  inset: 3px;
+  border: 0;
+  background-color: inherit;
+  filter: blur(10px);
+  opacity: 0.75;
+  animation: fxBreath 5.3s var(--fx-breathe) -1.4s infinite;
+}
+
+/* --- 10. Header controls, FABs, badge -------------------------------------
+   Controls sit one step above tiles. The round edit-pencil and sticky-note
+   buttons (which float over every screen, modals included) and the device
+   bubble tiles are frosted lenses of the same family. The sticky button's
+   own colour glow (glass-glow.js, !important) keeps its box-shadow. The
+   badge becomes a small red light that breathes; the search field gains an
+   azure focus light. */
+html[data-fx="v2"] body[data-style="glass"][data-theme] :is(.fab, .fab-left) {
+  box-shadow: var(--fx-lift-control),
+    inset -1px 1px 1px var(--fx-bevel-lit),
+    inset 1px -1px 1px var(--fx-bevel-soft),
+    inset 1px 1px 2px var(--fx-bevel-shade),
+    inset -1px -1px 2px var(--fx-bevel-shade);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] :is(.wrench-btn, .sticky-note-btn) {
+  background: radial-gradient(circle 34px at 72% 20%, rgb(255 255 255 / 58%), rgb(255 255 255 / 12%) 55%, transparent 100%),
+    var(--glass-reflection), var(--glass-dialog);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  backdrop-filter: blur(20px) saturate(150%);
+  box-shadow: var(--fx-lift-control),
+    inset -1px 1px 1px var(--fx-bevel-lit),
+    inset 1px -1px 1px var(--fx-bevel-soft),
+    inset 2px 2px 4px -1px var(--fx-bevel-shade),
+    inset -2px -2px 4px -1px var(--fx-bevel-shade);
+}
+/* The sticky glyph's body is 50% translucent: a bright field under it keeps
+   the note as crisp and yellow as on the old white button, while the rim
+   stays frosted. (Dark, 13, keeps its own fill.) */
+html[data-fx="v2"] body[data-style="glass"][data-theme] .sticky-note-btn {
+  background: radial-gradient(circle 22px at 50% 50%, rgb(255 255 255 / 92%), rgb(255 255 255 / 66%) 70%, transparent 100%),
+    radial-gradient(circle 34px at 72% 20%, rgb(255 255 255 / 58%), rgb(255 255 255 / 12%) 55%, transparent 100%),
+    var(--glass-reflection), var(--glass-dialog);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .device-mode-option {
+  background: var(--glass-reflection), var(--glass-dialog);
+  border-color: rgb(255 255 255 / 30%);   /* colour only; the 2px width is untouched */
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  backdrop-filter: blur(20px) saturate(140%);
+  box-shadow: var(--fx-lift-control), var(--glass-rim);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .device-mode-option.active {
+  border-color: var(--brand);
+  background: linear-gradient(rgb(var(--fx-ind-rgb) / 12%), rgb(var(--fx-ind-rgb) / 12%)), var(--glass-reflection), var(--glass-dialog);
+}
+/* Badge: background-image only, so the computed background-color that
+   glass-glow.js samples stays the original red. The body is at least as
+   dark as the old flat fill behind the digit; the gloss is a thin cap
+   above the glyph. */
+html[data-fx="v2"] body[data-style="glass"][data-theme] .notification-badge {
+  background-image: radial-gradient(ellipse 56% 13% at 50% 6%, rgb(255 255 255 / 24%), transparent 100%),
+    radial-gradient(circle at 50% 30%, #ea3a4c, #d62a40 60%, #bf2238) !important;
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .notification-badge::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: 0 0 8px 1px rgb(249 76 100 / 55%), 0 0 18px 4px rgb(249 76 100 / 22%);
+  pointer-events: none;
+  opacity: 0.8;
+  animation: fxBreath 4.9s var(--fx-breathe) -1.2s infinite;
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .search-input:focus {
+  box-shadow: inset 0 1px 3px rgb(40 46 56 / 5%), 0 0 0 1px rgb(var(--fx-ind-rgb) / 45%),
+    0 0 14px -2px rgb(var(--fx-ind-rgb) / 40%);
+}
+
+/* --- 11. Dialogs, popovers, scrims ----------------------------------------
+   Blur, scrims and z-index untouched (stacked Meetings frost stays). Dialogs
+   float highest: deep ambient lift, a prismatic hairline on the top edge, a
+   top-right glint and inner light, and the shared rim direction. Rows that
+   were opaque white slabs inside dialogs become glass fields; the @mention
+   dropdown is the same frosted popover as the context menu; the toast is
+   smoked glass (white ink stays ~10:1). */
+html[data-fx="v2"] body[data-style="glass"][data-theme] :is(.media-dialog, .breakdown-dialog, .appearance-dialog, .copy-text-dialog,
+  .image-editor-dialog, .file-manager-dialog, .note-viewer-dialog, .tasks-summary-dialog,
+  .ideas-dialog, .task-editor-dialog, .subtask-template-name-dialog, .subtask-desc-dialog,
+  .item-tasks-dialog, .item-selector-dialog, .item-task-picker-dialog, .meetings-dialog,
+  .meeting-editor-dialog, .completed-tasks-dialog, .projects-dialog, .auth-dialog,
+  .calendar-view-dialog, .quick-link-dialog, .reorder-modal-content, .color-picker-dialog,
+  .reminder-links-dialog, .reminder-tasks-dialog, .icon-links-dialog) {
+  background:
+    linear-gradient(90deg, transparent 6%, rgb(var(--fx-cyan) / 44%) 30%, rgb(var(--fx-violet) / 44%) 55%, rgb(var(--fx-pink) / 36%) 78%, transparent 96%) top / 100% 1px no-repeat,
+    radial-gradient(ellipse 180px 60px at calc(100% - 40px) 0%, var(--fx-dialog-glint), transparent 100%),
+    var(--glass-reflection), var(--glass-dialog) !important;
+  box-shadow: var(--fx-lift-dialog), var(--glass-rim),
+    inset -18px 18px 40px -30px rgb(255 255 255 / 40%);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] :is(.edit-popover, .calendar-popover, .interval-popover, .confirm-popover,
+  .notification-popover, .auth-user-popover, .notepad-popover, .link-color-popover,
+  .highlight-context-menu, .task-subtask-menu-dropdown, .task-mention-dropdown) {
+  box-shadow: 0 2px 4px rgb(var(--fx-ink) / 10%),
+    0 22px 50px -18px rgb(var(--fx-ink) / 38%), var(--glass-rim);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .task-mention-dropdown {
+  background: var(--glass-reflection), var(--glass-dialog);
+  border-color: var(--glass-edge);
+  -webkit-backdrop-filter: blur(28px) saturate(135%);
+  backdrop-filter: blur(28px) saturate(135%);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] :is(.ideas-item, .appearance-option:not(.active),
+  .appearance-backup-btn, .appearance-btn.secondary) {
+  background: var(--glass-reflection), var(--glass-field);
+  border-color: var(--glass-divider);
+  box-shadow: var(--fx-lift-pill), var(--glass-rim);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] :is(.ideas-item, .appearance-option:not(.active),
+  .appearance-backup-btn, .appearance-btn.secondary):hover {
+  background: var(--glass-reflection), var(--glass-hover);
+  box-shadow: var(--fx-lift-pill-hover), var(--glass-rim);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .toast {
+  background: linear-gradient(180deg, rgb(255 255 255 / 10%), transparent 55%), rgb(22 28 40 / 80%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  backdrop-filter: blur(16px) saturate(140%);
+  box-shadow: var(--fx-lift-control),
+    inset 0 1px 0 rgb(255 255 255 / 16%),
+    inset -1px 1px 1px rgb(255 255 255 / 10%),
+    inset 1px -1px 1px rgb(255 255 255 / 5%);
+}
+
+/* --- 12. Pointer light (js/features/glass-fx.js) ---------------------------
+   glass-fx.js registers --fx-px/--fx-py/--fx-ix/--fx-iy (<length>,
+   inherits: false, initial -999px) and writes them onto the hovered card's
+   / item's own ::after through a paused Web Animation (element.animate with
+   pseudoElement '::after'), so only that pseudo element is restyled. No
+   classes, attributes, inline styles or stylesheet rules are written, so
+   glass-glow.js's MutationObservers stay asleep. Without the JS the
+   coordinates are unregistered, --fx-*-ptr is invalid and the transparent
+   fallback paints nothing.
+   The card ::after list restates glass.css's rim composition (glass.css
+   section "card ::after", var(--surface-reflected-light) +
+   var(--card-highlight-contour), !important) to prepend the pointer layer:
+   if glass.css adds or reorders a rim layer there, mirror it here. */
+html[data-fx="v2"] body[data-style="glass"][data-theme] :is(section.card, .app-header.card, .time-tracking-card, .quick-access-card, .eisenhower-card)::after {
+  background: var(--fx-card-ptr, linear-gradient(transparent, transparent)), var(--surface-reflected-light, none), var(--card-highlight-contour) !important;
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] :is(section.card, .app-header.card):hover::after {
+  --fx-card-ptr: radial-gradient(circle 190px at var(--fx-px) var(--fx-py), rgb(120 206 255 / 95%), rgb(160 150 255 / 60%) 38%, rgb(255 170 225 / 26%) 66%, transparent 100%);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] :is(.icon-button, .unified-subtask-item, .list-item, .unified-copypaste-item, .copy-paste-item):not(.quick-access-lit):not(.icon-in-quick-access):hover::after {
+  --fx-item-ptr: radial-gradient(circle 46px at var(--fx-ix) var(--fx-iy), rgb(255 255 255 / 100%), rgb(var(--fx-cyan) / 45%) 45%, transparent 100%);
+}
+
+/* --- 13. Dark ---------------------------------------------------------------
+   No extra ambient lift here: the approved dark cast shadows stay as they
+   were. */
+html[data-fx="v2"] body[data-style="glass"][data-theme="dark"] {
+  --fx-ind-rgb: 74 196 255;
+  --fx-ind-fringe: 146 120 255;
+  --fx-ind-pool-a: 100%;
+  --fx-core-a: 88%;
+  --fx-core-halo-a: 44%;
+  --fx-prism-1: rgb(150 214 255 / 46%);
+  --fx-prism-2: rgb(170 150 255 / 30%);
+  --fx-prism-3: rgb(255 140 214 / 14%);
+  --fx-cyan: 110 214 255;
+  --fx-violet: 160 138 255;
+  --fx-pink: 240 130 210;
+  --fx-iris-a: 36%;
+  --fx-spec: rgb(230 240 255 / 62%);
+  --fx-a1: 64 104 196;  --fx-a1-a: 20%;   /* ice blue, right; centred below the header text */
+  --fx-a2: 112 72 178;  --fx-a2-a: 18%;   /* lilac, left         */
+  --fx-a3: 26 128 132;  --fx-a3-a: 16%;   /* sea glass, bottom   */
+  --fx-a4: 150 90 110;  --fx-a4-a: 10%;   /* warm hint, top      */
+  --fx-ink: 0 3 10;
+  --fx-bevel-lit: rgb(214 228 250 / 56%);
+  --fx-bevel-soft: rgb(200 216 240 / 16%);
+  --fx-bevel-shade: rgb(0 3 10 / 60%);
+  --fx-band-lit: rgb(200 218 245 / 14%);
+  --fx-band-shade: rgb(0 3 10 / 34%);
+  --fx-gloss: rgb(220 232 255 / 40%);
+  --fx-sheen: rgb(210 225 250 / 8%);
+  --fx-task-gloss: 9%;
+  --fx-task-gloss-end: 26%;       /* gloss ends above the title (text contrast) */
+  --fx-lift-pill: 0 1px 1px rgb(0 3 10 / 34%),
+    0 3px 6px -2px rgb(0 3 10 / 30%),
+    4px 10px 18px -8px rgb(0 3 10 / 48%);
+  --fx-lift-pill-hover: 0 1px 1px rgb(0 3 10 / 30%),
+    0 5px 9px -3px rgb(0 3 10 / 32%),
+    6px 15px 26px -10px rgb(0 3 10 / 54%);
+  --fx-lift-tile: 0 1px 1px rgb(0 3 10 / 38%),
+    0 4px 8px -3px rgb(0 3 10 / 34%),
+    6px 13px 22px -9px rgb(0 3 10 / 54%),
+    0 20px 30px -18px rgb(0 3 10 / 44%);
+  --fx-lift-tile-hover: 0 1px 1px rgb(0 3 10 / 34%),
+    0 6px 11px -4px rgb(0 3 10 / 36%),
+    8px 19px 30px -11px rgb(0 3 10 / 58%),
+    0 28px 38px -22px rgb(0 3 10 / 44%);
+  --fx-lift-control: 0 1px 1px rgb(0 3 10 / 40%),
+    0 5px 9px -3px rgb(0 3 10 / 40%),
+    8px 16px 28px -10px rgb(0 3 10 / 58%);
+  --fx-lift-dialog: 0 2px 4px rgb(0 3 10 / 30%),
+    0 30px 80px -24px rgb(0 3 10 / 66%),
+    20px 40px 70px -40px rgb(0 3 10 / 56%);
+  --fx-dialog-glint: rgb(210 226 255 / 9%);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme="dark"]:not([data-glass-theme="sunset"]) {
+  background:
+    radial-gradient(ellipse 46vw 42vh at 86% 34%, rgb(var(--fx-a1) / var(--fx-a1-a)), transparent 72%),
+    radial-gradient(ellipse 38vw 48vh at 8% 60%, rgb(var(--fx-a2) / var(--fx-a2-a)), transparent 72%),
+    radial-gradient(ellipse 46vw 36vh at 60% 104%, rgb(var(--fx-a3) / var(--fx-a3-a)), transparent 72%),
+    radial-gradient(ellipse 28vw 24vh at 34% 2%, rgb(var(--fx-a4) / var(--fx-a4-a)), transparent 72%),
+    radial-gradient(ellipse at 85% 8%, #343d4c 0%, transparent 55%),
+    linear-gradient(125deg, #222832, #151a22 65%, #252d3b);
+  background-attachment: fixed;
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme="dark"] :is(section.card, .app-header.card, .time-tracking-card, .quick-access-card, .eisenhower-card) {
+  --card-edge-light: rgb(226 236 252 / 56%);
+  --card-edge-dark: rgb(0 3 10 / 78%);
+  --card-cast-shadow: 0 1px 1px rgb(0 3 10 / 40%),
+    0 3px 7px -2px rgb(0 3 10 / 36%),
+    12px 22px 36px -16px rgb(0 3 10 / 60%),
+    0 36px 64px -34px rgb(0 3 10 / 52%);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme="dark"] .card > .glass-card-highlight {
+  background:
+    radial-gradient(ellipse 26% 34% at 100% 0%, rgb(190 214 255 / 14%), rgb(190 214 255 / 4%) 45%, transparent 72%),
+    radial-gradient(ellipse 22% 30% at 0% 100%, rgb(190 214 255 / 7%), transparent 72%);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme="dark"] .card > .glass-card-highlight::after {
+  background:
+    radial-gradient(ellipse 110px 2px at calc(100% - 96px) 1.5px, var(--fx-spec), transparent 100%),
+    radial-gradient(ellipse 2px 70px at calc(100% - 1.5px) 84px, var(--fx-spec), transparent 100%),
+    radial-gradient(ellipse 80px 2px at 90px calc(100% - 1.5px), rgb(220 232 255 / 34%), transparent 100%);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme="dark"] .icon-button:not(.icon-in-quick-access) {
+  background-image: linear-gradient(205deg, rgb(200 216 240 / 10%), rgb(200 216 240 / 2%) 48%, rgb(200 216 240 / 6%));
+  border-color: rgb(200 216 240 / 9%);
+}
+/* No top glare smear on dark tiles; the band alone carries the thickness. */
+html[data-fx="v2"] body[data-style="glass"][data-theme="dark"] .icon-button:not(.icon-in-quick-access)::before {
+  background: none;
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme="dark"] .icon-button:not(.icon-in-quick-access):has(> .icon-indicator) {
+  background-image: radial-gradient(circle 44px at calc(100% - 14px) 16px, rgb(var(--fx-ind-rgb) / 20%), rgb(var(--fx-ind-fringe) / 8%) 55%, transparent 100%),
+    linear-gradient(205deg, rgb(200 216 240 / 10%), rgb(200 216 240 / 2%) 48%, rgb(200 216 240 / 6%));
+}
+/* Dark: a slightly larger core so the cue reads at 1x (pseudo box only). */
+html[data-fx="v2"] body[data-style="glass"][data-theme="dark"] .icon-button > .icon-indicator { --fx-core-inset: -2px; }
+html[data-fx="v2"] body[data-style="glass"][data-theme="dark"] .edit-mode-tiles .icon-button > .icon-indicator { --fx-core-inset: -4px; }
+html[data-fx="v2"] body[data-style="glass"][data-theme="dark"] .unified-reminder-item:is([data-progress-state], :has(> .days-badge:is(.green, .yellow, .orange, .red))):not(.quick-access-lit) {
+  box-shadow: 0 1px 1px rgb(0 3 10 / 30%),
+    0 4px 12px -7px rgb(0 0 0 / 40%),
+    0 12px 24px -14px rgb(var(--glow-rgb) / calc(var(--progress-width, 100%) * 0.55)),
+    inset 0 3px 8px rgb(0 3 10 / 30%), inset 0 -1px 2px rgb(200 220 250 / 8%);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme="dark"] .unified-reminder-item:is([data-progress-state], :has(> .days-badge:is(.green, .yellow, .orange, .red)))::before {
+  background:
+    radial-gradient(ellipse 60% 1.4px at 50% 2.5px, rgb(255 255 255 / 50%), transparent 100%),
+    linear-gradient(180deg, rgb(255 255 255 / 12%), transparent 50%),
+    radial-gradient(circle 16px at calc(100% - 13px) 50%, rgb(var(--glow-rgb) / 62%), transparent 100%),
+    var(--light-body);
+}
+/* White text sits on the fill, so the ember stays saturated and peaks in the
+   cap padding beyond the text instead of under it. */
+html[data-fx="v2"] body[data-style="glass"][data-theme="dark"] .unified-reminder-item[data-progress-state="red"]::after {
+  background:
+    radial-gradient(ellipse 64px 30px at calc(100% - 8px) 50%, rgb(255 112 140 / 58%), rgb(var(--glow-rgb) / 30%) 45%, rgb(var(--glow-rgb) / 0%) 100%),
+    radial-gradient(circle 63px at calc(100% - 21px) 50%,
+      rgb(var(--glow-rgb) / 52%) 0%, rgb(var(--glow-rgb) / 25%) 50%, rgb(var(--glow-rgb) / 3.5%) 80%, rgb(var(--glow-rgb) / 0%) 100%);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme="dark"] :is(.unified-subtask-item, .list-item,
+  .unified-copypaste-item:not([data-glass-glow="material"]), .copy-paste-item:not([data-glass-glow="material"]),
+  .eisenhower-task:not(.eisenhower-task-pinned)):not(.quick-access-lit)::before {
+  background:
+    radial-gradient(ellipse 42% 1.4px at 58% 2.5px, var(--fx-gloss), transparent 100%),
+    linear-gradient(180deg, var(--fx-sheen), transparent 55%),
+    radial-gradient(ellipse 60% 120% at 96% 110%, rgb(0 3 10 / 22%), transparent 70%);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme="dark"] [data-glass-glow="surface"]:not(.quick-access-lit):not(:disabled):not([aria-disabled="true"]) {
+  box-shadow: inset -1px 1px 1px rgb(255 255 255 / 20%),
+    inset 1px -1px 1px rgb(255 255 255 / 9%),
+    inset 0 0 8px rgb(var(--control-glow-rgb) / 24%),
+    0 0 7px rgb(var(--control-glow-rgb) / 34%),
+    0 0 20px -2px rgb(var(--control-glow-rgb) / 28%),
+    0 10px 24px -10px rgb(var(--control-glow-rgb) / 50%) !important;
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme="dark"] .timer-circle:not(.active) {
+  background-image: radial-gradient(circle 40px at 72% 22%, rgb(210 226 255 / 13%), transparent 100%),
+    var(--glass-reflection);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme="dark"] :is(.wrench-btn, .sticky-note-btn) {
+  background: radial-gradient(circle 34px at 72% 20%, rgb(210 226 255 / 14%), rgb(210 226 255 / 3%) 55%, transparent 100%),
+    var(--glass-reflection), var(--glass-dialog);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme="dark"] .device-mode-option:not(.active) {
+  border-color: var(--glass-edge);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme="dark"] :is(.media-dialog, .breakdown-dialog, .appearance-dialog, .copy-text-dialog,
+  .image-editor-dialog, .file-manager-dialog, .note-viewer-dialog, .tasks-summary-dialog,
+  .ideas-dialog, .task-editor-dialog, .subtask-template-name-dialog, .subtask-desc-dialog,
+  .item-tasks-dialog, .item-selector-dialog, .item-task-picker-dialog, .meetings-dialog,
+  .meeting-editor-dialog, .completed-tasks-dialog, .projects-dialog, .auth-dialog,
+  .calendar-view-dialog, .quick-link-dialog, .reorder-modal-content, .color-picker-dialog,
+  .reminder-links-dialog, .reminder-tasks-dialog, .icon-links-dialog) {
+  box-shadow: var(--fx-lift-dialog), var(--glass-rim),
+    inset -18px 18px 40px -30px rgb(190 214 255 / 14%);
+}
+/* The dialog's top-right glint sits behind the task editor's close glyph:
+   lift the glyph (still the danger hue) so it reads as before. */
+html[data-fx="v2"] body[data-style="glass"][data-theme="dark"] .task-editor-close-btn {
+  opacity: 0.85;
+}
+/* Card-note bubbles keep their light pastel inline fill in dark mode, so they
+   need dark ink; only the default slate bubble (#475569, set by
+   edit-mode.js renderSavedNotesList) keeps light ink. */
+html[data-fx="v2"] body[data-style="glass"][data-theme="dark"] .notepad-saved-bubble:not([style*="475569"]) {
+  color: #1d232d;
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme="dark"] :is(section.card, .app-header.card):hover::after {
+  --fx-card-ptr: radial-gradient(circle 190px at var(--fx-px) var(--fx-py), rgb(120 206 255 / 88%), rgb(150 130 255 / 52%) 38%, rgb(255 120 210 / 20%) 66%, transparent 100%);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme="dark"] :is(.icon-button, .unified-subtask-item, .list-item, .unified-copypaste-item, .copy-paste-item):not(.quick-access-lit):not(.icon-in-quick-access):hover::after {
+  --fx-item-ptr: radial-gradient(circle 46px at var(--fx-ix) var(--fx-iy), rgb(220 236 255 / 80%), rgb(var(--fx-cyan) / 40%) 45%, transparent 100%);
+}
+
+/* --- 14. Sunset: warm aurora over the original sunset gradient -----------
+   Light sunset tints the ambient lift warm umber so the depth stays
+   luminous on the peach canvas instead of turning cool-grey. */
+html[data-fx="v2"] body[data-style="glass"][data-theme][data-glass-theme="sunset"] {
+  --fx-a1: 255 150 120; --fx-a1-a: 32%;   /* coral  */
+  --fx-a2: 214 120 210; --fx-a2-a: 24%;   /* orchid */
+  --fx-a3: 255 196 96;  --fx-a3-a: 26%;   /* gold   */
+  --fx-a4: 255 236 170; --fx-a4-a: 34%;   /* honey  */
+  --fx-lift-air: 128 70 56;
+  background:
+    radial-gradient(ellipse 40vw 38vh at 84% 20%, rgb(var(--fx-a1) / var(--fx-a1-a)), transparent 72%),
+    radial-gradient(ellipse 36vw 46vh at 8% 64%, rgb(var(--fx-a2) / var(--fx-a2-a)), transparent 72%),
+    radial-gradient(ellipse 44vw 34vh at 56% 102%, rgb(var(--fx-a3) / var(--fx-a3-a)), transparent 72%),
+    radial-gradient(ellipse 34vw 28vh at 26% 2%, rgb(var(--fx-a4) / var(--fx-a4-a)), transparent 72%),
+    linear-gradient(135deg, #ffeb99 0%, #f9be82 30%, #e4a87a 50%, #cbaed4 75%, #c19fcc 100%);
+  background-attachment: fixed;
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme="dark"][data-glass-theme="sunset"] {
+  --fx-a1: 214 92 70;  --fx-a1-a: 26%;
+  --fx-a2: 150 64 150; --fx-a2-a: 22%;
+  --fx-a3: 206 128 40; --fx-a3-a: 20%;
+  --fx-a4: 120 70 140; --fx-a4-a: 12%;
+  background:
+    radial-gradient(ellipse 40vw 38vh at 84% 18%, rgb(var(--fx-a1) / var(--fx-a1-a)), transparent 72%),
+    radial-gradient(ellipse 36vw 46vh at 8% 64%, rgb(var(--fx-a2) / var(--fx-a2-a)), transparent 72%),
+    radial-gradient(ellipse 44vw 34vh at 56% 104%, rgb(var(--fx-a3) / var(--fx-a3-a)), transparent 72%),
+    radial-gradient(ellipse 28vw 24vh at 34% 2%, rgb(var(--fx-a4) / var(--fx-a4-a)), transparent 72%),
+    linear-gradient(135deg, #4a2d1c 0%, #6b4028 30%, #7d4c34 50%, #553a5e 75%, #4a3555 100%);
+  background-attachment: fixed;
+}
+
+/* --- 15. Keyframes (opacity / transform only) ---------------------------- */
+/* Indicator pool: wide breath (0.36 -> 1) carried mostly by opacity; a slow
+   +/-8deg orbit about the core glides the rim streak along the bevel arc
+   (~2px each way); scale 0.9-1.07 keeps the streak on the bevel. */
+@keyframes fxPool {
+  0%   { opacity: 0.36; transform: rotate(40deg) scale(0.9); }
+  13%  { opacity: 0.84; transform: rotate(47deg) scale(1); }
+  27%  { opacity: 0.56; transform: rotate(53deg) scale(0.94); }
+  47%  { opacity: 1;    transform: rotate(46deg) scale(1.07); }
+  61%  { opacity: 0.62; transform: rotate(37deg) scale(0.96); }
+  80%  { opacity: 0.9;  transform: rotate(42deg) scale(1.02); }
+  100% { opacity: 0.36; transform: rotate(40deg) scale(0.9); }
+}
+@keyframes fxCore {
+  0%, 100% { opacity: 0.78; transform: scale(0.88); }
+  21% { opacity: 1;    transform: scale(1.02); }
+  37% { opacity: 0.86; transform: scale(0.94); }
+  60% { opacity: 1;    transform: scale(1.1); }
+  77% { opacity: 0.74; transform: scale(0.9); }
+}
+@keyframes fxHalo {
+  0%, 100% { opacity: 0.45; }
+  18% { opacity: 0.8; }
+  34% { opacity: 0.62; }
+  55% { opacity: 1; }
+  72% { opacity: 0.55; }
+  86% { opacity: 0.74; }
+}
+@keyframes fxBreath {
+  0%, 100% { opacity: 0.66; }
+  16% { opacity: 0.9; }
+  33% { opacity: 0.74; }
+  52% { opacity: 1; }
+  70% { opacity: 0.7; }
+  85% { opacity: 0.84; }
+}
+/* Pinned-task bloom: deeper than fxBreath so a pinned source visibly lives. */
+@keyframes fxTaskBreath {
+  0%, 100% { opacity: 0.5; }
+  15% { opacity: 0.86; }
+  31% { opacity: 0.62; }
+  52% { opacity: 1; }
+  69% { opacity: 0.48; }
+  84% { opacity: 0.78; }
+}
+/* Red reminder ember: uneven breath with a slow sideways drift. */
+@keyframes fxEmber {
+  0%, 100% { opacity: 0.22; transform: translateX(0); }
+  17% { opacity: 0.72; transform: translateX(-3px); }
+  33% { opacity: 0.5;  transform: translateX(-1px); }
+  54% { opacity: 1;    transform: translateX(-6px); }
+  71% { opacity: 0.36; transform: translateX(-2px); }
+  86% { opacity: 0.78; transform: translateX(-4px); }
+}
+
+/* --- 16. Accessibility guards --------------------------------------------
+   Reduced motion: every FX animation stops and rests at a calm static value
+   (glass.css's catch-all would also end them; this makes the rest state
+   explicit) and drops its will-change, so no idle layers stay promoted.
+   Reduced transparency: the aurora and prism go away, the smoked toast
+   turns opaque, and backdrop blur really goes away: glass.css's '*' guard
+   (0,2,1) loses to the !important shell rules in 2 and to glass.css's own
+   !important .card and dialog rules (a pre-existing leak), so it is
+   restated here at a specificity that beats all of them. */
+@media (prefers-reduced-motion: reduce) {
+  html[data-fx="v2"] body[data-style="glass"][data-theme] .icon-button > .icon-indicator::before,
+  html[data-fx="v2"] body[data-style="glass"][data-theme] .icon-button > .icon-indicator::after,
+  html[data-fx="v2"] body[data-style="glass"][data-theme] .icon-button.icon-in-quick-access::after,
+  html[data-fx="v2"] body[data-style="glass"][data-theme] .quick-access-lit::after,
+  html[data-fx="v2"] body[data-style="glass"][data-theme] .unified-reminder-item::after,
+  html[data-fx="v2"] body[data-style="glass"][data-theme] .unified-reminder-item[data-progress-state="red"]::after,
+  html[data-fx="v2"] body[data-style="glass"][data-theme] .eisenhower-task::before,
+  html[data-fx="v2"] body[data-style="glass"][data-theme] .timer-circle.active::before,
+  html[data-fx="v2"] body[data-style="glass"][data-theme] .notification-badge::after {
+    animation: none !important;
+    will-change: auto;
+  }
+}
+@media (prefers-reduced-transparency: reduce) {
+  html[data-fx="v2"] body[data-style="glass"][data-theme]:not([data-glass-theme="sunset"]) { background: var(--bg); }
+  html[data-fx="v2"] body[data-style="glass"][data-theme][data-glass-theme="sunset"] {
+    background: linear-gradient(135deg, #ffeb99 0%, #f9be82 30%, #e4a87a 50%, #cbaed4 75%, #c19fcc 100%);
+  }
+  html[data-fx="v2"] body[data-style="glass"][data-theme="dark"][data-glass-theme="sunset"] {
+    background: linear-gradient(135deg, #4a2d1c 0%, #6b4028 30%, #7d4c34 50%, #553a5e 75%, #4a3555 100%);
+  }
+  /* With the blur gone, panes must be solid. glass.css's own opaque fallback
+     loses to its dark-theme tokens on specificity, so restate it here. */
+  html[data-fx="v2"] body[data-style="glass"][data-theme] {
+    --glass-fill: var(--card); --glass-dialog: var(--card);
+    --fx-iris-a: 0%; --fx-prism-1: transparent; --fx-prism-2: transparent; --fx-prism-3: transparent;
+  }
+  html[data-fx="v2"] body[data-style="glass"][data-theme] *,
+  html[data-fx="v2"] body[data-style="glass"][data-theme] :is(section.card, .app-header.card, .time-tracking-card, .quick-access-card, .eisenhower-card, .card, .card-edit-body > section.card) {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+  html[data-fx="v2"] body[data-style="glass"][data-theme] .icon-button > .icon-indicator::before { opacity: 0.6; animation: none; will-change: auto; }
+  html[data-fx="v2"] body[data-style="glass"][data-theme] .toast { background: rgb(22 28 40); }
+}
