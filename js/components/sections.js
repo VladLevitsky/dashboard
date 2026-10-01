@@ -12,6 +12,7 @@ import { applyCellSize, applyGridPlacement, computeDisplayLayout, reconcileRowSp
 import { persistImageFromLibraryEntry } from '../features/media-library.js';
 import { setImageFromRef, classifyImageRef, uploadFile, dataURLtoBlob, filenameFromDataUrl, deleteR2File } from '../core/file-service.js';
 import { isLoggedIn } from '../core/auth.js';
+import { openItemCreator } from '../features/item-creator.js';
 
 // Helper: collect R2 fileId from an item for deferred cleanup after save
 function getItemR2FileId(item) {
@@ -42,7 +43,8 @@ function applyLinkToItem(item, result) {
 }
 
 // Helper: upload icon media to R2 if logged in, otherwise use Base64
-async function resolveIconMedia(chosenMedia) {
+// (also used by the item creator)
+export async function resolveIconMedia(chosenMedia) {
   const base64Src = persistImageFromLibraryEntry(chosenMedia);
   // Skip SVG — not in R2 allowed types, fine as inline
   if (isLoggedIn() && typeof base64Src === 'string' && base64Src.startsWith('data:') && !base64Src.startsWith('data:image/svg')) {
@@ -288,6 +290,29 @@ export function createSectionElement(section) {
     }
   });
   sectionEl.appendChild(notepadBtn);
+
+  // Quick-add "+" (view mode): add an item without entering edit mode. Shown
+  // on card hover, always on phones; hidden in edit mode and on collapsed
+  // cards via CSS (edit mode uses the "+" tiles inside the Card Edit Modal)
+  if (!editState.enabled) {
+    const addItemBtn = document.createElement('button');
+    addItemBtn.type = 'button';
+    addItemBtn.className = 'card-add-item-btn';
+    addItemBtn.title = 'Add an item to this card';
+    addItemBtn.setAttribute('aria-label', 'Add an item to this card');
+    addItemBtn.innerHTML = `
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+        <line x1="12" y1="5" x2="12" y2="19"></line>
+        <line x1="5" y1="12" x2="19" y2="12"></line>
+      </svg>
+    `;
+    addItemBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (editState.enabled) return;
+      openItemCreator({ sectionId: section.id, cardEl: sectionEl });
+    });
+    sectionEl.appendChild(addItemBtn);
+  }
 
   // Add collapse chevron button (only visible outside edit mode)
   const collapseBtn = document.createElement('button');
@@ -1688,17 +1713,26 @@ export function renderUnifiedCard(sectionEl, sectionId) {
     const iconsGroup = document.createElement('div');
     iconsGroup.className = 'unified-icons-group';
 
-    // In view mode, sort Quick Access icons to the front
+    // In view mode, Quick Access icons move to the front of their own group:
+    // separators stay where they are and keep the icons on their side of them
     let iconsToRender = items.icons;
     if (!editState.enabled && window.isItemInQuickAccess) {
-      iconsToRender = [...items.icons].sort((a, b) => {
-        if (a.isDivider || b.isDivider) return 0; // Don't sort dividers
-        const aInQA = window.isItemInQuickAccess({ type: 'icon', icon: a.icon, url: a.url, title: a.title || a.key, name: a.key, sectionType: sectionId, subtitle });
-        const bInQA = window.isItemInQuickAccess({ type: 'icon', icon: b.icon, url: b.url, title: b.title || b.key, name: b.key, sectionType: sectionId, subtitle });
-        if (aInQA && !bInQA) return -1;
-        if (!aInQA && bInQA) return 1;
-        return 0;
+      const inQA = new Set(items.icons.filter(a => !a.isDivider && window.isItemInQuickAccess({ type: 'icon', icon: a.icon, url: a.url, title: a.title || a.key, name: a.key, sectionType: sectionId, subtitle })));
+      iconsToRender = [];
+      let run = [];
+      const flush = () => {
+        iconsToRender.push(...run.filter(a => inQA.has(a)), ...run.filter(a => !inQA.has(a)));
+        run = [];
+      };
+      items.icons.forEach(icon => {
+        if (icon.isDivider) {
+          flush();
+          iconsToRender.push(icon);
+        } else {
+          run.push(icon);
+        }
       });
+      flush();
     }
 
     iconsToRender.forEach(icon => {
@@ -1723,7 +1757,7 @@ export function renderUnifiedCard(sectionEl, sectionId) {
       addTile.dataset.subtitle = subtitle;
       addTile.addEventListener('click', (e) => {
         e.preventDefault();
-        openUnifiedAddItemPopover(sectionId, subtitle, e);
+        openItemCreator({ sectionId, subtitle, cardEl: addTile.closest('section.card') });
       });
       iconsGroup.appendChild(addTile);
     }
@@ -3107,218 +3141,6 @@ function createUnifiedCopyPasteItem(item, sectionId, subtitle, subtitleColor) {
   }
 
   return div;
-}
-
-// --- Open add item popover for unified cards (shows Icon, Subtask, Copy-Paste options)
-export function openUnifiedAddItemPopover(sectionId, subtitle, event) {
-  const clickX = event ? event.clientX : window.innerWidth / 2;
-  const clickY = event ? event.clientY : window.innerHeight / 2;
-
-  const popover = document.createElement('div');
-  popover.className = 'edit-popover unified-add-popover';
-  popover.style.cssText = `
-    position: fixed;
-    background: white;
-    border-radius: 8px;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.08);
-    padding: 12px;
-    border: 1px solid #e5e7eb;
-    z-index: 2500;
-    width: fit-content;
-    visibility: hidden;
-  `;
-
-  // Dark mode support
-  if (document.body.getAttribute('data-theme') === 'dark') {
-    popover.style.background = '#1e293b';
-    popover.style.borderColor = '#475569';
-  }
-
-  popover.innerHTML = `
-    <div style="display: flex; flex-direction: column; gap: 8px;">
-      <div style="font-size: 12px; color: #6b7280; margin-bottom: 4px;">Add item type:</div>
-      <div style="display: flex; gap: 8px; align-items: center;">
-        <button id="add-icon-btn" title="Add Icon" style="width: 48px; height: 48px; border: 1px solid #e5e7eb; border-radius: 6px; background: #f8fafc; cursor: pointer; display: flex; align-items: center; justify-content: center;">
-          <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="3" y="3" width="18" height="18" rx="2"></rect>
-            <circle cx="8.5" cy="8.5" r="2"></circle>
-          </svg>
-        </button>
-        <button id="add-separator-btn" title="Add Separator" style="width: 48px; height: 48px; border: 1px solid #e5e7eb; border-radius: 6px; background: #f8fafc; cursor: pointer; display: flex; align-items: center; justify-content: center;">
-          <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="12" y1="4" x2="12" y2="20"></line>
-          </svg>
-        </button>
-        <button id="add-subtask-btn" title="Add Subtask" style="width: 48px; height: 48px; border: 1px solid #e5e7eb; border-radius: 6px; background: #f8fafc; cursor: pointer; display: flex; align-items: center; justify-content: center;">
-          <svg xmlns="http://www.w3.org/2000/svg" width="26" height="16" viewBox="0 0 28 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="1" y="1" width="26" height="14" rx="3"></rect>
-            <circle cx="7" cy="8" r="2.5"></circle>
-            <line x1="12" y1="8" x2="23" y2="8"></line>
-          </svg>
-        </button>
-        <button id="add-reminder-btn" title="Add Reminder" style="width: 48px; height: 48px; border: 1px solid #e5e7eb; border-radius: 6px; background: #f8fafc; cursor: pointer; display: flex; align-items: center; justify-content: center;">
-          <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="10"></circle>
-            <polyline points="12 6 12 12 16 14"></polyline>
-          </svg>
-        </button>
-        <button id="add-copypaste-btn" title="Add Copy-Paste" style="width: 48px; height: 48px; border: 1px solid #e5e7eb; border-radius: 6px; background: #f8fafc; cursor: pointer; display: flex; align-items: center; justify-content: center;">
-          <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-          </svg>
-        </button>
-        <button id="cancel-btn" style="background: none; border: none; cursor: pointer; padding: 0; color: #ef4444; font-size: 22px; line-height: 1; transition: color 0.15s;">&times;</button>
-      </div>
-    </div>
-  `;
-
-  document.body.appendChild(popover);
-
-  // Viewport-aware positioning: measure popover size and adjust position
-  const rect = popover.getBoundingClientRect();
-  const padding = 16; // Minimum distance from viewport edges
-  let finalX = clickX;
-  let finalY = clickY;
-
-  // Adjust horizontal position if would overflow
-  if (clickX - rect.width / 2 < padding) {
-    finalX = padding + rect.width / 2;
-  } else if (clickX + rect.width / 2 > window.innerWidth - padding) {
-    finalX = window.innerWidth - padding - rect.width / 2;
-  }
-
-  // Adjust vertical position if would overflow
-  if (clickY - rect.height / 2 < padding) {
-    finalY = padding + rect.height / 2;
-  } else if (clickY + rect.height / 2 > window.innerHeight - padding) {
-    finalY = window.innerHeight - padding - rect.height / 2;
-  }
-
-  popover.style.left = `${finalX}px`;
-  popover.style.top = `${finalY}px`;
-  popover.style.transform = 'translate(-50%, -50%)';
-  popover.style.visibility = 'visible';
-
-  popover.querySelector('#add-icon-btn').addEventListener('click', (e) => {
-    e.preventDefault();
-    document.body.removeChild(popover);
-    onAddUnifiedItem(sectionId, subtitle, 'icon');
-  });
-
-  popover.querySelector('#add-separator-btn').addEventListener('click', (e) => {
-    e.preventDefault();
-    document.body.removeChild(popover);
-    onAddUnifiedItem(sectionId, subtitle, 'separator');
-  });
-
-  popover.querySelector('#add-subtask-btn').addEventListener('click', (e) => {
-    e.preventDefault();
-    document.body.removeChild(popover);
-    onAddUnifiedItem(sectionId, subtitle, 'subtask');
-  });
-
-  popover.querySelector('#add-reminder-btn').addEventListener('click', (e) => {
-    e.preventDefault();
-    document.body.removeChild(popover);
-    onAddUnifiedItem(sectionId, subtitle, 'reminder');
-  });
-
-  popover.querySelector('#add-copypaste-btn').addEventListener('click', (e) => {
-    e.preventDefault();
-    document.body.removeChild(popover);
-    onAddUnifiedItem(sectionId, subtitle, 'copyPaste');
-  });
-
-  popover.querySelector('#cancel-btn').addEventListener('click', (e) => {
-    e.preventDefault();
-    document.body.removeChild(popover);
-  });
-
-  // Close on outside click
-  const closeOnOutside = (e) => {
-    if (!popover.contains(e.target)) {
-      if (document.body.contains(popover)) {
-        document.body.removeChild(popover);
-      }
-      document.removeEventListener('click', closeOnOutside);
-    }
-  };
-  setTimeout(() => document.addEventListener('click', closeOnOutside), 0);
-}
-
-// --- Add item to unified card
-export function onAddUnifiedItem(sectionId, subtitle, itemType) {
-  const data = currentData();
-  const cardData = data[sectionId];
-
-  if (!cardData || !cardData[subtitle]) return;
-
-  const subtitleData = cardData[subtitle];
-
-  switch (itemType) {
-    case 'icon':
-      const iconKey = generateKey('icon', subtitleData.icons);
-      subtitleData.icons.push({
-        key: iconKey,
-        icon: 'assets/logos/Tools_1.svg',
-        url: PLACEHOLDER_URL,
-        title: ''
-      });
-      break;
-
-    case 'separator':
-      const separatorKey = generateKey('sep', subtitleData.icons);
-      subtitleData.icons.push({
-        key: separatorKey,
-        icon: icons.Content_creation_divider || 'assets/icons/Content_creation_divider.svg',
-        isDivider: true
-      });
-      break;
-
-    case 'subtask':
-      const subtaskKey = generateKey('subtask', subtitleData.subtasks);
-      subtitleData.subtasks.push({
-        key: subtaskKey,
-        text: 'New Item',
-        url: PLACEHOLDER_URL,
-        links: null
-      });
-      break;
-
-    case 'reminder':
-      if (!subtitleData.reminders) subtitleData.reminders = [];
-      const reminderKey = generateKey('reminder', subtitleData.reminders);
-      subtitleData.reminders.push({
-        key: reminderKey,
-        title: 'New Reminder',
-        url: PLACEHOLDER_URL,
-        type: 'days',
-        schedule: null,
-        repeat: 'none',
-        weeklyInterval: 1,
-        monthlyType: 'sameDay',
-        targetNumber: null,
-        currentNumber: null,
-        intervalType: 'goal',
-        unit: 'none',
-        breakdown: null,
-        links: null
-      });
-      break;
-
-    case 'copyPaste':
-      const copyKey = generateKey('copy', subtitleData.copyPaste);
-      subtitleData.copyPaste.push({
-        key: copyKey,
-        text: 'New Item',
-        copyText: ''
-      });
-      break;
-  }
-
-  markDirtyAndSave();
-  renderAllSections();
 }
 
 // --- Add subtitle to unified card

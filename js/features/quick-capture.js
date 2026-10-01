@@ -870,8 +870,9 @@ function undo(record) {
   showToast(record.created ? 'Task removed' : 'Change undone');
 }
 
-// Toast with buttons (the shared #toast is text only)
-function showActionToast(message, actions) {
+// Toast with buttons (the shared #toast is text only). Also used by the item
+// creator (item-creator.js) for its Undo
+export function showActionToast(message, actions) {
   let toast = document.getElementById('qc-toast');
   if (!toast) {
     toast = document.createElement('div');

@@ -112,6 +112,8 @@ Images inside rich text (descriptions, projects, meetings, ideas, notes) are sto
 │   │   ├── time-tracking.js # Pill stopwatches, 1s tick, Time Tracking panel (task list + category donut)
 │   │   ├── task-categories.js # Category helpers + Task Settings modal
 │   │   ├── quick-capture.js # N-key bar: @ task / !category: pickers, live preview, ⓘ command list, Open/Undo toast
+│   │   ├── item-creator.js  # "Add item" window (card "+" in view mode, "+" tiles in edit mode) + separator placement mode
+│   │   ├── drop-light.js    # The glowing drop line: item reorder in edit mode + separator placement
 │   │   ├── rich-text-images.js # Paste/drop images → R2 upload; fills in stored images wherever rich text renders
 │   │   ├── quick-access.js  # Quick access panel with reconciliation
 │   │   ├── media-library.js
@@ -164,6 +166,18 @@ All cards are type `'unified'` containing any mix of:
 - **Reminders**: Time/interval tracking with color-coded day badges (supports URL or file links)
 - **Subtasks**: 2-column grid of text links (supports URL or file links)
 - **Copy-Paste**: 2-column grid, copies text on click
+- In view mode, Quick Access icons move to the front of their own separator-delimited group (separators stay put)
+
+### Item Creator (`js/features/item-creator.js`): add items without blank placeholders
+- **View mode**: a "+" on every card's title bar (`.card-add-item-btn`, left of the notes button) opens the window. Shown on card hover / keyboard focus, always on phones (`body[data-device="mobile"]`, `(hover: none)`); hidden on collapsed cards and in edit mode
+- **Edit mode**: the "+" tiles inside the Card Edit Modal open the same window with that section preselected (the old `openUnifiedAddItemPopover` / `onAddUnifiedItem` blank-item flow is gone)
+- Window (`.ic-overlay`, z-index 3000: above the Card Edit Modal and item popovers, below the media library at 4000): tabs Icon · Subtask · Reminder · Copy-paste · Separator, a Section select (only when the card has named sections), then the fields for that type. Name and link are SHARED fields, so switching tabs keeps them
+  - Icon: image (media library or emoji picker, created on first use) + required link/file + optional name (`icon.title`) + "Invert colors in dark mode" (dark only)
+  - Subtask: text + optional link/file. Reminder: name + optional link/file + Date (date, repeats weekly 1-3 / monthly same date or first weekday; same schedule shapes as the calendar popover) or Counter (target, current, limit/goal, unit). Copy-paste: optional label (defaults to the first line) + text to copy
+- Nothing exists until Add. Validation blocks Add (missing field shown in the footer; Add shakes the window and focuses the field). Files and icon images upload only on Add (link file first; a failure stops before anything else uploads; anything uploaded is cleaned up if the save fails)
+- Saving: view mode writes the profile (`markDirtyAndSave`) and pushes it with a silent `cloudSave()` (a failed push stays dirty and retries on the 20-min timer); edit mode writes the working copy (Confirm keeps it, Cancel drops it). Then a toast with Undo (`showActionToast` from quick-capture.js; Undo only applies in the same mode it was made in) and a one-time glow on the new item (`.ic-just-added`)
+- Remembers the last type and section per card (in memory); the first open on a card starts on the kind of item it holds most
+- **Separator**: picking the tab hides the window and enters placement mode on the card (`.sep-placing`, `html.sep-placing-active` crosshair). Every gap between two icons (not next to an existing separator) in a visible icon row gets a faint breathing marker (`.sep-slot`, absolutely positioned inside its `.unified-icons-group`, so it scrolls with the card); the drop light follows the pointer to the nearest gap; click / tap drops it there. Window-level capture listeners swallow clicks, long-presses and drags so icons don't open while placing. Esc / Cancel (hint bar `.sep-place-hint`) returns to the window unchanged. The group is saved in its ON-SCREEN order before inserting (WYSIWYG with the Quick Access sort). No valid gap → the tab explains instead. A re-render while placing re-attaches to the new card element
 
 ### Eisenhower Matrix Tasks
 Central task store in `model.tasks[]` with 4-color priority system:
@@ -333,6 +347,7 @@ Prioritized items panel with state-based reconciliation — automatically remove
 - **SWAP**: dragging so the CURSOR is inside another card arms a swap — both cards pulse (`.card-swap-glow`, `filter: drop-shadow` animation since glass box-shadows would drown a box-shadow pulse; dragged card opacity lifted from 0.4). Drop exchanges positions; each card keeps its own size; overlaps settle downward
 - **Resize on ALL FOUR edges**: right/bottom move that edge; left/top move the edge while anchoring the opposite one (adjust `gridCol`+`gridColSpan` / `gridRow`+`gridRowSpan` together). Snaps to any cell; height can never shrink below content (`getMinRowSpan` via `measureContentHeight`, which ignores absolutely-positioned children); top can't rise past row 2
 - Single "Add Card" FAB button (blue +) in the fab-left stack directly above Settings
+- **Item reorder drop light** (`js/features/drop-light.js`): while dragging an icon / pill inside the Card Edit Modal, a glowing azure beam sits in the real gap where it will land (vertical between icons, horizontal above/below pills; gap read from the group's `column-gap` / `row-gap`). One fixed element at z-index 2450 (above the modal's 2000 — the old `.item-drop-indicator` sat at 1001, behind the modal, so it never showed). It moves through a paused Web Animation (no style/attribute writes per dragover, so glass-glow.js's observers stay asleep), glides between gaps, and goes out when the drag leaves the group or targets another section. Look: glass-fx.css 11b (tapered white-hot core, breathing halo, travelling spark)
 
 ### Card Edit Modal (`js/features/card-modal.js`)
 - `openCardEditModal(sectionId)` / `closeCardEditModal()`
@@ -402,8 +417,14 @@ Prioritized items panel with state-based reconciliation — automatically remove
 - `updateNotificationBadge()` / `wireNotificationBadge()`
 - `refreshCalendarView()` - Re-render the calendar if it is open
 
+### Item Creator & Drop Light
+- `openItemCreator({ sectionId, subtitle?, cardEl? })` / `closeItemCreator()` / `isItemCreatorOpen()`
+- `showDropLight({ x, y, length, vertical })` / `hideDropLight()` (viewport coordinates)
+- `resolveIconMedia(chosenMedia)` (sections.js, exported): media-library entry → R2 ref when signed in, else Base64
+
 ### Quick Capture
 - `initQuickCapture()` (N key + header bolt) / `openQuickCapture()` / `closeQuickCapture()`
+- `showActionToast(message, actions)` (exported; the item creator reuses it for Undo)
 - quick-capture-parse.js: `parseQuickCapture(text, { now, categories })` / `matchCategory()` / `normalizeUrl()` / `toDateKey()` / `fromDateKey()` / `QUICK_CAPTURE_HELP`
 
 ### Shared Utilities (`js/utils.js`)
@@ -496,6 +517,9 @@ Shared logic lives in `edit-mode.js`: `handleEditorKeydown`, `handleEditorInput`
 - **Pasted images go to R2 file storage** (not the 2 MB profile): paste/drop in any rich-text editor uploads, the note keeps `<img data-r2-file-id>`, existing embedded images migrate on sign-in; File Manager groups Images / Documents and its delete no longer double-fires
 - **Quick capture**: N anywhere (or the Mobile-layout header bolt) → one line with dates, `!commands`, `@task` and `!category:` pickers, live preview, ⓘ command list, Open/Undo toast
 - Task editor: the Linked Project/Meeting row is hidden again for tasks without one (`.task-editor-field[hidden]`)
+- **Quick-add in view mode**: "+" on each card's title bar opens one "add item" window (icon / subtask / reminder / copy-paste / separator); saved straight to the profile, with Undo. Edit mode's "+" tiles use the same window, so new items are never blank placeholders
+- **Separator placement**: pick where a separator goes; markers in every gap between icons, a glowing beam follows the pointer, click / tap to drop
+- **Reorder drop light**: the glowing beam now shows where a dragged item lands inside the Card Edit Modal (the old line rendered behind the modal)
 
 ### v5.1
 - **Glass FX v2** overlay (`glass-fx.css`, `glass-fx.js`): more lift and 3D, fluid pulsing indicator light, feathered colored glows, playful transparency

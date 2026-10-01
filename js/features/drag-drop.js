@@ -4,6 +4,7 @@
 import { editState, dragState, currentData, currentSections } from '../state.js';
 import { $, showToast } from '../utils.js';
 import { markDirtyAndSave, refreshEditingClasses } from './edit-mode.js';
+import { showDropLight, hideDropLight } from './drop-light.js';
 import {
   DEFAULT_ROW_SPAN,
   mouseToGridCell, computeDropPosition, resolveCollisions
@@ -268,17 +269,8 @@ export function initializeItemDragHandlers(element, itemKey, sectionKey) {
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', itemKey);
 
-    // Create item drop indicator if it doesn't exist
-    if (!dragState.itemDropIndicator) {
-      dragState.itemDropIndicator = document.createElement('div');
-      dragState.itemDropIndicator.className = 'item-drop-indicator';
-      dragState.itemDropIndicator.style.position = 'absolute';
-      dragState.itemDropIndicator.style.zIndex = '1001';
-      dragState.itemDropIndicator.style.pointerEvents = 'none';
-      dragState.itemDropIndicator.innerHTML = '<div class="item-drop-line"></div>';
-      document.body.appendChild(dragState.itemDropIndicator);
-    }
-    dragState.itemDropIndicator.style.display = 'none';
+    // The glowing drop line (drop-light.js) shows the landing spot
+    hideDropLight();
   });
 
   // Drag end
@@ -288,9 +280,7 @@ export function initializeItemDragHandlers(element, itemKey, sectionKey) {
     element.classList.remove('item-dragging');
     element.style.cursor = 'grab';
 
-    if (dragState.itemDropIndicator) {
-      dragState.itemDropIndicator.style.display = 'none';
-    }
+    hideDropLight();
 
     dragState.draggedItem = null;
     dragState.draggedItemKey = null;
@@ -335,8 +325,6 @@ export function initializeContainerDragHandlers(container, sectionKey) {
 
     const mouseX = e.clientX;
     const mouseY = e.clientY;
-    const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-    const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
 
     // Get all draggable items in this container (including separators for proper positioning)
     const items = Array.from(container.querySelectorAll('[data-key]')).filter(item =>
@@ -346,7 +334,7 @@ export function initializeContainerDragHandlers(container, sectionKey) {
     );
 
     if (items.length === 0) {
-      dragState.itemDropIndicator.style.display = 'none';
+      hideDropLight();
       return;
     }
 
@@ -464,49 +452,30 @@ export function initializeContainerDragHandlers(container, sectionKey) {
       }
     }
 
-    if (closestItem && dragState.itemDropIndicator) {
+    if (closestItem) {
+      // Glowing drop line in the real gap next to the target item (viewport
+      // coordinates: the line is fixed, so it also works inside the Card Edit Modal)
       const rect = closestItem.getBoundingClientRect();
-      dragState.itemDropIndicator.style.display = 'block';
-
-      dragState.itemDropIndicator.dataset.targetKey = closestItem.dataset.key;
-      dragState.itemDropIndicator.dataset.position = dropPosition;
-
+      const styles = getComputedStyle(container);
       if (isIconContainer) {
-        // Vertical indicator for icon grids
-        if (dropPosition === 'before') {
-          dragState.itemDropIndicator.style.left = `${rect.left + scrollLeft - halfGap - 1.5}px`;
-        } else {
-          dragState.itemDropIndicator.style.left = `${rect.right + scrollLeft + halfGap - 1.5}px`;
-        }
-        dragState.itemDropIndicator.style.top = `${rect.top + scrollTop}px`;
-        dragState.itemDropIndicator.style.width = '3px';
-        dragState.itemDropIndicator.style.height = `${rect.height}px`;
-        dragState.itemDropIndicator.className = 'item-drop-indicator vertical';
-      } else if (isGridContainer) {
-        // Horizontal indicator for 2-column grids (subtasks, reminders, copy-paste)
-        // Shows above/below the target item to indicate array insertion point
-        dragState.itemDropIndicator.style.left = `${rect.left + scrollLeft}px`;
-        if (dropPosition === 'before') {
-          dragState.itemDropIndicator.style.top = `${rect.top + scrollTop - halfGap - 1.5}px`;
-        } else {
-          dragState.itemDropIndicator.style.top = `${rect.bottom + scrollTop + halfGap - 1.5}px`;
-        }
-        dragState.itemDropIndicator.style.width = `${rect.width}px`;
-        dragState.itemDropIndicator.style.height = '3px';
-        dragState.itemDropIndicator.className = 'item-drop-indicator horizontal';
+        // Vertical line beside the target icon
+        const gap = parseFloat(styles.columnGap) || gapSize;
+        const x = dropPosition === 'before' ? rect.left - gap / 2 : rect.right + gap / 2;
+        showDropLight({ x, y: rect.top - 3, length: rect.height + 6, vertical: true });
       } else {
-        // Horizontal indicator for single-column lists
-        dragState.itemDropIndicator.style.left = `${rect.left + scrollLeft}px`;
-        if (dropPosition === 'before') {
-          dragState.itemDropIndicator.style.top = `${rect.top + scrollTop - halfGap - 1.5}px`;
-        } else {
-          dragState.itemDropIndicator.style.top = `${rect.bottom + scrollTop + halfGap - 1.5}px`;
-        }
-        dragState.itemDropIndicator.style.width = `${rect.width}px`;
-        dragState.itemDropIndicator.style.height = '3px';
-        dragState.itemDropIndicator.className = 'item-drop-indicator horizontal';
+        // Horizontal line above / below the target pill (2-column grids and lists)
+        const gap = parseFloat(styles.rowGap) || gapSize;
+        const y = dropPosition === 'before' ? rect.top - gap / 2 : rect.bottom + gap / 2;
+        showDropLight({ x: rect.left, y, length: rect.width, vertical: false });
       }
     }
+  });
+
+  // Leaving the group (into the card's padding, another section or outside the
+  // card) means a drop wouldn't reorder anything here: put the line out
+  container.addEventListener('dragleave', (e) => {
+    if (dragState.draggedItemSection !== sectionKey) return;
+    if (!e.relatedTarget || !container.contains(e.relatedTarget)) hideDropLight();
   });
 
   // Drop - reorder the item
@@ -517,6 +486,7 @@ export function initializeContainerDragHandlers(container, sectionKey) {
 
     e.preventDefault();
     e.stopPropagation();
+    hideDropLight();
 
     const data = currentData();
 
@@ -869,7 +839,9 @@ export function removeDragHandlers() {
     dragState.dropIndicator = null;
   }
 
-  // Remove item drop indicator if it exists
+  hideDropLight();
+
+  // Remove the legacy reminder drop indicator if it exists
   if (dragState.itemDropIndicator && dragState.itemDropIndicator.parentElement) {
     dragState.itemDropIndicator.parentElement.removeChild(dragState.itemDropIndicator);
     dragState.itemDropIndicator = null;
@@ -920,6 +892,8 @@ export function initializeCardDropZone(cardElement, targetSectionId) {
 
     if (isCrossCard || isCrossSubtitle) {
       e.preventDefault();
+      // The item lands at the end of the highlighted section, not at a gap
+      hideDropLight();
 
       // Only show card-level highlight for cross-card drags
       if (isCrossCard) {
