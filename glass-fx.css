@@ -662,6 +662,23 @@ html[data-fx="v2"] body[data-style="glass"][data-theme] .notification-badge::aft
   opacity: 0.8;
   animation: fxBreath 4.9s var(--fx-breathe) -1.2s infinite;
 }
+/* Nothing due: a quiet glass lens with a calendar glyph (it still opens the
+   calendar). No red body, no breathing glow. */
+html[data-fx="v2"] body[data-style="glass"][data-theme] .notification-badge.is-clear {
+  background-image: var(--glass-reflection) !important;
+  background-color: var(--glass-dialog) !important;
+  color: var(--muted);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  backdrop-filter: blur(16px) saturate(140%);
+  box-shadow: var(--fx-lift-control), var(--glass-rim);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .notification-badge.is-clear:hover {
+  color: var(--brand);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .notification-badge.is-clear::after {
+  content: none;
+  animation: none;
+}
 html[data-fx="v2"] body[data-style="glass"][data-theme] .search-input:focus {
   box-shadow: inset 0 1px 3px rgb(40 46 56 / 5%), 0 0 0 1px rgb(var(--fx-ind-rgb) / 45%),
     0 0 14px -2px rgb(var(--fx-ind-rgb) / 40%);
@@ -679,7 +696,7 @@ html[data-fx="v2"] body[data-style="glass"][data-theme] :is(.media-dialog, .brea
   .ideas-dialog, .task-editor-dialog, .subtask-template-name-dialog, .subtask-desc-dialog,
   .item-tasks-dialog, .item-selector-dialog, .item-task-picker-dialog, .meetings-dialog,
   .meeting-editor-dialog, .completed-tasks-dialog, .projects-dialog, .auth-dialog,
-  .calendar-view-dialog, .quick-link-dialog, .reorder-modal-content, .color-picker-dialog,
+  .calendar-view-dialog, .today-dialog, .quick-link-dialog, .reorder-modal-content, .color-picker-dialog,
   .reminder-links-dialog, .reminder-tasks-dialog, .icon-links-dialog, .qc-dialog, .qc-help-dialog, .ic-dialog) {
   background:
     linear-gradient(90deg, transparent 6%, rgb(var(--fx-cyan) / 44%) 30%, rgb(var(--fx-violet) / 44%) 55%, rgb(var(--fx-pink) / 36%) 78%, transparent 96%) top / 100% 1px no-repeat,
@@ -829,6 +846,30 @@ html[data-fx="v2"] body[data-style="glass"][data-theme] .ic-seg button[aria-chec
 html[data-fx="v2"] body[data-style="glass"][data-theme] .ic-save {
   background-image: radial-gradient(ellipse 60% 40% at 70% 0%, rgb(255 255 255 / 30%), transparent 100%);
   box-shadow: var(--fx-lift-pill), inset -1px 1px 1px rgb(255 255 255 / 35%), 0 0 16px -4px rgb(var(--fx-ind-rgb) / 50%);
+}
+
+/* --- 11c. Today view (js/features/today.js) --------------------------------
+   Task pills, card items and the tinted color groups come with their own
+   looks; only the Today-specific pieces are styled here. Meeting rows are
+   violet-tinted glass pills; the empty state is a dashed glass well. */
+html[data-fx="v2"] body[data-style="glass"][data-theme] .today-meeting {
+  background: linear-gradient(180deg, rgb(255 255 255 / 12%), transparent 60%), rgb(139 92 246 / 10%);
+  border-color: rgb(139 92 246 / 30%);
+  -webkit-backdrop-filter: blur(10px) saturate(140%);
+  backdrop-filter: blur(10px) saturate(140%);
+  box-shadow: var(--fx-lift-pill), var(--glass-rim);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .today-meeting:hover {
+  background: linear-gradient(180deg, rgb(255 255 255 / 14%), transparent 60%), rgb(139 92 246 / 16%);
+  box-shadow: var(--fx-lift-pill-hover), var(--glass-rim);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .today-empty {
+  border-color: var(--glass-divider);
+  background: var(--glass-field);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .today-icon-btn:hover {
+  background: var(--glass-field);
+  box-shadow: var(--glass-rim);
 }
 
 /* --- 12. Pointer light (js/features/glass-fx.js) ---------------------------
@@ -1005,7 +1046,7 @@ html[data-fx="v2"] body[data-style="glass"][data-theme="dark"] :is(.media-dialog
   .ideas-dialog, .task-editor-dialog, .subtask-template-name-dialog, .subtask-desc-dialog,
   .item-tasks-dialog, .item-selector-dialog, .item-task-picker-dialog, .meetings-dialog,
   .meeting-editor-dialog, .completed-tasks-dialog, .projects-dialog, .auth-dialog,
-  .calendar-view-dialog, .quick-link-dialog, .reorder-modal-content, .color-picker-dialog,
+  .calendar-view-dialog, .today-dialog, .quick-link-dialog, .reorder-modal-content, .color-picker-dialog,
   .reminder-links-dialog, .reminder-tasks-dialog, .icon-links-dialog, .qc-dialog, .qc-help-dialog, .ic-dialog) {
   box-shadow: var(--fx-lift-dialog), var(--glass-rim),
     inset -18px 18px 40px -30px rgb(190 214 255 / 14%);

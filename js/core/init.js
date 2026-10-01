@@ -32,12 +32,7 @@ import { initTimeTracking } from '../features/time-tracking.js';
 import { initQuickCapture } from '../features/quick-capture.js';
 import { openTaskSettingsModal } from '../features/task-categories.js';
 import { startRichTextImages } from '../features/rich-text-images.js';
-import {
-  toggleQuickAccess,
-  renderQuickAccess,
-  openQuickLinkModal,
-  removeQuickLink
-} from '../features/quick-access.js';
+import { toggleTodayView } from '../features/today.js';
 import {
   loadMediaLibrary,
   saveMediaLibrary,
@@ -703,16 +698,6 @@ export async function init() {
   // Quick capture: N anywhere (or the header bolt in the Mobile layout)
   initQuickCapture();
 
-  // Initialize Quick Access if it was expanded
-  if (model.quickAccessExpanded) {
-    const card = $('#quick-access-card');
-    if (card) {
-      card.hidden = false;
-      setTimeout(() => card.classList.add('active'), ANIMATION_DELAY_MS);
-      renderQuickAccess();
-    }
-  }
-
   // Cloud sync: reconcile with server after local render (async, non-blocking)
   if (wasLoggedIn) {
     postRestoreAuthSync();
@@ -983,15 +968,13 @@ export function wireUI() {
     });
   }
 
-  // Meetings toggle
-  const calendarViewToggle = $('#calendar-view-toggle');
-  if (calendarViewToggle) {
-    calendarViewToggle.addEventListener('click', () => {
-      if (window.openCalendarView) window.openCalendarView();
-    });
+  // Today view (header button): due today & overdue + Quick Access
+  const todayToggle = $('#today-toggle');
+  if (todayToggle) {
+    todayToggle.addEventListener('click', toggleTodayView);
   }
 
-  // Wire notification badge on profile photo
+  // Notification badge on the profile photo opens the calendar
   if (window.wireNotificationBadge) window.wireNotificationBadge();
 
   const meetingsToggle = $('#meetings-toggle');
@@ -1022,10 +1005,6 @@ export function wireUI() {
   if (projectsBtn) {
     projectsBtn.addEventListener('click', openProjectsModal);
   }
-
-  // Quick access event handlers
-  $('#quick-access-toggle').addEventListener('click', toggleQuickAccess);
-  $('#quick-links-add').addEventListener('click', openQuickLinkModal);
 
   // Global drag and drop event listeners
   document.addEventListener('dragover', handleDragOver);

@@ -89,15 +89,19 @@ import {
 } from './features/rich-text-images.js';
 
 import {
-  closeQuickAccess,
-  toggleQuickAccess,
   openQuickLinkModal,
   removeQuickLink,
-  renderQuickAccess,
   isItemSelected,
   toggleItemQuickAccess,
   isItemInQuickAccess
 } from './features/quick-access.js';
+
+import {
+  openTodayView,
+  closeTodayView,
+  toggleTodayView,
+  refreshTodayView
+} from './features/today.js';
 
 import {
   loadMediaLibrary,
@@ -452,15 +456,18 @@ window.closeQuickCapture = closeQuickCapture;
 window.attachImageUpload = attachImageUpload;
 window.hydrateRichTextImages = hydrateRichTextImages;
 
-// Quick Access
-window.closeQuickAccess = closeQuickAccess;
-window.toggleQuickAccess = toggleQuickAccess;
+// Quick Access (listed in the Today view)
 window.openQuickLinkModal = openQuickLinkModal;
 window.removeQuickLink = removeQuickLink;
-window.renderQuickAccess = renderQuickAccess;
 window.isItemSelected = isItemSelected;
 window.toggleItemQuickAccess = toggleItemQuickAccess;
 window.isItemInQuickAccess = isItemInQuickAccess;
+
+// Today view (header button)
+window.openTodayView = openTodayView;
+window.closeTodayView = closeTodayView;
+window.toggleTodayView = toggleTodayView;
+window.refreshTodayView = refreshTodayView;
 
 // Media Library
 window.loadMediaLibrary = loadMediaLibrary;

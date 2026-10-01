@@ -8,11 +8,11 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Caveat:wght@500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=2026-09-30-quick-add">
-  <link rel="stylesheet" href="glass.css?v=2026-09-30-quick-add">
+  <link rel="stylesheet" href="styles.css?v=2026-09-30-today">
+  <link rel="stylesheet" href="glass.css?v=2026-09-30-today">
   <!-- Glass FX v2 layer: every rule is scoped under html[data-fx="v2"] -->
-  <link rel="stylesheet" href="glass-fx.css?v=2026-09-30-quick-add">
-  <script type="module" src="js/features/glass-glow.js?v=2026-09-23-card-bevels"></script>
+  <link rel="stylesheet" href="glass-fx.css?v=2026-09-30-today">
+  <script type="module" src="js/features/glass-glow.js?v=2026-09-30-today"></script>
   <script type="module" src="js/features/glass-fx.js?v=2026-09-28-fx"></script>
   <!-- Emoji Picker Element - Web Component -->
   <script type="module" src="https://cdn.jsdelivr.net/npm/emoji-picker-element@^1/index.js"></script>
@@ -45,7 +45,8 @@
           <div class="profile-photo-container">
             <img src="assets/icons/placeholder-profile.svg" alt="Profile" class="profile-photo editable" data-type="profilePhoto" />
           </div>
-          <div class="notification-badge" id="notification-badge" hidden>0</div>
+          <!-- Due today + overdue count; opens the calendar (js/features/calendar.js) -->
+          <div class="notification-badge" id="notification-badge" role="button" tabindex="0" hidden>0</div>
         </div>
         <div class="profile-info">
           <div class="profile-name editable" data-type="profileName">Your Name</div>
@@ -76,12 +77,11 @@
               <path d="M13 2 4 14h7l-1 8 9-12h-7l1-8z"></path>
             </svg>
           </button>
-          <button id="calendar-view-toggle" class="calendar-view-toggle" title="Calendar" aria-label="Calendar">
+          <!-- Today: due today & overdue + Quick Access (the calendar opens from the badge on the profile photo) -->
+          <button type="button" id="today-toggle" class="calendar-view-toggle today-toggle" title="Today" aria-label="Today">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-              <line x1="16" y1="2" x2="16" y2="6"></line>
-              <line x1="8" y1="2" x2="8" y2="6"></line>
-              <line x1="3" y1="10" x2="21" y2="10"></line>
+              <circle cx="12" cy="12" r="4"></circle>
+              <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path>
             </svg>
           </button>
           <button id="tasks-summary-toggle" class="tasks-summary-toggle" title="Tasks" aria-label="Tasks">
@@ -98,13 +98,6 @@
               <line x1="200" y1="288.6" x2="200" y2="342.77"/>
               <circle cx="200" cy="135" r="32" stroke-width="22"/>
               <path d="M138 230 c0-35 28-62 62-62 s62 27 62 62" stroke-width="22" stroke-linecap="round"/>
-            </svg>
-          </button>
-          <button id="quick-access-toggle" class="quick-access-toggle" title="Toggle quick access" aria-label="Toggle quick access">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="12" r="10"></circle>
-              <circle cx="12" cy="12" r="6"></circle>
-              <circle cx="12" cy="12" r="2"></circle>
             </svg>
           </button>
           <button id="time-tracking-toggle" class="time-tracking-toggle" title="Toggle time tracking" aria-label="Toggle time tracking">
@@ -142,23 +135,6 @@
           <h4 class="eisenhower-section-heading tt-section-heading" id="tt-categories-heading">Categories</h4>
           <div id="tt-category-chart" class="tt-category-chart"></div>
         </section>
-      </div>
-    </div>
-
-    <div id="quick-access-card" class="card quick-access-card" hidden>
-      <div class="quick-access-header">
-        <h3>Quick Access</h3>
-        <div class="quick-access-controls">
-          <button id="quick-links-add" class="quick-access-btn" title="Add quick link" aria-label="Add quick link">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
-              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
-            </svg>
-          </button>
-        </div>
-      </div>
-      <div id="quick-access-content" class="quick-access-content">
-        <!-- Quick access items will be dynamically added here -->
       </div>
     </div>
 
@@ -800,7 +776,7 @@
     </div>
 
     <!-- ES6 Modules - fully modularized, no app.js dependency -->
-    <script type="module" src="js/main.js?v=2026-09-30-quick-add"></script>
+    <script type="module" src="js/main.js?v=2026-09-30-today"></script>
   </body>
   </html>
 

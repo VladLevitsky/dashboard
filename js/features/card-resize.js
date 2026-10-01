@@ -25,7 +25,7 @@ let activeResize = null;
 export function initializeResizeHandles(cardEl, sectionId) {
   if (!editState.enabled) return;
   if (cardEl.classList.contains('app-header') || cardEl.classList.contains('time-tracking-card') ||
-      cardEl.classList.contains('quick-access-card') || cardEl.classList.contains('eisenhower-card')) return;
+      cardEl.classList.contains('eisenhower-card')) return;
 
   cardEl.querySelectorAll('.card-resize-handle-right, .card-resize-handle-bottom, .card-resize-handle-left, .card-resize-handle-top')
     .forEach(h => h.remove());

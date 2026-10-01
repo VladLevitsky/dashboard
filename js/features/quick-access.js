@@ -1,60 +1,17 @@
 // Personal Dashboard - Quick Access Module
-// Handles quick access panel functionality
+// Quick Access data: holding a card item (icon, reminder, subtask, copy-paste)
+// for a moment adds it here or takes it out, and its card shows it first with
+// a pulse. The items are listed in the Today view (js/features/today.js),
+// which replaced the old Quick Access panel. Manually added quick links live
+// here too.
 
 import { editState, currentData } from '../state.js';
-import { $, openUrl, copyToClipboard } from '../utils.js';
-import { classifyImageRef, setImageFromRef } from '../core/file-service.js';
-import { ANIMATION_DELAY_MS, CARD_HIDE_DELAY_MS } from '../constants.js';
+import { $ } from '../utils.js';
+import { classifyImageRef } from '../core/file-service.js';
 import { saveModel } from '../core/storage.js';
 
-// --- Close quick access panel (without toggle)
-export function closeQuickAccess() {
-  const card = $('#quick-access-card');
-  if (!card) return;
-  const data = currentData();
-  if (!data.quickAccessExpanded) return;
-
-  data.quickAccessExpanded = false;
-  card.classList.remove('active');
-  setTimeout(() => card.hidden = true, CARD_HIDE_DELAY_MS);
-
-  if (!editState.enabled) {
-    saveModel();
-  }
-}
-
-// --- Toggle quick access panel
-export function toggleQuickAccess() {
-  const card = $('#quick-access-card');
-  if (!card) return;
-
-  const data = currentData();
-
-  // If opening, close other slide-out panels first (abort if user cancels)
-  if (!data.quickAccessExpanded) {
-    if (window.closeTasksSummaryModal) window.closeTasksSummaryModal();
-    if (window.closeMeetingsModal) {
-      window.closeMeetingsModal();
-      // If meetings modal didn't close (user cancelled unsaved changes), abort
-      const meetingsModal = document.querySelector('#meetings-modal');
-      if (meetingsModal && !meetingsModal.hidden) return;
-    }
-  }
-
-  data.quickAccessExpanded = !data.quickAccessExpanded;
-
-  if (data.quickAccessExpanded) {
-    card.hidden = false;
-    setTimeout(() => card.classList.add('active'), ANIMATION_DELAY_MS);
-    renderQuickAccess();
-  } else {
-    card.classList.remove('active');
-    setTimeout(() => card.hidden = true, CARD_HIDE_DELAY_MS);
-  }
-
-  if (!editState.enabled) {
-    saveModel();
-  }
+function refreshTodayView() {
+  if (window.refreshTodayView) window.refreshTodayView();
 }
 
 // --- Open quick link modal
@@ -115,11 +72,10 @@ export function openQuickLinkModal() {
       key: `quick-link-${Date.now()}`
     });
 
-    renderQuickAccess();
-
     if (!editState.enabled) {
       saveModel();
     }
+    refreshTodayView();
 
     document.body.removeChild(modal);
   });
@@ -129,12 +85,13 @@ export function openQuickLinkModal() {
   clearAllBtn.addEventListener('click', () => {
     const data = currentData();
     if (data.quickAccessItems.quickLinks && data.quickAccessItems.quickLinks.length > 0) {
+      if (!confirm('Remove all quick links?')) return;
       data.quickAccessItems.quickLinks = [];
-      renderQuickAccess();
 
       if (!editState.enabled) {
         saveModel();
       }
+      refreshTodayView();
     }
     document.body.removeChild(modal);
   });
@@ -152,11 +109,13 @@ export function openQuickLinkModal() {
     }
   });
 
-  // Handle Enter key
+  // Handle Enter key (Esc stays here so it doesn't also close the Today view)
   modal.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
       saveBtn.click();
     } else if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
       document.body.removeChild(modal);
     }
   });
@@ -171,15 +130,20 @@ export function removeQuickLink(linkKey) {
     link => link.key !== linkKey
   );
 
-  renderQuickAccess();
-
   if (!editState.enabled) {
     saveModel();
   }
+  refreshTodayView();
 }
 
+// --- Same-item identity used when an entry's card/section reference doesn't resolve
+const iconIdentity = icon => {
+  const ref = classifyImageRef(icon.icon);
+  return `${ref.type === 'r2' ? `r2:${ref.value}` : String(icon.icon)}::${icon.url}`;
+};
+
 // --- Reconcile quick access items against current data (remove stale entries)
-function reconcileQuickAccessItems(data) {
+export function reconcileQuickAccessItems(data = currentData()) {
   if (!data.quickAccessItems) return;
   let changed = false;
 
@@ -195,11 +159,7 @@ function reconcileQuickAccessItems(data) {
       if (!group || typeof group !== 'object') return;
       if (group.icons) {
         group.icons.forEach(icon => {
-          if (icon.icon && icon.url) {
-            const ref = classifyImageRef(icon.icon);
-            const key = ref.type === 'r2' ? `r2:${ref.value}` : String(icon.icon);
-            existingIcons.add(`${key}::${icon.url}`);
-          }
+          if (icon.icon && icon.url) existingIcons.add(iconIdentity(icon));
         });
       }
       if (group.subtasks) {
@@ -223,11 +183,7 @@ function reconcileQuickAccessItems(data) {
   // Filter icons — keep only those that still exist in a card
   if (data.quickAccessItems.icons) {
     const before = data.quickAccessItems.icons.length;
-    data.quickAccessItems.icons = data.quickAccessItems.icons.filter(icon => {
-      const ref = classifyImageRef(icon.icon);
-      const key = ref.type === 'r2' ? `r2:${ref.value}` : String(icon.icon);
-      return existingIcons.has(`${key}::${icon.url}`);
-    });
+    data.quickAccessItems.icons = data.quickAccessItems.icons.filter(icon => existingIcons.has(iconIdentity(icon)));
     if (data.quickAccessItems.icons.length < before) changed = true;
   }
 
@@ -251,183 +207,82 @@ function reconcileQuickAccessItems(data) {
   }
 }
 
-// --- Render quick access panel
-export function renderQuickAccess() {
-  const data = currentData();
-  const content = $('#quick-access-content');
+// --- Quick Access entries resolved to the live card items they point at, so
+// they can be shown working exactly as on their cards (Today view).
+// → { icons, reminders, subtasks, copyPaste: [{ item, sectionId, subtitle }], quickLinks }
+// Entries are repaired on the way: older ones that don't name their card or
+// section (or whose item was renamed) get the live item's references, and
+// duplicates are dropped. Holding the item then finds the entry again, both
+// in the Today view and on its card.
+export function getQuickAccessItems(data = currentData()) {
+  const qa = data.quickAccessItems || {};
+  const result = { icons: [], reminders: [], subtasks: [], copyPaste: [], quickLinks: (qa.quickLinks || []).filter(l => l && l.url) };
+  const seen = new Set();
+  let changed = false;
 
-  if (!content) return;
-
-  // Reconcile against current data — remove stale items (only when panel is freshly opened)
-  if (data.quickAccessExpanded) {
-    reconcileQuickAccessItems(data);
-  }
-
-  const quickLinks = data.quickAccessItems.quickLinks || [];
-  const icons = data.quickAccessItems.icons || [];
-  // Deduplicate list items by name/key
-  const allListItems = data.quickAccessItems.listItems || [];
-  const seenKeys = new Set();
-  const dedupedListItems = allListItems.filter(item => {
-    const key = item.name || `${item.text}::${item.copyText || ''}`;
-    if (seenKeys.has(key)) return false;
-    seenKeys.add(key);
-    return true;
-  });
-  // Update source array if duplicates were removed
-  if (dedupedListItems.length < allListItems.length) {
-    data.quickAccessItems.listItems = dedupedListItems;
-    if (!editState.enabled) saveModel();
-  }
-  const listItems = dedupedListItems;
-
-  if (quickLinks.length === 0 && icons.length === 0 && listItems.length === 0) {
-    content.innerHTML = '<div class="quick-access-empty">No quick links yet. Click the link button above to add quick links.</div>';
-    return;
-  }
-
-  let html = '';
-
-  // Render quick links first (at the very top, as list-style bubbles)
-  if (quickLinks.length > 0) {
-    html += '<div class="quick-access-quick-links">';
-    quickLinks.forEach(link => {
-      const escapedUrl = (link.url || '').replace(/"/g, '&quot;');
-      const escapedTitle = (link.title || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-      html += `
-        <div class="quick-access-list quick-link-item" data-qa-url="${escapedUrl}" data-qa-key="${link.key}">
-          <a href="${escapedUrl}" target="_blank" rel="noopener noreferrer">${escapedTitle}</a>
-        </div>
-      `;
-    });
-    html += '</div>';
-  }
-
-  // Render icons second
-  if (icons.length > 0) {
-    // Quick access keeps copies; follow the source icon's dark-mode invert toggle.
-    // Matched on image + url, the same identity reconciliation uses.
-    const iconIdentity = icon => {
-      const ref = classifyImageRef(icon.icon);
-      return `${ref.type === 'r2' ? `r2:${ref.value}` : String(icon.icon)}::${icon.url}`;
-    };
-    const invertedIcons = new Set();
-    (data.sections || []).forEach(section => {
+  // Entries name their card (sectionType), section (subtitle) and item key
+  // (name); older entries are matched by the same identity reconciliation uses
+  const resolve = (entry, kind, sameItem) => {
+    const group = entry.sectionType && data[entry.sectionType] && data[entry.sectionType][entry.subtitle];
+    const direct = group && Array.isArray(group[kind]) && entry.name ? group[kind].find(i => i.key === entry.name) : null;
+    if (direct) return { item: direct, sectionId: entry.sectionType, subtitle: entry.subtitle };
+    for (const section of data.sections || []) {
       const cardData = data[section.id];
-      if (!cardData || typeof cardData !== 'object') return;
-      Object.values(cardData).forEach(group => {
-        if (group && Array.isArray(group.icons)) {
-          group.icons.forEach(icon => { if (icon.invertDark) invertedIcons.add(iconIdentity(icon)); });
-        }
-      });
-    });
-
-    html += '<div class="quick-access-icons">';
-    icons.forEach((item, idx) => {
-      const classified = classifyImageRef(item.icon);
-      const imgSrc = (classified.type === 'r2') ? '' : (classified.value || '');
-      const fileIdAttr = (classified.type === 'r2') ? ` data-r2-file-id="${classified.value}"` : '';
-      const invertAttr = invertedIcons.has(iconIdentity(item)) ? ' class="invert-dark"' : '';
-      html += `
-        <div class="icon-button quick-access-icon" data-qa-url="${item.url}" style="cursor: pointer;">
-          <img src="${imgSrc}" alt="${item.title || item.name || ''}"${fileIdAttr}${invertAttr} />
-        </div>
-      `;
-    });
-    html += '</div>';
-  }
-
-  // Render list items below
-  if (listItems.length > 0) {
-    html += '<div class="quick-access-lists">';
-    listItems.forEach(item => {
-      if (item.copyText) {
-        const escapedCopyText = (item.copyText || '').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-        const escapedText = (item.text || item.name || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-
-        html += `
-          <div class="copy-paste-item quick-access-copy-paste" data-qa-copy-text="${escapedCopyText}">
-            <span class="copy-paste-text">${escapedText}</span>
-            <button type="button" class="copy-paste-icon" title="Copy to clipboard">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-              </svg>
-            </button>
-          </div>
-        `;
-      } else {
-        const displayClass = item.sectionType === 'tools' ? 'list-item tools' : 'list-item';
-        const escapedUrl = (item.url || '').replace(/"/g, '&quot;');
-        const escapedText = (item.text || item.name || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-        html += `
-          <div class="${displayClass} quick-access-list" data-qa-url="${escapedUrl}">
-            <a href="${item.url}" target="_blank" rel="noopener noreferrer">${escapedText}</a>
-          </div>
-        `;
+      if (!cardData || typeof cardData !== 'object') continue;
+      for (const [subtitle, g] of Object.entries(cardData)) {
+        const found = g && Array.isArray(g[kind]) ? g[kind].find(i => sameItem(i)) : null;
+        if (found) return { item: found, sectionId: section.id, subtitle };
+      }
+    }
+    return null;
+  };
+  // The same fields the card writes when the item is held (sections.js)
+  const liveFields = (kind, hit) => {
+    const { item, sectionId, subtitle } = hit;
+    const base = { name: item.key, sectionType: sectionId, subtitle };
+    if (kind === 'icons') return { ...base, type: 'icon', icon: item.icon, url: item.url, title: item.title || item.key };
+    if (kind === 'reminders') return { ...base, type: 'reminder', text: item.title, url: item.url };
+    if (kind === 'copyPaste') return { ...base, type: 'copyPaste', text: item.text, copyText: item.copyText || item.text };
+    return { ...base, type: 'list', text: item.text, url: item.url };
+  };
+  // Icon refs can be objects ({ type: 'r2', fileId }): compare by value
+  const sameValue = (a, b) => a === b ||
+    (!!a && !!b && typeof a === 'object' && typeof b === 'object' && JSON.stringify(a) === JSON.stringify(b));
+  // → keep the entry? Adds the resolved item to `list` once.
+  const take = (entry, kind, list, hit) => {
+    if (!hit) return true; // unresolved: left for reconcileQuickAccessItems
+    const id = `${hit.sectionId}|${hit.subtitle}|${hit.item.key}`;
+    if (seen.has(id)) { changed = true; return false; }
+    seen.add(id);
+    Object.entries(liveFields(kind, hit)).forEach(([field, value]) => {
+      if (!sameValue(entry[field], value)) {
+        entry[field] = value && typeof value === 'object' ? { ...value } : value;
+        changed = true;
       }
     });
-    html += '</div>';
-  }
-
-  content.innerHTML = html;
-
-  // Resolve R2 images (async, non-blocking)
-  content.querySelectorAll('img[data-r2-file-id]').forEach(img => {
-    setImageFromRef(img, { type: 'r2', fileId: img.dataset.r2FileId });
-  });
-
-  // Use event delegation
-  const existingHandler = content._quickAccessClickHandler;
-  if (existingHandler) {
-    content.removeEventListener('click', existingHandler);
-  }
-
-  const clickHandler = (e) => {
-    // Handle copy button
-    const copyBtn = e.target.closest('.copy-paste-icon');
-    if (copyBtn) {
-      e.preventDefault();
-      e.stopPropagation();
-      const copyPasteItem = copyBtn.closest('.quick-access-copy-paste');
-      if (copyPasteItem) {
-        const copyText = copyPasteItem.dataset.qaCopyText;
-        if (copyText) copyToClipboard(copyText);
-      }
-      return;
-    }
-
-    // Handle copy-paste item click (clicking anywhere on the item copies text)
-    const copyPasteItem = e.target.closest('.quick-access-copy-paste');
-    if (copyPasteItem) {
-      e.preventDefault();
-      const copyText = copyPasteItem.dataset.qaCopyText;
-      if (copyText) copyToClipboard(copyText);
-      return;
-    }
-
-    // Handle icon click
-    const icon = e.target.closest('.quick-access-icon');
-    if (icon) {
-      e.preventDefault();
-      const url = icon.dataset.qaUrl;
-      if (url) openUrl(url);
-      return;
-    }
-
-    // Handle list item click (subtask links)
-    const listItem = e.target.closest('.quick-access-list:not(.quick-link-item)');
-    if (listItem) {
-      e.preventDefault();
-      const url = listItem.dataset.qaUrl;
-      if (url) openUrl(url);
-      return;
-    }
-
+    list.push(hit);
+    return true;
   };
 
-  content._quickAccessClickHandler = clickHandler;
-  content.addEventListener('click', clickHandler);
+  const icons = (qa.icons || []).filter(entry => entry &&
+    take(entry, 'icons', result.icons, resolve(entry, 'icons', i => !i.isDivider && iconIdentity(i) === iconIdentity(entry))));
+  const listItems = (qa.listItems || []).filter(entry => {
+    if (!entry) return false;
+    if (entry.copyText !== undefined && entry.type !== 'list' && entry.type !== 'reminder') {
+      return take(entry, 'copyPaste', result.copyPaste, resolve(entry, 'copyPaste', i => (i.text || '') === (entry.text || '') && (i.copyText || i.text || '') === (entry.copyText || '')));
+    }
+    if (entry.type === 'reminder') {
+      return take(entry, 'reminders', result.reminders, resolve(entry, 'reminders', i => (i.title || '') === (entry.text || '') && (i.url || '') === (entry.url || '')));
+    }
+    return take(entry, 'subtasks', result.subtasks, resolve(entry, 'subtasks', i => (i.text || '') === (entry.text || '') && (i.url || '') === (entry.url || '')));
+  });
+
+  if (changed || icons.length !== (qa.icons || []).length || listItems.length !== (qa.listItems || []).length) {
+    data.quickAccessItems = { ...qa, icons, listItems };
+    if (!editState.enabled) saveModel();
+    result.repaired = true; // cards may now show the Quick Access light on more items
+  }
+  return result;
 }
 
 
@@ -466,7 +321,7 @@ export function isItemSelected(itemData, data) {
   return false;
 }
 
-// --- Toggle item in quick access (for priority button)
+// --- Toggle item in quick access (long-press on a card item)
 // Returns true if item is now in quick access, false if removed
 export function toggleItemQuickAccess(itemData) {
   const data = currentData();
@@ -517,19 +372,16 @@ export function toggleItemQuickAccess(itemData) {
     }
   }
 
-  // Re-render quick access if panel is open
-  if (data.quickAccessExpanded) {
-    renderQuickAccess();
+  // Save first: the re-render below also repaints an open Today view
+  if (!editState.enabled) {
+    saveModel();
   }
 
   // Re-render sections to update item positions (prioritized items move to top)
   if (window.renderAllSections) {
     window.renderAllSections();
-  }
-
-  // Save
-  if (!editState.enabled) {
-    saveModel();
+  } else {
+    refreshTodayView();
   }
 
   return !isSelected;
@@ -540,4 +392,3 @@ export function isItemInQuickAccess(itemData) {
   const data = currentData();
   return isItemSelected(itemData, data);
 }
-

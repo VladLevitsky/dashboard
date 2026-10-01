@@ -79,6 +79,8 @@ function deleteMeeting(meetingId) {
   }
   meetings.splice(idx, 1);
   saveModel();
+  // Badge, calendar and Today view drop it right away
+  if (window.updateNotificationBadge) window.updateNotificationBadge();
 
   if (orphanFileIds.length > 0 && window.cleanupOrphanedR2Files) {
     window.cleanupOrphanedR2Files(orphanFileIds);
@@ -90,7 +92,9 @@ function deleteMeeting(meetingId) {
 // MEETINGS MODAL
 // ============================================================
 
-export function openMeetingsModal() {
+// meetingId (optional): open straight to that meeting (Today view, calendar).
+// Also used as a click handler, so anything that isn't an id string is ignored.
+export function openMeetingsModal(meetingId) {
   // Clean up old editor modal if it exists from previous version
   const oldEditor = $('#meeting-editor-modal');
   if (oldEditor) oldEditor.remove();
@@ -155,11 +159,12 @@ export function openMeetingsModal() {
   }
 
   // Close other slide-out panels
-  if (window.closeQuickAccess) window.closeQuickAccess();
   if (window.closeTasksSummaryModal) window.closeTasksSummaryModal();
 
   meetingsEditingId = null;
   showMeetingsMainView();
+  const meeting = typeof meetingId === 'string' ? getAllMeetings().find(m => m.id === meetingId) : null;
+  if (meeting) showMeetingsViewMode(meeting);
   modal.hidden = false;
 }
 

@@ -2495,6 +2495,10 @@ function createUnifiedSubtaskItem(item, sectionId, subtitle, subtitleColor) {
       }
       if (e.target.closest('.list-item-links-toggle') || e.target.closest('.list-item-tasks-toggle') || e.target.closest('.list-item-notes-toggle')) return;
       e.preventDefault();
+      if (item.linkType === 'file' && item.fileId) {
+        if (window.openFile) window.openFile(item.fileId, item.fileName);
+        return;
+      }
       const url = div.dataset.url;
       if (url && url !== PLACEHOLDER_URL) {
         window.open(url, '_blank', 'noopener,noreferrer');
@@ -2944,6 +2948,10 @@ function createUnifiedReminderItem(rem, sectionId, subtitle, subtitleColor) {
         return;
       }
       e.preventDefault();
+      if (rem.linkType === 'file' && rem.fileId) {
+        if (window.openFile) window.openFile(rem.fileId, rem.fileName);
+        return;
+      }
       const url = div.dataset.url;
       if (url && url !== PLACEHOLDER_URL) {
         window.open(url, '_blank', 'noopener,noreferrer');
@@ -3141,6 +3149,20 @@ function createUnifiedCopyPasteItem(item, sectionId, subtitle, subtitleColor) {
   }
 
   return div;
+}
+
+// --- One card item, built and wired exactly as on its card. The Today view
+// shows Quick Access items and due reminders through this, so they open,
+// copy, show their badges and toggle Quick Access the same way.
+// type: 'icon' | 'reminder' | 'subtask' | 'copyPaste'
+export function createCardItemElement(type, item, sectionId, subtitle) {
+  const data = currentData();
+  const subtitleColor = data.subtitleColors && data.subtitleColors[`${sectionId}:${subtitle}`];
+  if (type === 'icon') return createUnifiedIconButton(item, sectionId, subtitle, subtitleColor);
+  if (type === 'reminder') return createUnifiedReminderItem(item, sectionId, subtitle, subtitleColor);
+  if (type === 'subtask') return createUnifiedSubtaskItem(item, sectionId, subtitle, subtitleColor);
+  if (type === 'copyPaste') return createUnifiedCopyPasteItem(item, sectionId, subtitle, subtitleColor);
+  return null;
 }
 
 // --- Add subtitle to unified card

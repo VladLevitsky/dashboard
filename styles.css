@@ -577,25 +577,6 @@ body[data-theme="dark"] .invert-dark {
   height: 20px;
 }
 
-.quick-access-toggle {
-  width: 30px;
-  height: 30px;
-  background: transparent;
-  border: none;
-  color: var(--muted);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s ease;
-  padding: 0;
-}
-
-.quick-access-toggle:hover {
-  color: var(--brand);
-  transform: scale(1.1);
-}
-
 /* ============================================================
    TIME TRACKING (header stopwatch → slide-out card)
    Task list with live totals + a category donut. Sized like the Tasks card.
@@ -1048,236 +1029,7 @@ body {
   color: var(--text);
 }
 
-/* Quick access card */
-.quick-access-card {
-  max-width: calc(100% - 32px);
-  position: relative;
-  display: flex;
-  flex-direction: column;
-}
-.quick-access-card[hidden] { display: none; }
-.quick-access-card:not(.active) {
-  opacity: 0;
-  height: 0;
-  padding: 0 !important;
-  margin: 0 auto !important;
-  overflow: hidden;
-  pointer-events: none;
-  transition: opacity 0.15s ease-out;
-}
-.quick-access-card.active {
-  opacity: 1;
-  margin: 0 auto 12px auto !important;
-  padding: 12px 40px 20px 40px !important;
-  transition: opacity 0.2s ease-in;
-}
-
-.quick-access-card.collapsed {
-  padding: 12px 40px 32px 40px !important;
-  margin-bottom: 40px !important;
-}
-
-.quick-access-card.collapsed > * {
-  display: block !important;
-}
-
-.quick-access-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 24px;
-}
-
-.quick-access-header h3 {
-  margin: 0;
-  font-size: 24px;
-}
-
-.quick-access-controls {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-}
-
-.quick-access-btn {
-  width: 36px;
-  height: 36px;
-  background: transparent;
-  border: 2px solid var(--muted);
-  border-radius: 50%;
-  color: var(--muted);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s ease;
-  padding: 0;
-}
-
-.quick-access-btn:hover {
-  border-color: var(--brand);
-  color: var(--brand);
-  transform: scale(1.1);
-}
-
-.selector-mode-btn.active {
-  border-color: var(--accent);
-  background: var(--accent);
-  color: white;
-  animation: pulsate 1.5s ease-in-out infinite;
-}
-
-.quick-access-content {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-  width: 100%;
-}
-
-.quick-access-icons {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
-  gap: 16px;
-  padding-bottom: 16px;
-}
-
-.quick-access-icon {
-  width: 84px;
-  height: 84px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 12px;
-  background: #f8fafc;
-  border: 1px solid #e5e7eb;
-  box-shadow: var(--shadow);
-  transition: all 0.2s ease;
-}
-
-.quick-access-icon:hover {
-  transform: scale(1.02);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-}
-
-.quick-access-icon img {
-  width: 48px;
-  height: 48px;
-  object-fit: contain;
-}
-
-.quick-access-lists {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.quick-access-list {
-  background: #fff4e5;
-  border: 1px solid #fde7c7;
-  border-radius: 999px;
-  padding: 12px 16px 12px 29px;
-  font-weight: 600;
-  transition: all 0.2s ease;
-}
-
-.quick-access-list.tools {
-  background: #e6fff3;
-  border-color: #c6f7e2;
-}
-
-.quick-access-list:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-}
-
-.quick-access-list a {
-  color: inherit;
-  text-decoration: none;
-}
-
-.quick-access-copy-paste {
-  display: flex !important;
-  align-items: center !important;
-  justify-content: space-between !important;
-  background: #f8fafc;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  padding: 12px 16px;
-  min-height: 48px;
-  transition: all 0.2s ease;
-}
-
-.quick-access-copy-paste:hover {
-  background: #f1f5f9;
-  border-color: #cbd5e1;
-  transform: translateY(-1px) !important;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1) !important;
-}
-/* Disable glass pseudo-element effects on quick access items */
-.quick-access-copy-paste::before,
-.quick-access-copy-paste::after {
-  display: none !important;
-}
-
-.quick-access-copy-paste .copy-paste-text {
-  flex: 1;
-  color: var(--text);
-  font-weight: 500;
-}
-
-.quick-access-copy-paste .copy-paste-icon {
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  padding: 6px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 6px;
-  transition: all 0.2s ease;
-  flex-shrink: 0;
-}
-
-.quick-access-copy-paste .copy-paste-icon:hover {
-  background: #e5e7eb;
-  color: var(--brand);
-}
-
-.quick-access-copy-paste .copy-paste-icon svg {
-  display: block;
-  width: 18px;
-  height: 18px;
-}
-
-.quick-access-empty {
-  text-align: center;
-  color: var(--muted);
-  padding: 40px;
-  font-size: 14px;
-}
-
-/* Pulsating animation for selector mode */
-@keyframes pulsate {
-  0%, 100% {
-    box-shadow: 0 0 0 0 rgba(78, 173, 107, 0.7);
-  }
-  50% {
-    box-shadow: 0 0 0 10px rgba(78, 173, 107, 0);
-  }
-}
-
-/* Selected item styling */
-.selectable-item {
-  cursor: pointer;
-  transition: all 0.2s ease;
-  position: relative;
-}
-
-.selectable-item.selected {
-  box-shadow: 0 0 0 2px rgba(78, 173, 107, 0.6);
-}
-
-/* Quick Link Modal */
+/* Quick Link Modal (opened from the Today view, so it sits above it) */
 .quick-link-modal {
   position: fixed;
   inset: 0;
@@ -1285,7 +1037,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 3000;
+  z-index: 10005;
 }
 
 .quick-link-dialog {
@@ -1391,16 +1143,6 @@ body {
   pointer-events: none;
 }
 
-/* Quick Link Items in Quick Access */
-.quick-access-quick-links {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid #e2e8f0;
-  margin-bottom: 16px;
-}
-
 /* Dark mode for quick links */
 [data-theme="dark"] .quick-link-dialog {
   background: var(--card);
@@ -1419,69 +1161,11 @@ body {
   background: #334155;
 }
 
-[data-theme="dark"] .quick-access-quick-links {
-  border-bottom-color: #475569;
-}
-
 [data-theme="dark"] .meetings-toggle {
   color: var(--muted);
 }
 
 [data-theme="dark"] .meetings-toggle:hover {
-  color: var(--brand);
-}
-
-/* Dark mode styles for quick access */
-[data-theme="dark"] .quick-access-toggle {
-  color: var(--muted);
-}
-
-[data-theme="dark"] .quick-access-toggle:hover {
-  color: var(--brand);
-}
-
-[data-theme="dark"] .quick-access-btn {
-  border-color: #475569;
-  color: var(--muted);
-}
-
-[data-theme="dark"] .quick-access-btn:hover {
-  border-color: var(--brand);
-  color: var(--brand);
-}
-
-[data-theme="dark"] .selector-mode-btn.active {
-  border-color: var(--accent);
-  background: var(--accent);
-}
-
-[data-theme="dark"] .quick-access-icon {
-  background: #334155;
-  border-color: #475569;
-}
-
-[data-theme="dark"] .quick-access-list {
-  background: #334155;
-  border-color: #475569;
-}
-
-[data-theme="dark"] .quick-access-list.tools {
-  background: #1e3a3a;
-  border-color: #2d5555;
-}
-
-[data-theme="dark"] .quick-access-copy-paste {
-  background: #334155;
-  border-color: #475569;
-}
-
-[data-theme="dark"] .quick-access-copy-paste:hover {
-  background: #475569;
-  border-color: #64748b;
-}
-
-[data-theme="dark"] .quick-access-copy-paste .copy-paste-icon:hover {
-  background: #475569;
   color: var(--brand);
 }
 
@@ -2817,7 +2501,8 @@ body[data-style="glass"]:not([data-theme="dark"]) .red {
 }
 
 /* Toast */
-.toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
+/* Above every modal (Today, calendar, task editor), so feedback is never hidden */
+.toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 100150;
   background: rgba(17,24,39,0.92); color: white; padding: 10px 14px; border-radius: 8px; box-shadow: var(--shadow);
 }
 
@@ -6777,11 +6462,13 @@ section.card.collapsed .section-icon {
   flex-shrink: 0;
 }
 
-/* Notification badge on profile photo */
+/* Notification badge on profile photo: what is due today or overdue.
+   Always shown (it opens the calendar); .is-clear = nothing due. */
 .notification-badge {
   position: absolute;
   top: -3px;
   right: -3px;
+  z-index: 5;
   min-width: 24px;
   height: 24px;
   padding: 0 6px;
@@ -6794,91 +6481,27 @@ section.card.collapsed .section-icon {
   align-items: center;
   justify-content: center;
   line-height: 1;
+  cursor: pointer;
+  transition: transform 0.15s;
 }
 .notification-badge[hidden] {
   display: none;
-  cursor: pointer;
-  z-index: 5;
-  transition: transform 0.15s;
 }
 .notification-badge:hover {
   transform: scale(1.1);
 }
-
-/* Notification popover */
-.notification-popover {
-  position: fixed;
-  z-index: 10001;
-  width: 300px;
-  max-height: 400px;
-  overflow-y: auto;
-  background: var(--card, #ffffff);
-  border: 1px solid rgba(0,0,0,0.1);
-  border-radius: 12px;
-  box-shadow: 0 8px 30px rgba(0,0,0,0.15);
-  padding: 8px;
-}
-[data-theme="dark"] .notification-popover {
-  background: var(--card, #1e293b);
-  border-color: rgba(255,255,255,0.1);
-  box-shadow: 0 8px 30px rgba(0,0,0,0.4);
-}
-.notification-section {
-  margin-bottom: 4px;
-}
-.notification-section:last-child {
-  margin-bottom: 0;
-}
-.notification-section-header {
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: var(--brand);
-  padding: 8px 10px 4px;
-}
-.notification-section-overdue {
-  color: #ef4444;
-}
-.notification-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 10px;
-  border-radius: 8px;
-  transition: background 0.12s;
-}
-.notification-item:hover {
-  background: rgba(0,0,0,0.04);
-}
-[data-theme="dark"] .notification-item:hover {
-  background: rgba(255,255,255,0.06);
-}
-.notification-item-dot {
-  width: 8px;
-  height: 8px;
+.notification-badge.is-clear {
+  padding: 0;
+  width: 24px;
   border-radius: 50%;
-  flex-shrink: 0;
-}
-.notification-item-info {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-.notification-item-title {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.notification-item-type {
-  font-size: 10px;
+  background: #ffffff;
   color: var(--muted);
-  text-transform: uppercase;
-  letter-spacing: 0.3px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.18);
+}
+.notification-badge.is-clear svg { display: block; }
+[data-theme="dark"] .notification-badge.is-clear {
+  background: #334155;
+  color: #cbd5e1;
 }
 
 /* Only show pointer cursor in edit mode */
@@ -14314,9 +13937,10 @@ mark.text-highlight {
   inset: 0;
   background: rgba(0,0,0,0.4);
 }
+/* Calendar on the left, Due Today + Overdue on the right (stacked on phones) */
 .calendar-view-dialog {
   position: relative;
-  width: 480px;
+  width: min(900px, calc(100vw - 32px));
   max-height: 90vh;
   background: var(--card, #ffffff);
   border-radius: 16px;
@@ -14356,8 +13980,45 @@ mark.text-highlight {
 .calendar-view-close:hover { color: var(--text); }
 
 .calendar-view-body {
-  padding: 16px 20px;
+  padding: 16px 20px 20px;
   overflow-y: auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 340px);
+  gap: 24px;
+  align-items: start;
+}
+.calendar-view-main { min-width: 0; }
+.calendar-view-day-hint {
+  color: var(--muted);
+  font-size: 13px;
+  text-align: center;
+  padding: 6px 8px 2px;
+}
+.calendar-view-due {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-left: 24px;
+  border-left: 1px solid rgba(0,0,0,0.06);
+  align-self: stretch;
+}
+[data-theme="dark"] .calendar-view-due {
+  border-left-color: rgba(255,255,255,0.06);
+}
+@media (max-width: 760px) {
+  .calendar-view-body {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+    padding: 12px 14px 16px;
+  }
+  .calendar-view-due {
+    padding-left: 0;
+    border-left: none;
+    padding-top: 14px;
+    border-top: 1px solid rgba(0,0,0,0.06);
+  }
+  [data-theme="dark"] .calendar-view-due { border-top-color: rgba(255,255,255,0.06); }
 }
 
 /* Navigation */
@@ -14367,10 +14028,23 @@ mark.text-highlight {
   justify-content: space-between;
   margin-bottom: 16px;
 }
+/* The month label is a button: back to today */
 .calendar-view-month-label {
+  font: inherit;
   font-size: 16px;
   font-weight: 600;
   color: var(--text);
+  background: none;
+  border: none;
+  border-radius: 8px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+.calendar-view-month-label:hover {
+  background: rgba(0,0,0,0.05);
+}
+[data-theme="dark"] .calendar-view-month-label:hover {
+  background: rgba(255,255,255,0.08);
 }
 .calendar-view-nav-btn {
   background: none;
@@ -14473,19 +14147,54 @@ mark.text-highlight {
   line-height: 1;
 }
 
-/* Day items list */
+/* Lists: the selected day (under the grid) and Due Today / Overdue (right) */
 .calendar-view-day-items {
   margin-top: 16px;
   border-top: 1px solid rgba(0,0,0,0.06);
   padding-top: 12px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  max-height: 200px;
-  overflow-y: auto;
+  gap: 4px;
 }
 [data-theme="dark"] .calendar-view-day-items {
   border-top-color: rgba(255,255,255,0.06);
+}
+.calendar-view-due-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.calendar-view-list-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--brand);
+  padding: 2px 10px 6px;
+}
+.calendar-view-day-items > .calendar-view-list-heading {
+  color: var(--muted);
+}
+.calendar-view-due-section.is-overdue .calendar-view-list-heading {
+  color: #ef4444;
+}
+.calendar-view-list-count {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: rgb(44 123 229 / 14%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  letter-spacing: 0;
+}
+.calendar-view-due-section.is-overdue .calendar-view-list-count {
+  background: rgb(239 68 68 / 14%);
 }
 .calendar-view-no-items {
   color: var(--muted);
@@ -14501,11 +14210,12 @@ mark.text-highlight {
   border-radius: 8px;
   transition: background 0.12s;
 }
-.calendar-view-item:hover {
-  background: rgba(0,0,0,0.03);
+.calendar-view-item.is-clickable { cursor: pointer; }
+.calendar-view-item.is-clickable:hover {
+  background: rgba(0,0,0,0.04);
 }
-[data-theme="dark"] .calendar-view-item:hover {
-  background: rgba(255,255,255,0.05);
+[data-theme="dark"] .calendar-view-item.is-clickable:hover {
+  background: rgba(255,255,255,0.06);
 }
 .calendar-view-item-dot {
   width: 8px;
@@ -14515,11 +14225,12 @@ mark.text-highlight {
 }
 .calendar-view-item-label {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   gap: 8px;
   font-size: 13px;
   color: var(--text);
   min-width: 0;
+  flex: 1;
 }
 .calendar-view-item-type {
   font-size: 10px;
@@ -14533,6 +14244,43 @@ mark.text-highlight {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  min-width: 0;
+}
+.calendar-view-item-detail {
+  font-size: 11px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  flex-shrink: 1000;
+}
+/* Right column: the detail (parent task, card, "Recurring") gets its own line */
+.calendar-view-due .calendar-view-item-label {
+  flex-wrap: wrap;
+  row-gap: 1px;
+}
+.calendar-view-due .calendar-view-item-title { flex: 1; }
+.calendar-view-due .calendar-view-item-detail {
+  flex-basis: 100%;
+  flex-shrink: 1;
+}
+.calendar-view-due .calendar-view-item { align-items: flex-start; }
+.calendar-view-due .calendar-view-item-dot,
+.calendar-view-due .calendar-view-item-chip { margin-top: 4px; }
+.calendar-view-due .calendar-view-item-dot { margin-top: 6px; }
+.calendar-view-item-chip {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 700;
+  color: #dc2626;
+  background: rgba(239, 68, 68, 0.12);
+  border-radius: 999px;
+  padding: 2px 7px;
+}
+[data-theme="dark"] .calendar-view-item-chip {
+  color: #fca5a5;
+  background: rgba(248, 113, 113, 0.16);
 }
 
 /* ============================================================
@@ -15322,3 +15070,336 @@ img[data-r2-file-id]:not([src]) {
 .editor-img-resize-handle.sw { bottom: -5px; left: -5px; cursor: nesw-resize; }
 .editor-img-resize-handle.se { bottom: -5px; right: -5px; cursor: nwse-resize; }
 
+
+
+/* ============================================================
+   TODAY VIEW (header Today button) - js/features/today.js
+   Due today & overdue (left) beside Quick Access (right); one column on
+   narrow screens. z-index 9990 keeps it under the item bubbles (9999+),
+   the calendar (10000), meetings (10001) and the task editor (10010), so
+   everything opened from it stacks on top. Glass look: glass.css / glass-fx.css.
+   ============================================================ */
+.today-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 9990;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.today-modal[hidden] { display: none; }
+/* The edit pencil (z-index 9999) would float over the panel; the calendar
+   and other dialogs sit above it anyway */
+body:has(> .today-modal:not([hidden])) .wrench-btn { visibility: hidden; }
+.today-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+}
+.today-dialog {
+  position: relative;
+  width: min(1120px, calc(100vw - 32px));
+  max-height: calc(100vh - 48px);
+  background: var(--card, #ffffff);
+  border-radius: 20px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  outline: none;
+}
+.today-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 24px 14px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+}
+[data-theme="dark"] .today-header { border-bottom-color: rgba(255, 255, 255, 0.08); }
+.today-title-block {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+.today-title-block h4 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text);
+}
+.today-date {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--muted);
+}
+.today-header-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.today-icon-btn {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+.today-icon-btn:hover {
+  color: var(--text);
+  background: rgba(0, 0, 0, 0.05);
+}
+[data-theme="dark"] .today-icon-btn:hover { background: rgba(255, 255, 255, 0.08); }
+
+.today-body {
+  overflow-y: auto;
+  padding: 20px 24px 28px;
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  gap: 28px;
+  align-items: start;
+}
+/* Each column is the container the card item grids measure */
+.today-column {
+  min-width: 0;
+  container-type: inline-size;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.today-column-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+}
+.today-heading.eisenhower-section-heading {
+  margin: 0 0 0 4px;
+  font-size: 13px;
+}
+.today-count {
+  min-width: 22px;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: 11px;
+  background: rgb(44 123 229 / 12%);
+  color: var(--brand);
+  font-size: 12px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.today-count[hidden] { display: none; }
+[data-theme="dark"] .today-count { background: rgb(96 165 250 / 16%); color: #93c5fd; }
+.today-add-link { margin-left: auto; }
+.today-column-content {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+.today-subheading {
+  margin: 6px 0 -4px 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.today-empty {
+  padding: 28px 16px;
+  border: 1.5px dashed rgba(0, 0, 0, 0.1);
+  border-radius: 16px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.5;
+  text-align: center;
+}
+[data-theme="dark"] .today-empty { border-color: rgba(255, 255, 255, 0.12); }
+
+/* Tasks: one tinted group per color, red on top (the matrix column look) */
+.today-tasks {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.today-color-group.eisenhower-priority-card {
+  flex: none;
+  min-width: 0;
+  min-height: 0;
+  padding: 12px;
+  gap: 10px;
+}
+.today-color-label {
+  padding: 0 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--text);
+  opacity: 0.7;
+}
+.today-task {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.today-task .eisenhower-task-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.today-task .eisenhower-task-icons { flex-shrink: 0; }
+
+/* Chips: due today, overdue, "subtask due", recurring meeting */
+.today-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.today-chip.is-today { color: #1d4ed8; background: rgb(59 130 246 / 14%); }
+.today-chip.is-overdue { color: #b91c1c; background: rgb(239 68 68 / 15%); }
+.today-chip.is-context { color: var(--muted); background: rgb(100 116 139 / 12%); font-weight: 600; }
+.today-chip.is-meeting { color: #6d28d9; background: rgb(139 92 246 / 14%); }
+[data-theme="dark"] .today-chip.is-today { color: #93c5fd; background: rgb(96 165 250 / 18%); }
+[data-theme="dark"] .today-chip.is-overdue { color: #fca5a5; background: rgb(248 113 113 / 18%); }
+[data-theme="dark"] .today-chip.is-context { color: #cbd5e1; background: rgb(148 163 184 / 16%); }
+[data-theme="dark"] .today-chip.is-meeting { color: #c4b5fd; background: rgb(167 139 250 / 18%); }
+
+/* Only a subtask is due: the task steps back (dashed outline, quieter) and
+   its due subtasks below carry the dates */
+.today-task-context {
+  opacity: 0.8;
+  border-style: dashed !important;
+}
+.today-task-context:hover { opacity: 1; }
+/* A pinned parent holds its light still, so the due subtask is what draws the eye */
+.today-task-context.eisenhower-task-pinned::before {
+  animation: none !important;
+  opacity: 0.35 !important;
+}
+
+/* Due subtasks hang off their task on a rail in the task's color */
+.today-subtasks {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-left: 14px;
+  padding-left: 12px;
+  border-left: 2px solid rgb(var(--priority-rgb, 148 163 184) / 45%);
+}
+.today-subtask {
+  min-height: 38px;
+  gap: 8px;
+  cursor: pointer;
+}
+.today-subtask-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.today-subtask .task-subtask-complete-btn:hover { color: #16a34a; }
+
+/* Meetings today */
+.today-meetings {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.today-meeting {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border: 1px solid rgb(139 92 246 / 28%);
+  border-radius: 14px;
+  background: rgb(139 92 246 / 8%);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.15s ease, background-color 0.15s ease;
+}
+.today-meeting:hover {
+  background: rgb(139 92 246 / 14%);
+  transform: translateY(-1px);
+}
+.today-meeting-icon { display: flex; flex-shrink: 0; color: #7c3aed; }
+.today-meeting-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.today-meeting-chevron { display: flex; flex-shrink: 0; color: var(--muted); }
+[data-theme="dark"] .today-meeting-icon { color: #c4b5fd; }
+
+/* Reminders and Quick Access are the real card items in their card groups;
+   columns follow the panel width (after the card container queries above) */
+.today-modal .today-reminders,
+.today-qa .unified-reminders-group,
+.today-qa .unified-subtasks-group,
+.today-qa .unified-copypaste-group {
+  grid-template-columns: repeat(auto-fill, minmax(min(220px, 100%), 1fr)) !important;
+  gap: 10px !important;
+}
+.today-qa .unified-icons-group { margin-bottom: 0; }
+.today-quick-link .unified-subtask-left > span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+/* The card rule ".unified-subtask-item span { flex: 1 }" would stretch the glyph */
+.today-quick-link .today-quick-link-icon {
+  flex: 0 0 auto;
+  display: flex;
+  margin-right: 4px;
+  color: var(--muted);
+}
+
+@media (max-width: 860px) {
+  .today-body {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 24px;
+    padding: 16px 16px 24px;
+  }
+}
+@media (max-width: 520px) {
+  .today-dialog {
+    width: calc(100vw - 16px);
+    max-height: calc(100vh - 16px);
+    border-radius: 18px;
+  }
+  .today-header { padding: 14px 16px 12px; }
+}

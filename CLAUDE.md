@@ -68,6 +68,8 @@ const model = {
   meetings: [{ id, title, type, description, links, files?: [{ fileId, fileName }], date?, repeat?, repeatWeeks?, repeatMonthlyType? }],
   ideas: [{ id, title, content }],
   cardNotes: { [sectionId]: [{ key, title, content, color? }] },
+  // Listed in the Today view. Entries copy the card item and name it: sectionType (card id),
+  // subtitle, name (item key). quickLinks: [{ key, title, url }] added with the link button
   quickAccessItems: { icons: [], listItems: [], quickLinks: [] },
   timers: [],   // legacy standalone timers: no longer shown, kept so old data isn't lost
   header: { profilePhotoSrc, companyLogoSrc, profilePhotoZoom, companyLogoInvertDark, ... }
@@ -105,6 +107,7 @@ Images inside rich text (descriptions, projects, meetings, ideas, notes) are sto
 │   │   ├── time-log.js      # Pure time-log rules: start/stop, totals, merge, import (no DOM, Node-testable)
 │   │   ├── rich-text-refs.js # Pure string rules for <img data-r2-file-id> in rich text (no DOM, Node-testable)
 │   │   ├── quick-capture-parse.js # Pure quick capture rules: dates, !commands, escapes, help list (no DOM, Node-testable)
+│   │   ├── agenda.js        # Pure due rules: what's due today/overdue, meeting recurrences, badge count (no DOM, Node-testable)
 │   │   └── file-service.js  # R2 file operations, image ref classification, Base64 migration
 │   ├── features/
 │   │   ├── edit-mode.js     # Toggle, popovers, color pickers, notepad, highlighter, context menu
@@ -115,7 +118,8 @@ Images inside rich text (descriptions, projects, meetings, ideas, notes) are sto
 │   │   ├── item-creator.js  # "Add item" window (card "+" in view mode, "+" tiles in edit mode) + separator placement mode
 │   │   ├── drop-light.js    # The glowing drop line: item reorder in edit mode + separator placement
 │   │   ├── rich-text-images.js # Paste/drop images → R2 upload; fills in stored images wherever rich text renders
-│   │   ├── quick-access.js  # Quick access panel with reconciliation
+│   │   ├── today.js         # Today view (header button): due today & overdue + Quick Access
+│   │   ├── quick-access.js  # Quick Access data: long-press toggle, entry repair, reconciliation, quick links
 │   │   ├── media-library.js
 │   │   ├── image-editor.js  # Profile/logo positioning
 │   │   ├── reminders.js     # Calendar/interval popovers, breakdown modal
@@ -127,7 +131,7 @@ Images inside rich text (descriptions, projects, meetings, ideas, notes) are sto
 │   │   ├── tasks.js         # Eisenhower Matrix task management
 │   │   ├── projects.js      # Projects module, @ mention autocomplete, highlight management
 │   │   ├── meetings.js      # Meetings with dates and recurrence
-│   │   ├── calendar.js      # Calendar view, notification badge
+│   │   ├── calendar.js      # Calendar (opened from the badge) + Due Today/Overdue list, notification badge
 │   │   ├── auth-ui.js       # Auth modal UI, cloud sync triggers
 │   │   ├── glass-glow.js    # Samples rendered colors into glow vars; reflected item light on card rims
 │   │   └── glass-fx.js      # FX v2 pointer-caught rim light (constructed stylesheet, no DOM writes)
@@ -140,7 +144,8 @@ Images inside rich text (descriptions, projects, meetings, ideas, notes) are sto
     ├── time-log-test.mjs    # Node smoke test: time-log start/stop, totals, merge, import
     ├── sync-merge-test.mjs  # Node smoke test: cloudSave() time-log merge against a fake API
     ├── rich-text-refs-test.mjs # Node smoke test: rich-text image reference rules
-    └── quick-capture-test.mjs # Node smoke test: quick capture dates, commands, escapes
+    ├── quick-capture-test.mjs # Node smoke test: quick capture dates, commands, escapes
+    └── agenda-test.mjs      # Node smoke test: due states, meeting recurrences, Today ordering, badge count
 ```
 
 ### Storage & Sync
@@ -242,17 +247,33 @@ Meetings with two categories: one-time and recurring.
 - Files section for uploading R2 file attachments (`meeting.files[]`)
 - Rich-text description editor (expanded height) with task highlighting
 
-### Calendar View
-Full month calendar aggregating all dated items:
-- Reminders (from schedule/getNextOccurrence)
-- Tasks and subtasks with due dates
-- Meetings (including recurring occurrences)
-- Red dot + count indicator on days with items
-- Click a day to see its items; click an item to open its editor
+### What Counts as Due (`js/core/agenda.js`)
+One set of rules for the Today view, the calendar and the badge, so they always agree:
+- Tasks and subtasks: `dueDate` on or before today (local day keys, never `toISOString`). A task is listed when it is due itself or one of its open subtasks is
+- Meetings: a one-time meeting only on its own date (a past one is never "overdue"); recurring ones on every occurrence from their start date (`meetingDatesBetween`: weekly every 1-3 weeks, monthly same day — skipped in short months — or first weekday)
+- Reminders: dated ones whose next date (as the card badge counts it) is today or earlier. Counter (interval) reminders have no date, even if an old schedule is still stored
+- Badge count = tasks due + subtasks due + meetings today + reminders due (`countDueItems`)
+
+### Calendar View (opened from the notification badge)
+- Month grid on the left; the **Due Today** + **Overdue** list (oldest first, `Nd` chip) on the right. Stacks on phones (≤760px)
+- Opens with no day picked; click a day for its items under the grid. The month label returns to today
+- Grid dots: reminders (next date), tasks and subtasks with due dates, meetings (every occurrence in the visible range)
+- Rows: task/subtask → task editor, meeting → that meeting, reminder → its link or file
+- Esc closes it unless something is open on top (`ownsEscape`, shared with the Today view)
 
 ### Notification Badge
-Red badge on profile photo showing count of overdue + due-today items.
-Click to see categorized list (Due Today / Overdue) with direct links to items.
+- On the profile photo, always shown: the due count (red) or, when nothing is due, a quiet glass lens with a calendar glyph (`.is-clear`)
+- Click (or Enter/Space) opens the calendar. `updateNotificationBadge()` also repaints an open calendar and Today view, so call it after changing anything dated
+
+### Today View (`js/features/today.js`, header sun button `#today-toggle`)
+- Left: **Due today & overdue**. Tasks in one tinted group per color, red → orange → yellow → blue (the matrix column classes `eisenhower-priority-card-<color>` give the tint and the pill hue), Primary first, oldest first. Then Meetings today, then due Reminders
+- Task pills are the matrix's own (`createTaskPillElement`): click opens the editor, the stopwatch runs the timer, long-press pins; no dragging. A chip shows `Today` / `Overdue · Nd`. Pinned pills get their own breathing phase inline (`--fx-t-dur` / `--fx-t-delay`), since every pill is the first child of its entry
+- Due subtasks hang below their task on a rail in its color (editor-style `.subtask-bubble` rows): the check completes it (same rule as the editor: done also clears importance and date) with an Undo toast; anywhere else opens the task. When only a subtask is due, the parent pill steps back (`.today-task-context`: dashed outline, quieter, a pinned one stops breathing) and says "Subtask due" / "N subtasks due"
+- Meetings open straight to that meeting (`openMeetingsModal(meetingId)`)
+- Reminders and Quick Access items are the real card items (`createCardItemElement` in sections.js) in the card group classes: they open their link/file, copy, show their badges, and long-press takes them in or out of Quick Access
+- Right: **Quick Access**: icons, reminders, subtasks, copy-paste (swatches in their own row), then the quick links (link button in the section header; "Clear All Links" asks first)
+- Off in edit mode (toast; an open one closes when editing starts). Esc closes it unless something is open on top. z-index 9990: under item bubbles (9999+), calendar (10000), meetings (10001), task editor (10010) and the quick-link dialog (10005), so they all stack above it. The edit pencil (9999) is hidden while it is open; `#toast` sits above every modal (100150)
+- `refreshTodayView()` coalesces repaint requests into one render (microtask); it runs from `renderEisenhowerMatrix`, `updateNotificationBadge` and Quick Access changes
 
 ### Text Highlighter
 Available in all rich-text editors (projects, meetings, tasks, subtasks, ideas, card notes):
@@ -279,8 +300,10 @@ Accessible via gear icon in edit mode. Contains:
 - Tasks: opens Task Settings (categories)
 - JSON File Backup: Download and Upload with overwrite warning (includes `taskCategories` and `timeTracking`; importing a log resets history older than the import)
 
-### Quick Access
-Prioritized items panel with state-based reconciliation — automatically removes items whose source cards/items have been deleted.
+### Quick Access (listed in the Today view; the old panel and its header button were removed)
+- Long-press (750ms) any icon, reminder, subtask or copy-paste item on a card to add it; again to take it out. In view mode its card shows it first, with the azure pulse
+- `getQuickAccessItems()` resolves entries to the live card items (by card + section + key, else by the old text/url identity) and repairs entries on the way: older ones without card/section, renamed items, duplicates. Opening Today also runs `reconcileQuickAccessItems()` (drops entries whose item was deleted)
+- `model.quickAccessExpanded` is no longer used (kept so old data loads)
 
 ### R2 File Storage Integration
 - Images (profile photo, logo, card icons) stored in R2 when authenticated
@@ -412,10 +435,14 @@ Prioritized items panel with state-based reconciliation — automatically remove
 - `attachTaskMention(editor, onInsert)` - Wire @ autocomplete to an editor
 - `attachHighlighterContextMenu(editor, options)` - Wire right-click menu
 
-### Calendar & Notifications
-- `openCalendarView()` / `closeCalendarView()`
-- `updateNotificationBadge()` / `wireNotificationBadge()`
-- `refreshCalendarView()` - Re-render the calendar if it is open
+### Calendar, Badge & Today
+- `openCalendarView()` / `closeCalendarView()` / `refreshCalendarView()` (re-render if open)
+- `updateNotificationBadge()` (also repaints an open calendar + Today) / `wireNotificationBadge()`
+- `getDueItems()` (calendar.js) = `collectDueItems(currentData(), { todayKey, reminderDays: reminderDaysLeft })`
+- `openTodayView()` / `closeTodayView()` / `toggleTodayView()` / `refreshTodayView()`
+- agenda.js: `collectDueItems` / `countDueItems` / `meetingDatesBetween` / `meetingOccursOn` / `dueState` / `daysBetween` / `addDays` / `TASK_COLOR_ORDER`
+- `createTaskPillElement(task)` (tasks.js) / `createCardItemElement(type, item, sectionId, subtitle)` (sections.js): the real pill / card item outside its panel
+- `getQuickAccessItems()` / `reconcileQuickAccessItems()` / `openQuickLinkModal()` (quick-access.js)
 
 ### Item Creator & Drop Light
 - `openItemCreator({ sectionId, subtitle?, cardEl? })` / `closeItemCreator()` / `isItemCreatorOpen()`
@@ -520,6 +547,10 @@ Shared logic lives in `edit-mode.js`: `handleEditorKeydown`, `handleEditorInput`
 - **Quick-add in view mode**: "+" on each card's title bar opens one "add item" window (icon / subtask / reminder / copy-paste / separator); saved straight to the profile, with Undo. Edit mode's "+" tiles use the same window, so new items are never blank placeholders
 - **Separator placement**: pick where a separator goes; markers in every gap between icons, a glowing beam follows the pointer, click / tap to drop
 - **Reorder drop light**: the glowing beam now shows where a dragged item lands inside the Card Edit Modal (the old line rendered behind the modal)
+- **Today view** (header sun button, replaces the Quick Access panel): due today & overdue tasks by color with their due subtasks (complete with Undo), meetings today, due reminders, and Quick Access, all as the real working items
+- **Calendar from the badge**: the badge is always shown (count, or a quiet calendar lens) and opens the calendar, now with the Due Today + Overdue list beside the month (the old badge popover is gone)
+- Shared due rules (`core/agenda.js`): past one-time meetings no longer count as overdue, recurring meetings count without opening the calendar first, counter reminders never count
+- File-linked subtasks and reminders open their file when clicked in view mode (they did nothing before); old Quick Access entries are repaired so holding the item removes it
 
 ### v5.1
 - **Glass FX v2** overlay (`glass-fx.css`, `glass-fx.js`): more lift and 3D, fluid pulsing indicator light, feathered colored glows, playful transparency

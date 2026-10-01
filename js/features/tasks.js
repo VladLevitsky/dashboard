@@ -1445,7 +1445,6 @@ export function toggleTasksSummary() {
 
   if (tasksSummaryExpanded) {
     // Close other slide-out panels (abort if user cancels unsaved changes)
-    if (window.closeQuickAccess) window.closeQuickAccess();
     if (window.closeMeetingsModal) {
       window.closeMeetingsModal();
       const meetingsModal = document.querySelector('#meetings-modal');
@@ -1547,6 +1546,8 @@ function renderEisenhowerMatrix() {
 
   // Task titles/categories/completion may have changed: keep the Time Tracking panel in step
   refreshTimeTrackingUI();
+  // ...and an open Today view (colors, pins, completions)
+  if (window.refreshTodayView) window.refreshTodayView();
 }
 
 // --- Create a single Eisenhower card for a color
@@ -1599,13 +1600,19 @@ const PINNED_BORDER_COLORS = {
   red:    { border: '#d03030', light: '#ffb0b0' }
 };
 
-function createEisenhowerTaskElement(task, color) {
+// --- The same pill outside the matrix (Today view): opens the editor, runs its
+// timer and pins on long-press, but has no drop zones to drag to
+export function createTaskPillElement(task) {
+  return createEisenhowerTaskElement(task, task.color || 'blue', { draggable: false });
+}
+
+function createEisenhowerTaskElement(task, color, { draggable = true } = {}) {
   if (!task) return document.createElement('div');
 
   const taskEl = document.createElement('div');
   taskEl.className = `eisenhower-task task-bubble-${color}${task.pinned ? ' eisenhower-task-pinned' : ''}`;
   taskEl.dataset.taskId = task.id || '';
-  taskEl.draggable = true;
+  taskEl.draggable = draggable;
 
   // Task title
   const titleSpan = document.createElement('span');
