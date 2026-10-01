@@ -141,7 +141,7 @@ Images inside rich text (descriptions, projects, meetings, ideas, notes) are sto
 └── Reference/               # (gitignored) Backend docs, screenshots, working context
     ├── migration-test.mjs   # Node smoke test: schema migrations + device-profile round-trip
     ├── collapse-test.mjs    # Node smoke test: collapse display-layout compaction
-    ├── time-log-test.mjs    # Node smoke test: time-log start/stop, totals, merge, import
+    ├── time-log-test.mjs    # Node smoke test: time-log start/stop, totals, merge, import, period ranges
     ├── sync-merge-test.mjs  # Node smoke test: cloudSave() time-log merge against a fake API
     ├── rich-text-refs-test.mjs # Node smoke test: rich-text image reference rules
     ├── quick-capture-test.mjs # Node smoke test: quick capture dates, commands, escapes
@@ -199,6 +199,7 @@ Central task store in `model.tasks[]` with 4-color priority system:
 - Primary (pinned) tasks float to top within their color group
 - **Category**: chips below "Link to Item" in the task editor (click the selected chip again to clear) → `task.categoryId`
 - **Stopwatch**: rightmost control on every pill (`createTaskTimerControl`); see Task Time Tracking
+- **Complete**: circle-check button just left of the stopwatch on every pill, matrix and Today view (`createTaskCompleteButton` in tasks.js). Click asks "Mark “…” as complete?" (native confirm, `confirmCompleteTask`), then completes it. Dropping a pill on the header checkmark (`#delete-task-drop`) asks the same question. Excluded from the pill's click-to-edit and long-press-to-pin; 20px with negative block margin so the pill height doesn't change; emerald glyph + lens on hover (glass-fx.css 9b)
 
 ### Task Time Tracking (`js/features/time-tracking.js` + `js/core/time-log.js`)
 - Pill stopwatch toggles that task's timer; ONE timer runs at a time (starting another stops and records the first, with a toast). While running, the task's total (`0:45` → `12:05` → `1:02:33`) sits to the LEFT of the icon, and the pill never changes height
@@ -208,6 +209,8 @@ Central task store in `model.tasks[]` with 4-color priority system:
 - Completing or deleting a task stops its timer first; its history stays in the log (title/category kept in `timeTracking.tasks[id]`), so deleted tasks still count and show as "Deleted"
 - Header stopwatch (`#time-tracking-toggle`) opens the Time Tracking panel (`#time-tracking-card`) and shows a live green dot while a timer runs. Panel: tasks with time > 0 (running first, then by total; completed/deleted in a collapsed "Completed" group), each row expands to its sessions (delete one, or "Clear all time"); below the list, the Categories donut + legend (legend doubles as the table view)
 - Donut rules (dataviz): ≤6 segments (smallest categories fold into "Other"), 2px gaps, slices in category order, colors from the validated categorical palette per category slot (`--task-cat-1..8`, `--task-cat-none`, `--task-cat-other` in styles.css, light + dark), chart figures in minutes (refresh once a minute)
+- **Categories period filter**: funnel button `#tt-range-btn` on top of the category legend, left-aligned with it (`.tt-legend-col` = button + legend, so it moves with the legend when the chart stacks). Built once in JS (`getRangeButton`) and re-attached on every chart render; in the empty states it sits above the message, and it's left out only when there's no tracked time and no filter. Shows the period; azure when filtered → popover `.tt-range-pop` (fixed, z-index 9000, appended to body): presets Today / This week (Monday start) / Last 14 days (incl. today) / This month / Last month / This year apply on click; Custom range From / To (inclusive local days, either side may be empty = since / until, ends swapped if reversed) + Apply; Clear = all time (the default). Esc / outside click closes. Filters ONLY the donut; the Tasks list stays all-time. Sessions crossing a period edge count only the part inside it; the running session counts up to now
+- The filter is per browser: localStorage `dashboard_tt_range_filter` (`{ preset }` or `{ from?, to? }`, not synced, not in the model). Presets are stored by name, so "This week" always means the current week. Range rules are pure in time-log.js (`TIME_RANGE_PRESETS`, `normalizeRangeFilter`, `resolveTimeRange`, `getTaskTotalsInRange`)
 - `refreshTimeTrackingUI()` repaints pill controls, header dot and the panel; it also closes a running timer whose task vanished (import, other device, or a task created in a cancelled edit)
 - The old standalone timers (timers.js, Reset All / Add Timer) were removed; `model.timers` is kept untouched
 
@@ -428,6 +431,7 @@ Accessible via gear icon in edit mode. Contains:
 - `toggleTimeTracking()` / `renderTimeTrackingPanel()` / `refreshTimeTrackingUI()`
 - `getTaskCategories()` / `getTaskCategory(id)` / `categoryColor(category)` / `openTaskSettingsModal()`
 - time-log.js: `startTaskTimer` / `stopActiveTimer` / `getTaskTotalMs` / `getTaskTotals` / `removeSession` / `clearTaskTime` / `mergeTimeLogs` / `prepareImportedTimeLog`
+- time-log.js periods: `TIME_RANGE_PRESETS` / `normalizeRangeFilter(raw)` / `resolveTimeRange(filter, nowMs)` → `{ start, end (exclusive), from, to }` or null / `getTaskTotalsInRange(log, now, range)` / `toDayKey` / `dayKeyToDate`
 
 ### Projects & Meetings
 - `openProjectsModal()` / `closeProjectsModal()`
@@ -540,6 +544,8 @@ Shared logic lives in `edit-mode.js`: `handleEditorKeydown`, `handleEditorInput`
 ### v5.2 (Current)
 - **Task time tracking**: stopwatch on every task pill, exact start/end sessions saved with the profile, Time Tracking panel (tracked tasks + sessions, category donut) replaces the old standalone timers
 - **Task categories**: category chips in the task editor; Settings → Tasks → Task Settings to manage them
+- **Categories period filter**: funnel button above the category legend: Today, This week, Last 14 days, This month, Last month, This year, or a custom From/To range; Clear returns to all time. Remembered per browser
+- **Complete button on task pills**: circle check left of the stopwatch; asks, then completes the task. Dragging a task onto the header checkmark now asks the same question
 - Cloud sync merges the time log before each upload (multi-device safe for time data) and no longer drops changes made during an upload
 - **Pasted images go to R2 file storage** (not the 2 MB profile): paste/drop in any rich-text editor uploads, the note keeps `<img data-r2-file-id>`, existing embedded images migrate on sign-in; File Manager groups Images / Documents and its delete no longer double-fires
 - **Quick capture**: N anywhere (or the Mobile-layout header bolt) → one line with dates, `!commands`, `@task` and `!category:` pickers, live preview, ⓘ command list, Open/Undo toast

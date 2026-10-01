@@ -543,6 +543,16 @@ html[data-fx="v2"] body[data-style="glass"][data-theme] .task-timer:not(.is-runn
   background: radial-gradient(circle at 70% 24%, rgb(255 255 255 / 42%), transparent 62%), var(--glass-hover);
   box-shadow: var(--glass-rim);
 }
+/* The complete check: the same frosted lens on hover, with an emerald glyph
+   and a faint green bloom so the action reads before the click */
+html[data-fx="v2"] body[data-style="glass"][data-theme] .task-complete-btn:is(:hover, :focus-visible) {
+  color: rgb(var(--fx-live-deep));
+  background: radial-gradient(circle at 70% 24%, rgb(255 255 255 / 42%), transparent 62%), var(--glass-hover);
+  box-shadow: var(--glass-rim), 0 0 10px -2px rgb(var(--fx-live-rgb) / 55%);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme="dark"] .task-complete-btn:is(:hover, :focus-visible) {
+  color: rgb(var(--fx-live-rgb));
+}
 html[data-fx="v2"] body[data-style="glass"][data-theme] :is(.task-timer.is-running .task-timer-btn, .task-timer-btn.is-running) {
   color: #fff;
   background-color: transparent;
@@ -707,11 +717,11 @@ html[data-fx="v2"] body[data-style="glass"][data-theme] :is(.media-dialog, .brea
 }
 html[data-fx="v2"] body[data-style="glass"][data-theme] :is(.edit-popover, .calendar-popover, .interval-popover, .confirm-popover,
   .notification-popover, .auth-user-popover, .notepad-popover, .link-color-popover,
-  .highlight-context-menu, .task-subtask-menu-dropdown, .task-mention-dropdown) {
+  .highlight-context-menu, .task-subtask-menu-dropdown, .task-mention-dropdown, .tt-range-pop) {
   box-shadow: 0 2px 4px rgb(var(--fx-ink) / 10%),
     0 22px 50px -18px rgb(var(--fx-ink) / 38%), var(--glass-rim);
 }
-html[data-fx="v2"] body[data-style="glass"][data-theme] .task-mention-dropdown {
+html[data-fx="v2"] body[data-style="glass"][data-theme] :is(.task-mention-dropdown, .tt-range-pop) {
   background: var(--glass-reflection), var(--glass-dialog);
   border-color: var(--glass-edge);
   -webkit-backdrop-filter: blur(28px) saturate(135%);
@@ -812,28 +822,28 @@ html[data-fx="v2"] body[data-style="glass"][data-theme] .ic-just-added {
   animation: fxJustAdded 2.6s var(--fx-breathe) both;
 }
 /* Item creator: glass fields and tabs; the selected tab and Add button carry the light */
-html[data-fx="v2"] body[data-style="glass"][data-theme] :is(.ic-tab, .ic-btn:not(.ic-save)) {
+html[data-fx="v2"] body[data-style="glass"][data-theme] :is(.ic-tab, .ic-btn:not(.ic-save), .tt-range-option, .tt-range-btn) {
   background: var(--glass-reflection), var(--glass-field);
   border-color: var(--glass-divider);
   box-shadow: var(--fx-lift-pill), var(--glass-rim);
 }
-html[data-fx="v2"] body[data-style="glass"][data-theme] :is(.ic-tab, .ic-btn:not(.ic-save)):hover {
+html[data-fx="v2"] body[data-style="glass"][data-theme] :is(.ic-tab, .ic-btn:not(.ic-save), .tt-range-option, .tt-range-btn):hover {
   background: var(--glass-reflection), var(--glass-hover);
   box-shadow: var(--fx-lift-pill-hover), var(--glass-rim);
 }
-html[data-fx="v2"] body[data-style="glass"][data-theme] .ic-tab[aria-selected="true"] {
+html[data-fx="v2"] body[data-style="glass"][data-theme] :is(.ic-tab[aria-selected="true"], .tt-range-option[aria-pressed="true"], .tt-range-btn.is-active) {
   border-color: rgb(var(--fx-ind-rgb) / 70%);
   background: radial-gradient(ellipse 70% 60% at 70% 0%, rgb(var(--fx-ind-rgb) / 18%), transparent 100%),
     var(--glass-reflection), var(--glass-field);
   box-shadow: var(--fx-lift-pill-hover), var(--glass-rim), 0 0 0 1px rgb(var(--fx-ind-rgb) / 35%),
     0 0 18px -4px rgb(var(--fx-ind-rgb) / 55%);
 }
-html[data-fx="v2"] body[data-style="glass"][data-theme] :is(.ic-input, .ic-image-preview) {
+html[data-fx="v2"] body[data-style="glass"][data-theme] :is(.ic-input, .ic-image-preview, .tt-range-date) {
   background: var(--glass-reflection), var(--glass-field);
   border-color: var(--glass-divider);
   box-shadow: inset 0 1px 3px rgb(var(--fx-ink) / 6%);
 }
-html[data-fx="v2"] body[data-style="glass"][data-theme] .ic-input:focus {
+html[data-fx="v2"] body[data-style="glass"][data-theme] :is(.ic-input, .tt-range-date):focus {
   border-color: rgb(var(--fx-ind-rgb) / 60%);
   box-shadow: inset 0 1px 3px rgb(var(--fx-ink) / 5%), 0 0 0 1px rgb(var(--fx-ind-rgb) / 40%),
     0 0 14px -2px rgb(var(--fx-ind-rgb) / 40%);
@@ -843,7 +853,7 @@ html[data-fx="v2"] body[data-style="glass"][data-theme] .ic-seg button[aria-chec
   background: var(--glass-reflection), var(--glass-dialog);
   box-shadow: var(--fx-lift-pill), var(--glass-rim);
 }
-html[data-fx="v2"] body[data-style="glass"][data-theme] .ic-save {
+html[data-fx="v2"] body[data-style="glass"][data-theme] :is(.ic-save, .tt-range-apply) {
   background-image: radial-gradient(ellipse 60% 40% at 70% 0%, rgb(255 255 255 / 30%), transparent 100%);
   box-shadow: var(--fx-lift-pill), inset -1px 1px 1px rgb(255 255 255 / 35%), 0 0 16px -4px rgb(var(--fx-ind-rgb) / 50%);
 }

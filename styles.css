@@ -994,6 +994,199 @@ body {
   color: var(--muted);
 }
 
+/* --- Categories period filter (button on top of the legend + popover).
+   The legend column takes the legend's old flex role; the button lines up
+   with the legend rows' left edge. */
+.tt-legend-col {
+  flex: 0 1 380px;
+  min-width: 190px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+.tt-legend-col .tt-legend {
+  flex: none;
+  align-self: stretch;
+  min-width: 0;
+}
+/* Empty states: the button sits above the message */
+.tt-category-chart > .tt-range-btn { margin-bottom: 4px; }
+.tt-range-btn {
+  min-width: 0;
+  max-width: 100%;
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px 4px 10px;
+  border: 1px solid var(--glass-divider, rgba(0, 0, 0, 0.12));
+  border-radius: 999px;
+  background: var(--glass-field, #fff);
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.tt-range-btn svg { width: 13px; height: 13px; flex-shrink: 0; }
+.tt-range-btn-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tt-range-btn:hover { color: var(--text); }
+.tt-range-btn.is-active { color: var(--brand); border-color: var(--brand); }
+.tt-range-btn:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+
+.tt-range-pop {
+  position: fixed;
+  z-index: 9000;
+  width: 320px;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 18px;
+  background: var(--card);
+  color: var(--text);
+  box-shadow: 0 18px 44px -16px rgba(0, 0, 0, 0.35);
+}
+/* Transform only: opacity on a glass pane cuts off its backdrop sampling */
+.tt-range-pop.open { animation: qcIn 0.16s ease-out; }
+.tt-range-label {
+  padding: 0 2px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.tt-range-presets {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+.tt-range-option {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 8px 11px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 12px;
+  background: var(--glass-field, #f8fafc);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+.tt-range-option-name { font-size: 13px; font-weight: 600; }
+.tt-range-option-span {
+  max-width: 100%;
+  font-size: 11px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tt-range-option[aria-pressed="true"] {
+  color: var(--brand);
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px rgba(66, 105, 155, 0.14);
+}
+.tt-range-option:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.tt-range-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.tt-range-field {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.tt-range-field-label { padding: 0 2px; font-size: 12px; color: var(--muted); }
+.tt-range-date {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  min-height: 36px;
+  padding: 6px 8px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 10px;
+  background: var(--glass-field, #f8fafc);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.tt-range-date:focus {
+  outline: none;
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px rgba(66, 105, 155, 0.18);
+}
+.tt-range-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 2px;
+}
+.tt-range-clear {
+  min-height: 34px;
+  padding: 6px 10px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.tt-range-clear:hover:not(:disabled) { color: var(--text); background: rgba(0, 0, 0, 0.05); }
+.tt-range-apply {
+  min-height: 34px;
+  padding: 6px 18px;
+  border: none;
+  border-radius: 10px;
+  background: var(--brand);
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.tt-range-apply:hover:not(:disabled) { filter: brightness(1.07); }
+:is(.tt-range-clear, .tt-range-apply):disabled { opacity: 0.45; cursor: default; }
+:is(.tt-range-clear, .tt-range-apply):focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+/* "Show all time" inside the empty-period message */
+.tt-range-reset {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--brand);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.tt-range-reset:hover { text-decoration: underline; }
+
+[data-theme="dark"] .tt-range-pop { border-color: rgba(255, 255, 255, 0.1); }
+[data-theme="dark"] :is(.tt-range-option, .tt-range-date) { border-color: rgba(255, 255, 255, 0.14); }
+[data-theme="dark"] .tt-range-clear:hover:not(:disabled) { background: rgba(255, 255, 255, 0.08); }
+
 /* Header stopwatch: live dot while a timer runs */
 .time-tracking-toggle { position: relative; }
 .time-tracking-toggle.is-running { color: var(--text); }
@@ -9000,6 +9193,35 @@ body[data-theme="dark"][data-style="glass"][data-glass-theme="sunset"] .tasks-su
   height: 15px;
 }
 .task-timer-btn:hover { opacity: 1; }
+/* Complete (circle check), left of the stopwatch: asks, then completes */
+.task-complete-btn {
+  position: relative;
+  width: 20px;
+  height: 20px;
+  margin-block: -4px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: inherit;
+  opacity: 0.55;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: opacity 0.2s ease, color 0.15s ease, background-color 0.15s ease, box-shadow 0.2s ease;
+}
+.task-complete-btn svg {
+  display: block;
+  width: 16px;
+  height: 16px;
+}
+.task-complete-btn:is(:hover, :focus-visible) {
+  opacity: 1;
+  color: var(--task-timer-live);
+}
+.task-complete-btn:focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; }
 .task-timer.is-running .task-timer-btn,
 .task-timer-btn.is-running {
   opacity: 1;

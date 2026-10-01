@@ -1657,7 +1657,9 @@ function createEisenhowerTaskElement(task, color, { draggable = true } = {}) {
     iconsContainer.appendChild(linkedIndicator);
   }
 
-  // Stopwatch (rightmost): toggles this task's timer; elapsed time ticks above it
+  // Complete (left of the stopwatch), then the stopwatch (rightmost), whose
+  // elapsed time ticks to its left while it runs
+  iconsContainer.appendChild(createTaskCompleteButton(task));
   iconsContainer.appendChild(createTaskTimerControl(task));
   if (isTaskTimerRunning(task.id)) taskEl.classList.add('is-timing');
 
@@ -1668,7 +1670,7 @@ function createEisenhowerTaskElement(task, color, { draggable = true } = {}) {
   let longPressTriggered = false;
 
   const startLongPress = (e) => {
-    if (e.target.closest('.eisenhower-task-link-btn, .task-timer-btn')) return;
+    if (e.target.closest('.eisenhower-task-link-btn, .task-complete-btn, .task-timer-btn')) return;
     longPressTriggered = false;
     longPressTimer = setTimeout(() => {
       longPressTriggered = true;
@@ -1701,7 +1703,7 @@ function createEisenhowerTaskElement(task, color, { draggable = true } = {}) {
       longPressTriggered = false;
       return;
     }
-    if (e.target.closest('.eisenhower-task-link-btn, .task-timer-btn')) return;
+    if (e.target.closest('.eisenhower-task-link-btn, .task-complete-btn, .task-timer-btn')) return;
     e.stopPropagation();
     openEditTaskModal(task.id);
   });
@@ -1722,6 +1724,39 @@ function createEisenhowerTaskElement(task, color, { draggable = true } = {}) {
   });
 
   return taskEl;
+}
+
+// --- Complete button on each pill: asks first, then does what dropping the
+// task on the header checkmark does
+const COMPLETE_CHECK_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"></circle><polyline points="8.5 12.5 11 15 15.5 9.5"></polyline></svg>`;
+
+function createTaskCompleteButton(task) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'task-complete-btn';
+  btn.draggable = false;
+  btn.title = 'Mark as complete';
+  btn.setAttribute('aria-label', `Mark “${task.title || 'Untitled Task'}” as complete`);
+  btn.innerHTML = COMPLETE_CHECK_SVG;
+  // Keep the pill's long-press (pin) and click (open editor) out of it
+  btn.addEventListener('mousedown', (e) => e.stopPropagation());
+  btn.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true });
+  btn.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    confirmCompleteTask(task.id);
+  });
+  return btn;
+}
+
+function confirmCompleteTask(taskId) {
+  const task = getTaskById(taskId);
+  if (!task) return;
+  if (!confirm(`Mark “${task.title || 'Untitled Task'}” as complete?`)) return;
+  completeTask(taskId);
+  showToast('Task completed');
+  refreshTaskViews();
+  if (window.refreshProjectHighlights) window.refreshProjectHighlights();
 }
 
 // --- Toggle task link bubble
@@ -1891,15 +1926,8 @@ function initDeleteDropZone() {
     dropTarget.classList.remove('drag-hover');
     const taskId = e.dataTransfer.getData('text/plain');
     if (!taskId) return;
-
-    const task = getTaskById(taskId);
-    if (!task) return;
-
-    completeTask(taskId);
-    showToast('Task completed');
-    renderEisenhowerMatrix();
-    if (window.renderAllSections) window.renderAllSections();
-    if (window.refreshProjectHighlights) window.refreshProjectHighlights();
+    // Same question as the pill's complete button
+    confirmCompleteTask(taskId);
   });
 }
 

@@ -16,7 +16,8 @@ import { ANIMATION_DELAY_MS, CARD_HIDE_DELAY_MS } from '../constants.js';
 import { saveModel } from '../core/storage.js';
 import {
   normalizeTimeLog, startTaskTimer, stopActiveTimer, rememberTaskMeta, removeSession,
-  clearTaskTime, getTaskTotalMs, getTaskTotals, MIN_SESSION_MS
+  clearTaskTime, getTaskTotalMs, getTaskTotals, MIN_SESSION_MS,
+  TIME_RANGE_PRESETS, normalizeRangeFilter, resolveTimeRange, getTaskTotalsInRange, dayKeyToDate
 } from '../core/time-log.js';
 import { getTaskCategories, categoryColor } from './task-categories.js';
 
@@ -357,6 +358,7 @@ export function toggleTimeTracking() {
   } else {
     card.classList.remove('active');
     hideChartTooltip();
+    closeRangePopover(false);
     setTimeout(() => { if (!card.classList.contains('active')) card.hidden = true; }, CARD_HIDE_DELAY_MS);
   }
 
@@ -372,6 +374,7 @@ function showPanel(card) {
 export function renderTimeTrackingPanel() {
   const now = Date.now();
   renderTaskList(now);
+  updateRangeButton();
   renderCategoryChart(now);
 }
 
@@ -580,6 +583,263 @@ function renderSessions(container, row, now) {
 }
 
 // ============================================================
+// CATEGORIES PERIOD FILTER
+// The funnel button above the category legend opens a popover: presets
+// (applied on click), a custom From / To range (either side may stay empty)
+// and Clear. The donut then counts only time inside the period; a session
+// that crosses its edge counts in part (time-log.js). The choice is per
+// browser (localStorage, not synced) and a preset is stored by name, so
+// "This week" always means the current week. Default: all time.
+// ============================================================
+
+const RANGE_FILTER_KEY = 'dashboard_tt_range_filter';
+const FILTER_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>`;
+let rangeFilter = loadRangeFilter();
+let rangePop = null; // { el, btn, cleanup } while the popover is open
+let rangeBtn = null;  // one button, moved into the chart on every render
+
+// The chart re-renders (and empties its host) often, so the button is made
+// once here and re-attached above the legend each time
+function getRangeButton() {
+  if (rangeBtn) return rangeBtn;
+  rangeBtn = document.createElement('button');
+  rangeBtn.type = 'button';
+  rangeBtn.id = 'tt-range-btn';
+  rangeBtn.className = 'tt-range-btn';
+  rangeBtn.setAttribute('aria-haspopup', 'dialog');
+  rangeBtn.setAttribute('aria-expanded', 'false');
+  rangeBtn.setAttribute('aria-controls', 'tt-range-pop');
+  rangeBtn.innerHTML = FILTER_SVG;
+  const label = document.createElement('span');
+  label.className = 'tt-range-btn-label';
+  label.appendChild(document.createTextNode(''));
+  rangeBtn.appendChild(label);
+  rangeBtn.addEventListener('click', openRangePopover);
+  updateRangeButton();
+  return rangeBtn;
+}
+
+function loadRangeFilter() {
+  try {
+    return normalizeRangeFilter(JSON.parse(localStorage.getItem(RANGE_FILTER_KEY) || 'null'));
+  } catch (e) {
+    return null;
+  }
+}
+
+function setRangeFilter(filter) {
+  rangeFilter = normalizeRangeFilter(filter);
+  try {
+    if (rangeFilter) localStorage.setItem(RANGE_FILTER_KEY, JSON.stringify(rangeFilter));
+    else localStorage.removeItem(RANGE_FILTER_KEY);
+  } catch (e) { /* storage blocked: the filter still applies until the page reloads */ }
+  updateRangeButton();
+  if (isPanelOpen()) renderCategoryChart(Date.now());
+}
+
+const rangeDayFmt = { month: 'short', day: 'numeric' };
+
+function formatDayKey(key, withYear) {
+  return dayKeyToDate(key).toLocaleDateString([], withYear ? { ...rangeDayFmt, year: 'numeric' } : rangeDayFmt);
+}
+
+// "Sep 28 – Oct 4" · "Oct 1" · "Since Sep 3" · "Until Sep 30" (a year only when it isn't this year)
+function formatRangeSpan(range, now = Date.now()) {
+  if (!range) return 'All time';
+  const thisYear = String(new Date(now).getFullYear());
+  const withYear = [range.from, range.to].some(key => key && key.slice(0, 4) !== thisYear);
+  if (range.from && range.to) {
+    if (range.from === range.to) return formatDayKey(range.from, withYear);
+    return `${formatDayKey(range.from, withYear)} – ${formatDayKey(range.to, withYear)}`;
+  }
+  return range.from ? `Since ${formatDayKey(range.from, withYear)}` : `Until ${formatDayKey(range.to, withYear)}`;
+}
+
+// What the button says: the preset's name, or the custom dates
+function filterLabel(filter, now) {
+  if (!filter) return 'All time';
+  const preset = filter.preset ? TIME_RANGE_PRESETS.find(p => p.id === filter.preset) : null;
+  return preset ? preset.label : formatRangeSpan(resolveTimeRange(filter, now), now);
+}
+
+function updateRangeButton() {
+  const btn = getRangeButton();
+  const now = Date.now();
+  const label = filterLabel(rangeFilter, now);
+  const labelEl = btn.querySelector('.tt-range-btn-label');
+  if (labelEl) setText(labelEl, label);
+  btn.classList.toggle('is-active', !!rangeFilter);
+  btn.title = !rangeFilter ? 'Filter by period'
+    : rangeFilter.preset ? `${label}: ${formatRangeSpan(resolveTimeRange(rangeFilter, now), now)}` : label;
+  btn.setAttribute('aria-label', `Filter categories by period, showing ${label}`);
+}
+
+function dateField(parent, labelText, value) {
+  const field = document.createElement('label');
+  field.className = 'tt-range-field';
+  const input = document.createElement('input');
+  input.type = 'date';
+  input.className = 'tt-range-date';
+  input.value = value || '';
+  field.append(textSpan('tt-range-field-label', labelText), input);
+  parent.appendChild(field);
+  return input;
+}
+
+function openRangePopover() {
+  const btn = getRangeButton();
+  if (!btn.isConnected) return;
+  if (rangePop) {
+    closeRangePopover(true);
+    return;
+  }
+  hideChartTooltip();
+  const now = Date.now();
+  const current = resolveTimeRange(rangeFilter, now);
+
+  const pop = document.createElement('div');
+  pop.className = 'tt-range-pop';
+  pop.id = 'tt-range-pop';
+  pop.setAttribute('role', 'dialog');
+  pop.setAttribute('aria-label', 'Filter categories by period');
+
+  // Presets apply straight away
+  const presets = document.createElement('div');
+  presets.className = 'tt-range-presets';
+  TIME_RANGE_PRESETS.forEach(preset => {
+    const option = document.createElement('button');
+    option.type = 'button';
+    option.className = 'tt-range-option';
+    option.setAttribute('aria-pressed', String(!!rangeFilter && rangeFilter.preset === preset.id));
+    option.append(
+      textSpan('tt-range-option-name', preset.label),
+      textSpan('tt-range-option-span', formatRangeSpan(resolveTimeRange({ preset: preset.id }, now), now))
+    );
+    option.addEventListener('click', () => {
+      setRangeFilter({ preset: preset.id });
+      closeRangePopover(true);
+    });
+    presets.appendChild(option);
+  });
+
+  // Custom range, prefilled with the period on show so it can be adjusted
+  const fields = document.createElement('div');
+  fields.className = 'tt-range-fields';
+  const fromInput = dateField(fields, 'From', current ? current.from : '');
+  const toInput = dateField(fields, 'To', current ? current.to : '');
+
+  const apply = document.createElement('button');
+  apply.type = 'button';
+  apply.className = 'tt-range-apply';
+  apply.textContent = 'Apply';
+  const syncBounds = () => {
+    toInput.min = fromInput.value;
+    fromInput.max = toInput.value;
+    apply.disabled = !fromInput.value && !toInput.value;
+  };
+  [fromInput, toInput].forEach(input => {
+    input.addEventListener('input', syncBounds);
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !apply.disabled) {
+        e.preventDefault();
+        apply.click();
+      }
+    });
+  });
+  syncBounds();
+  apply.addEventListener('click', () => {
+    const filter = normalizeRangeFilter({ from: fromInput.value, to: toInput.value });
+    if (!filter) return;
+    setRangeFilter(filter);
+    closeRangePopover(true);
+  });
+
+  const clear = document.createElement('button');
+  clear.type = 'button';
+  clear.className = 'tt-range-clear';
+  clear.textContent = 'Clear';
+  clear.title = 'Back to all time';
+  clear.disabled = !rangeFilter;
+  clear.addEventListener('click', () => {
+    setRangeFilter(null);
+    closeRangePopover(true);
+  });
+
+  const footer = document.createElement('div');
+  footer.className = 'tt-range-footer';
+  footer.append(clear, apply);
+
+  pop.append(textSpan('tt-range-label', 'Period'), presets, textSpan('tt-range-label', 'Custom range'), fields, footer);
+  document.body.appendChild(pop);
+
+  // Close on a click outside, Esc, or focus moving away
+  const onPointerDown = (e) => {
+    if (!pop.contains(e.target) && !btn.contains(e.target)) closeRangePopover(false);
+  };
+  const onKeyDown = (e) => {
+    if (e.key !== 'Escape') return;
+    e.preventDefault();
+    e.stopPropagation();
+    closeRangePopover(true);
+  };
+  const onFocusOut = (e) => {
+    const next = e.relatedTarget;
+    if (next && !pop.contains(next) && next !== btn) closeRangePopover(false);
+  };
+  const onReflow = () => positionRangePopover();
+  document.addEventListener('pointerdown', onPointerDown, true);
+  document.addEventListener('keydown', onKeyDown, true);
+  pop.addEventListener('focusout', onFocusOut);
+  window.addEventListener('resize', onReflow);
+  window.addEventListener('scroll', onReflow, { capture: true, passive: true });
+
+  rangePop = {
+    el: pop,
+    btn,
+    cleanup: () => {
+      document.removeEventListener('pointerdown', onPointerDown, true);
+      document.removeEventListener('keydown', onKeyDown, true);
+      window.removeEventListener('resize', onReflow);
+      window.removeEventListener('scroll', onReflow, { capture: true });
+    }
+  };
+  btn.setAttribute('aria-expanded', 'true');
+  positionRangePopover();
+  pop.classList.add('open');
+  const focusTarget = pop.querySelector('.tt-range-option[aria-pressed="true"]') || pop.querySelector('.tt-range-option');
+  if (focusTarget) focusTarget.focus({ preventScroll: true });
+}
+
+// Under the button, kept inside the viewport; flips above when there's no room below
+function positionRangePopover() {
+  if (!rangePop) return;
+  const { el, btn } = rangePop;
+  const margin = 8;
+  const box = btn.getBoundingClientRect();
+  const width = el.offsetWidth;
+  const height = el.offsetHeight;
+  const left = Math.max(margin, Math.min(box.left, window.innerWidth - width - margin));
+  let top = box.bottom + 8;
+  if (top + height > window.innerHeight - margin) {
+    top = box.top - 8 - height >= margin
+      ? box.top - 8 - height
+      : Math.max(margin, window.innerHeight - height - margin);
+  }
+  el.style.left = `${left}px`;
+  el.style.top = `${top}px`;
+}
+
+function closeRangePopover(returnFocus) {
+  if (!rangePop) return;
+  const { el, btn, cleanup } = rangePop;
+  rangePop = null;
+  cleanup();
+  el.remove();
+  btn.setAttribute('aria-expanded', 'false');
+  if (returnFocus) btn.focus({ preventScroll: true });
+}
+
+// ============================================================
 // CATEGORY DONUT
 // Part-to-whole at a glance: at most 6 segments (the smallest categories fold
 // into "Other"), 2px surface gaps between segments, slices in category order
@@ -597,7 +857,7 @@ let chartState = null; // { key, slices: Map(key → { circle, value, pct }), ce
 
 function computeCategorySlices(now) {
   const log = getLog();
-  const totals = getTaskTotals(log, now);
+  const totals = getTaskTotalsInRange(log, now, resolveTimeRange(rangeFilter, now));
   const categories = getTaskCategories();
   const byCategory = new Map();
   let uncategorized = 0;
@@ -649,18 +909,37 @@ function renderCategoryChart(now) {
   const host = $('#tt-category-chart');
   if (!host) return;
   hideChartTooltip();
+  const filterBtn = getRangeButton();
+  filterBtn.remove();
   host.innerHTML = '';
   chartState = null;
 
   const slices = computeCategorySlices(now);
   const total = slices.reduce((sum, s) => sum + s.ms, 0);
   if (total <= 0) {
+    // The filter stays reachable while one is set, even with nothing to show
+    const hasAnyTime = Object.keys(getTaskTotals(getLog(), now)).length > 0;
+    if (rangeFilter || hasAnyTime) host.appendChild(filterBtn);
+    else if (rangePop) closeRangePopover(false);
     const empty = document.createElement('div');
     empty.className = 'tt-empty';
-    empty.textContent = getTaskCategories().length > 0
-      ? 'Your tracked time will be split by task category here.'
-      : 'Add categories in Settings → Tasks (edit mode) to see how your time splits.';
+    if (rangeFilter && hasAnyTime) {
+      // There is time, just none in this period
+      const span = formatRangeSpan(resolveTimeRange(rangeFilter, now));
+      empty.textContent = `No tracked time in this period (${span}). `;
+      const reset = document.createElement('button');
+      reset.type = 'button';
+      reset.className = 'tt-range-reset';
+      reset.textContent = 'Show all time';
+      reset.addEventListener('click', () => setRangeFilter(null));
+      empty.appendChild(reset);
+    } else {
+      empty.textContent = getTaskCategories().length > 0
+        ? 'Your tracked time will be split by task category here.'
+        : 'Add categories in Settings → Tasks (edit mode) to see how your time splits.';
+    }
     host.appendChild(empty);
+    positionRangePopover();
     return;
   }
 
@@ -673,7 +952,7 @@ function renderCategoryChart(now) {
   const svg = document.createElementNS(SVG_NS, 'svg');
   svg.setAttribute('viewBox', '0 0 100 100');
   svg.setAttribute('role', 'img');
-  svg.setAttribute('aria-label', 'Tracked time by category: ' +
+  svg.setAttribute('aria-label', `Tracked time by category, ${rangeFilter ? filterLabel(rangeFilter, now) : 'all time'}: ` +
     slices.map(s => `${s.name} ${formatChartDuration(s.ms)}`).join(', '));
 
   const arcs = sliceArcs(slices, total);
@@ -737,9 +1016,16 @@ function renderCategoryChart(now) {
     Object.assign(sliceEls.get(slice.key), { value, pct });
   });
 
-  wrap.append(figure, legend);
+  // The filter sits on top of the legend, aligned with it (and moves with it
+  // when the chart stacks on a narrow card)
+  const legendCol = document.createElement('div');
+  legendCol.className = 'tt-legend-col';
+  legendCol.append(filterBtn, legend);
+
+  wrap.append(figure, legendCol);
   host.appendChild(wrap);
   chartState = { key: slices.map(s => s.key).join('|'), slices: sliceEls, centerValue, data: slices, total };
+  positionRangePopover();
 }
 
 // Once a minute while a timer runs: move arcs and numbers in place, or rebuild

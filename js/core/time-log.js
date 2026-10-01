@@ -169,6 +169,116 @@ export function getTaskTotals(log, now) {
   return totals;
 }
 
+// ============================================================
+// PERIODS (the Categories filter in the Time Tracking panel)
+// Local calendar days, built with new Date(y, m, d) so DST days come out
+// right. A filter is null (all time), { preset } or { from?, to? } with
+// inclusive 'YYYY-MM-DD' day keys; a range is { start, end, from, to } with
+// end exclusive and null for an open side.
+// ============================================================
+
+export const TIME_RANGE_PRESETS = [
+  { id: 'today', label: 'Today' },
+  { id: 'thisWeek', label: 'This week' },
+  { id: 'last14', label: 'Last 14 days' },
+  { id: 'thisMonth', label: 'This month' },
+  { id: 'lastMonth', label: 'Last month' },
+  { id: 'thisYear', label: 'This year' }
+];
+
+const pad2 = (n) => String(n).padStart(2, '0');
+
+export function toDayKey(date) {
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+}
+
+// 'YYYY-MM-DD' → local midnight, or null if it isn't a real day
+export function dayKeyToDate(key) {
+  const m = typeof key === 'string' ? key.match(/^(\d{4})-(\d{2})-(\d{2})$/) : null;
+  if (!m) return null;
+  const date = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  return toDayKey(date) === key ? date : null;
+}
+
+// Validate a stored filter. Anything unknown reads as all time (null).
+export function normalizeRangeFilter(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  if (typeof raw.preset === 'string') {
+    return TIME_RANGE_PRESETS.some(p => p.id === raw.preset) ? { preset: raw.preset } : null;
+  }
+  let from = dayKeyToDate(raw.from) ? raw.from : null;
+  let to = dayKeyToDate(raw.to) ? raw.to : null;
+  if (!from && !to) return null;
+  if (from && to && from > to) [from, to] = [to, from];
+  const filter = {};
+  if (from) filter.from = from;
+  if (to) filter.to = to;
+  return filter;
+}
+
+// Weeks start on Monday (quick capture's "eow" is that week's Friday)
+function presetDays(id, now) {
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const y = today.getFullYear();
+  const m = today.getMonth();
+  const d = today.getDate();
+  switch (id) {
+    case 'today': return [today, new Date(y, m, d + 1)];
+    case 'thisWeek': {
+      const monday = d - ((today.getDay() + 6) % 7);
+      return [new Date(y, m, monday), new Date(y, m, monday + 7)];
+    }
+    case 'last14': return [new Date(y, m, d - 13), new Date(y, m, d + 1)];
+    case 'thisMonth': return [new Date(y, m, 1), new Date(y, m + 1, 1)];
+    case 'lastMonth': return [new Date(y, m - 1, 1), new Date(y, m, 1)];
+    case 'thisYear': return [new Date(y, 0, 1), new Date(y + 1, 0, 1)];
+    default: return null;
+  }
+}
+
+// The filter as a concrete range at `now`, or null for all time
+export function resolveTimeRange(filter, nowMs) {
+  const f = normalizeRangeFilter(filter);
+  if (!f) return null;
+  if (f.preset) {
+    const [first, after] = presetDays(f.preset, new Date(nowMs));
+    const last = new Date(after.getFullYear(), after.getMonth(), after.getDate() - 1);
+    return { start: first.getTime(), end: after.getTime(), from: toDayKey(first), to: toDayKey(last) };
+  }
+  const first = f.from ? dayKeyToDate(f.from) : null;
+  const last = f.to ? dayKeyToDate(f.to) : null;
+  const after = last ? new Date(last.getFullYear(), last.getMonth(), last.getDate() + 1) : null;
+  return {
+    start: first ? first.getTime() : null,
+    end: after ? after.getTime() : null,
+    from: f.from || null,
+    to: f.to || null
+  };
+}
+
+// Time inside the range: a session that crosses a boundary counts only the
+// part inside it, and the running session counts up to now
+function overlapMs(start, end, range) {
+  const from = range.start === null ? start : Math.max(start, range.start);
+  const to = range.end === null ? end : Math.min(end, range.end);
+  return Math.max(0, to - from);
+}
+
+// Like getTaskTotals, limited to a range (null = all time)
+export function getTaskTotalsInRange(log, now, range) {
+  if (!range) return getTaskTotals(log, now);
+  const totals = {};
+  for (const [taskId, entry] of Object.entries(log.tasks)) {
+    let total = 0;
+    for (const [start, end] of entry.sessions) total += overlapMs(start, end, range);
+    if (log.active && log.active.taskId === taskId && now > log.active.start) {
+      total += overlapMs(log.active.start, now, range);
+    }
+    if (total > 0) totals[taskId] = total;
+  }
+  return totals;
+}
+
 // Merge two copies of the log (this device's and the cloud's) so neither
 // device's sessions are lost when both tracked time before syncing.
 // - Sessions: union, deduped by start (earliest end wins), minus tombstones.
