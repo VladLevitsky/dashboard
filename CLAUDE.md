@@ -104,12 +104,14 @@ Images inside rich text (descriptions, projects, meetings, ideas, notes) are sto
 │   │   ├── sync.js          # Cloud sync (D1 profiles, dirty tracking, 20-min interval, time-log merge)
 │   │   ├── time-log.js      # Pure time-log rules: start/stop, totals, merge, import (no DOM, Node-testable)
 │   │   ├── rich-text-refs.js # Pure string rules for <img data-r2-file-id> in rich text (no DOM, Node-testable)
+│   │   ├── quick-capture-parse.js # Pure quick capture rules: dates, !commands, escapes, help list (no DOM, Node-testable)
 │   │   └── file-service.js  # R2 file operations, image ref classification, Base64 migration
 │   ├── features/
 │   │   ├── edit-mode.js     # Toggle, popovers, color pickers, notepad, highlighter, context menu
 │   │   ├── drag-drop.js     # Card and item reordering
 │   │   ├── time-tracking.js # Pill stopwatches, 1s tick, Time Tracking panel (task list + category donut)
 │   │   ├── task-categories.js # Category helpers + Task Settings modal
+│   │   ├── quick-capture.js # N-key bar: @ task / !category: pickers, live preview, ⓘ command list, Open/Undo toast
 │   │   ├── rich-text-images.js # Paste/drop images → R2 upload; fills in stored images wherever rich text renders
 │   │   ├── quick-access.js  # Quick access panel with reconciliation
 │   │   ├── media-library.js
@@ -135,7 +137,8 @@ Images inside rich text (descriptions, projects, meetings, ideas, notes) are sto
     ├── collapse-test.mjs    # Node smoke test: collapse display-layout compaction
     ├── time-log-test.mjs    # Node smoke test: time-log start/stop, totals, merge, import
     ├── sync-merge-test.mjs  # Node smoke test: cloudSave() time-log merge against a fake API
-    └── rich-text-refs-test.mjs # Node smoke test: rich-text image reference rules
+    ├── rich-text-refs-test.mjs # Node smoke test: rich-text image reference rules
+    └── quick-capture-test.mjs # Node smoke test: quick capture dates, commands, escapes
 ```
 
 ### Storage & Sync
@@ -188,6 +191,16 @@ Central task store in `model.tasks[]` with 4-color priority system:
 - Donut rules (dataviz): ≤6 segments (smallest categories fold into "Other"), 2px gaps, slices in category order, colors from the validated categorical palette per category slot (`--task-cat-1..8`, `--task-cat-none`, `--task-cat-other` in styles.css, light + dark), chart figures in minutes (refresh once a minute)
 - `refreshTimeTrackingUI()` repaints pill controls, header dot and the panel; it also closes a running timer whose task vanished (import, other device, or a task created in a cancelled edit)
 - The old standalone timers (timers.js, Reset All / Add Timer) were removed; `model.timers` is kept untouched
+
+### Quick Capture (`js/features/quick-capture.js` + `js/core/quick-capture-parse.js`)
+- **N anywhere** (not while typing in a field, no Ctrl/Alt/Meta) opens a one-line bar above everything (`#quick-capture`, z-index 100100); the header bolt `#quick-capture-toggle` does the same and is shown only when the Mobile layout is active (`body[data-device="mobile"]`). Off in edit mode (toast): tasks made there would only live in the working copy
+- Plain text = new task name (`!task` optional). `@` opens the task list (same look as the @ mention list); a pick becomes a chip and the line then CHANGES that task, with leftover text added as a new subtask. One task + one category chip per line; Backspace at the start of the line removes the last chip
+- Commands (anywhere in the line, case-insensitive): `!red !orange !yellow !blue` (`!r !o !y !b`), `!priority` / `!nopriority` (Primary), `!timer` (always STARTS, never toggles; `startTimerForTask`), `!url:telcobridges.com` (https:// added, http/https only, several allowed), `!category:` / `!cat:` (opens the category list on the colon; typed names match exact → starts-with → contains), `!nodate`
+- Dates, day-first, built from the LOCAL calendar day (never via toISOString): `today` `tomorrow`/`tmr`, `fri` (today if it is Friday) / `next fri` (+7), `3d` `2w` `in 3 days` (lowercase only, so "3D printer" stays text), `eow` `eom`, `Dec 21` / `21st of December 2026` / `December 21st, 2026`, `21/12` `21/12/26` `21-12-2026` `21.12.2026` `2026-12-21`. No year = next occurrence (29/2 waits for a leap year); a "by"/"due" right before the date is dropped from the title. `24/7`, `3-5`, `21.12`, `45/50` stay text
+- Errors block Enter and shake the bar (unknown command with a "Did you mean" suggestion, impossible date like 31/02, bad link, unknown/ambiguous category, nothing to change); warnings don't (two colors/dates: the last one wins; past date; already linked). A `\` before a word keeps it as text (`\fri`, `\!red`, `\@marc`); clicking the date chip in the preview inserts it
+- While a list is open, Enter/Tab picks (Enter never saves by accident) and Esc closes just the list, leaving the text as typed. Enter saves; Shift+Enter saves and opens the task editor; Esc / backdrop closes
+- Saving uses the task editor's own calls (`createTask` then `updateTask`; links via `taskLinks` + legacy `link`; subtasks via `generateSubtaskId`), then `refreshTaskViews()`. Toast `#qc-toast` offers Open / Undo for 7s (hover pauses). Undo only applies if the task is unchanged since: it deletes a new task (and all of its time) or restores the old copy exactly, and `undoTimerStart()` drops the session quick capture started and restarts a timer it switched off
+- No new model fields. The ⓘ button and "See all commands" (left end of the bar's bottom row; the key hints on its right are hidden on phones) open the command list, which renders `QUICK_CAPTURE_HELP` from the parser module (click an example to insert it), so the reference can't drift from the rules
 
 ### Task Categories (`js/features/task-categories.js`)
 - Edit mode → Settings → **Tasks** opens the Task Settings modal (reuses the appearance-modal classes, z-index 2100 above Settings): add / rename / delete categories, max 8, colors auto-assigned by the lowest free slot
@@ -367,9 +380,12 @@ Prioritized items panel with state-based reconciliation — automatically remove
 - `getTasksByColor(color)` / `getAllTasks()` / `getCompletedTasks()`
 - `openAddTaskModal()` / `openEditTaskModal(taskId)`
 - `openItemTasksModal(type, key, sectionId, subtitle)`
+- `refreshTaskViews()` - Repaint the matrix, item tasks modal, cards/badge and an open calendar after a change made outside the editor
+- `generateSubtaskId()`
 
 ### Time Tracking & Categories
 - `toggleTaskTimer(taskId)` / `stopTaskTimer()` / `isTaskTimerRunning(taskId)`
+- `startTimerForTask(taskId)` (start only, returns `{ started, start, switchedFrom }`) / `undoTimerStart(info)` (quick capture Undo)
 - `stopTimerForTask(taskId)` (before complete/delete) / `syncTaskTimeMeta(task)` (after title/category edits)
 - `toggleTimeTracking()` / `renderTimeTrackingPanel()` / `refreshTimeTrackingUI()`
 - `getTaskCategories()` / `getTaskCategory(id)` / `categoryColor(category)` / `openTaskSettingsModal()`
@@ -384,6 +400,11 @@ Prioritized items panel with state-based reconciliation — automatically remove
 ### Calendar & Notifications
 - `openCalendarView()` / `closeCalendarView()`
 - `updateNotificationBadge()` / `wireNotificationBadge()`
+- `refreshCalendarView()` - Re-render the calendar if it is open
+
+### Quick Capture
+- `initQuickCapture()` (N key + header bolt) / `openQuickCapture()` / `closeQuickCapture()`
+- quick-capture-parse.js: `parseQuickCapture(text, { now, categories })` / `matchCategory()` / `normalizeUrl()` / `toDateKey()` / `fromDateKey()` / `QUICK_CAPTURE_HELP`
 
 ### Shared Utilities (`js/utils.js`)
 - `moveCursorAfterNode(node)` - Move cursor after a contenteditable node
@@ -473,6 +494,8 @@ Shared logic lives in `edit-mode.js`: `handleEditorKeydown`, `handleEditorInput`
 - **Task categories**: category chips in the task editor; Settings → Tasks → Task Settings to manage them
 - Cloud sync merges the time log before each upload (multi-device safe for time data) and no longer drops changes made during an upload
 - **Pasted images go to R2 file storage** (not the 2 MB profile): paste/drop in any rich-text editor uploads, the note keeps `<img data-r2-file-id>`, existing embedded images migrate on sign-in; File Manager groups Images / Documents and its delete no longer double-fires
+- **Quick capture**: N anywhere (or the Mobile-layout header bolt) → one line with dates, `!commands`, `@task` and `!category:` pickers, live preview, ⓘ command list, Open/Undo toast
+- Task editor: the Linked Project/Meeting row is hidden again for tasks without one (`.task-editor-field[hidden]`)
 
 ### v5.1
 - **Glass FX v2** overlay (`glass-fx.css`, `glass-fx.js`): more lift and 3D, fluid pulsing indicator light, feathered colored glows, playful transparency

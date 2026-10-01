@@ -79,6 +79,11 @@ import {
 } from './features/task-categories.js';
 
 import {
+  openQuickCapture,
+  closeQuickCapture
+} from './features/quick-capture.js';
+
+import {
   attachImageUpload,
   hydrateRichTextImages
 } from './features/rich-text-images.js';
@@ -189,6 +194,7 @@ import {
 import {
   openCalendarView,
   closeCalendarView,
+  refreshCalendarView,
   updateNotificationBadge,
   wireNotificationBadge
 } from './features/calendar.js';
@@ -438,6 +444,10 @@ window.renderTimeTrackingPanel = renderTimeTrackingPanel;
 window.getTaskCategories = getTaskCategories;
 window.openTaskSettingsModal = openTaskSettingsModal;
 
+// Quick capture (N anywhere)
+window.openQuickCapture = openQuickCapture;
+window.closeQuickCapture = closeQuickCapture;
+
 // Rich-text images (pasted images live in file storage)
 window.attachImageUpload = attachImageUpload;
 window.hydrateRichTextImages = hydrateRichTextImages;
@@ -634,6 +644,7 @@ window.attachTaskMention = attachTaskMention;
 
 // Calendar
 window.openCalendarView = openCalendarView;
+window.refreshCalendarView = refreshCalendarView;
 window.closeCalendarView = closeCalendarView;
 window.migrateBase64ToR2 = migrateBase64ToR2;
 window.openFile = openFile;

@@ -228,6 +228,12 @@ export function closeCalendarView() {
   modal.hidden = true;
 }
 
+// Re-render an open calendar after items changed elsewhere (quick capture)
+export function refreshCalendarView() {
+  if (!calendarModal || calendarModal.hidden || !displayedMonth) return;
+  renderCalendarGrid();
+}
+
 // ============================================================
 // RENDER CALENDAR
 // ============================================================

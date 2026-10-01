@@ -1471,6 +1471,16 @@ export function openTasksSummaryModal() {
   }
 }
 
+// --- Repaint everything that shows tasks after a change made outside the
+// task editor (quick capture): the matrix, an open item tasks modal, card
+// task indicators + notification badge, and an open calendar
+export function refreshTaskViews() {
+  renderEisenhowerMatrix();
+  refreshItemTasksModal();
+  if (window.renderAllSections) window.renderAllSections();
+  if (window.refreshCalendarView) window.refreshCalendarView();
+}
+
 // --- Render Eisenhower Matrix with Important section + 4 cards
 function renderEisenhowerMatrix() {
   const grid = $('#eisenhower-grid');
@@ -3299,7 +3309,7 @@ function exitDescriptionEditMode() {
 // Editor-local subtask list (committed on save)
 let editorSubtasks = [];
 
-function generateSubtaskId() {
+export function generateSubtaskId() {
   return 'subtask-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
 }
 

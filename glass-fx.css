@@ -680,7 +680,7 @@ html[data-fx="v2"] body[data-style="glass"][data-theme] :is(.media-dialog, .brea
   .item-tasks-dialog, .item-selector-dialog, .item-task-picker-dialog, .meetings-dialog,
   .meeting-editor-dialog, .completed-tasks-dialog, .projects-dialog, .auth-dialog,
   .calendar-view-dialog, .quick-link-dialog, .reorder-modal-content, .color-picker-dialog,
-  .reminder-links-dialog, .reminder-tasks-dialog, .icon-links-dialog) {
+  .reminder-links-dialog, .reminder-tasks-dialog, .icon-links-dialog, .qc-dialog, .qc-help-dialog) {
   background:
     linear-gradient(90deg, transparent 6%, rgb(var(--fx-cyan) / 44%) 30%, rgb(var(--fx-violet) / 44%) 55%, rgb(var(--fx-pink) / 36%) 78%, transparent 96%) top / 100% 1px no-repeat,
     radial-gradient(ellipse 180px 60px at calc(100% - 40px) 0%, var(--fx-dialog-glint), transparent 100%),
@@ -700,6 +700,10 @@ html[data-fx="v2"] body[data-style="glass"][data-theme] .task-mention-dropdown {
   -webkit-backdrop-filter: blur(28px) saturate(135%);
   backdrop-filter: blur(28px) saturate(135%);
 }
+/* Quick capture's lists open over the bar's own preview row: a solid pane keeps them readable */
+html[data-fx="v2"] body[data-style="glass"][data-theme] .qc-picker.task-mention-dropdown {
+  background: var(--glass-reflection), var(--card);
+}
 html[data-fx="v2"] body[data-style="glass"][data-theme] :is(.ideas-item, .appearance-option:not(.active),
   .appearance-backup-btn, .appearance-btn.secondary) {
   background: var(--glass-reflection), var(--glass-field);
@@ -711,7 +715,7 @@ html[data-fx="v2"] body[data-style="glass"][data-theme] :is(.ideas-item, .appear
   background: var(--glass-reflection), var(--glass-hover);
   box-shadow: var(--fx-lift-pill-hover), var(--glass-rim);
 }
-html[data-fx="v2"] body[data-style="glass"][data-theme] .toast {
+html[data-fx="v2"] body[data-style="glass"][data-theme] :is(.toast, .qc-toast) {
   background: linear-gradient(180deg, rgb(255 255 255 / 10%), transparent 55%), rgb(22 28 40 / 80%);
   -webkit-backdrop-filter: blur(16px) saturate(140%);
   backdrop-filter: blur(16px) saturate(140%);
@@ -896,7 +900,7 @@ html[data-fx="v2"] body[data-style="glass"][data-theme="dark"] :is(.media-dialog
   .item-tasks-dialog, .item-selector-dialog, .item-task-picker-dialog, .meetings-dialog,
   .meeting-editor-dialog, .completed-tasks-dialog, .projects-dialog, .auth-dialog,
   .calendar-view-dialog, .quick-link-dialog, .reorder-modal-content, .color-picker-dialog,
-  .reminder-links-dialog, .reminder-tasks-dialog, .icon-links-dialog) {
+  .reminder-links-dialog, .reminder-tasks-dialog, .icon-links-dialog, .qc-dialog, .qc-help-dialog) {
   box-shadow: var(--fx-lift-dialog), var(--glass-rim),
     inset -18px 18px 40px -30px rgb(190 214 255 / 14%);
 }
@@ -1053,5 +1057,5 @@ html[data-fx="v2"] body[data-style="glass"][data-theme="dark"][data-glass-theme=
     backdrop-filter: none !important;
   }
   html[data-fx="v2"] body[data-style="glass"][data-theme] .icon-button > .icon-indicator::before { opacity: 0.6; animation: none; will-change: auto; }
-  html[data-fx="v2"] body[data-style="glass"][data-theme] .toast { background: rgb(22 28 40); }
+  html[data-fx="v2"] body[data-style="glass"][data-theme] :is(.toast, .qc-toast) { background: rgb(22 28 40); }
 }

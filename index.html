@@ -8,10 +8,10 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Caveat:wght@500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=2026-09-29-pasted-images">
-  <link rel="stylesheet" href="glass.css?v=2026-09-23-file-manager">
+  <link rel="stylesheet" href="styles.css?v=2026-09-30-quick-capture">
+  <link rel="stylesheet" href="glass.css?v=2026-09-30-quick-capture">
   <!-- Glass FX v2 layer: every rule is scoped under html[data-fx="v2"] -->
-  <link rel="stylesheet" href="glass-fx.css?v=2026-09-29-task-timers">
+  <link rel="stylesheet" href="glass-fx.css?v=2026-09-30-quick-capture">
   <script type="module" src="js/features/glass-glow.js?v=2026-09-23-card-bevels"></script>
   <script type="module" src="js/features/glass-fx.js?v=2026-09-28-fx"></script>
   <!-- Emoji Picker Element - Web Component -->
@@ -70,6 +70,12 @@
       </div>
       <div class="header-icons-row">
         <div class="header-icons-left">
+          <!-- Quick capture (same as pressing N); shown in the Mobile layout only -->
+          <button type="button" id="quick-capture-toggle" class="quick-capture-toggle" title="Quick capture (N)" aria-label="Quick capture">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M13 2 4 14h7l-1 8 9-12h-7l1-8z"></path>
+            </svg>
+          </button>
           <button id="calendar-view-toggle" class="calendar-view-toggle" title="Calendar" aria-label="Calendar">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
@@ -794,7 +800,7 @@
     </div>
 
     <!-- ES6 Modules - fully modularized, no app.js dependency -->
-    <script type="module" src="js/main.js?v=2026-09-29-pasted-images"></script>
+    <script type="module" src="js/main.js?v=2026-09-30-quick-capture"></script>
   </body>
   </html>
 

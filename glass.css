@@ -510,7 +510,8 @@ body[data-style="glass"][data-theme] :is(.media-backdrop, .breakdown-backdrop,
   .task-editor-backdrop, .subtask-template-name-backdrop, .subtask-desc-backdrop,
   .item-tasks-backdrop, .item-selector-backdrop, .item-task-picker-backdrop,
   .meetings-backdrop, .meeting-editor-backdrop, .completed-tasks-backdrop,
-  .projects-backdrop, .auth-backdrop, .calendar-view-backdrop, .card-edit-backdrop) {
+  .projects-backdrop, .auth-backdrop, .calendar-view-backdrop, .card-edit-backdrop,
+  .qc-backdrop, .qc-help-backdrop) {
   background: var(--glass-scrim);
   -webkit-backdrop-filter: blur(4px);
   backdrop-filter: blur(4px);
@@ -528,7 +529,7 @@ body[data-style="glass"][data-theme] :is(.media-dialog, .breakdown-dialog,
   .meetings-dialog, .meeting-editor-dialog, .completed-tasks-dialog,
   .projects-dialog, .auth-dialog, .calendar-view-dialog, .quick-link-dialog,
   .reorder-modal-content, .color-picker-dialog, .reminder-links-dialog,
-  .reminder-tasks-dialog, .icon-links-dialog),
+  .reminder-tasks-dialog, .icon-links-dialog, .qc-dialog, .qc-help-dialog),
 body[data-style="glass"][data-theme] .card-edit-body > section.card {
   background: var(--glass-reflection), var(--glass-dialog) !important;
   border: 1px solid var(--glass-edge) !important;

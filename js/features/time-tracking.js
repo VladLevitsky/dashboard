@@ -65,20 +65,57 @@ export function toggleTaskTimer(taskId) {
     showToast(ms >= MIN_SESSION_MS ? `Tracked ${formatDuration(ms)} on “${title}”` : 'Timer stopped');
     return;
   }
+  const started = startTimerForTask(taskId);
+  if (started.switchedFrom) {
+    showToast(`Timer switched from “${started.switchedFrom.title}” to “${findTask(taskId).task?.title || 'Untitled Task'}”`);
+  }
+}
+
+// Start this task's timer; never stops it (quick capture's !timer). Any other
+// running timer is stopped and recorded first. The caller shows the toast.
+// → { started, alreadyRunning?, start?, switchedFrom?: { taskId, title } }
+export function startTimerForTask(taskId) {
+  if (isTaskTimerRunning(taskId)) return { started: false, alreadyRunning: true };
   const { task, state } = findTask(taskId);
-  if (!task || state !== 'active') return;
+  if (!task || state !== 'active') return { started: false };
 
   const log = getLog();
   const previous = log.active ? findTask(log.active.taskId).task : null;
+  const previousId = log.active ? log.active.taskId : null;
   if (previous) rememberTaskMeta(log, previous.id, metaOf(previous));
-  const closed = startTaskTimer(log, taskId, metaOf(task), Date.now());
+  const now = Date.now();
+  const closed = startTaskTimer(log, taskId, metaOf(task), now);
   saveModel();
   refreshTimeTrackingUI();
 
-  if (closed) {
-    const prevTitle = previous ? (previous.title || 'Untitled Task') : 'the previous task';
-    showToast(`Timer switched from “${prevTitle}” to “${task.title || 'Untitled Task'}”`);
+  const switchedFrom = closed
+    ? { taskId: previousId, title: previous ? (previous.title || 'Untitled Task') : 'the previous task' }
+    : null;
+  return { started: true, start: now, switchedFrom };
+}
+
+// Quick capture's Undo: take back a timer it started. A brand-new task loses
+// all of its (seconds of) time; an existing task only loses that one session.
+// A timer that the start switched off runs again, from now.
+export function undoTimerStart({ taskId, start, wholeTask, previousTaskId }) {
+  const log = getLog();
+  const now = Date.now();
+  if (wholeTask) {
+    clearTaskTime(log, taskId, now);
+  } else if (log.active && log.active.taskId === taskId && log.active.start === start) {
+    log.active = null;
+    log.changedAt = now;
+    const entry = log.tasks[taskId];
+    if (entry && entry.sessions.length === 0) delete log.tasks[taskId];
+  } else {
+    removeSession(log, taskId, start);
   }
+  if (previousTaskId && !log.active) {
+    const { task, state } = findTask(previousTaskId);
+    if (task && state === 'active') startTaskTimer(log, previousTaskId, metaOf(task), now);
+  }
+  saveModel();
+  refreshTimeTrackingUI();
 }
 
 // Stop the running timer (records the session)

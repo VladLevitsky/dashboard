@@ -29,6 +29,7 @@ import {
   handleDrop
 } from '../features/drag-drop.js';
 import { initTimeTracking } from '../features/time-tracking.js';
+import { initQuickCapture } from '../features/quick-capture.js';
 import { openTaskSettingsModal } from '../features/task-categories.js';
 import { startRichTextImages } from '../features/rich-text-images.js';
 import {
@@ -698,6 +699,9 @@ export async function init() {
   // Task timers + Time Tracking panel (reopens if it was expanded; a running
   // timer resumes ticking from its saved start time)
   initTimeTracking();
+
+  // Quick capture: N anywhere (or the header bolt in the Mobile layout)
+  initQuickCapture();
 
   // Initialize Quick Access if it was expanded
   if (model.quickAccessExpanded) {
