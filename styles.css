@@ -679,7 +679,7 @@ body {
   position: relative;
   z-index: 0; /* own stacking context: the running crystal's halo stays above the row */
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto 30px;
+  grid-template-columns: minmax(0, 1fr) auto auto 64px;
   align-items: center;
   gap: 12px;
   padding: 6px 10px 6px 6px;
@@ -750,7 +750,22 @@ body {
   font-variant-numeric: tabular-nums;
   color: var(--text);
 }
-.tt-task-toggle-spacer { width: 30px; }
+/* Complete + stopwatch (open tasks); empty but the same width on finished rows */
+.tt-task-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+}
+.tt-task-complete.task-complete-btn {
+  width: 30px;
+  height: 30px;
+  margin-block: 0;
+}
+.tt-task-complete.task-complete-btn svg {
+  width: 18px;
+  height: 18px;
+}
 .tt-task-toggle.task-timer-btn {
   width: 30px;
   height: 30px;
@@ -858,7 +873,7 @@ body {
    Placed after the base rules above so it wins. */
 @container (max-width: 480px) {
   .tt-cat-chip { display: none; }
-  .tt-task-line { grid-template-columns: minmax(0, 1fr) auto 30px; }
+  .tt-task-line { grid-template-columns: minmax(0, 1fr) auto 64px; }
   .tt-sessions { padding: 0 8px 10px 12px; }
   .tt-session { grid-template-columns: auto minmax(0, 1fr) auto 22px; gap: 8px; }
 }

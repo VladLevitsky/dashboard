@@ -20,6 +20,9 @@ import {
   TIME_RANGE_PRESETS, normalizeRangeFilter, resolveTimeRange, getTaskTotalsInRange, dayKeyToDate
 } from '../core/time-log.js';
 import { getTaskCategories, categoryColor } from './task-categories.js';
+// tasks.js imports this module too; the cycle is safe because neither uses
+// the other's exports until the app is running
+import { createTaskCompleteButton } from './tasks.js';
 
 const STOPWATCH_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="14" r="8"></circle><line x1="12" y1="6" x2="12" y2="2"></line><line x1="9" y1="2" x2="15" y2="2"></line><line x1="12" y1="14" x2="12" y2="10"></line><line x1="12" y1="14" x2="15" y2="17"></line></svg>`;
 const CHEVRON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="9 6 15 12 9 18"></polyline></svg>`;
@@ -481,7 +484,15 @@ function buildTaskRow(row, now) {
 
   line.append(main, buildCategoryChip(row.categoryId), time);
 
+  // Complete + stopwatch for open tasks; finished rows keep the same width empty
+  const actions = document.createElement('div');
+  actions.className = 'tt-task-actions';
+  line.appendChild(actions);
   if (row.state === 'active') {
+    const complete = createTaskCompleteButton({ id: row.taskId, title: row.title });
+    complete.classList.add('tt-task-complete');
+    actions.appendChild(complete);
+
     const toggle = document.createElement('button');
     toggle.type = 'button';
     toggle.className = 'task-timer-btn tt-task-toggle' + (row.running ? ' is-running' : '');
@@ -491,9 +502,7 @@ function buildTaskRow(row, now) {
     toggle.setAttribute('aria-label', `${label}: ${row.title}`);
     toggle.setAttribute('aria-pressed', String(row.running));
     toggle.addEventListener('click', () => toggleTaskTimer(row.taskId));
-    line.appendChild(toggle);
-  } else {
-    line.appendChild(textSpan('tt-task-toggle-spacer', ''));
+    actions.appendChild(toggle);
   }
 
   const sessions = document.createElement('div');

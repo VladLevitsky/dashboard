@@ -1726,11 +1726,12 @@ function createEisenhowerTaskElement(task, color, { draggable = true } = {}) {
   return taskEl;
 }
 
-// --- Complete button on each pill: asks first, then does what dropping the
-// task on the header checkmark does
+// --- Complete button (task pills and the Time Tracking rows): asks first,
+// the same question as dropping a task on the header checkmark
 const COMPLETE_CHECK_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"></circle><polyline points="8.5 12.5 11 15 15.5 9.5"></polyline></svg>`;
 
-function createTaskCompleteButton(task) {
+// task: anything with { id, title }
+export function createTaskCompleteButton(task) {
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.className = 'task-complete-btn';
@@ -1756,6 +1757,7 @@ function confirmCompleteTask(taskId) {
   completeTask(taskId);
   showToast('Task completed');
   refreshTaskViews();
+  refreshTimeTrackingUI(); // an open Time Tracking panel moves it to Completed
   if (window.refreshProjectHighlights) window.refreshProjectHighlights();
 }
 
