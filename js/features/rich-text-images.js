@@ -79,6 +79,7 @@ export function attachImageUpload(editor, { label = 'Image', getTitle = null } =
   if (!editor || editor._imageUploadAttached) return;
   editor._imageUploadAttached = true;
   const opts = { label, getTitle };
+  editor._imageUploadOpts = opts; // for uploadPastedImages (writing paste.js)
 
   editor.addEventListener('paste', (e) => {
     const data = e.clipboardData;
@@ -151,6 +152,12 @@ function uploadInlineImages(editor, opts) {
     img.setAttribute('data-r2-uploading', token);
     storeImage(blob, token, null, opts, false);
   });
+}
+
+// The writing engine's clean paste (writing/paste.js) inserts pasted HTML
+// itself: same follow-up as a browser paste above
+export function uploadPastedImages(editor) {
+  if (editor && editor._imageUploadOpts) uploadInlineImages(editor, editor._imageUploadOpts);
 }
 
 async function storeImage(file, token, previewUrl, opts, keepFileName) {

@@ -6,6 +6,7 @@ import { model, currentData, normalizeTaskCategories } from '../state.js';
 import { showToast } from '../utils.js';
 import { getActiveStorageKey, markCloudDirty } from './sync.js';
 import { normalizeTimeLog } from './time-log.js';
+import { sanitizeStoredHtml } from './markdown.js';
 import { migrateToGrid24, migrateToDeviceLayouts, hydrateLayout, persistActiveLayout, getActiveMode, DEFAULT_COL_SPAN, DEFAULT_ROW_SPAN } from '../features/grid-engine.js';
 
 // --- Migrate legacy card types to unified card structure (schemaVersion 3)
@@ -431,6 +432,41 @@ export function cleanupOldBackups() {
   }
 }
 
+// --- Rich text that enters the model (localStorage, a cloud profile, a backup) is later shown with
+// innerHTML: anything in it that could run script or cover the page goes through the allowlist
+// sanitizer (markdown.js sanitizeStoredHtml); clean fields are left exactly as they are.
+// Returns how many fields changed.
+export function sanitizeStoredRichText(data) {
+  if (!data || typeof data !== 'object') return 0;
+  let changed = 0;
+  const clean = (obj, key) => {
+    if (!obj || typeof obj !== 'object' || typeof obj[key] !== 'string') return;
+    const next = sanitizeStoredHtml(obj[key]);
+    if (next !== obj[key]) { obj[key] = next; changed++; }
+  };
+  const each = (list, keys) => {
+    if (Array.isArray(list)) list.forEach(item => keys.forEach(key => clean(item, key)));
+  };
+  each(data.projects, ['content']);
+  each(data.meetings, ['description']);
+  each(data.ideas, ['description', 'content']);
+  [data.tasks, data.completedTasks].forEach(tasks => {
+    if (!Array.isArray(tasks)) return;
+    tasks.forEach(task => {
+      clean(task, 'description');
+      if (task && typeof task === 'object') each(task.subtasks, ['description']);
+    });
+  });
+  [data.cardNotes, data.subtaskNotes].forEach(bucket => {
+    if (!bucket || typeof bucket !== 'object') return;
+    Object.keys(bucket).forEach(id => {
+      if (typeof bucket[id] === 'string') clean(bucket, id); // old single-note format
+      else each(bucket[id], ['content']);
+    });
+  });
+  return changed;
+}
+
 // --- Save model to localStorage
 export function saveModel() {
   // Clean up old backups before saving to prevent quota issues
@@ -709,6 +745,10 @@ export async function restoreModel() {
         }
       });
     }
+
+    // Stored rich text is shown with innerHTML: clean anything unsafe (also covers a cloud profile,
+    // which arrives through localStorage and a reload); the save below keeps the cleaned copy
+    sanitizeStoredRichText(model);
 
     // Set flags
     window.skipUrlOverrides = true;

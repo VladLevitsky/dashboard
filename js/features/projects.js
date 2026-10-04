@@ -5,11 +5,14 @@
 
 import { model, editState, currentData } from '../state.js';
 import { $, showToast, moveCursorAfterNode } from '../utils.js';
-import { handleEditorInput, handleEditorKeydown, createHighlighterButton, attachHighlighterContextMenu, toggleChecklist, isInChecklist, attachChecklistHandler, attachImageResizeHandler } from './edit-mode.js';
+import { handleEditorInput, handleEditorKeydown, createHighlighterButton, attachHighlighterContextMenu, toggleChecklist, isInChecklist, attachChecklistHandler, attachImageResizeHandler, runFormatCommand, safeRichHtml } from './edit-mode.js';
 import { saveModel } from '../core/storage.js';
 import { TASK_COLORS, TASK_COLOR_LABELS } from '../constants.js';
 import { attachImageUpload } from './rich-text-images.js';
-import { stripHydratedImageSrc } from '../core/rich-text-refs.js';
+import { attachWritingFeatures } from './writing/editor.js';
+import { mentionDateItems, insertDateChipAt, dateRowElement } from './writing/menus.js';
+import { positionUnderTrigger } from './writing/ui.js';
+import { cleanEditorHtml, isEffectivelyEmpty, restoreRange, isInCode } from './writing/dom.js';
 
 // Module state
 let currentProjectId = null;
@@ -26,6 +29,7 @@ let mentionAnchorOffset = null;   // Offset of @ in that text node
 let mentionSelectedIndex = -1;    // Keyboard-selected item index
 let mentionOnInsert = null;       // Callback after inserting highlight (e.g. save)
 let mentionSuppressInput = false; // Suppress input events during DOM manipulation
+let mentionKeysInstalled = false;  // onMentionKeydown is on the document (once)
 
 // Priority order for display rows (most important first)
 const MENTION_COLOR_ORDER = ['red', 'orange', 'yellow', 'blue'];
@@ -61,10 +65,12 @@ function filterTasks(query) {
 
 function buildMentionRows(query) {
   const filtered = filterTasks(query);
+  const dates = mentionDateItems(query); // a Date row when the query reads as one (@fri, @21/12...)
   const dropdown = getMentionDropdown();
   dropdown.innerHTML = '';
+  dropdown.classList.toggle('has-dates', dates.length > 0);
 
-  if (filtered.length === 0) {
+  if (filtered.length === 0 && dates.length === 0) {
     const empty = document.createElement('div');
     empty.className = 'task-mention-empty';
     empty.textContent = 'No matching tasks';
@@ -74,6 +80,30 @@ function buildMentionRows(query) {
   }
 
   let flatIndex = 0;
+  let colsHost = dropdown;
+  if (dates.length) {
+    // Date section on top, picked by default (Enter inserts the date chip)
+    const section = document.createElement('div');
+    section.className = 'task-mention-dates';
+    const head = document.createElement('div');
+    head.className = 'task-mention-section-title';
+    head.textContent = 'Date';
+    section.appendChild(head);
+    dates.forEach(d => {
+      // The same row as the @ dates list in the other editors (menus.js)
+      const item = dateRowElement(d, 'task-mention-date');
+      item.dataset.flatIndex = flatIndex++;
+      item.querySelector('.wr-menu-label')?.classList.add('task-mention-item-title');
+      item.addEventListener('click', () => selectMentionDate(d.key));
+      section.appendChild(item);
+    });
+    dropdown.appendChild(section);
+    if (filtered.length) {
+      colsHost = document.createElement('div');
+      colsHost.className = 'task-mention-cols';
+      dropdown.appendChild(colsHost);
+    }
+  }
   MENTION_COLOR_ORDER.forEach(color => {
     const colorTasks = filtered
       .filter(t => t.color === color)
@@ -110,50 +140,34 @@ function buildMentionRows(query) {
       flatIndex++;
     });
 
-    dropdown.appendChild(col);
+    colsHost.appendChild(col);
   });
 
-  // Reset selection
-  mentionSelectedIndex = -1;
+  // Reset selection (a date row starts selected)
+  mentionSelectedIndex = dates.length ? 0 : -1;
+  if (dates.length) dropdown.querySelector('.task-mention-date').classList.add('selected', 'is-selected');
 }
 
+// List rows in keyboard order: the Date rows, then the task pills
+const MENTION_ROWS = '.task-mention-date, .task-mention-item';
+
+// Under the @ like the writing lists (ui.positionPopup): below the line, above it
+// only when there is no room below, shortened (it scrolls) rather than covering the line
 function positionDropdown(editor) {
   const dropdown = getMentionDropdown();
   const sel = window.getSelection();
   if (!sel || sel.rangeCount === 0) { dropdown.style.display = 'none'; return; }
 
-  const range = sel.getRangeAt(0).cloneRange();
-  range.collapse(true);
-  const rect = range.getBoundingClientRect();
-  const editorRect = editor.getBoundingClientRect();
-  const x = rect.x || editorRect.x;
-  const y = rect.y || editorRect.y;
-
-  // Show offscreen first to measure
-  dropdown.style.visibility = 'hidden';
-  dropdown.style.display = 'flex';
-  dropdown.style.left = '0px';
-  dropdown.style.bottom = '';
-  dropdown.style.top = '0px';
-  const dw = dropdown.offsetWidth;
-  const dh = dropdown.offsetHeight;
-  dropdown.style.visibility = '';
-
-  // Clamp horizontally
-  let left = Math.max(8, Math.min(x, window.innerWidth - dw - 8));
-
-  // Prefer above cursor; if no room, show below
-  let top;
-  if (y - dh - 6 >= 0) {
-    top = y - dh - 6;
-  } else {
-    top = y + 20;
+  let range = null;
+  const node = mentionAnchorNode;
+  if (node && node.isConnected && editor.contains(node) && node.nodeType === 3 && mentionAnchorOffset < node.data.length) {
+    range = document.createRange();
+    range.setStart(node, mentionAnchorOffset);
+    range.setEnd(node, mentionAnchorOffset + 1);
   }
-  top = Math.max(8, Math.min(top, window.innerHeight - dh - 8));
-
-  dropdown.style.left = `${left}px`;
-  dropdown.style.top = `${top}px`;
   dropdown.style.bottom = '';
+  dropdown.style.display = 'flex';
+  positionUnderTrigger(dropdown, range, editor);
 }
 
 function showMentionDropdown(editor, query) {
@@ -237,12 +251,26 @@ function selectMentionTask(task) {
   setTimeout(() => { mentionSuppressInput = false; }, 50);
 }
 
+// Replace @query with a date chip (writing/menus.js, undoable)
+function selectMentionDate(dateKey) {
+  if (!mentionAnchorNode || !mentionEditor) { hideMentionDropdown(); return; }
+  const editor = mentionEditor;
+  const node = mentionAnchorNode;
+  const start = mentionAnchorOffset;
+  const end = start + 1 + mentionQuery.length;
+  hideMentionDropdown();
+  mentionSuppressInput = true;
+  insertDateChipAt(editor, node, start, end, dateKey);
+  setTimeout(() => { mentionSuppressInput = false; }, 50);
+}
+
 function highlightSelectedItem(index) {
   const dropdown = getMentionDropdown();
-  const items = dropdown.querySelectorAll('.task-mention-item');
-  items.forEach(el => el.classList.remove('selected'));
+  const items = dropdown.querySelectorAll(MENTION_ROWS);
+  items.forEach(el => el.classList.remove('selected', 'is-selected'));
   if (index >= 0 && index < items.length) {
-    items[index].classList.add('selected');
+    // is-selected: the date rows' writing-menu look (pills read .selected)
+    items[index].classList.add('selected', 'is-selected');
     items[index].scrollIntoView({ block: 'nearest' });
   }
 }
@@ -254,6 +282,7 @@ function getMentionContext(editor) {
   const node = sel.anchorNode;
   if (!node || node.nodeType !== Node.TEXT_NODE) return null;
   if (!editor.contains(node)) return null;
+  if (isInCode(node, editor)) return null; // no task pills inside code
 
   const text = node.textContent;
   const cursor = sel.anchorOffset;
@@ -287,6 +316,7 @@ function getMentionContext(editor) {
  * @param {Function} onInsert - Called after a task mention is inserted (for saving)
  */
 export function attachTaskMention(editor, onInsert) {
+  editor._taskMention = true; // writing/menus.js: @ dates live in this list here
   editor.addEventListener('input', () => {
     if (mentionSuppressInput) return;
     const ctx = getMentionContext(editor);
@@ -302,48 +332,62 @@ export function attachTaskMention(editor, onInsert) {
     }
   });
 
-  editor.addEventListener('keydown', (e) => {
-    const dropdown = getMentionDropdown();
-    if (dropdown.style.display === 'none' || mentionEditor !== editor) return;
-
-    const items = dropdown.querySelectorAll('.task-mention-item');
-    const count = items.length;
-    if (count === 0) return;
-
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      mentionSelectedIndex = (mentionSelectedIndex + 1) % count;
-      highlightSelectedItem(mentionSelectedIndex);
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      mentionSelectedIndex = mentionSelectedIndex <= 0 ? count - 1 : mentionSelectedIndex - 1;
-      highlightSelectedItem(mentionSelectedIndex);
-    } else if (e.key === 'Enter' || e.key === 'Tab') {
-      if (mentionSelectedIndex >= 0 && mentionSelectedIndex < count) {
-        e.preventDefault();
-        const taskId = items[mentionSelectedIndex].dataset.taskId;
-        const tasks = getAllTasksForMention();
-        const task = tasks.find(t => t.id === taskId);
-        if (task) selectMentionTask(task);
-      }
-    } else if (e.key === 'Escape') {
-      e.preventDefault();
-      hideMentionDropdown();
-    }
-  });
+  // List keys: one document capture listener for every editor (see onMentionKeydown)
+  if (!mentionKeysInstalled) {
+    mentionKeysInstalled = true;
+    document.addEventListener('keydown', onMentionKeydown, true);
+  }
 
   // Hide dropdown if editor loses focus
   editor.addEventListener('blur', () => {
-    // Small delay to allow click on dropdown items
+    // Small delay to allow click on dropdown items; keep it when focus came
+    // back in the meantime (a closed popover hands the caret back)
     setTimeout(() => {
-      if (mentionEditor === editor) {
-        const dropdown = getMentionDropdown();
-        if (!dropdown.matches(':hover')) {
-          hideMentionDropdown();
-        }
-      }
+      if (mentionEditor !== editor) return;
+      const active = document.activeElement;
+      if (active && (active === editor || editor.contains(active))) return;
+      if (!getMentionDropdown().matches(':hover')) hideMentionDropdown();
     }, 200);
   });
+}
+
+// Keys for the open list. Capture on the document runs before the editor's own
+// listeners (the writing key hooks), so table cells, toggle titles and boxes
+// that end the doc can't take Enter / Tab / arrows from the list, and Esc closes
+// the list (even "No matching tasks") before focus mode or a notepad prompt hear it
+function onMentionKeydown(e) {
+  const dropdown = mentionDropdown;
+  if (!dropdown || dropdown.style.display === 'none' || !mentionEditor) return;
+  if (e.isComposing || e.keyCode === 229) return;
+  const target = e.target;
+  if (!(target instanceof Node) || !mentionEditor.contains(target)) return;
+  const consume = () => { e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation(); };
+
+  if (e.key === 'Escape') {
+    consume();
+    hideMentionDropdown();
+    return;
+  }
+
+  const items = dropdown.querySelectorAll(MENTION_ROWS);
+  const count = items.length;
+  if (count === 0) return;
+
+  if (e.key === 'ArrowDown') {
+    consume();
+    mentionSelectedIndex = (mentionSelectedIndex + 1) % count;
+    highlightSelectedItem(mentionSelectedIndex);
+  } else if (e.key === 'ArrowUp') {
+    consume();
+    mentionSelectedIndex = mentionSelectedIndex <= 0 ? count - 1 : mentionSelectedIndex - 1;
+    highlightSelectedItem(mentionSelectedIndex);
+  } else if ((e.key === 'Enter' || e.key === 'Tab') && mentionSelectedIndex >= 0 && mentionSelectedIndex < count) {
+    consume();
+    const item = items[mentionSelectedIndex];
+    if (item.dataset.date) { selectMentionDate(item.dataset.date); return; }
+    const task = getAllTasksForMention().find(t => t.id === item.dataset.taskId);
+    if (task) selectMentionTask(task);
+  }
 }
 
 // ============================================================
@@ -417,7 +461,7 @@ export function removeProjectTaskHighlight(projectId, taskId) {
   function stripHighlight(content) {
     if (!content) return content;
     const temp = document.createElement('div');
-    temp.innerHTML = content;
+    temp.innerHTML = safeRichHtml(content);
     temp.querySelectorAll(`span.project-task-highlight[data-task-id="${taskId}"]`).forEach(span => {
       const text = document.createTextNode(span.textContent);
       span.parentNode.replaceChild(text, span);
@@ -460,7 +504,7 @@ export function markProjectTaskHighlightCompleted(projectId, taskId) {
 
   // Update stored content
   const temp = document.createElement('div');
-  temp.innerHTML = project.content;
+  temp.innerHTML = safeRichHtml(project.content);
   temp.querySelectorAll(`span.project-task-highlight[data-task-id="${taskId}"]`).forEach(span => {
     span.dataset.highlightColor = 'completed';
     span.style.backgroundColor = HIGHLIGHT_COLORS.completed;
@@ -510,7 +554,7 @@ export function refreshProjectHighlights() {
   if (currentProjectId) {
     const project = getProjectById(currentProjectId);
     if (project) {
-      project.content = stripHydratedImageSrc(editor.innerHTML);
+      project.content = projectEditorHtml(editor);
       saveModel();
     }
   }
@@ -522,6 +566,7 @@ export function refreshProjectHighlights() {
 
 export function openProjectsModal(openToProjectId) {
   let modal = $('#projects-modal');
+  const wasOpen = !!(modal && !modal.hidden);
 
   if (!modal) {
     modal = document.createElement('div');
@@ -594,12 +639,12 @@ export function openProjectsModal(openToProjectId) {
       btn.addEventListener('mousedown', e => e.preventDefault());
       btn.addEventListener('click', () => {
         if (btn.classList.contains('projects-checklist-btn')) {
-          toggleChecklist();
+          runFormatCommand($('#project-editor'), 'checklist');
           updateProjectsToolbarState();
           $('#project-editor').focus();
           return;
         }
-        document.execCommand(btn.dataset.cmd, false, null);
+        runFormatCommand($('#project-editor'), btn.dataset.cmd);
         updateProjectsToolbarState();
         $('#project-editor').focus();
       });
@@ -684,6 +729,27 @@ export function openProjectsModal(openToProjectId) {
       updateConvertButtonState();
     });
 
+    // Writing features (FULL tier). Ctrl+S saves right away (with the flash)
+    attachWritingFeatures(editor, {
+      id: 'projects',
+      tier: 'full',
+      toolbar: projectsToolbar,
+      getTitle: () => getProjectById(currentProjectId)?.title || 'Untitled project',
+      getDocMeta: () => ({ kind: 'Project', title: getProjectById(currentProjectId)?.title || 'Untitled project' }),
+      getDocId: () => currentProjectId,
+      onChange: () => markProjectDirty(),
+      onSave: () => {
+        if (autoSaveTimer) { clearTimeout(autoSaveTimer); autoSaveTimer = null; }
+        projectDirty = true;
+        doSaveAndFlash();
+      },
+      linkTask: true,
+      makeTask: (text, range) => {
+        restoreRange(range, editor);
+        convertSelectionToTask();
+      }
+    });
+
     // Click on highlights to open linked task, click on links to open URL
     editor.addEventListener('click', (e) => {
       // Hyperlinks — open in new tab
@@ -703,6 +769,9 @@ export function openProjectsModal(openToProjectId) {
       }
     });
   }
+
+  // Already open (a [[ link from inside it): keep the open project's edits before reloading
+  if (wasOpen && currentProjectId) saveCurrentProject();
 
   // Open to specific project if requested, otherwise first project
   const projects = getAllProjects();
@@ -844,7 +913,7 @@ function loadCurrentProject() {
   if (editorWrap) editorWrap.hidden = false;
   if (emptyState) emptyState.hidden = true;
   if (editor) {
-    editor.innerHTML = project.content || '';
+    editor.innerHTML = safeRichHtml(project.content);
     // Reconcile task highlights based on actual task status
     if (window.reconcileTaskHighlights) {
       window.reconcileTaskHighlights(editor);
@@ -854,7 +923,10 @@ function loadCurrentProject() {
         saveModel();
       }
     }
+    if (editor._wr) editor._wr.loaded();
     editor.focus();
+    // The old doc's caret went with it (no selectionchange): B / I / U follow the new one
+    updateProjectsToolbarState();
   }
 
   // Reset dirty state for new tab
@@ -872,8 +944,15 @@ function saveCurrentProject() {
   if (!editor) return;
   const project = getProjectById(currentProjectId);
   if (!project) return;
-  project.content = stripHydratedImageSrc(editor.innerHTML);
+  project.content = projectEditorHtml(editor);
   saveModel();
+}
+
+// Canonical HTML: no image-resize wrapper, no writing UI, R2 images keep only
+// their reference; '' when nothing is in it (<div><br></div>, NBSP...)
+function projectEditorHtml(editor) {
+  const html = cleanEditorHtml(editor);
+  return isEffectivelyEmpty(html) ? '' : html;
 }
 
 let autoSaveTimer = null;
@@ -1134,7 +1213,7 @@ export function removeMeetingTaskHighlight(meetingId, taskId) {
   function stripHighlight(desc) {
     if (!desc) return desc;
     const temp = document.createElement('div');
-    temp.innerHTML = desc;
+    temp.innerHTML = safeRichHtml(desc);
     temp.querySelectorAll(`span.project-task-highlight[data-task-id="${taskId}"]`).forEach(span => {
       const text = document.createTextNode(span.textContent);
       span.parentNode.replaceChild(text, span);
@@ -1182,7 +1261,7 @@ export function markMeetingTaskHighlightCompleted(meetingId, taskId) {
   if (!meeting || !meeting.description) return;
 
   const temp = document.createElement('div');
-  temp.innerHTML = meeting.description;
+  temp.innerHTML = safeRichHtml(meeting.description);
   temp.querySelectorAll(`span.project-task-highlight[data-task-id="${taskId}"]`).forEach(span => {
     span.dataset.highlightColor = 'completed';
     span.style.backgroundColor = HIGHLIGHT_COLORS.completed;

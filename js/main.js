@@ -89,6 +89,12 @@ import {
 } from './features/rich-text-images.js';
 
 import {
+  attachWritingFeatures,
+  attachWritingView,
+  api as writingApi
+} from './features/writing/editor.js';
+
+import {
   openQuickLinkModal,
   removeQuickLink,
   isItemSelected,
@@ -285,7 +291,8 @@ import {
   getCompletedTasks,
   deleteCompletedTask,
   clearCompletedTasks,
-  openAddTaskModalWithCallback
+  openAddTaskModalWithCallback,
+  openIdeasModal
 } from './features/tasks.js';
 
 import {
@@ -455,6 +462,12 @@ window.closeQuickCapture = closeQuickCapture;
 // Rich-text images (pasted images live in file storage)
 window.attachImageUpload = attachImageUpload;
 window.hydrateRichTextImages = hydrateRichTextImages;
+
+// Writing power-up (one engine for the 6 rich-text editors). window.writingApi
+// is for debugging and tests; the help module adds window.openWritingHelp
+window.attachWritingFeatures = attachWritingFeatures;
+window.attachWritingView = attachWritingView;
+window.writingApi = writingApi;
 
 // Quick Access (listed in the Today view)
 window.openQuickLinkModal = openQuickLinkModal;
@@ -638,6 +651,7 @@ window.getCompletedTasks = getCompletedTasks;
 window.deleteCompletedTask = deleteCompletedTask;
 window.clearCompletedTasks = clearCompletedTasks;
 window.openAddTaskModalWithCallback = openAddTaskModalWithCallback;
+window.openIdeasModal = openIdeasModal;
 
 // Projects
 window.openProjectsModal = openProjectsModal;

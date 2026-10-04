@@ -7,7 +7,7 @@
 
 import { model, editState, currentData, normalizeTaskCategories } from '../state.js';
 import { PLACEHOLDER_URL, APP_VERSION, LINKS_FILE_PATH } from '../constants.js';
-import { saveModel, cleanupOldBackups, migrateToUnifiedCards, migrateToHalfWidthCards } from './storage.js';
+import { saveModel, cleanupOldBackups, migrateToUnifiedCards, migrateToHalfWidthCards, sanitizeStoredRichText } from './storage.js';
 import { migrateToDeviceLayouts, hydrateLayout, getActiveMode } from '../features/grid-engine.js';
 import { getActiveStorageKey, markCloudDirty } from './sync.js';
 import { normalizeTimeLog, prepareImportedTimeLog } from './time-log.js';
@@ -900,6 +900,9 @@ export function applyUrlOverrides(data) {
     const exportedAt = Date.parse(data._metadata?.exportDate || '');
     current.timeTracking = prepareImportedTimeLog(data.timeTracking, exportedAt, Date.now());
   }
+
+  // Imported rich text goes through the allowlist sanitizer before anything renders it
+  sanitizeStoredRichText(current);
 
   // Synchronize editState.working if in edit mode
   if (editState.enabled && editState.working) {

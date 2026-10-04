@@ -4,7 +4,7 @@
 
 import { model, editState, currentData, currentSections } from '../state.js';
 import { $, showToast, createAnimatedBorder, normalizeDescHtml, openUrl } from '../utils.js';
-import { markDirtyAndSave, handleEditorInput, handleEditorKeydown, createHighlighterButton, attachHighlighterContextMenu, toggleChecklist, isInChecklist, attachChecklistHandler, attachImageResizeHandler } from './edit-mode.js';
+import { markDirtyAndSave, handleEditorInput, handleEditorKeydown, createHighlighterButton, attachHighlighterContextMenu, toggleChecklist, isInChecklist, attachChecklistHandler, attachImageResizeHandler, runFormatCommand, safeRichHtml } from './edit-mode.js';
 import { saveModel } from '../core/storage.js';
 import { immediateCloudSave } from '../core/sync.js';
 import { uploadFile, openFile, setImageFromRef, deleteR2File } from '../core/file-service.js';
@@ -12,6 +12,7 @@ import { TASK_COLORS, TASK_COLOR_LABELS, ANIMATION_DELAY_MS, CARD_HIDE_DELAY_MS 
 import { createTaskTimerControl, isTaskTimerRunning, stopTimerForTask, syncTaskTimeMeta, refreshTimeTrackingUI } from './time-tracking.js';
 import { getTaskCategories, categoryColor } from './task-categories.js';
 import { attachImageUpload } from './rich-text-images.js';
+import { attachWritingFeatures, attachWritingView } from './writing/editor.js';
 
 // Module state
 let currentTasksReminder = null;
@@ -2346,13 +2347,15 @@ function openTaskEditorModal(taskData, titleText) {
               <div class="task-desc-view-content" id="task-desc-view-content"></div>
               <div class="task-desc-view-empty">No description</div>
             </div>
-            <button type="button" class="task-desc-edit-btn" id="task-desc-edit-btn" title="Edit description">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-              </svg>
-              Edit
-            </button>
+            <div class="task-desc-view-actions" id="task-desc-view-actions">
+              <button type="button" class="task-desc-edit-btn" id="task-desc-edit-btn" title="Edit description">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                </svg>
+                Edit
+              </button>
+            </div>
             <div class="task-desc-editor-wrap" id="task-desc-editor-wrap" hidden>
               <div class="task-desc-toolbar">
                 <button type="button" class="task-desc-toolbar-btn" data-cmd="bold" title="Bold"><strong>B</strong></button>
@@ -2404,22 +2407,22 @@ function openTaskEditorModal(taskData, titleText) {
     `;
     document.body.appendChild(modal);
 
-    // Close on backdrop click
-    modal.querySelector('.task-editor-backdrop').addEventListener('click', closeTaskEditorModal);
-    modal.querySelector('.task-editor-close-btn').addEventListener('click', closeTaskEditorModal);
+    // Close on backdrop click (wrapped: the click event must not be read as `force`)
+    modal.querySelector('.task-editor-backdrop').addEventListener('click', () => closeTaskEditorModal());
+    modal.querySelector('.task-editor-close-btn').addEventListener('click', () => closeTaskEditorModal());
 
     // Description toolbar commands
     modal.querySelectorAll('.task-desc-toolbar-btn').forEach(btn => {
       btn.addEventListener('mousedown', (e) => e.preventDefault()); // Keep focus in editor
       btn.addEventListener('click', () => {
         if (btn.classList.contains('checklist-toolbar-btn')) {
-          toggleChecklist();
+          runFormatCommand($('#task-desc-editor'), 'checklist');
           updateTaskToolbarState();
           $('#task-desc-editor').focus();
           return;
         }
         const cmd = btn.dataset.cmd;
-        document.execCommand(cmd, false, null);
+        runFormatCommand($('#task-desc-editor'), cmd);
         updateTaskToolbarState();
         $('#task-desc-editor').focus();
       });
@@ -2456,6 +2459,21 @@ function openTaskEditorModal(taskData, titleText) {
       if ((e.ctrlKey || e.metaKey) && ['b', 'i', 'u'].includes(e.key.toLowerCase())) {
         setTimeout(updateTaskToolbarState, 0);
       }
+    });
+
+    // Writing features (FULL tier). Ctrl+S stages the description like ✓
+    attachWritingFeatures(descEditor, {
+      id: 'task',
+      tier: 'full',
+      toolbar: taskDescToolbar,
+      getTitle: () => taskEditorTitle(),
+      getDocMeta: () => taskDocMeta(),
+      getDocId: () => currentEditingTaskId || 'new',
+      onSave: () => {
+        saveDescriptionFromEditor();
+        showToast('Description updated. Press Save to keep it');
+      },
+      addSubtask: (text) => addSubtaskFromText(text)
     });
 
     // Update toolbar on selection change
@@ -2545,6 +2563,7 @@ function openTaskEditorModal(taskData, titleText) {
   } else if (taskData.linkType === 'file' && taskData.fileId) {
     editorLinks = [{ type: 'file', fileId: taskData.fileId, fileName: taskData.fileName || '' }];
   }
+  taskEditorLinksRef = editorLinks; // mutated in place from here on (doc meta reads it)
 
   function renderEditorLinks() {
     const list = $('#task-editor-links-list');
@@ -2834,7 +2853,8 @@ function openTaskEditorModal(taskData, titleText) {
   const descEditBtn = $('#task-desc-edit-btn');
   const descEditorWrap = $('#task-desc-editor-wrap');
   const hasDescription = normalizeDescHtml(taskData.description || '');
-  descViewContent.innerHTML = taskData.description || '';
+  descViewContent.innerHTML = safeRichHtml(taskData.description);
+  attachWritingView(descViewContent, { id: 'task', getTitle: () => taskEditorTitle(), getDocMeta: () => taskDocMeta(), actionsHost: $('#task-desc-view-actions') });
   // Make links in description view clickable
   descViewContent.onclick = (e) => {
     const link = e.target.closest('a[href]');
@@ -2857,6 +2877,7 @@ function openTaskEditorModal(taskData, titleText) {
     descriptionEditing = true;
     const editor = $('#task-desc-editor');
     editor.innerHTML = '';
+    if (editor._wr) editor._wr.loaded();
     // Focus after modal is visible
     requestAnimationFrame(() => editor.focus());
   }
@@ -2995,7 +3016,7 @@ function openTaskEditorModal(taskData, titleText) {
 
   // Wire up buttons
   const cancelBtn = $('#task-editor-cancel');
-  cancelBtn.onclick = closeTaskEditorModal;
+  cancelBtn.onclick = () => closeTaskEditorModal();
 
   const saveBtn = $('#task-editor-save');
   saveBtn.onclick = async () => {
@@ -3113,16 +3134,27 @@ function openTaskEditorModal(taskData, titleText) {
   modal.hidden = false;
   nameInput.focus();
 
-  // Capture initial state for unsaved changes detection
+  // Capture initial state for unsaved changes detection. The description
+  // baseline is read back from what is on screen (the writing view refreshes
+  // chip labels / titles on render), so just opening never counts as a change
   taskEditorInitialState = {
     title: taskData.title || '',
     color: taskData.color || 'blue',
     link: taskData.link || '',
     pinned: !!taskData.pinned,
-    description: taskData.description || '',
+    description: currentTaskDescHtml(),
     subtasks: JSON.stringify(taskData.subtasks || []),
     categoryId: selectedCategoryId
   };
+}
+
+// --- The task description as shown right now (the editor while editing, else
+// the view), normalized like a save would store it
+function currentTaskDescHtml() {
+  const rawDesc = descriptionEditing
+    ? ($('#task-desc-editor')?.innerHTML || '')
+    : ($('#task-desc-view-content')?.innerHTML || '');
+  return normalizeDescHtml(rawDesc) || '';
 }
 
 // --- Check if task editor has unsaved changes
@@ -3133,13 +3165,10 @@ function taskEditorHasChanges() {
   const primaryCheckbox = $('#task-editor-primary-checkbox');
   const colorsContainer = $('#task-editor-colors');
   const activeColor = colorsContainer?.querySelector('.task-editor-color-btn.active');
-  const rawDesc = descriptionEditing
-    ? ($('#task-desc-editor')?.innerHTML || '')
-    : ($('#task-desc-view-content')?.innerHTML || '');
-  const desc = normalizeDescHtml(rawDesc) || '';
+  const desc = currentTaskDescHtml();
 
   if ((nameInput?.value || '') !== taskEditorInitialState.title) return true;
-  if ((linkInput?.value || '') !== taskEditorInitialState.link) return true;
+  if (linkInput && (linkInput.value || '') !== taskEditorInitialState.link) return true; // legacy field, gone from the editor
   if ((activeColor?.dataset.color || 'blue') !== taskEditorInitialState.color) return true;
   if ((primaryCheckbox?.checked || false) !== taskEditorInitialState.pinned) return true;
   if (desc !== taskEditorInitialState.description) return true;
@@ -3307,6 +3336,7 @@ function enterDescriptionEditMode() {
 
   // Copy current content to editor
   editor.innerHTML = viewContent.innerHTML || '';
+  if (editor._wr) editor._wr.loaded();
   descView.hidden = true;
   descEditBtn.hidden = true;
   descEditorWrap.hidden = false;
@@ -3322,6 +3352,7 @@ function saveDescriptionFromEditor() {
 
   // Save editor content to view (normalize empty contenteditable output)
   viewContent.innerHTML = normalizeDescHtml(editor.innerHTML);
+  attachWritingView(viewContent, { id: 'task', getTitle: () => taskEditorTitle(), getDocMeta: () => taskDocMeta(), actionsHost: $('#task-desc-view-actions') });
   descriptionEditing = false;
   descView.hidden = false;
   descEditBtn.hidden = false;
@@ -3337,6 +3368,55 @@ function exitDescriptionEditMode() {
   descView.hidden = false;
   descEditBtn.hidden = false;
   descEditorWrap.hidden = true;
+}
+
+// --- Writing features: title + doc meta (exports) for the open task
+let taskEditorLinksRef = [];
+
+function taskEditorTitle() {
+  return ($('#task-editor-name')?.value || '').trim() || 'Untitled task';
+}
+
+function taskDocMeta() {
+  const color = $('#task-editor-colors .task-editor-color-btn.active')?.dataset.color || 'blue';
+  const fields = [{ label: 'Priority', value: TASK_COLOR_LABELS[color] || color }];
+  if ($('#task-editor-primary-checkbox')?.checked) fields.push({ label: 'Primary', value: 'Yes' });
+  const due = $('#task-editor-date')?.value;
+  if (due) fields.push({ label: 'Due', value: due });
+  const categoryId = $('#task-editor-categories .task-category-chip.active')?.dataset.categoryId;
+  const category = categoryId ? getTaskCategories().find(c => c.id === categoryId) : null;
+  if (category) fields.push({ label: 'Category', value: category.name });
+  const data = currentData();
+  if (currentEditingTaskId && (data.completedTasks || []).some(t => t.id === currentEditingTaskId)) {
+    fields.push({ label: 'Status', value: 'Completed' });
+  }
+  const sections = [];
+  const subtasks = editorSubtasks.filter(st => st.title && st.title.trim());
+  if (subtasks.length) {
+    sections.push({
+      title: 'Subtasks',
+      items: subtasks.map(st => st.title.trim()),
+      checklist: subtasks.map(st => ({ text: st.title.trim(), done: !!st.completed }))
+    });
+  }
+  const links = (taskEditorLinksRef || []).filter(l => !l._editing && ((l.type === 'url' && l.value) || (l.type === 'file' && l.fileId)));
+  if (links.length) {
+    sections.push({
+      title: 'Links',
+      items: links.map(l => (l.type === 'file' ? `[file: ${l.title || l.fileName || 'file'}]` : (l.title ? `${l.title} (${l.value})` : l.value)))
+    });
+  }
+  return { kind: 'Task', title: taskEditorTitle(), subtitle: TASK_COLOR_LABELS[color] || '', fields, sections };
+}
+
+// "Add as subtask" from the description: a titled subtask in the editor's list
+// (committed with the task, like the + button)
+function addSubtaskFromText(text) {
+  const title = String(text || '').replace(/\s+/g, ' ').trim().slice(0, 200);
+  if (!title) return;
+  editorSubtasks.push({ id: generateSubtaskId(), title, description: '', completed: false, important: false });
+  renderEditorSubtasks();
+  showToast(`Subtask added: ${title.length > 48 ? title.slice(0, 47) + '…' : title}`);
 }
 
 // ============================================================
@@ -3709,13 +3789,13 @@ function openSubtaskDescriptionModal(subtask) {
       btn.addEventListener('mousedown', (e) => e.preventDefault());
       btn.addEventListener('click', () => {
         if (btn.classList.contains('checklist-toolbar-btn')) {
-          toggleChecklist();
+          runFormatCommand($('#subtask-desc-editor'), 'checklist');
           updateSubtaskToolbarState();
           $('#subtask-desc-editor').focus();
           return;
         }
         const cmd = btn.dataset.cmd;
-        document.execCommand(cmd, false, null);
+        runFormatCommand($('#subtask-desc-editor'), cmd);
         updateSubtaskToolbarState();
         $('#subtask-desc-editor').focus();
       });
@@ -3755,6 +3835,22 @@ function openSubtaskDescriptionModal(subtask) {
       }
     });
 
+    // Writing features (FULL tier). Ctrl+S = the modal's Save
+    attachWritingFeatures(editorEl, {
+      id: 'subtask',
+      tier: 'full',
+      toolbar: subtaskToolbar,
+      getTitle: () => subtaskDescTitle(),
+      getDocMeta: () => ({
+        kind: 'Subtask',
+        title: subtaskDescTitle(),
+        subtitle: taskEditorTitle(),
+        fields: [{ label: 'Task', value: taskEditorTitle() }]
+      }),
+      getDocId: () => `${currentEditingTaskId || 'new'}:${currentSubtaskDescId || ''}`,
+      onSave: () => { const btn = $('#subtask-desc-save'); if (btn) btn.click(); }
+    });
+
     document.addEventListener('selectionchange', () => {
       const m = $('#subtask-desc-modal');
       if (m && !m.hidden) {
@@ -3767,8 +3863,10 @@ function openSubtaskDescriptionModal(subtask) {
   $('#subtask-desc-title').textContent = subtask.title ? `Subtask: ${subtask.title}` : 'Subtask Description';
 
   // Populate editor
+  currentSubtaskDescId = subtask.id || null;
   const editor = $('#subtask-desc-editor');
-  editor.innerHTML = subtask.description || '';
+  editor.innerHTML = safeRichHtml(subtask.description);
+  if (editor._wr) editor._wr.loaded();
   modal.hidden = false;
   requestAnimationFrame(() => editor.focus());
 
@@ -3801,6 +3899,12 @@ function openSubtaskDescriptionModal(subtask) {
     modal.hidden = true;
     renderEditorSubtasks();
   };
+}
+
+let currentSubtaskDescId = null;
+
+function subtaskDescTitle() {
+  return ($('#subtask-desc-title')?.textContent || '').replace(/^Subtask:\s*/, '').replace(/^Subtask Description$/, '').trim() || 'Subtask';
 }
 
 function updateSubtaskToolbarState() {
@@ -4134,7 +4238,9 @@ function updateIdeasToolbarState() {
   });
 }
 
-export function openIdeasModal() {
+// ideaId (optional): open straight to that idea ([[ links). Also a click
+// handler, so anything that isn't an id string is ignored.
+export function openIdeasModal(ideaId) {
   let modal = $('#ideas-modal');
 
   if (!modal) {
@@ -4217,13 +4323,13 @@ export function openIdeasModal() {
       btn.addEventListener('mousedown', (e) => e.preventDefault());
       btn.addEventListener('click', () => {
         if (btn.classList.contains('checklist-toolbar-btn')) {
-          toggleChecklist();
+          runFormatCommand($('#ideas-editor'), 'checklist');
           updateIdeasToolbarState();
           $('#ideas-editor').focus();
           return;
         }
         const cmd = btn.dataset.cmd;
-        document.execCommand(cmd, false, null);
+        runFormatCommand($('#ideas-editor'), cmd);
         updateIdeasToolbarState();
         $('#ideas-editor').focus();
       });
@@ -4257,6 +4363,17 @@ export function openIdeasModal() {
       if ((e.ctrlKey || e.metaKey) && ['b', 'i', 'u'].includes(e.key.toLowerCase())) {
         setTimeout(updateIdeasToolbarState, 0);
       }
+    });
+
+    // Writing features (FULL tier). Ctrl+S = Save
+    attachWritingFeatures(ideasEditorEl, {
+      id: 'ideas',
+      tier: 'full',
+      toolbar: ideasToolbar,
+      getTitle: () => ($('#ideas-title-input')?.value || '').trim() || 'Untitled idea',
+      getDocMeta: () => ({ kind: 'Idea', title: ($('#ideas-title-input')?.value || '').trim() || 'Untitled idea' }),
+      getDocId: () => ideasEditingId || 'new',
+      onSave: () => saveCurrentIdea()
     });
 
     // Update toolbar on selection change
@@ -4296,6 +4413,8 @@ export function openIdeasModal() {
 
   ideasEditingId = null;
   showIdeasMainView();
+  const idea = typeof ideaId === 'string' ? getAllIdeas().find(i => i.id === ideaId) : null;
+  if (idea) showIdeasViewMode(idea);
   modal.hidden = false;
 }
 
@@ -4310,6 +4429,7 @@ function showIdeasMainView() {
   $('#ideas-title-input').value = '';
   $('#ideas-editor').innerHTML = '';
   ideasEditingId = null;
+  if ($('#ideas-editor')._wr) $('#ideas-editor')._wr.loaded();
 
   renderIdeasList();
 }
@@ -4325,7 +4445,13 @@ function showIdeasViewMode(idea) {
   $('#ideas-title').textContent = 'Ideas';
 
   $('#ideas-view-title').textContent = idea.title || 'Untitled';
-  $('#ideas-view-content').innerHTML = idea.description || '<span style="color:var(--muted)">No description</span>';
+  $('#ideas-view-content').innerHTML = safeRichHtml(idea.description) || '<span style="color:var(--muted)">No description</span>';
+  attachWritingView($('#ideas-view-content'), {
+    id: 'ideas',
+    getTitle: () => idea.title || 'Untitled idea',
+    getDocMeta: () => ({ kind: 'Idea', title: idea.title || 'Untitled idea' }),
+    actionsHost: $('#ideas-modal .ideas-view-actions')
+  });
 }
 
 // Editor view for editing an existing idea
@@ -4337,7 +4463,8 @@ function showIdeasEditorView(idea) {
   ideasEditingId = idea.id;
   $('#ideas-title').textContent = 'Ideas';
   $('#ideas-title-input').value = idea.title || '';
-  $('#ideas-editor').innerHTML = idea.description || '';
+  $('#ideas-editor').innerHTML = safeRichHtml(idea.description);
+  if ($('#ideas-editor')._wr) $('#ideas-editor')._wr.loaded();
 
   renderIdeasList();
   requestAnimationFrame(() => $('#ideas-title-input').focus());

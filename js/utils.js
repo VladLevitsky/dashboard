@@ -5,6 +5,7 @@
 // model is set on window by main.js after all modules load
 
 import { stripHydratedImageSrc } from './core/rich-text-refs.js';
+import { cleanEditorHtml, isEffectivelyEmpty } from './features/writing/dom.js';
 
 // --- DOM Utilities
 export const $ = (sel, root = document) => root.querySelector(sel);
@@ -730,13 +731,18 @@ export function moveCursorAfterNode(node) {
   sel.addRange(range);
 }
 
-// --- Normalize description HTML (strip lone <br> and whitespace). Images kept
-// in file storage lose their session-only src, so the saved HTML (and the
-// unsaved-changes checks that compare it) only carry the file reference.
+// --- Normalize description HTML: the canonical saved form (cleanEditorHtml:
+// no image-resize wrapper, no writing UI, R2 images keep only their file
+// reference), or '' when there is nothing in it (<div><br></div>, NBSP...).
+// The unsaved-changes checks compare this form on both sides.
 export function normalizeDescHtml(html) {
   if (!html) return '';
-  const stripped = html.replace(/<br\s*\/?>/gi, '').replace(/&nbsp;/gi, ' ').trim();
-  return stripped ? stripHydratedImageSrc(html) : '';
+  if (typeof document === 'undefined') {
+    const stripped = html.replace(/<br\s*\/?>/gi, '').replace(/&nbsp;/gi, ' ').trim();
+    return stripped ? stripHydratedImageSrc(html) : '';
+  }
+  const clean = cleanEditorHtml(html);
+  return isEffectivelyEmpty(clean) ? '' : clean;
 }
 
 // --- Escape string for use in HTML attributes

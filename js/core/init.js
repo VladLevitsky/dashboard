@@ -7,6 +7,7 @@ import { PLACEHOLDER_URL, ANIMATION_DELAY_MS, CARD_HIDE_DELAY_MS } from '../cons
 import { saveModel, restoreModel, exportBackupFile, deepMergeModel, cleanupOldBackups } from './storage.js';
 import { setImageFromRef, getDisplaySrc, classifyImageRef, uploadFile, dataURLtoBlob, filenameFromDataUrl } from './file-service.js';
 import { isLoggedIn } from './auth.js';
+import { htmlToPlainText } from './markdown.js';
 import {
   toggleEditMode,
   hideEditPopover,
@@ -196,15 +197,18 @@ function performSearch(query) {
     const sectionData = data[section.id];
     const cardTitle = section.title || 'Untitled Card';
 
-    // Search card notes for this section
+    // Search card notes for this section: their TEXT, not the stored HTML
+    // (tag names, classes and data attributes would give false hits)
     if (data.cardNotes && data.cardNotes[section.id]) {
       const notes = data.cardNotes[section.id];
       const notesArray = Array.isArray(notes) ? notes : [];
       notesArray.forEach(note => {
+        const text = noteSearchText(note.content);
         if (matchesQuery(note.title, currentSearchQuery) ||
-            matchesQuery(note.content, currentSearchQuery)) {
+            matchesQuery(text, currentSearchQuery)) {
           results.cardNotes.push({
             ...note,
+            text,
             cardTitle,
             sectionId: section.id
           });
@@ -285,12 +289,68 @@ function performSearch(query) {
     });
   });
 
+  // Subtask notes ("sectionId:subtitle:itemKey"), listed with the card notes
+  const sectionsById = new Map(sections.map(s => [s.id, s]));
+  Object.entries(data.subtaskNotes || {}).forEach(([noteId, notes]) => {
+    if (!Array.isArray(notes) || !notes.length) return;
+    const first = noteId.indexOf(':');
+    const last = noteId.lastIndexOf(':');
+    if (first <= 0 || last <= first) return;
+    const sectionId = noteId.slice(0, first);
+    const section = sectionsById.get(sectionId);
+    if (!section) return;
+    const subtitle = noteId.slice(first + 1, last);
+    const itemKey = noteId.slice(last + 1);
+    const item = data[sectionId]?.[subtitle]?.subtasks?.find(s => s.key === itemKey);
+    const location = [section.title || 'Untitled Card', subtitle !== '_default' ? subtitle : '', item ? item.text : '']
+      .filter(Boolean).join(' › ');
+    notes.forEach(note => {
+      const text = noteSearchText(note.content);
+      if (matchesQuery(note.title, currentSearchQuery) || matchesQuery(text, currentSearchQuery)) {
+        results.cardNotes.push({ ...note, text, cardTitle: location, sectionId, subtaskNoteId: noteId });
+      }
+    });
+  });
+
   renderSearchResults(results);
 }
 
 function matchesQuery(text, query) {
   if (!text) return false;
   return text.toLowerCase().includes(query);
+}
+
+// Plain text of a note (one line per block, joined with " · "), cached by HTML
+const noteTextCache = new Map();
+function noteSearchText(html) {
+  if (!html) return '';
+  let text = noteTextCache.get(html);
+  if (text === undefined) {
+    try {
+      text = htmlToPlainText(html).split('\n').map(line => line.trim()).filter(Boolean).join(' · ');
+    } catch {
+      text = String(html).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+    }
+    if (noteTextCache.size > 500) noteTextCache.clear();
+    noteTextCache.set(html, text);
+  }
+  return text;
+}
+
+// ~90 characters of the note text around the first match (start of the text
+// when only the title matched)
+function noteSnippet(text, query, max = 90) {
+  if (!text) return '';
+  if (text.length <= max) return text;
+  const at = query ? text.toLowerCase().indexOf(query) : -1;
+  let start = 0;
+  if (at > 30) {
+    start = at - 30;
+    const space = text.lastIndexOf(' ', start);
+    if (space > at - 45) start = space + 1;
+  }
+  const end = Math.min(text.length, start + max);
+  return (start > 0 ? '…' : '') + text.slice(start, end).trim() + (end < text.length ? '…' : '');
 }
 
 function renderSearchResults(results) {
@@ -401,7 +461,7 @@ function renderSearchResults(results) {
           <line x1="16" y1="17" x2="8" y2="17"></line>
           <polyline points="10 9 9 9 8 9"></polyline>
         </svg>
-        Card Notes <span class="search-count">${results.cardNotes.length}</span>
+        Notes <span class="search-count">${results.cardNotes.length}</span>
       </h3>
       <div class="search-items">
         ${results.cardNotes.map(n => renderSearchCardNote(n)).join('')}
@@ -529,12 +589,13 @@ function renderSearchCopyPaste(item) {
 }
 
 function renderSearchCardNote(note) {
-  // Show a preview of the content (first 80 chars), stripping HTML tags
-  const plainContent = note.content ? note.content.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim() : '';
-  const contentPreview = plainContent.substring(0, 80) + (plainContent.length > 80 ? '...' : '');
+  // Preview: the note's plain text around the match
+  const plainContent = note.text !== undefined ? note.text : noteSearchText(note.content);
+  const contentPreview = noteSnippet(plainContent, currentSearchQuery);
+  const subtaskAttr = note.subtaskNoteId ? ` data-subtask-note-id="${escapeAttr(note.subtaskNoteId)}"` : '';
 
   return `
-    <div class="search-item search-item-cardnote" data-section-id="${escapeAttr(note.sectionId)}" data-note-key="${escapeAttr(note.key)}">
+    <div class="search-item search-item-cardnote" data-section-id="${escapeAttr(note.sectionId)}" data-note-key="${escapeAttr(note.key)}"${subtaskAttr}>
       <div class="search-item-content">
         <span class="search-item-title">${highlightMatch(note.title || 'Untitled Note', currentSearchQuery)}</span>
         <span class="search-item-preview">${highlightMatch(contentPreview, currentSearchQuery)}</span>
@@ -612,6 +673,7 @@ function attachSearchResultHandlers() {
       if (item.classList.contains('search-item-cardnote') && sectionId) {
         const targetSectionId = sectionId;
         const noteKey = item.dataset.noteKey;
+        const subtaskNoteId = item.dataset.subtaskNoteId || null;
         const searchInput = $('#dashboard-search');
         if (searchInput) {
           searchInput.value = '';
@@ -621,7 +683,8 @@ function attachSearchResultHandlers() {
         clearSearch();
         // Open the notepad modal for this card, then open the specific note viewer
         setTimeout(() => {
-          openNotepad(targetSectionId);
+          if (subtaskNoteId) openNotepad(targetSectionId, null, 'subtask', subtaskNoteId);
+          else openNotepad(targetSectionId);
           // Open the specific note viewer on top
           if (noteKey) {
             setTimeout(() => {

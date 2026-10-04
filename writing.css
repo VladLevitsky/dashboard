@@ -1,0 +1,4032 @@
+/* Personal Dashboard - Writing power-up styles (loaded after glass-fx.css)
+   One section per module. Each module edits ONLY its own section; sections
+   are separated by several blank lines so patches never touch a neighbour.
+   Glass-specific rules use the prefix
+   html[data-fx="v2"] body[data-style="glass"][data-theme] (beats glass.css).
+   Sections:
+    0 tokens / shared        1 toolbar               2 menus / popups (ui.js)
+    3 .wr-doc content base   4 blocks                5 input rules
+    6 menus (/ @ [[ :)       7 refs chips            8 links
+    9 paste                 10 find                 11 doc tools
+   12 focus                 13 (removed)            14 export
+   15 help                  16 card notes           17 dark overrides (shared)
+   18 reduced motion */
+
+
+
+/* ==========================================================================
+   0. TOKENS / SHARED (foundation)
+   ========================================================================== */
+:root {
+  --wr-z-menu: 100004;            /* menus / popovers: above context menu 100002, link picker 100003 */
+  --wr-z-help: 10060;             /* writing help modal */
+  --wr-z-focus: 10040;            /* focus mode sheet */
+  --wr-mono: ui-monospace, 'SFMono-Regular', 'Cascadia Code', Menlo, Consolas, monospace;
+  --wr-radius-menu: 14px;
+  --wr-menu-border: rgba(0, 0, 0, 0.1);
+  --wr-menu-shadow: 0 2px 4px rgba(34, 40, 52, 0.08), 0 18px 44px -16px rgba(34, 40, 52, 0.35);
+  --wr-row-hover: rgba(44, 123, 229, 0.1);
+  --wr-chip-bg: rgba(127, 135, 150, 0.14);
+  --wr-rule: rgba(74, 80, 91, 0.16);
+  --wr-quote-bar: rgba(66, 105, 155, 0.5);
+  /* Highlighter palette (new marks carry only data-highlight-color) */
+  --wr-hl-yellow: rgba(253, 224, 120, 0.62);
+  --wr-hl-green: rgba(150, 236, 196, 0.6);
+  --wr-hl-blue: rgba(180, 211, 254, 0.68);
+  --wr-hl-pink: rgba(251, 194, 207, 0.66);
+  --wr-hl-purple: rgba(214, 196, 255, 0.68);
+}
+
+/* Highlights follow the theme: !important beats the old inline colors that
+   were baked in at apply time, and the ink stays the text color in dark mode
+   (the UA mark style forces black). */
+mark.text-highlight {
+  color: inherit;
+  border-radius: 3px;
+  padding: 1px 2px;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+mark.text-highlight[data-highlight-color="yellow"] { background-color: var(--wr-hl-yellow) !important; }
+mark.text-highlight[data-highlight-color="green"] { background-color: var(--wr-hl-green) !important; }
+mark.text-highlight[data-highlight-color="blue"] { background-color: var(--wr-hl-blue) !important; }
+mark.text-highlight[data-highlight-color="pink"] { background-color: var(--wr-hl-pink) !important; }
+mark.text-highlight[data-highlight-color="purple"] { background-color: var(--wr-hl-purple) !important; }
+
+/* Highlighter: a bigger hit area on the color bar (it opens the swatches;
+   the pen itself highlights the selection) */
+.highlighter-color-indicator {
+  position: relative;
+}
+.highlighter-color-indicator::after {
+  content: '';
+  position: absolute;
+  inset: -7px -6px -6px;
+}
+/* Projects: the toolbar sits right under the header inside an overflow:hidden
+   wrap, so swatches opening upward were clipped (never clickable): open down */
+#projects-editor-toolbar .highlighter-color-dropdown {
+  bottom: auto;
+  top: calc(100% + 6px);
+}
+
+/* Meetings: its static divider and the highlighter's own divider meet once
+   the old hyperlink button is hidden: keep one hairline */
+.wr-toolbar > .task-desc-toolbar-divider + .task-desc-toolbar-divider {
+  display: none;
+}
+
+/* Chrome's editing commands copy a "font-family: inherit" from the editor's
+   own rule into <span style> wrappers when they move text (outdent, unwraps,
+   list exits). A concrete family (the body's) leaves nothing to copy. */
+.wr-editor {
+  font-family: 'Inter', system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+}
+
+/* Link replaces the old hyperlink buttons (projects, meetings) */
+#project-hyperlink-btn,
+#meeting-hyperlink-btn {
+  display: none !important;
+}
+
+/* Context menu: right-aligned shortcut hints from the registry */
+.highlight-context-item .ctx-kbd {
+  margin-left: auto;
+  padding-left: 18px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  color: var(--muted);
+  opacity: 0.85;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.highlight-context-item s {
+  font-weight: 600;
+}
+/* Glyph column: B / I / U letters and SVG icons share one width so labels align */
+.highlight-context-item > :first-child {
+  flex: 0 0 16px;
+  display: inline-flex;
+  justify-content: center;
+}
+
+/* Task description view: the Edit button's row (also hosts the export menu) */
+.task-desc-view-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  flex-shrink: 0;
+}
+.task-desc-view-actions .task-desc-edit-btn {
+  margin-top: 0;
+}
+.task-desc-view-actions:has(> .task-desc-edit-btn[hidden]) {
+  display: none;
+}
+
+/* <kbd> chips used by menus, tooltips and the reference */
+.wr-kbd {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  white-space: nowrap;
+}
+.wr-kbd kbd {
+  font: 500 10.5px/1 inherit;
+  font-family: inherit;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  border-radius: 5px;
+  border: 1px solid var(--wr-rule);
+  border-bottom-width: 2px;
+  background: var(--wr-chip-bg);
+  color: var(--muted);
+}
+
+
+
+/* ==========================================================================
+   1. TOOLBAR (foundation: editor.js buildToolbar)
+   ========================================================================== */
+/* Wrap safety: toolbars never clip their buttons */
+.wr-toolbar {
+  flex-wrap: wrap;
+  row-gap: 2px;
+  min-width: 0;
+}
+/* Every full toolbar keeps the same 2px rhythm (Ideas had 4px, so Insert +
+   wrapped alone under the block dropdown where the others keep it on row 1) */
+.wr-toolbar.wr-toolbar-full {
+  column-gap: 2px;
+}
+
+.wr-tb-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.wr-tb-btn[hidden] {
+  display: none !important;
+}
+.wr-tb-btn:hover,
+.wr-tb-btn[aria-expanded="true"] {
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--text);
+}
+.wr-tb-btn.active {
+  background: var(--brand);
+  color: #fff;
+}
+.wr-tb-btn .wr-icon {
+  flex-shrink: 0;
+}
+
+.wr-tb-divider {
+  width: 1px;
+  height: 20px;
+  margin: 0 6px;
+  flex-shrink: 0;
+  background: #e5e7eb;
+}
+
+/* Block style dropdown: "Text ▾", shows the current block */
+.wr-tb-btn.wr-tb-block {
+  width: auto;
+  min-width: 96px;
+  padding: 0 6px 0 10px;
+  gap: 6px;
+  justify-content: space-between;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.wr-tb-block-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.wr-tb-caret {
+  opacity: 0.6;
+}
+
+/* Export ▾ */
+.wr-tb-btn.wr-tb-export {
+  width: auto;
+  padding: 0 4px 0 6px;
+  gap: 1px;
+}
+
+/* Right group: document tools (find, outline, focus, export, help). It wraps
+   inside itself when even its own row is too narrow, so Export and Help can
+   never end up past the toolbar's edge */
+.wr-tb-right {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+  min-width: 0;
+  max-width: 100%;
+  flex-shrink: 1;
+}
+/* Projects: the spacer already pushes it right (before the save label) */
+.wr-tb-right.wr-tb-right-inline {
+  margin-left: 0;
+  margin-right: 4px;
+}
+.wr-tb-btn.wr-tb-end {
+  margin-left: auto;
+}
+
+[data-theme="dark"] .wr-tb-btn:hover,
+[data-theme="dark"] .wr-tb-btn[aria-expanded="true"] {
+  background: rgba(255, 255, 255, 0.1);
+}
+[data-theme="dark"] .wr-tb-btn.active {
+  color: #0f172a;
+}
+[data-theme="dark"] .wr-tb-divider {
+  background: #475569;
+}
+[data-theme="dark"] .wr-tb-btn.wr-tb-block {
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+/* Glass: hairlines and the block pill sit on the frosted pane */
+html[data-fx="v2"] body[data-style="glass"][data-theme] .wr-tb-divider {
+  background: var(--glass-divider);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .wr-tb-btn.wr-tb-block {
+  background: var(--glass-field);
+  border-color: var(--glass-divider);
+  box-shadow: inset 0 1px 2px rgb(40 46 56 / 4%), 0 1px 0 var(--glass-edge);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .wr-tb-btn.wr-tb-block:hover,
+html[data-fx="v2"] body[data-style="glass"][data-theme] .wr-tb-btn.wr-tb-block[aria-expanded="true"] {
+  background: var(--glass-hover);
+}
+
+/* Phones: a slimmer block pill, and no hairlines (wrapped rows would end on one) */
+body[data-device="mobile"] .wr-tb-btn.wr-tb-block {
+  min-width: 84px;
+}
+body[data-device="mobile"] .wr-toolbar-full > :is(.wr-tb-divider, .task-desc-toolbar-divider) {
+  display: none;
+}
+
+
+
+/* ==========================================================================
+   2. MENUS / POPUPS (foundation: ui.js openMenu, createCaretList, openPopover)
+   ========================================================================== */
+.wr-pop {
+  position: fixed;
+  z-index: var(--wr-z-menu);
+  left: 0;
+  top: 0;
+  box-sizing: border-box;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.35;
+}
+.wr-pop.open {
+  animation: wrPopIn 0.14s cubic-bezier(0.2, 0.8, 0.3, 1);
+  transform-origin: top left;
+}
+@keyframes wrPopIn {
+  from { opacity: 0; transform: translateY(-3px) scale(0.985); }
+  to { opacity: 1; transform: none; }
+}
+
+.wr-menu,
+.wr-popover {
+  background: var(--card, #fff);
+  border: 1px solid var(--wr-menu-border);
+  border-radius: var(--wr-radius-menu);
+  box-shadow: var(--wr-menu-shadow);
+}
+.wr-menu {
+  display: flex;
+  flex-direction: column;
+  min-width: 220px;
+  max-width: min(340px, calc(100vw - 16px));
+  max-height: min(440px, calc(100vh - 16px));
+  padding: 5px;
+  overflow: hidden;
+}
+.wr-menu-body {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+.wr-menu-title {
+  padding: 6px 10px 4px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.wr-menu-header {
+  padding: 8px 10px 3px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.wr-menu-header:first-child {
+  padding-top: 4px;
+}
+.wr-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 32px;
+  padding: 4px 8px;
+  border-radius: 9px;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.wr-menu-item.is-selected {
+  background: var(--wr-row-hover);
+}
+.wr-menu-item.is-disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.wr-menu-item.is-danger .wr-menu-label {
+  color: #dc2626;
+}
+.wr-menu-icon {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 7px;
+  border: 1px solid var(--wr-rule);
+  background: var(--wr-chip-bg);
+  color: var(--muted);
+}
+.wr-menu-icon:empty {
+  border-color: transparent;
+  background: none;
+}
+.wr-menu-item.is-selected .wr-menu-icon {
+  color: var(--brand);
+}
+.wr-menu-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.wr-menu-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wr-menu-item.is-active .wr-menu-label {
+  font-weight: 600;
+}
+.wr-menu-desc {
+  font-size: 11.5px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wr-menu-check {
+  display: inline-flex;
+  color: var(--brand);
+  flex-shrink: 0;
+}
+.wr-menu-hint {
+  margin-left: auto;
+  padding-left: 12px;
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+  font-family: var(--wr-mono);
+}
+.wr-menu-hint .wr-kbd {
+  font-family: inherit;
+}
+.wr-menu-hint .wr-kbd kbd {
+  font-family: system-ui, sans-serif;
+}
+.wr-menu-empty {
+  padding: 10px 12px;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+.wr-menu-footer {
+  margin: 4px -5px -5px;
+  padding: 7px 12px;
+  border-top: 1px solid var(--wr-rule);
+  font-size: 11px;
+  color: var(--muted);
+}
+
+/* Popover with inputs (link editor, table tools...) */
+.wr-popover {
+  padding: 10px;
+  max-width: calc(100vw - 16px);
+}
+
+[data-theme="dark"] {
+  --wr-menu-border: rgba(255, 255, 255, 0.1);
+  --wr-menu-shadow: 0 2px 4px rgba(0, 0, 0, 0.3), 0 18px 44px -16px rgba(0, 0, 0, 0.6);
+  --wr-row-hover: rgba(166, 200, 245, 0.14);
+}
+
+/* Glass: the same frosted pane as the @mention dropdown / period filter */
+html[data-fx="v2"] body[data-style="glass"][data-theme] :is(.wr-menu, .wr-popover) {
+  background: var(--glass-reflection), var(--glass-dialog);
+  border-color: var(--glass-edge);
+  -webkit-backdrop-filter: blur(28px) saturate(135%);
+  backdrop-filter: blur(28px) saturate(135%);
+  box-shadow: 0 2px 4px rgb(var(--fx-ink) / 10%), 0 22px 50px -18px rgb(var(--fx-ink) / 38%), var(--glass-rim);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .wr-menu-item.is-selected {
+  background: var(--glass-hover);
+  box-shadow: inset 0 0 0 1px var(--glass-divider);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .wr-menu-icon {
+  background: var(--glass-field);
+  border-color: var(--glass-divider);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .wr-menu-footer {
+  border-top-color: var(--glass-divider);
+}
+
+
+
+/* ==========================================================================
+   3. .wr-doc CONTENT BASE (editors AND read-only views; blocks refines)
+   ========================================================================== */
+/* 590 renders as Inter's 600 face, and stays under Chrome's bold threshold
+   (600), so the Bold buttons don't light up inside every heading and Ctrl+B
+   in a heading adds bold instead of removing it */
+.wr-doc h1,
+.wr-doc h2,
+.wr-doc h3 {
+  font-weight: 590;
+  line-height: 1.28;
+  letter-spacing: -0.01em;
+  margin: 0.7em 0 0.25em;
+}
+.wr-doc h1 { font-size: 1.5em; }
+.wr-doc h2 { font-size: 1.27em; }
+.wr-doc h3 { font-size: 1.1em; }
+.wr-doc > :is(h1, h2, h3):first-child {
+  margin-top: 0.1em;
+}
+/* Projects is a full page: a larger scale */
+.wr-doc.project-editor h1 { font-size: 1.8em; }
+.wr-doc.project-editor h2 { font-size: 1.42em; }
+.wr-doc.project-editor h3 { font-size: 1.16em; }
+
+.wr-doc blockquote {
+  margin: 0.45em 0;
+  padding: 2px 0 2px 14px;
+  border-left: 3px solid var(--wr-quote-bar);
+  color: var(--text);
+  opacity: 0.88;
+}
+
+.wr-doc hr {
+  border: none;
+  height: 1px;
+  margin: 14px 0;
+  background: var(--wr-rule);
+}
+
+.wr-doc :is(s, strike, del) {
+  text-decoration: line-through;
+  text-decoration-thickness: 1.5px;
+  opacity: 0.8;
+}
+
+.wr-doc code {
+  font-family: var(--wr-mono);
+  font-size: 0.88em;
+  padding: 0.1em 0.38em;
+  border-radius: 5px;
+  background: var(--wr-chip-bg);
+  border: 1px solid var(--wr-rule);
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+.wr-doc pre {
+  margin: 0.5em 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--wr-chip-bg);
+  border: 1px solid var(--wr-rule);
+  font-family: var(--wr-mono);
+  font-size: 0.86em;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.wr-doc pre code {
+  padding: 0;
+  border: none;
+  background: none;
+  font-size: inherit;
+}
+/* Code shows the characters that were typed (and that Copy puts on the
+   clipboard): no programming ligatures (Cascadia Code draws => != === as one
+   glyph), the same in editors, views and focus mode, whose letter-spacing
+   used to switch them off there only */
+.wr-doc :is(code, pre) {
+  font-variant-ligatures: none;
+  font-feature-settings: 'liga' 0, 'calt' 0;
+  letter-spacing: normal;
+}
+
+.wr-doc table {
+  border-collapse: collapse;
+  margin: 0.5em 0;
+  max-width: 100%;
+}
+.wr-doc :is(td, th) {
+  border: 1px solid var(--wr-rule);
+  padding: 4px 9px;
+  vertical-align: top;
+  text-align: left;
+}
+.wr-doc th {
+  font-weight: 600;
+  background: var(--wr-chip-bg);
+}
+
+.wr-doc a[href] {
+  color: #3b82f6;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  cursor: pointer;
+}
+[data-theme="dark"] .wr-doc a[href] {
+  color: #60a5fa;
+}
+/* In editors a plain click places the caret; Ctrl/Cmd+click opens */
+.wr-editor a[href] {
+  cursor: text;
+}
+
+/* Views: images and lists like the editors */
+.wr-view img {
+  max-width: 100%;
+  height: auto;
+}
+.wr-view :is(ul, ol):not(.checklist) {
+  margin: 0.2em 0;
+  padding-left: 1.5em;
+}
+.wr-view ul:not(.checklist) { list-style-type: disc; }
+.wr-view ul ul:not(.checklist) { list-style-type: circle; }
+.wr-view ol { list-style-type: decimal; }
+.wr-view ol ol { list-style-type: lower-alpha; }
+.wr-view li { margin: 2px 0; }
+
+
+
+/* ==========================================================================
+   4. BLOCKS (callout, toggle, code block, table, divider: blocks agent)
+   ========================================================================== */
+/* In-content UI (callout icon + kind, toggle chevron, code language + Copy)
+   is drawn with pseudo-elements; blocks.js handles the clicks on them, in
+   editors and read-only views alike. */
+:root {
+  --wr-co-note: #2563eb;
+  --wr-co-note-bg: rgba(59, 130, 246, 0.075);
+  --wr-co-note-edge: rgba(59, 130, 246, 0.24);
+  --wr-co-tip: #047857;
+  --wr-co-tip-bg: rgba(16, 185, 129, 0.085);
+  --wr-co-tip-edge: rgba(16, 185, 129, 0.28);
+  --wr-co-decision: #6d28d9;
+  --wr-co-decision-bg: rgba(139, 92, 246, 0.085);
+  --wr-co-decision-edge: rgba(139, 92, 246, 0.26);
+  --wr-co-warning: #b45309;
+  --wr-co-warning-bg: rgba(245, 158, 11, 0.1);
+  --wr-co-warning-edge: rgba(217, 119, 6, 0.3);
+  --wr-co-caution: #dc2626;
+  --wr-co-caution-bg: rgba(239, 68, 68, 0.075);
+  --wr-co-caution-edge: rgba(239, 68, 68, 0.26);
+  /* kind names (top-right): a deeper ink than the icon, about 5:1 on the tint
+     over the frosted pane (classic and sunset) */
+  --wr-co-note-label: #1e40af;
+  --wr-co-tip-label: #065f46;
+  --wr-co-decision-label: #5b21b6;
+  --wr-co-warning-label: #92400e;
+  --wr-co-caution-label: #991b1b;
+  --wr-co-shine: inset 0 1px 0 rgba(255, 255, 255, 0.55);
+  --wr-code-bg: rgba(120, 128, 145, 0.075);
+  --wr-code-head: rgba(120, 128, 145, 0.07);
+  --wr-code-edge: rgba(74, 80, 91, 0.14);
+  --wr-table-edge: rgba(74, 80, 91, 0.16);
+  --wr-table-head: rgba(120, 128, 145, 0.09);
+  --wr-icon-note: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cline x1='12' y1='11' x2='12' y2='16.5'/%3E%3Cline x1='12' y1='7.6' x2='12.01' y2='7.6'/%3E%3C/svg%3E");
+  --wr-icon-tip: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 18h6'/%3E%3Cpath d='M10 21h4'/%3E%3Cpath d='M12 3a6 6 0 0 0-3.9 10.6c.6.5.9 1.3.9 2.1V16h6v-.3c0-.8.3-1.6.9-2.1A6 6 0 0 0 12 3z'/%3E%3C/svg%3E");
+  --wr-icon-decision: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 3l9 9-9 9-9-9z'/%3E%3Cpolyline points='8.6 12 11 14.4 15.4 9.8'/%3E%3C/svg%3E");
+  --wr-icon-warning: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z'/%3E%3Cline x1='12' y1='9' x2='12' y2='13'/%3E%3Cline x1='12' y1='17' x2='12.01' y2='17'/%3E%3C/svg%3E");
+  --wr-icon-caution: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolygon points='7.9 2.5 16.1 2.5 21.5 7.9 21.5 16.1 16.1 21.5 7.9 21.5 2.5 16.1 2.5 7.9'/%3E%3Cline x1='12' y1='8' x2='12' y2='12.5'/%3E%3Cline x1='12' y1='16' x2='12.01' y2='16'/%3E%3C/svg%3E");
+  --wr-icon-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='9 5.5 15.5 12 9 18.5'/%3E%3C/svg%3E");
+  --wr-icon-copy: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='9' y='9' width='12' height='12' rx='2'/%3E%3Cpath d='M5 15H4.5A1.5 1.5 0 0 1 3 13.5v-9A1.5 1.5 0 0 1 4.5 3h9A1.5 1.5 0 0 1 15 4.5V5'/%3E%3C/svg%3E");
+}
+[data-theme="dark"] {
+  --wr-co-note: #93c5fd;
+  --wr-co-note-bg: rgba(96, 165, 250, 0.11);
+  --wr-co-note-edge: rgba(147, 197, 253, 0.24);
+  --wr-co-tip: #6ee7b7;
+  --wr-co-tip-bg: rgba(52, 211, 153, 0.1);
+  --wr-co-tip-edge: rgba(110, 231, 183, 0.24);
+  --wr-co-decision: #c4b5fd;
+  --wr-co-decision-bg: rgba(167, 139, 250, 0.12);
+  --wr-co-decision-edge: rgba(196, 181, 253, 0.26);
+  --wr-co-warning: #fcd34d;
+  --wr-co-warning-bg: rgba(251, 191, 36, 0.1);
+  --wr-co-warning-edge: rgba(252, 211, 77, 0.26);
+  --wr-co-caution: #fca5a5;
+  --wr-co-caution-bg: rgba(248, 113, 113, 0.11);
+  --wr-co-caution-edge: rgba(252, 165, 165, 0.26);
+  --wr-co-note-label: #93c5fd;
+  --wr-co-tip-label: #6ee7b7;
+  --wr-co-decision-label: #c4b5fd;
+  --wr-co-warning-label: #fcd34d;
+  --wr-co-caution-label: #fca5a5;
+  --wr-co-shine: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  --wr-code-bg: rgba(148, 163, 184, 0.08);
+  --wr-code-head: rgba(148, 163, 184, 0.07);
+  --wr-code-edge: rgba(207, 221, 241, 0.13);
+  --wr-table-edge: rgba(207, 221, 241, 0.15);
+  --wr-table-head: rgba(148, 163, 184, 0.11);
+  --wr-icon-copy: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239aa5b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='9' y='9' width='12' height='12' rx='2'/%3E%3Cpath d='M5 15H4.5A1.5 1.5 0 0 1 3 13.5v-9A1.5 1.5 0 0 1 4.5 3h9A1.5 1.5 0 0 1 15 4.5V5'/%3E%3C/svg%3E");
+}
+
+/* Old data's h4-h6: the same weight as h1-h3 (keeps Bold off, section 3) */
+.wr-doc :is(h4, h5, h6) {
+  font-weight: 590;
+}
+
+/* --- Boxes share one rhythm: no outer margin on their first / last line */
+.wr-doc :is(.wr-callout, .wr-toggle-body, blockquote) > :first-child {
+  margin-top: 0;
+}
+.wr-doc :is(.wr-callout, .wr-toggle-body, blockquote) > :last-child {
+  margin-bottom: 0;
+}
+
+/* --- Callout: tinted panel, icon in the left gutter (click: next kind),
+   kind name in the top-right corner */
+.wr-doc .wr-callout {
+  --co-ink: var(--wr-co-note);
+  --co-label: var(--wr-co-note-label);
+  --co-bg: var(--wr-co-note-bg);
+  --co-edge: var(--wr-co-note-edge);
+  --co-icon: var(--wr-icon-note);
+  position: relative;
+  margin: 0.55em 0;
+  padding: 8px 14px 8px 38px;
+  border: 1px solid var(--co-edge);
+  border-radius: 12px;
+  background: var(--co-bg);
+  box-shadow: var(--wr-co-shine);
+  overflow-wrap: anywhere;
+}
+.wr-doc .wr-callout[data-kind="tip"] { --co-ink: var(--wr-co-tip); --co-label: var(--wr-co-tip-label); --co-bg: var(--wr-co-tip-bg); --co-edge: var(--wr-co-tip-edge); --co-icon: var(--wr-icon-tip); }
+.wr-doc .wr-callout[data-kind="decision"] { --co-ink: var(--wr-co-decision); --co-label: var(--wr-co-decision-label); --co-bg: var(--wr-co-decision-bg); --co-edge: var(--wr-co-decision-edge); --co-icon: var(--wr-icon-decision); }
+.wr-doc .wr-callout[data-kind="warning"] { --co-ink: var(--wr-co-warning); --co-label: var(--wr-co-warning-label); --co-bg: var(--wr-co-warning-bg); --co-edge: var(--wr-co-warning-edge); --co-icon: var(--wr-icon-warning); }
+.wr-doc .wr-callout[data-kind="caution"] { --co-ink: var(--wr-co-caution); --co-label: var(--wr-co-caution-label); --co-bg: var(--wr-co-caution-bg); --co-edge: var(--wr-co-caution-edge); --co-icon: var(--wr-icon-caution); }
+.wr-doc .wr-callout::before {
+  content: '';
+  position: absolute;
+  left: 12px;
+  top: calc(8px + (1lh - 17px) / 2);
+  width: 17px;
+  height: 17px;
+  background-color: var(--co-ink);
+  -webkit-mask: var(--co-icon) center / contain no-repeat;
+  mask: var(--co-icon) center / contain no-repeat;
+}
+.wr-editor .wr-callout::before {
+  cursor: pointer;
+}
+.wr-doc .wr-callout::after {
+  content: 'Note';
+  position: absolute;
+  top: 6px;
+  right: 10px;
+  font: 650 9.5px/1.5 'Inter', system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--co-label);
+  pointer-events: none;
+  user-select: none;
+}
+/* Dark: the pastel ink, a touch softer (still about 4.5:1) */
+[data-theme="dark"] .wr-doc .wr-callout::after {
+  opacity: 0.86;
+}
+.wr-doc .wr-callout[data-kind="tip"]::after { content: 'Tip'; }
+.wr-doc .wr-callout[data-kind="decision"]::after { content: 'Decision'; }
+.wr-doc .wr-callout[data-kind="warning"]::after { content: 'Warning'; }
+.wr-doc .wr-callout[data-kind="caution"]::after { content: 'Caution'; }
+/* the first line leaves room for the kind name */
+.wr-doc .wr-callout > :first-child {
+  padding-right: 62px;
+}
+.wr-doc .wr-callout :is(h1, h2, h3) {
+  color: inherit;
+}
+
+/* --- Toggle: chevron (click: open / close; Ctrl+Enter in the title), a
+   faint guide line along the body */
+.wr-doc .wr-toggle {
+  margin: 0.3em 0;
+}
+.wr-doc .wr-toggle-title {
+  position: relative;
+  padding-left: 24px;
+  font-weight: 590;
+}
+.wr-doc .wr-toggle-title::before {
+  content: '';
+  position: absolute;
+  left: 1px;
+  top: calc((1lh - 18px) / 2);
+  width: 18px;
+  height: 18px;
+  background-color: currentColor;
+  opacity: 0.5;
+  -webkit-mask: var(--wr-icon-chevron) center / 13px no-repeat;
+  mask: var(--wr-icon-chevron) center / 13px no-repeat;
+  transform: rotate(90deg);
+  transition: transform 0.18s cubic-bezier(0.2, 0.8, 0.3, 1), opacity 0.15s ease;
+  cursor: pointer;
+}
+.wr-doc .wr-toggle-title:hover::before {
+  opacity: 0.9;
+}
+.wr-doc .wr-toggle[data-open="false"] > .wr-toggle-title::before {
+  transform: none;
+}
+.wr-doc .wr-toggle-body {
+  position: relative;
+  padding-left: 24px;
+  margin-top: 1px;
+}
+.wr-doc .wr-toggle-body::before {
+  content: '';
+  position: absolute;
+  left: 9.5px;
+  top: 3px;
+  bottom: 3px;
+  width: 1.5px;
+  border-radius: 1px;
+  background: var(--wr-rule);
+  pointer-events: none;
+}
+.wr-doc .wr-toggle[data-open="false"] > .wr-toggle-body {
+  display: none;
+}
+/* shown only while blocks.js rewrites it (Chrome's editing skips hidden content) */
+.wr-doc .wr-toggle[data-wr-reveal] > .wr-toggle-body {
+  display: block !important;
+}
+/* Views: a reader's own open / closed state (data-wr-open, never saved) */
+.wr-view .wr-toggle[data-wr-open="true"] > .wr-toggle-body {
+  display: block;
+}
+.wr-view .wr-toggle[data-wr-open="false"] > .wr-toggle-body {
+  display: none;
+}
+.wr-view .wr-toggle[data-wr-open="true"] > .wr-toggle-title::before {
+  transform: rotate(90deg);
+}
+.wr-view .wr-toggle[data-wr-open="false"] > .wr-toggle-title::before {
+  transform: none;
+}
+/* an empty title says what it is */
+.wr-editor .wr-toggle-title:has(> br:only-child)::after {
+  content: 'Toggle';
+  position: absolute;
+  left: 24px;
+  top: 0;
+  color: var(--muted);
+  font-weight: 400;
+  pointer-events: none;
+}
+
+/* --- Code block: monospace panel with a header strip (language, Copy) */
+.wr-doc pre.wr-code {
+  position: relative;
+  margin: 0.6em 0;
+  padding: 36px 14px 12px;
+  border: 1px solid var(--wr-code-edge);
+  border-radius: 12px;
+  background:
+    linear-gradient(to bottom, var(--wr-code-head) 0 27px, var(--wr-code-edge) 27px 28px, transparent 28px) no-repeat,
+    var(--wr-code-bg);
+  font-family: var(--wr-mono);
+  font-size: 0.86em;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  tab-size: 4;
+  color: var(--text);
+}
+.wr-doc pre.wr-code > code {
+  font-size: inherit;
+}
+.wr-doc pre.wr-code::before {
+  content: attr(data-lang);
+  position: absolute;
+  top: 0;
+  left: 14px;
+  max-width: calc(100% - 120px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 600 10px/27px 'Inter', system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--muted) 70%, var(--text)); /* >= 4.5:1 on every glass theme */
+  pointer-events: none;
+  user-select: none;
+}
+.wr-doc pre.wr-code:is([data-lang=""], :not([data-lang]))::before {
+  content: 'Code';
+}
+/* Editors: the label sets the language (click) */
+.wr-editor pre.wr-code::before {
+  content: attr(data-lang) '\00a0\25BE';
+  pointer-events: auto;
+  cursor: pointer;
+}
+.wr-editor pre.wr-code:is([data-lang=""], :not([data-lang]))::before {
+  content: 'Code\00a0\25BE';
+}
+.wr-editor pre.wr-code:hover::before {
+  color: var(--text);
+}
+
+/* Language field (opens over the label) */
+.wr-popover.wr-lang-pop {
+  padding: 8px;
+  width: 220px;
+}
+.wr-lang-input {
+  box-sizing: border-box;
+  width: 100%;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--wr-rule);
+  border-radius: 8px;
+  background: var(--wr-chip-bg);
+  color: var(--text);
+  font: 500 13px/30px var(--wr-mono);
+  outline: none;
+}
+.wr-lang-input:focus {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px rgba(44, 123, 229, 0.18);
+}
+.wr-lang-hint {
+  margin-top: 6px;
+  padding: 0 2px;
+  font-size: 11px;
+  color: var(--muted);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .wr-lang-input {
+  background: var(--glass-field);
+  border-color: var(--glass-divider);
+}
+.wr-doc pre.wr-code::after {
+  content: 'Copy';
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  height: 20px;
+  padding: 0 8px 0 24px;
+  border-radius: 7px;
+  font: 500 11px/20px 'Inter', system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  color: color-mix(in srgb, var(--muted) 70%, var(--text));
+  background: var(--wr-icon-copy) no-repeat 7px center / 12px 12px;
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+.wr-doc pre.wr-code:hover::after {
+  background-color: var(--wr-chip-bg);
+  color: var(--text);
+}
+
+/* --- Table: hairline grid, tinted header row, scrolls sideways when wide */
+.wr-doc table.wr-table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  margin: 0.6em 0;
+  border-collapse: separate;
+  border-spacing: 0;
+  border: 1px solid var(--wr-table-edge);
+  border-radius: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.wr-doc table.wr-table :is(td, th) {
+  min-width: 84px;
+  padding: 6px 11px;
+  border: 0;
+  border-right: 1px solid var(--wr-table-edge);
+  border-bottom: 1px solid var(--wr-table-edge);
+  vertical-align: top;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.wr-doc table.wr-table tr > :last-child {
+  border-right: 0;
+}
+.wr-doc table.wr-table tr:last-child > * {
+  border-bottom: 0;
+}
+.wr-doc table.wr-table th {
+  font-weight: 590;
+  background: var(--wr-table-head);
+}
+
+/* --- Divider: a hairline that fades at the ends */
+.wr-doc hr {
+  height: 1px;
+  margin: 16px 2px;
+  border: 0;
+  background: linear-gradient(90deg, transparent, var(--wr-rule) 12%, var(--wr-rule) 88%, transparent);
+}
+
+/* Glass: boxes catch the same top light as the panes around them */
+html[data-fx="v2"] body[data-style="glass"][data-theme] .wr-doc .wr-callout {
+  box-shadow: var(--wr-co-shine), 0 1px 2px -1px rgb(var(--fx-ink, 34 40 52) / 10%);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .wr-doc pre.wr-code {
+  box-shadow: inset 0 1px 0 var(--glass-edge, rgba(255, 255, 255, 0.4));
+}
+
+/* --- Table tools bar (floating above the table while the caret is in it) */
+.wr-table-tools {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  padding: 4px;
+  border-radius: 12px;
+  background: var(--card, #fff);
+  border: 1px solid var(--wr-menu-border);
+  box-shadow: var(--wr-menu-shadow);
+}
+.wr-tt-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.wr-tt-btn:hover {
+  background: var(--wr-row-hover);
+  color: var(--text);
+}
+.wr-tt-btn.is-on {
+  color: var(--brand);
+}
+.wr-tt-btn.is-danger:hover {
+  color: #dc2626;
+  background: rgba(239, 68, 68, 0.1);
+}
+.wr-tt-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+  background: transparent;
+}
+.wr-tt-btn:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 1px;
+}
+.wr-tt-sep {
+  width: 1px;
+  height: 18px;
+  margin: 0 3px;
+  background: var(--wr-rule);
+}
+[data-theme="dark"] .wr-tt-btn.is-danger:hover {
+  color: #fca5a5;
+  background: rgba(248, 113, 113, 0.14);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .wr-table-tools {
+  background: var(--glass-reflection), var(--glass-dialog);
+  border-color: var(--glass-edge);
+  -webkit-backdrop-filter: blur(28px) saturate(135%);
+  backdrop-filter: blur(28px) saturate(135%);
+  box-shadow: 0 2px 4px rgb(var(--fx-ink) / 10%), 0 18px 40px -18px rgb(var(--fx-ink) / 36%), var(--glass-rim);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .wr-tt-btn:hover {
+  background: var(--glass-hover);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .wr-tt-sep {
+  background: var(--glass-divider);
+}
+/* Phones: bigger targets */
+body[data-device="mobile"] .wr-tt-btn {
+  width: 34px;
+  height: 34px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wr-doc .wr-toggle-title::before,
+  .wr-doc pre.wr-code::after {
+    transition: none;
+  }
+}
+@media (prefers-reduced-transparency: reduce) {
+  html[data-fx="v2"] body[data-style="glass"][data-theme] .wr-table-tools {
+    background: var(--card);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+
+
+/* ==========================================================================
+   5. INPUT RULES (input-rules agent)
+   ========================================================================== */
+/* Nothing to draw: typed markdown turns into the same elements the toolbar
+   makes (headings, lists, quote, <b> <i> <s> <code> <mark>, links), styled
+   in sections 3 and 4 */
+
+
+
+/* ==========================================================================
+   6. MENUS: slash, @ dates, [[ refs, : emoji (menus agent)
+   ========================================================================== */
+/* Caret lists (ui.createCaretList): compact rows under the trigger */
+:is(.wr-slash-menu, .wr-date-menu, .wr-ref-menu, .wr-emoji-menu, .task-mention-dates) .wr-menu-item {
+  min-height: 30px;
+  padding: 3px 8px;
+}
+:is(.wr-slash-menu, .wr-date-menu, .wr-ref-menu, .wr-emoji-menu, .task-mention-dates) .wr-menu-icon {
+  width: 24px;
+  height: 24px;
+}
+
+/* Slash menu */
+.wr-slash-menu {
+  width: 356px;
+  max-width: min(356px, calc(100vw - 16px));
+}
+.wr-slash-menu .wr-menu-desc {
+  font-size: 11px;
+}
+/* Footer: key hints, then "Ctrl+/ all commands" (opens the reference) on the right */
+.wr-slash-menu .wr-menu-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+  line-height: 1.5;
+}
+.wr-slash-help {
+  margin-left: auto;
+  color: var(--brand);
+  font-weight: 550;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.wr-slash-help:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+/* Touch screens: no keyboard hints (markdown hints like --- stay) */
+@media (hover: none) {
+  .wr-slash-keys { display: none; }
+  .wr-slash-menu .wr-menu-hint:has(.wr-kbd) { display: none; }
+}
+
+/* @ dates (editors without the task list; the task list's Date rows too) */
+.wr-date-menu {
+  width: 290px;
+  min-width: 0;
+}
+:is(.wr-date-menu, .task-mention-dates) .wr-menu-icon {
+  color: var(--wr-date-ink);
+}
+:is(.wr-date-menu, .wr-ref-menu, .task-mention-dates) .wr-menu-hint {
+  font-family: inherit;
+  font-size: 11.5px;
+}
+
+/* [[ projects / meetings / ideas */
+.wr-ref-menu {
+  width: 320px;
+}
+.wr-ref-row.is-project .wr-menu-icon { color: var(--wr-ref-project-ink); }
+.wr-ref-row.is-meeting .wr-menu-icon { color: var(--wr-ref-meeting-ink); }
+.wr-ref-row.is-idea .wr-menu-icon { color: var(--wr-ref-idea-ink); }
+.wr-ref-row .wr-menu-icon svg {
+  width: 15px;
+  height: 15px;
+}
+
+/* : emoji: wide enough that similar names ("Grinning face with smiling eyes") read in full */
+.wr-emoji-menu {
+  width: 340px;
+  min-width: 0;
+}
+.wr-emoji-menu .wr-menu-icon,
+html[data-fx="v2"] body[data-style="glass"][data-theme] .wr-emoji-menu .wr-menu-icon {
+  border-color: transparent;
+  background: none;
+}
+.wr-emoji-glyph {
+  font-size: 19px;
+  line-height: 1;
+  font-family: 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', sans-serif;
+}
+.wr-emoji-menu .wr-menu-label::first-letter {
+  text-transform: uppercase;
+}
+.wr-emoji-menu .wr-menu-hint {
+  max-width: 34%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Emoji picker popover (the emoji-picker-element web component, made on first use) */
+.wr-popover.wr-emoji-pop {
+  padding: 4px;
+  overflow: hidden;
+}
+.wr-emoji-pop emoji-picker {
+  display: block;
+  width: min(340px, calc(100vw - 26px));
+  height: 330px;
+  --num-columns: 8;
+  --emoji-size: 1.3rem;
+  --emoji-padding: 0.38rem;
+  --background: transparent;
+  --border-size: 0;
+  --border-color: var(--wr-rule);
+  --indicator-color: var(--brand);
+  --input-border-color: var(--wr-rule);
+  --input-border-radius: 8px;
+  --input-font-color: var(--text);
+  --input-placeholder-color: var(--muted);
+  --outline-color: var(--brand);
+  --category-font-color: var(--muted);
+  --button-active-background: var(--wr-chip-bg);
+  --button-hover-background: var(--wr-row-hover);
+}
+@media (max-width: 420px) {
+  .wr-emoji-pop emoji-picker {
+    --num-columns: 7;
+    height: 300px;
+  }
+}
+
+/* @ task list (projects.js): a Date section on top when the query reads as a date. Its rows are
+   the @ dates list's own rows (menus.js dateRowElement: .wr-menu-item, sized and colored by the
+   .wr-date-menu rules above), so both lists look the same */
+.task-mention-dropdown.has-dates {
+  flex-direction: column;
+  align-items: stretch;
+  min-width: min(290px, calc(100vw - 16px));
+}
+.task-mention-dates {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.35;
+}
+.task-mention-cols {
+  display: flex;
+  flex-direction: row;
+  gap: 6px;
+  padding-top: 7px;
+  border-top: 1px solid var(--wr-rule);
+}
+.task-mention-section-title {
+  padding: 2px 8px 3px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+/* Hover and the keyboard pick (.is-selected, set with the pills' .selected) like any menu row */
+.task-mention-date.wr-menu-item:hover {
+  background: var(--wr-row-hover);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .task-mention-date.wr-menu-item:hover {
+  background: var(--glass-hover);
+  box-shadow: inset 0 0 0 1px var(--glass-divider);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .task-mention-cols {
+  border-top-color: var(--glass-divider);
+}
+
+
+
+/* ==========================================================================
+   7. REFS CHIPS: .wr-date, .wr-ref (menus agent)
+   ========================================================================== */
+/* Chips render wherever saved HTML shows (editors, views, anything else), so
+   they are not scoped to .wr-doc. Today / past tints: refs.js generates
+   .wr-date[data-date="…"] rules that set --wr-date-state-* (nothing is saved). */
+:root {
+  --wr-date-bg: rgba(44, 123, 229, 0.09);
+  --wr-date-ink: #1d5bb8;
+  --wr-date-edge: rgba(44, 123, 229, 0.24);
+  --wr-date-today-bg: rgba(44, 123, 229, 0.18);
+  --wr-date-today-ink: #12479a;
+  --wr-date-today-edge: rgba(44, 123, 229, 0.46);
+  --wr-date-past-bg: rgba(100, 116, 139, 0.1);
+  --wr-date-past-ink: #5f6b7d;
+  --wr-date-past-edge: rgba(100, 116, 139, 0.24);
+  --wr-ref-project-bg: rgba(124, 58, 237, 0.08);
+  --wr-ref-project-ink: #6a2fd0;
+  --wr-ref-project-edge: rgba(124, 58, 237, 0.24);
+  --wr-ref-meeting-bg: rgba(13, 148, 136, 0.09);
+  --wr-ref-meeting-ink: #0b6f66;
+  --wr-ref-meeting-edge: rgba(13, 148, 136, 0.26);
+  --wr-ref-idea-bg: rgba(217, 119, 6, 0.1);
+  --wr-ref-idea-ink: #a14a06;
+  --wr-ref-idea-edge: rgba(217, 119, 6, 0.28);
+  --wr-icon-date: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.3' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4.5' width='18' height='16.5' rx='2.5'/%3E%3Cline x1='16' y1='2.5' x2='16' y2='6.5'/%3E%3Cline x1='8' y1='2.5' x2='8' y2='6.5'/%3E%3Cline x1='3' y1='10' x2='21' y2='10'/%3E%3C/svg%3E");
+  --wr-icon-project: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 7.5A2.5 2.5 0 0 1 5.5 5H9l2 2.2h7.5A2.5 2.5 0 0 1 21 9.7v7.8a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5z'/%3E%3C/svg%3E");
+  --wr-icon-meeting: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.3' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='9' cy='8.5' r='3'/%3E%3Cpath d='M3.5 19a5.5 5.5 0 0 1 11 0'/%3E%3Ccircle cx='17' cy='9.5' r='2.4'/%3E%3Cpath d='M15.6 14.6A4.5 4.5 0 0 1 21 19'/%3E%3C/svg%3E");
+  --wr-icon-idea: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 18h6'/%3E%3Cpath d='M10 21h4'/%3E%3Cpath d='M12 3a6 6 0 0 0-3.9 10.6c.6.5.9 1.3.9 2.1V16h6v-.3c0-.8.3-1.6.9-2.1A6 6 0 0 0 12 3z'/%3E%3C/svg%3E");
+}
+[data-theme="dark"] {
+  --wr-date-bg: rgba(96, 165, 250, 0.14);
+  --wr-date-ink: #9cc8ff;
+  --wr-date-edge: rgba(96, 165, 250, 0.32);
+  --wr-date-today-bg: rgba(96, 165, 250, 0.27);
+  --wr-date-today-ink: #d6e8ff;
+  --wr-date-today-edge: rgba(147, 197, 253, 0.6);
+  --wr-date-past-bg: rgba(148, 163, 184, 0.12);
+  --wr-date-past-ink: #9aa7b8;
+  --wr-date-past-edge: rgba(148, 163, 184, 0.26);
+  --wr-ref-project-bg: rgba(167, 139, 250, 0.15);
+  --wr-ref-project-ink: #cdbcff;
+  --wr-ref-project-edge: rgba(167, 139, 250, 0.34);
+  --wr-ref-meeting-bg: rgba(45, 212, 191, 0.13);
+  --wr-ref-meeting-ink: #7eeadb;
+  --wr-ref-meeting-edge: rgba(45, 212, 191, 0.32);
+  --wr-ref-idea-bg: rgba(251, 191, 36, 0.13);
+  --wr-ref-idea-ink: #fcd77a;
+  --wr-ref-idea-edge: rgba(251, 191, 36, 0.32);
+}
+
+.wr-date {
+  --wr-c-bg: var(--wr-date-state-bg, var(--wr-date-bg));
+  --wr-c-ink: var(--wr-date-state-ink, var(--wr-date-ink));
+  --wr-c-edge: var(--wr-date-state-edge, var(--wr-date-edge));
+  --wr-c-icon: var(--wr-icon-date);
+}
+.wr-ref {
+  --wr-c-bg: var(--wr-ref-project-bg);
+  --wr-c-ink: var(--wr-ref-project-ink);
+  --wr-c-edge: var(--wr-ref-project-edge);
+  --wr-c-icon: var(--wr-icon-project);
+}
+.wr-ref[data-ref-type="meeting"] {
+  --wr-c-bg: var(--wr-ref-meeting-bg);
+  --wr-c-ink: var(--wr-ref-meeting-ink);
+  --wr-c-edge: var(--wr-ref-meeting-edge);
+  --wr-c-icon: var(--wr-icon-meeting);
+}
+.wr-ref[data-ref-type="idea"] {
+  --wr-c-bg: var(--wr-ref-idea-bg);
+  --wr-c-ink: var(--wr-ref-idea-ink);
+  --wr-c-edge: var(--wr-ref-idea-edge);
+  --wr-c-icon: var(--wr-icon-idea);
+}
+.wr-date,
+.wr-ref {
+  display: inline;
+  margin: 0 0.06em;
+  padding: 0.06em 0.48em 0.06em 0.4em;
+  border: 1px solid var(--wr-c-edge);
+  border-radius: 0.55em;
+  background: var(--wr-c-bg);
+  color: var(--wr-c-ink);
+  font-size: 0.9em;
+  font-weight: var(--wr-date-state-weight, 560);
+  font-style: normal;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  -webkit-user-modify: read-only;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  transition: filter 0.12s ease, border-color 0.12s ease;
+}
+.wr-date::before,
+.wr-ref::before {
+  content: '';
+  display: inline-block;
+  width: 0.95em;
+  height: 0.95em;
+  margin-right: 0.32em;
+  vertical-align: -0.13em;
+  background-color: currentColor;
+  -webkit-mask: var(--wr-c-icon) center / contain no-repeat;
+  mask: var(--wr-c-icon) center / contain no-repeat;
+  opacity: 0.85;
+}
+.wr-date:hover,
+.wr-ref:hover {
+  filter: brightness(0.95) saturate(1.15);
+  border-color: currentColor;
+}
+[data-theme="dark"] :is(.wr-date, .wr-ref):hover {
+  filter: brightness(1.15);
+}
+/* Headings: the chip follows the heading's size, a touch lighter */
+.wr-doc :is(h1, h2, h3) :is(.wr-date, .wr-ref) {
+  font-weight: 600;
+}
+/* Glass: a lit top edge, like the pills */
+html[data-fx="v2"] body[data-style="glass"][data-theme] :is(.wr-date, .wr-ref) {
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 45%);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme="dark"] :is(.wr-date, .wr-ref) {
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 8%);
+}
+
+/* Card shown when a chip is clicked (popover from ui.openPopover) */
+.wr-popover.wr-chip-pop {
+  padding: 12px;
+  width: 268px;
+}
+.wr-chip-card-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.wr-chip-card-icon {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  border: 1px solid var(--wr-date-edge);
+  background: var(--wr-date-bg);
+  color: var(--wr-date-ink);
+}
+.wr-ref-card[data-ref-type="project"] .wr-chip-card-icon { border-color: var(--wr-ref-project-edge); background: var(--wr-ref-project-bg); color: var(--wr-ref-project-ink); }
+.wr-ref-card[data-ref-type="meeting"] .wr-chip-card-icon { border-color: var(--wr-ref-meeting-edge); background: var(--wr-ref-meeting-bg); color: var(--wr-ref-meeting-ink); }
+.wr-ref-card[data-ref-type="idea"] .wr-chip-card-icon { border-color: var(--wr-ref-idea-edge); background: var(--wr-ref-idea-bg); color: var(--wr-ref-idea-ink); }
+.wr-chip-card-text {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.wr-chip-card-kicker {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.wr-chip-card-title {
+  margin-top: 1px;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+.wr-chip-card-sub {
+  margin-top: 1px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.wr-chip-card-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 12px;
+}
+.wr-chip-card-label {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.wr-chip-input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 32px;
+  padding: 4px 8px;
+  border: 1px solid var(--wr-rule);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+}
+.wr-chip-input:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 1px;
+}
+[data-theme="dark"] .wr-chip-input {
+  color-scheme: dark;
+}
+.wr-chip-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 12px;
+}
+.wr-chip-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 4px 12px;
+  border: 1px solid var(--wr-rule);
+  border-radius: 999px;
+  background: var(--wr-chip-bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 550;
+  cursor: pointer;
+}
+.wr-chip-btn svg {
+  width: 14px;
+  height: 14px;
+}
+.wr-chip-btn:hover {
+  background: var(--wr-row-hover);
+}
+.wr-chip-btn.is-primary {
+  border-color: transparent;
+  background: var(--glass-action, #42699b);
+  color: #fff;
+}
+.wr-chip-btn.is-primary:hover {
+  filter: brightness(1.08);
+}
+.wr-chip-btn.is-quiet {
+  background: none;
+  color: var(--muted);
+}
+.wr-chip-btn.is-quiet:hover {
+  color: var(--text);
+  background: var(--wr-row-hover);
+}
+.wr-chip-btn:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+.wr-chip-card-hint {
+  margin-top: 9px;
+  font-size: 11px;
+  color: var(--muted);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] :is(.wr-chip-input, .wr-chip-btn:not(.is-primary):not(.is-quiet)) {
+  background: var(--glass-field);
+  border-color: var(--glass-divider);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .wr-chip-btn:not(.is-primary):hover {
+  background: var(--glass-hover);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .wr-chip-btn.is-primary {
+  box-shadow: var(--fx-lift-pill), inset 0 1px 0 rgb(255 255 255 / 30%);
+}
+
+/* Hover tip on chips (full date + "in 3 days", or "Ctrl+click to open") */
+.wr-pop.wr-chip-tip {
+  max-width: min(320px, calc(100vw - 16px));
+  padding: 5px 9px;
+  border-radius: 8px;
+  background: rgba(22, 28, 40, 0.92);
+  color: #f8fafc;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+  box-shadow: 0 8px 20px -8px rgba(0, 0, 0, 0.4);
+  animation: wrTipIn 0.12s ease-out;
+}
+@keyframes wrTipIn {
+  from { opacity: 0; transform: translateY(2px); }
+  to { opacity: 1; transform: none; }
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .wr-chip-tip {
+  background: linear-gradient(180deg, rgb(255 255 255 / 10%), transparent 55%), rgb(22 28 40 / 82%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  backdrop-filter: blur(16px) saturate(140%);
+  box-shadow: var(--fx-lift-control), inset 0 1px 0 rgb(255 255 255 / 16%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wr-pop.wr-chip-tip { animation: none; }
+  :is(.wr-date, .wr-ref) { transition: none; }
+}
+@media (prefers-reduced-transparency: reduce) {
+  html[data-fx="v2"] body[data-style="glass"][data-theme] .wr-chip-tip {
+    background: rgb(22 28 40);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+
+
+/* ==========================================================================
+   8. LINKS: Ctrl+K popover, hover card (links agent)
+   ========================================================================== */
+/* Link editor (Ctrl+K): Text + Link fields with leading icons, actions row */
+.wr-link-pop {
+  width: 340px;
+}
+.wr-link-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.wr-link-editor.is-shaking {
+  animation: wrLinkShake 0.34s cubic-bezier(0.36, 0.07, 0.19, 0.97);
+}
+@keyframes wrLinkShake {
+  20%, 60% { transform: translateX(-5px); }
+  40%, 80% { transform: translateX(5px); }
+}
+.wr-link-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.wr-link-row[hidden] {
+  display: none;
+}
+.wr-link-row-icon {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  color: var(--muted);
+  pointer-events: none;
+  transition: color 0.15s ease;
+}
+.wr-link-row:focus-within .wr-link-row-icon {
+  color: var(--brand);
+}
+.wr-link-input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  min-height: 36px;
+  padding: 7px 10px 7px 34px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 10px;
+  background: var(--glass-field, #f8fafc);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.wr-link-input::placeholder {
+  color: var(--muted);
+  opacity: 0.85;
+}
+.wr-link-input:focus {
+  outline: none;
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px rgba(66, 105, 155, 0.18);
+}
+.wr-link-row.is-invalid .wr-link-input,
+.wr-link-row.is-invalid .wr-link-input:focus {
+  border-color: #dc2626;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.14);
+}
+.wr-link-row.is-invalid .wr-link-row-icon {
+  color: #dc2626;
+}
+.wr-link-error {
+  margin-top: -2px;
+  padding: 0 4px;
+  font-size: 12px;
+  line-height: 1.35;
+  color: #dc2626;
+}
+.wr-link-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-top: 2px;
+}
+.wr-link-spacer {
+  flex: 1 1 auto;
+}
+.wr-link-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding-left: 2px;
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.wr-link-btn {
+  min-height: 32px;
+  padding: 6px 12px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+.wr-link-btn:hover {
+  color: var(--text);
+  background: rgba(0, 0, 0, 0.05);
+}
+.wr-link-btn:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+.wr-link-icon-btn {
+  width: 32px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.wr-link-remove {
+  padding: 6px 8px;
+  color: #dc2626;
+}
+.wr-link-remove:hover {
+  color: #b91c1c;
+  background: rgba(220, 38, 38, 0.08);
+}
+.wr-link-apply,
+.wr-link-apply:hover {
+  padding: 6px 16px;
+  background: var(--brand);
+  color: #fff;
+}
+.wr-link-apply:hover {
+  filter: brightness(1.07);
+}
+
+/* Link card: URL + Open / Edit / Copy / Remove in one compact row */
+.wr-link-card.wr-popover {
+  padding: 4px;
+  border-radius: 12px;
+}
+.wr-link-card-body {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  max-width: min(440px, calc(100vw - 24px));
+}
+.wr-link-card-icon {
+  flex-shrink: 0;
+  width: 26px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+}
+.wr-link-card-url {
+  min-width: 0;
+  max-width: 270px;
+  padding: 4px 6px 4px 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12.5px;
+  color: #3b82f6;
+  cursor: pointer;
+}
+.wr-link-card-url:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.wr-link-card-url.is-inert {
+  cursor: default;
+  text-decoration: none;
+}
+.wr-link-card-url.is-unsafe {
+  color: #dc2626;
+}
+.wr-link-card-sep {
+  flex-shrink: 0;
+  width: 1px;
+  height: 18px;
+  margin: 0 3px;
+  background: var(--wr-rule);
+}
+.wr-link-card-btn {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+.wr-link-card-btn:hover:not(:disabled) {
+  background: var(--wr-row-hover);
+  color: var(--text);
+}
+.wr-link-card-btn[data-act="remove"]:hover {
+  background: rgba(220, 38, 38, 0.1);
+  color: #dc2626;
+}
+.wr-link-card-btn:disabled {
+  opacity: 0.38;
+  cursor: default;
+}
+.wr-link-card-btn:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 1px;
+}
+
+[data-theme="dark"] .wr-link-input {
+  border-color: rgba(255, 255, 255, 0.14);
+}
+[data-theme="dark"] .wr-link-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+[data-theme="dark"] .wr-link-remove,
+[data-theme="dark"] .wr-link-row.is-invalid .wr-link-row-icon,
+[data-theme="dark"] .wr-link-error,
+[data-theme="dark"] .wr-link-card-url.is-unsafe {
+  color: #f87171;
+}
+[data-theme="dark"] .wr-link-remove:hover {
+  color: #fca5a5;
+  background: rgba(248, 113, 113, 0.12);
+}
+[data-theme="dark"] .wr-link-card-url {
+  color: #60a5fa;
+}
+[data-theme="dark"] .wr-link-card-btn[data-act="remove"]:hover {
+  background: rgba(248, 113, 113, 0.14);
+  color: #f87171;
+}
+/* The dark brand is a light azure: dark ink keeps the label readable */
+[data-theme="dark"] .wr-link-apply,
+[data-theme="dark"] .wr-link-apply:hover {
+  color: #0d1a2b;
+}
+
+/* Glass: frosted fields, a lit primary button, glass hover on card buttons */
+html[data-fx="v2"] body[data-style="glass"][data-theme] .wr-link-input {
+  background: var(--glass-reflection), var(--glass-field);
+  border-color: var(--glass-divider);
+  box-shadow: inset 0 1px 3px rgb(var(--fx-ink) / 6%);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .wr-link-input:focus {
+  border-color: rgb(var(--fx-ind-rgb) / 60%);
+  box-shadow: inset 0 1px 3px rgb(var(--fx-ink) / 5%), 0 0 0 1px rgb(var(--fx-ind-rgb) / 40%),
+    0 0 14px -2px rgb(var(--fx-ind-rgb) / 40%);
+}
+/* The fields draw their own focus glow: no second ring from glass.css */
+html[data-fx="v2"] body[data-style="glass"][data-theme] .wr-link-input:focus-visible {
+  outline: none;
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .wr-link-row.is-invalid .wr-link-input {
+  border-color: rgb(220 38 38 / 70%);
+  box-shadow: inset 0 1px 3px rgb(var(--fx-ink) / 5%), 0 0 0 1px rgb(220 38 38 / 35%), 0 0 14px -3px rgb(220 38 38 / 45%);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .wr-link-apply {
+  background-image: radial-gradient(ellipse 60% 40% at 70% 0%, rgb(255 255 255 / 30%), transparent 100%);
+  box-shadow: var(--fx-lift-pill), inset -1px 1px 1px rgb(255 255 255 / 35%), 0 0 16px -4px rgb(var(--fx-ind-rgb) / 50%);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .wr-link-btn:not(.wr-link-apply):not(.wr-link-remove):hover,
+html[data-fx="v2"] body[data-style="glass"][data-theme] .wr-link-card-btn:not([data-act="remove"]):hover:not(:disabled) {
+  background: var(--glass-hover);
+  box-shadow: inset 0 0 0 1px var(--glass-divider);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .wr-link-card-sep {
+  background: var(--glass-divider);
+}
+
+/* Phones / touch: full-width editor, 16px inputs (no iOS zoom), bigger targets */
+@media (max-width: 480px) {
+  .wr-link-pop {
+    width: calc(100vw - 16px);
+  }
+  .wr-link-input {
+    font-size: 16px;
+  }
+}
+@media (hover: none), (max-width: 480px) {
+  .wr-link-hint {
+    display: none;
+  }
+}
+@media (pointer: coarse) {
+  .wr-link-card-btn {
+    width: 36px;
+    height: 36px;
+  }
+  .wr-link-btn {
+    min-height: 38px;
+  }
+  .wr-link-icon-btn {
+    width: 38px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wr-link-editor.is-shaking {
+    animation: none;
+  }
+}
+
+
+
+/* ==========================================================================
+   9. PASTE (links agent)
+   ========================================================================== */
+
+
+
+/* ==========================================================================
+   10. FIND & REPLACE (find agent)
+   ========================================================================== */
+/* The bar sits right under the editor's toolbar (outside the contenteditable) */
+.wr-find {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  flex-shrink: 0;
+  min-width: 0;
+  margin: 0 0 8px;
+  padding: 5px 6px;
+  box-sizing: border-box;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.3;
+  container-type: inline-size;
+  animation: wrFindIn 0.16s cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+@keyframes wrFindIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: none; }
+}
+.wr-find-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+}
+.wr-find-row[hidden] {
+  display: none;
+}
+.wr-find-spacer {
+  flex: 0 0 28px;
+}
+
+/* Query / replacement fields (both rows' fields line up) */
+.wr-find-field {
+  flex: 1 1 110px;
+  min-width: 0;
+  max-width: 540px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 30px;
+  padding: 0 3px 0 8px;
+  box-sizing: border-box;
+  overflow: hidden;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 8px;
+  background: var(--card);
+  cursor: text;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.wr-find-field:focus-within {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px rgb(44 123 229 / 16%);
+}
+.wr-find-field-icon {
+  flex-shrink: 0;
+  color: var(--muted);
+}
+/* .wr-find prefix: beats the app's [data-theme="dark"] input / form-field input rules */
+.wr-find .wr-find-input {
+  flex: 1 1 auto;
+  width: 0;
+  min-width: 28px;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+}
+.wr-find-input::placeholder {
+  color: var(--muted);
+  opacity: 0.85;
+}
+.wr-find-count {
+  flex-shrink: 0;
+  padding: 0 3px;
+  font-size: 11.5px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.wr-find-count:empty {
+  display: none;
+}
+.wr-find-count[data-empty="true"] {
+  color: #dc2626;
+}
+
+/* Match case / whole word: pressed = tinted with the brand */
+.wr-find-opt {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 25px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.wr-find-opt:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--text);
+}
+.wr-find-opt[aria-pressed="true"] {
+  color: var(--brand);
+  background: rgb(44 123 229 / 12%);
+  border-color: rgb(44 123 229 / 38%);
+}
+.wr-find-aa {
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+.wr-find-ww {
+  font-size: 10.5px;
+  font-weight: 650;
+  line-height: 1;
+  padding: 0 2px 1px;
+  border: 1.5px solid currentColor;
+  border-top: 0;
+  border-radius: 0 0 3px 3px;
+}
+
+/* Icon buttons (replace toggle, previous / next, close) */
+.wr-find-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.wr-find-btn:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--text);
+}
+.wr-find-btn:disabled {
+  opacity: 0.38;
+  cursor: default;
+}
+.wr-find-toggle .wr-find-toggle-chevron {
+  transition: transform 0.16s ease;
+}
+.wr-find-toggle[aria-expanded="true"] .wr-find-toggle-chevron {
+  transform: rotate(90deg);
+}
+.wr-find-toggle .wr-find-toggle-glyph {
+  display: none;
+}
+.wr-find-nav {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  flex-shrink: 0;
+}
+/* × keeps the far end */
+.wr-find-close {
+  margin-left: auto;
+}
+
+/* Replace / Replace all */
+.wr-find-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.wr-find-action {
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.wr-find-action:hover:not(:disabled) {
+  border-color: var(--brand);
+  color: var(--brand);
+}
+.wr-find-action:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+/* Narrow editors: Replace / Replace all get their own line, on the right */
+@container (max-width: 400px) {
+  .wr-find-replace-row .wr-find-actions {
+    flex: 1 0 100%;
+    justify-content: flex-end;
+  }
+}
+/* Narrow columns (task description on a phone): the query gets the whole
+   first line; the replace toggle joins previous / next under it */
+@container (max-width: 340px) {
+  .wr-find-spacer {
+    display: none;
+  }
+  .wr-find .wr-find-row .wr-find-field { /* beats the phone flex-basis */
+    flex-basis: 100%;
+    max-width: none;
+  }
+  .wr-find-toggle { order: 2; }
+  .wr-find-nav { order: 3; }
+  .wr-find-close { order: 4; }
+  /* Beside ↑ ↓ a chevron would read as a third arrow: the replace glyph, tinted while shown */
+  .wr-find-toggle .wr-find-toggle-chevron { display: none; }
+  .wr-find-toggle .wr-find-toggle-glyph { display: block; }
+  .wr-find .wr-find-toggle[aria-expanded="true"] {
+    color: var(--brand);
+    background: color-mix(in srgb, var(--brand) 14%, transparent);
+  }
+}
+/* Very narrow columns (the Meetings form on a phone): everything compacts */
+@container (max-width: 250px) {
+  .wr-find-field-icon {
+    display: none;
+  }
+  .wr-find-field {
+    padding-left: 6px;
+  }
+  .wr-find-opt {
+    width: 21px;
+  }
+  .wr-find-replace-row .wr-find-actions {
+    flex-wrap: wrap;
+  }
+  .wr-find-action {
+    flex: 1 1 auto;
+    padding: 0 6px;
+  }
+  .wr-find .wr-find-row .wr-find-btn {
+    width: 26px;
+  }
+}
+@container (max-width: 170px) {
+  .wr-find-opt { display: none; }
+  .wr-find-row { gap: 2px; }
+}
+
+/* Where it sits: a sub-toolbar row in Projects; the Ideas column already has a gap */
+.projects-editor-wrap > .wr-find {
+  margin: 0;
+  padding: 6px 16px;
+  border-width: 0 0 1px;
+  border-radius: 0;
+  background: transparent;
+}
+.ideas-editor-section > .wr-find {
+  margin: 0;
+}
+
+/* Matches (CSS Custom Highlight API: nothing is written into the text) */
+::highlight(wr-find) {
+  background-color: rgb(255 176 32 / 34%);
+}
+::highlight(wr-find-current) {
+  background-color: rgb(255 138 0 / 62%);
+  text-decoration: underline 2px rgb(234 88 12);
+}
+
+[data-theme="dark"] .wr-find {
+  border-color: #475569;
+}
+[data-theme="dark"] :is(.wr-find-field, .wr-find-action) {
+  border-color: rgba(255, 255, 255, 0.14);
+}
+[data-theme="dark"] :is(.wr-find-btn:hover:not(:disabled), .wr-find-opt:hover) {
+  background: rgba(255, 255, 255, 0.1);
+}
+[data-theme="dark"] .wr-find-opt[aria-pressed="true"] {
+  background: rgb(166 200 245 / 16%);
+  border-color: rgb(166 200 245 / 40%);
+}
+[data-theme="dark"] .wr-find-field:focus-within {
+  box-shadow: 0 0 0 3px rgb(166 200 245 / 18%);
+}
+[data-theme="dark"] .wr-find-count[data-empty="true"] {
+  color: #f87171;
+}
+[data-theme="dark"] ::highlight(wr-find) {
+  background-color: rgb(251 191 36 / 24%);
+}
+[data-theme="dark"] ::highlight(wr-find-current) {
+  background-color: rgb(251 146 60 / 52%);
+  text-decoration: underline 2px rgb(253 186 116);
+}
+
+/* Glass: a frosted strip with inset fields, like the toolbar pills */
+html[data-fx="v2"] body[data-style="glass"][data-theme] .wr-find {
+  background: var(--glass-field);
+  border-color: var(--glass-divider);
+  box-shadow: inset 0 1px 0 var(--glass-edge), 0 1px 2px rgb(var(--fx-ink, 34 40 52) / 5%);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .projects-editor-wrap > .wr-find {
+  background: transparent;
+  box-shadow: none;
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] :is(.wr-find-field, .wr-find-action) {
+  background: var(--glass-field);
+  border-color: var(--glass-divider);
+  box-shadow: inset 0 1px 3px rgb(40 46 56 / 5%), 0 1px 0 var(--glass-edge);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .wr-find-field:focus-within {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 22%, transparent), 0 1px 0 var(--glass-edge);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .wr-find-action:hover:not(:disabled) {
+  background: var(--glass-hover);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .wr-find-opt[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--brand) 16%, transparent);
+  border-color: color-mix(in srgb, var(--brand) 42%, transparent);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .wr-find .wr-find-input {
+  height: 100%;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .wr-find .wr-find-input:focus-visible {
+  outline: none;
+}
+/* Keyboard focus ring drawn inside: the fields clip anything outside */
+html[data-fx="v2"] body[data-style="glass"][data-theme] .wr-find :is(.wr-find-opt, .wr-find-btn, .wr-find-action):focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: -2px;
+}
+
+/* Phones: roomier targets; the fields wrap onto their own line when narrow */
+body[data-device="mobile"] .wr-find-field {
+  height: 34px;
+  flex-basis: 140px;
+}
+body[data-device="mobile"] .wr-find .wr-find-input {
+  font-size: 16px; /* no zoom on focus (iOS) */
+}
+body[data-device="mobile"] .wr-find-btn {
+  width: 32px;
+  height: 32px;
+}
+body[data-device="mobile"] .wr-find-action {
+  height: 32px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wr-find,
+  .wr-find-toggle .wr-icon {
+    animation: none;
+    transition: none;
+  }
+}
+
+
+
+/* ==========================================================================
+   11. DOC TOOLS: status bar, outline (find agent)
+   ========================================================================== */
+/* Status bar: a quiet row under the editor ("248 words · … · ☑ 3/7").
+   Parts are separate spans so narrow editors drop the least useful first. */
+.wr-status {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  min-width: 0;
+  padding: 5px 4px 0;
+  overflow: hidden;
+  container-type: inline-size;
+  font-size: 11.5px;
+  line-height: 16px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  cursor: default;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.wr-status[hidden] {
+  display: none !important;
+}
+.wr-status-part:empty {
+  display: none;
+}
+.wr-status-part:not(:empty) ~ .wr-status-part:not(:empty)::before {
+  content: '·';
+  margin: 0 6px;
+  opacity: 0.75;
+}
+.wr-st-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.wr-st-check[hidden] {
+  display: none;
+}
+.wr-st-check-icon {
+  flex-shrink: 0;
+}
+.wr-st-check[data-complete="true"] {
+  color: #059669;
+}
+@container (max-width: 300px) {
+  .wr-st-chars { display: none; }
+}
+@container (max-width: 190px) {
+  .wr-st-read { display: none; }
+}
+
+/* On the left of the task description's ✓ / × row */
+.wr-status.wr-status-inline {
+  flex: 1 1 auto;
+  margin-right: auto;
+  padding: 0 2px;
+}
+/* Projects: a footer under the page, aligned with the text */
+.projects-editor-wrap > .wr-status {
+  padding: 6px 32px 7px;
+  border-top: 1px solid #e5e7eb;
+}
+/* Ideas: tucked under the editor (the column's gap is 12px) */
+.ideas-editor-section > .wr-status {
+  margin-top: -7px;
+}
+
+[data-theme="dark"] .projects-editor-wrap > .wr-status {
+  border-top-color: #475569;
+}
+[data-theme="dark"] .wr-st-check[data-complete="true"] {
+  color: #34d399;
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .projects-editor-wrap > .wr-status {
+  border-top-color: var(--glass-divider);
+}
+body[data-device="mobile"] .projects-editor-wrap > .wr-status {
+  padding-left: 16px;
+  padding-right: 16px;
+}
+
+/* Outline popover: H1-H3, indented by level, the current section marked */
+.wr-outline-menu {
+  min-width: 240px;
+  max-width: min(360px, calc(100vw - 16px));
+}
+.wr-outline-menu .wr-outline-item {
+  position: relative;
+  min-height: 30px;
+  padding-top: 3px;
+  padding-bottom: 3px;
+}
+.wr-outline-menu .wr-outline-l1 .wr-menu-label {
+  font-weight: 600;
+}
+.wr-outline-menu .wr-outline-l2 {
+  padding-left: 24px;
+}
+.wr-outline-menu .wr-outline-l3 {
+  padding-left: 40px;
+}
+.wr-outline-menu .wr-outline-l3 .wr-menu-label {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+/* Guide lines for nested levels */
+.wr-outline-menu :is(.wr-outline-l2, .wr-outline-l3)::after {
+  content: '';
+  position: absolute;
+  left: 14px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--wr-rule);
+}
+.wr-outline-menu .wr-outline-l3::after {
+  left: 28px;
+}
+.wr-outline-menu .wr-outline-item.is-active::before {
+  content: '';
+  position: absolute;
+  left: 3px;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--brand);
+}
+.wr-outline-menu .wr-outline-item.is-active .wr-menu-label {
+  color: var(--brand);
+}
+.wr-outline-menu .wr-outline-item.is-untitled .wr-menu-label {
+  font-style: italic;
+  color: var(--muted);
+}
+.wr-outline-menu .wr-outline-item .wr-menu-hint {
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  opacity: 0.7;
+}
+.wr-outline-menu .wr-menu-item.wr-outline-empty {
+  opacity: 1;
+  min-height: 44px;
+}
+.wr-outline-menu .wr-outline-empty .wr-menu-label {
+  font-weight: 600;
+}
+.wr-outline-menu .wr-outline-empty .wr-menu-desc {
+  white-space: normal;
+}
+
+/* The heading an outline pick jumped to glows for a moment */
+::highlight(wr-outline-flash) {
+  background-color: rgb(44 123 229 / 16%);
+}
+[data-theme="dark"] ::highlight(wr-outline-flash) {
+  background-color: rgb(166 200 245 / 20%);
+}
+
+
+
+/* ==========================================================================
+   12. FOCUS MODE (focus agent)
+   ========================================================================== */
+/* The sheet (body level; focus.js sets an inline z-index just above the
+   window the editor came from, --wr-z-focus otherwise). The editor, its
+   toolbar and the writing bars next to them are moved in and back out. */
+.wr-focus {
+  --wr-focus-col: 760px;
+  --wr-focus-veil: rgb(245 246 249 / 94%);
+  --wr-focus-veil-solid: rgb(245 246 249);
+  position: fixed;
+  inset: 0;
+  z-index: var(--wr-z-focus);
+  display: flex;
+  flex-direction: column;
+  background: var(--wr-focus-veil);
+  color: var(--text);
+  animation: wrFocusIn 0.22s cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+@keyframes wrFocusIn {
+  from { opacity: 0; transform: translateY(8px) scale(0.996); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Top row: what you're writing, and the way out */
+.wr-focus-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+  min-height: 52px;
+  padding: max(8px, env(safe-area-inset-top)) 20px 6px;
+  box-sizing: border-box;
+}
+.wr-focus-doc {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.wr-focus-kind {
+  flex-shrink: 0;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.wr-focus-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  opacity: 0.8;
+}
+.wr-focus-exit {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  flex-shrink: 0;
+  height: 32px;
+  padding: 0 7px 0 11px;
+  border: 1px solid var(--wr-rule);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.wr-focus-exit:hover {
+  border-color: color-mix(in srgb, var(--brand) 40%, var(--wr-rule));
+}
+.wr-focus-exit .wr-icon {
+  color: var(--muted);
+}
+.wr-focus-exit .wr-kbd kbd {
+  height: 18px;
+  min-width: 26px;
+}
+/* Typewriter toggle: quiet until on */
+.wr-focus-tw {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  flex-shrink: 0;
+  height: 32px;
+  padding: 0 12px 0 10px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.wr-focus-tw:hover {
+  background: var(--wr-row-hover);
+  color: var(--text);
+}
+.wr-focus-tw[aria-pressed="true"] {
+  border-color: color-mix(in srgb, var(--brand) 35%, transparent);
+  background: color-mix(in srgb, var(--brand) 12%, transparent);
+  color: var(--brand);
+}
+
+/* The toolbar (and find bar...) on one frosted pill, centered */
+.wr-focus-bar {
+  position: relative;
+  z-index: 2;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  width: min(960px, calc(100% - 32px));
+  margin: 0 auto 4px;
+  padding: 4px 6px;
+  border: 1px solid var(--wr-rule);
+  border-radius: 16px;
+  background: var(--card);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 4%), 0 14px 32px -20px rgb(30 41 59 / 30%);
+}
+.wr-focus-bar[hidden] {
+  display: none;
+}
+html body .wr-focus .wr-focus-bar > .wr-toolbar {
+  margin: 0 !important;
+  padding: 2px 2px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+/* Swatches open downward (the bar sits at the top of the screen) */
+.wr-focus .wr-focus-bar .highlighter-color-dropdown {
+  bottom: auto;
+  top: calc(100% + 6px);
+}
+
+/* The page: a centered column, the outline rail in the left margin */
+.wr-focus-scroll {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  /* Text softly fades out under the toolbar instead of being cut */
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 28px);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 28px);
+}
+.wr-focus-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, var(--wr-focus-col)) minmax(0, 1fr);
+  column-gap: 40px;
+  min-height: 100%;
+  padding: 0 28px;
+  box-sizing: border-box;
+  cursor: text;
+}
+.wr-focus-column {
+  grid-column: 2;
+  min-width: 0;
+  padding: 44px 0 56vh;   /* the last line can still reach the calm middle */
+}
+html body .wr-focus .wr-focus-column > .wr-editor {
+  display: block;
+  flex: none;
+  width: auto;
+  height: auto !important;
+  min-height: 50vh !important;
+  max-height: none !important;
+  overflow: visible !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  outline: none !important;
+  color: var(--text);
+  font-size: 18px;
+  line-height: 1.75;
+  letter-spacing: 0.002em;
+  caret-color: var(--brand);
+}
+html body .wr-focus .wr-focus-column > .wr-editor:focus-visible {
+  outline: none !important;
+}
+/* Checklist circles sit on the first line at the larger line height */
+.wr-focus .wr-focus-column > .wr-editor ul.checklist > li::before {
+  top: calc(0.875em - 8px);
+}
+
+/* Outline rail (doc-tools' api.outline, wide screens) */
+.wr-focus-rail {
+  grid-column: 1;
+  justify-self: end;
+  align-self: start;
+  position: sticky;
+  top: 0;
+  box-sizing: border-box;
+  width: 230px;
+  max-height: 100%;
+  padding: 48px 0 24px;
+  overflow-y: auto;
+  cursor: default;
+}
+.wr-focus-rail[hidden] {
+  display: none;
+}
+.wr-focus-rail-head {
+  padding: 0 12px 8px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.wr-focus-rail-item {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 1px 0;
+  padding: 5px 12px;
+  border: 0;
+  border-left: 2px solid transparent;
+  border-radius: 0 8px 8px 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.35;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.wr-focus-rail-item[data-level="2"] { padding-left: 24px; }
+.wr-focus-rail-item[data-level="3"] { padding-left: 36px; font-size: 12.5px; }
+.wr-focus-rail-item:hover {
+  background: var(--wr-row-hover);
+  color: var(--text);
+}
+.wr-focus-rail-item[aria-current] {
+  border-left-color: var(--brand);
+  color: var(--text);
+  font-weight: 600;
+}
+/* Inside the rail's scroll box: the ring sits inside the row */
+html[data-fx="v2"] body[data-style="glass"][data-theme] .wr-focus-rail-item:focus-visible,
+.wr-focus-rail-item:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: -2px;
+}
+.wr-focus-rail-empty {
+  padding: 2px 12px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+/* Status line etc. float at the bottom of the page */
+.wr-focus-foot {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1;
+  display: flex;
+  justify-content: center;
+  padding: 18px 16px max(10px, env(safe-area-inset-bottom));
+  background: linear-gradient(to top, var(--wr-focus-veil-solid) 35%, transparent);
+  pointer-events: none;
+}
+.wr-focus-foot:empty {
+  display: none;
+}
+.wr-focus-foot > * {
+  pointer-events: auto;
+  max-width: var(--wr-focus-col);
+  width: 100%;
+  margin: 0 !important;
+}
+
+/* While typing the chrome steps back; a real mouse move brings it back */
+.wr-focus-top,
+.wr-focus-bar,
+.wr-focus-rail,
+.wr-focus-foot {
+  transition: opacity 0.2s ease;
+}
+.wr-focus[data-typing] :is(.wr-focus-top, .wr-focus-bar) {
+  opacity: 0;
+  transition-duration: 0.8s;
+}
+.wr-focus[data-typing] .wr-focus-rail {
+  opacity: 0.35;
+  transition-duration: 0.8s;
+}
+.wr-focus[data-typing] .wr-focus-foot {
+  opacity: 0.6;
+  transition-duration: 0.8s;
+}
+.wr-focus[data-typing] .wr-focus-bar:focus-within {
+  opacity: 1;
+}
+/* Touch screens have no mouse to bring it back: keep it */
+@media (hover: none) {
+  .wr-focus[data-typing] :is(.wr-focus-top, .wr-focus-bar, .wr-focus-rail, .wr-focus-foot) {
+    opacity: 1;
+  }
+}
+
+/* Dark */
+[data-theme="dark"] .wr-focus {
+  --wr-focus-veil: rgb(16 20 28 / 95%);
+  --wr-focus-veil-solid: rgb(16 20 28);
+}
+[data-theme="dark"] .wr-focus-bar {
+  box-shadow: 0 1px 2px rgb(0 0 0 / 30%), 0 16px 36px -20px rgb(0 0 0 / 60%);
+}
+/* Long reading on a dark page: the ink a touch softer than pure white */
+[data-theme="dark"] .wr-focus .wr-focus-column > .wr-editor {
+  color: color-mix(in srgb, var(--text) 88%, var(--wr-focus-veil-solid));
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Glass: a calm frosted sheet over the dashboard, the pill and the Exit
+   button on the same frosted fields as the dialogs */
+html[data-fx="v2"] body[data-style="glass"][data-theme] .wr-focus {
+  background:
+    radial-gradient(ellipse 60% 45% at 88% 0%, rgb(var(--fx-a1) / 16%), transparent 70%),
+    radial-gradient(ellipse 55% 45% at 0% 100%, rgb(var(--fx-a3) / 13%), transparent 70%),
+    var(--wr-focus-veil);
+  -webkit-backdrop-filter: blur(22px) saturate(120%);
+  backdrop-filter: blur(22px) saturate(120%);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .wr-focus-bar {
+  background: var(--glass-reflection), var(--glass-field);
+  border-color: var(--glass-edge);
+  box-shadow: var(--fx-lift-pill), var(--glass-rim);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .wr-focus-exit {
+  background: var(--glass-reflection), var(--glass-field);
+  border-color: var(--glass-divider);
+  box-shadow: var(--fx-lift-pill), var(--glass-rim);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .wr-focus-exit:hover {
+  background: var(--glass-reflection), var(--glass-hover);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .wr-focus-rail-item:hover,
+html[data-fx="v2"] body[data-style="glass"][data-theme] .wr-focus-tw:not([aria-pressed="true"]):hover {
+  background: var(--glass-hover);
+}
+
+/* Phones: a full-screen sheet, the toolbar wraps, slightly smaller type */
+@media (max-width: 760px) {
+  .wr-focus-top {
+    min-height: 48px;
+    padding: max(6px, env(safe-area-inset-top)) 12px 4px;
+  }
+  .wr-focus-exit .wr-kbd {
+    display: none;
+  }
+  .wr-focus-exit {
+    padding: 0 12px 0 10px;
+  }
+  .wr-focus-tw {
+    width: 34px;
+    padding: 0;
+    justify-content: center;
+  }
+  .wr-focus-tw-label {
+    display: none;
+  }
+  .wr-focus-bar {
+    width: calc(100% - 16px);
+    border-radius: 14px;
+    padding: 3px 4px;
+  }
+  .wr-focus-layout {
+    padding: 0 18px;
+    column-gap: 0;
+  }
+  .wr-focus-column {
+    padding: 22px 0 50vh;
+  }
+  html body .wr-focus .wr-focus-column > .wr-editor {
+    font-size: 17px;
+    line-height: 1.7;
+  }
+  .wr-focus .wr-focus-column > .wr-editor ul.checklist > li::before {
+    top: calc(0.85em - 8px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wr-focus {
+    animation: none;
+  }
+  .wr-focus-top,
+  .wr-focus-bar,
+  .wr-focus-rail,
+  .wr-focus-foot {
+    transition: none;
+  }
+}
+@media (prefers-reduced-transparency: reduce) {
+  html[data-fx="v2"] body[data-style="glass"][data-theme] .wr-focus {
+    background: var(--wr-focus-veil-solid);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+
+
+/* ==========================================================================
+   13. (removed: version history was dropped)
+   ========================================================================== */
+
+
+
+/* ==========================================================================
+   14. EXPORT + TEMPLATES (export agent)
+   ========================================================================== */
+/* Export ▾ menu (toolbars + views) and the Templates menu */
+.wr-export-menu {
+  min-width: 260px;
+}
+.wr-pop.wr-template-menu {
+  width: 340px;
+  max-height: min(520px, calc(100vh - 16px));
+}
+.wr-template-menu .wr-menu-item {
+  min-height: 40px;
+  padding-top: 5px;
+  padding-bottom: 5px;
+}
+/* Descriptions wrap to two lines instead of being cut */
+.wr-template-menu .wr-menu-desc {
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  line-height: 1.3;
+}
+
+/* Views: Export ▾ in the actions row (note viewer, meetings, ideas, task) */
+.wr-view-export {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  flex-shrink: 0;
+  height: 28px;
+  padding: 0 4px 0 6px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, opacity 0.15s ease, border-color 0.15s ease;
+}
+.wr-view-export.meetings-view-icon-btn,
+.wr-view-export.ideas-view-icon-btn {
+  width: auto;
+  padding: 0 4px 0 6px;
+}
+.wr-view-export:hover,
+.wr-view-export[aria-expanded="true"] {
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--text);
+}
+.wr-view-export:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 1px;
+}
+.wr-view-export .wr-tb-caret {
+  opacity: 0.6;
+}
+/* Note viewer: the same quiet icons as Edit / Delete */
+.note-viewer-actions .wr-view-export {
+  opacity: 0.7;
+}
+.note-viewer-actions .wr-view-export:hover,
+.note-viewer-actions .wr-view-export[aria-expanded="true"] {
+  opacity: 1;
+}
+/* Task description: a labeled pill next to "Edit" */
+.wr-view-export.wr-view-export-labeled {
+  gap: 6px;
+  height: auto;
+  padding: 6px 10px 6px 12px;
+  border: 1px solid #e5e7eb;
+  background: transparent;
+}
+.wr-view-export.wr-view-export-labeled:hover,
+.wr-view-export.wr-view-export-labeled[aria-expanded="true"] {
+  background: transparent;
+  color: var(--brand);
+  border-color: var(--brand);
+}
+.wr-view-export-labeled .wr-icon:first-child {
+  width: 14px;
+  height: 14px;
+}
+[data-theme="dark"] .wr-view-export:hover,
+[data-theme="dark"] .wr-view-export[aria-expanded="true"] {
+  background: rgba(255, 255, 255, 0.1);
+}
+[data-theme="dark"] .wr-view-export.wr-view-export-labeled {
+  border-color: #475569;
+  background: transparent;
+}
+[data-theme="dark"] .wr-view-export.wr-view-export-labeled:hover,
+[data-theme="dark"] .wr-view-export.wr-view-export-labeled[aria-expanded="true"] {
+  border-color: var(--brand);
+  background: transparent;
+}
+
+/* "Start with a template": an overlay under an empty editor's placeholder
+   (outside the contenteditable; export.js positions it). The zero-height
+   anchor sits right after the editor, so the row scrolls and clips with it */
+.wr-tpl-hint-anchor {
+  position: relative;
+  flex: none;
+  align-self: stretch;
+  height: 0;
+  margin: 0;
+  padding: 0;
+  overflow: visible;
+}
+.wr-tpl-hint-anchor[hidden] {
+  display: none;
+}
+.wr-tpl-hint {
+  position: absolute;
+  left: 0;
+  top: 0;
+  margin: 0;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  pointer-events: none;
+  animation: wrTplHintIn 0.22s ease both;
+}
+.wr-tpl-hint > [hidden] {
+  display: none;
+}
+@keyframes wrTplHintIn {
+  from { opacity: 0; transform: translateY(3px); }
+  to { opacity: 1; transform: none; }
+}
+.wr-tpl-hint > button {
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--wr-rule);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--muted);
+  font: inherit;
+  font-size: 12.5px;
+  font-style: normal;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.wr-tpl-hint > button .wr-icon {
+  flex-shrink: 0;
+}
+/* Narrow editors: a chip never runs past the editor (its label shortens) */
+.wr-tpl-hint > button {
+  max-width: 100%;
+  min-width: 0;
+}
+.wr-tpl-hint > button > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.wr-tpl-hint > .wr-tpl-start {
+  color: var(--text);
+  font-weight: 500;
+  padding-right: 8px;
+}
+.wr-tpl-hint > .wr-tpl-start .wr-icon:first-child {
+  color: var(--brand);
+}
+.wr-tpl-hint > button:hover,
+.wr-tpl-hint > button[aria-expanded="true"] {
+  color: var(--brand);
+  border-color: rgba(44, 123, 229, 0.45);
+  background: rgba(44, 123, 229, 0.06);
+}
+.wr-tpl-hint > button:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 1px;
+}
+[data-theme="dark"] .wr-tpl-hint > button:hover,
+[data-theme="dark"] .wr-tpl-hint > button[aria-expanded="true"] {
+  border-color: rgba(96, 165, 250, 0.5);
+  background: rgba(96, 165, 250, 0.1);
+}
+
+/* Glass: frosted chips like the editor's fields */
+html[data-fx="v2"] body[data-style="glass"][data-theme] .wr-tpl-hint > button {
+  background: var(--glass-field);
+  border-color: var(--glass-divider);
+  -webkit-backdrop-filter: blur(10px) saturate(130%);
+  backdrop-filter: blur(10px) saturate(130%);
+  box-shadow: 0 1px 0 var(--glass-edge), 0 4px 12px -8px rgb(var(--fx-ink) / 30%);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .wr-tpl-hint > button:hover,
+html[data-fx="v2"] body[data-style="glass"][data-theme] .wr-tpl-hint > button[aria-expanded="true"] {
+  background: var(--glass-hover);
+  border-color: var(--glass-edge);
+  color: var(--brand);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .wr-view-export.wr-view-export-labeled {
+  border-color: var(--glass-divider);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .wr-view-export.wr-view-export-labeled:hover,
+html[data-fx="v2"] body[data-style="glass"][data-theme] .wr-view-export.wr-view-export-labeled[aria-expanded="true"] {
+  border-color: var(--brand);
+}
+
+/* Phones: slimmer chips */
+body[data-device="mobile"] .wr-tpl-hint > button {
+  height: 28px;
+  padding: 0 9px;
+  font-size: 12px;
+}
+
+/* Motion / transparency guards for this section (kept here so section 18 stays untouched) */
+@media (prefers-reduced-motion: reduce) {
+  .wr-tpl-hint {
+    animation: none;
+  }
+}
+@media (prefers-reduced-transparency: reduce) {
+  html[data-fx="v2"] body[data-style="glass"][data-theme] .wr-tpl-hint > button {
+    background: var(--card);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+
+
+/* ==========================================================================
+   15. HELP: commands reference, preferences (help agent)
+   ========================================================================== */
+/* #wr-help: one glass dialog (z 10060: above every editor modal, below the
+   writing menus and quick capture). Fixed height, so switching tabs or
+   searching never makes it jump. Open animation is transform only (opacity
+   on a glass pane cuts off its backdrop sampling). */
+.wr-help {
+  position: fixed;
+  inset: 0;
+  z-index: var(--wr-z-help);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+.wr-help[hidden] { display: none; }
+.wr-help-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.3);
+}
+.wr-help-dialog {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 780px;
+  max-width: 100%;
+  height: min(86vh, 800px);
+  max-height: 100%;
+  overflow: hidden;
+  background: var(--card);
+  color: var(--text);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 22px;
+  box-shadow: 0 24px 60px -20px rgba(0, 0, 0, 0.35);
+  outline: none;
+  font-size: 13px;
+  line-height: 1.4;
+  /* Inter draws "->" as an arrow (contextual alternates): show what you type */
+  font-feature-settings: 'calt' 0;
+}
+.wr-help.open .wr-help-dialog { animation: wrHelpIn 0.18s cubic-bezier(0.2, 0.8, 0.3, 1); }
+@keyframes wrHelpIn {
+  from { transform: translateY(10px) scale(0.985); }
+  to { transform: none; }
+}
+
+/* Header + search */
+.wr-help-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 14px 4px 22px;
+  flex-shrink: 0;
+}
+.wr-help-heading { min-width: 0; }
+.wr-help-header h4 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.wr-help-sub {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.wr-help-sub[hidden] { display: none; }
+.wr-help-close {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.wr-help-close:hover,
+.wr-help-close:focus-visible { color: var(--text); background: var(--glass-hover, rgba(0, 0, 0, 0.06)); }
+.wr-help-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 18px 2px;
+  padding: 0 12px;
+  height: 40px;
+  border: 1px solid var(--glass-divider, rgba(0, 0, 0, 0.1));
+  border-radius: 12px;
+  background: var(--glass-field, #f8fafc);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  flex-shrink: 0;
+}
+.wr-help-search:focus-within {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px rgba(66, 105, 155, 0.14);
+}
+.wr-help-search-icon {
+  display: inline-flex;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+/* Two classes: beats the dark theme's plain input fill (styles.css) */
+.wr-help-search .wr-help-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  outline: none;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+}
+.wr-help-search .wr-help-input::-webkit-search-cancel-button { cursor: pointer; }
+
+/* Tabs: pills (one scrolling row on phones) */
+.wr-help-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 18px 10px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  flex-shrink: 0;
+}
+.wr-help-tabs::-webkit-scrollbar { display: none; }
+.wr-help-tab {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 11px;
+  border: 1px solid var(--glass-divider, rgba(0, 0, 0, 0.1));
+  border-radius: 999px;
+  background: var(--glass-field, #f8fafc);
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+}
+.wr-help-tab:hover { color: var(--text); }
+.wr-help-tab.is-active {
+  color: var(--brand);
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px rgba(66, 105, 155, 0.12);
+}
+.wr-help-tab.is-empty { opacity: 0.5; }
+.wr-help-tab-count {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
+  background: rgba(66, 105, 155, 0.14);
+  color: var(--brand);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+}
+.wr-help-tab-count[hidden] { display: none; }
+.wr-help-tab.is-empty .wr-help-tab-count {
+  background: var(--wr-chip-bg);
+  color: var(--muted);
+}
+
+/* Body */
+.wr-help-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 2px 22px 18px;
+  border-top: 1px solid var(--glass-divider, rgba(0, 0, 0, 0.06));
+  outline: none;
+}
+/* Keyboard users can Tab here to scroll with the arrows */
+.wr-help-body:focus-visible { box-shadow: inset 0 0 0 2px rgba(66, 105, 155, 0.35); }
+.wr-help-intro {
+  margin: 12px 0 2px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.wr-help-intro-off { font-style: italic; }
+.wr-help-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--brand);
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.wr-help-group-title {
+  margin: 16px 0 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.wr-help-note {
+  margin: 0 0 6px;
+  padding: 6px 10px;
+  border-radius: 9px;
+  background: rgba(234, 179, 8, 0.12);
+  font-size: 12px;
+  color: var(--text);
+}
+
+/* Rows: hairline between rows, a soft lens on hover / the picked row */
+.wr-help-row {
+  display: grid;
+  align-items: center;
+  column-gap: 12px;
+  row-gap: 4px;
+  margin: 0 -8px;
+  padding: 7px 8px;
+  border-radius: 10px;
+  background-image: linear-gradient(var(--glass-divider, rgba(0, 0, 0, 0.06)), var(--glass-divider, rgba(0, 0, 0, 0.06)));
+  background-size: calc(100% - 16px) 1px;
+  background-position: 8px 0;
+  background-repeat: no-repeat;
+}
+.wr-help-row:first-child { background-image: none; }
+.wr-help-row.is-runnable { cursor: default; }
+.wr-help-row.is-selected,
+.wr-help-row.is-selected + .wr-help-row { background-image: none; }
+.wr-help-row.is-selected { background-color: var(--wr-row-hover); }
+.wr-help-row.is-off { opacity: 0.48; }
+.wr-help-row.is-paused .wr-help-syntax,
+.wr-help-row.is-paused .wr-help-label { opacity: 0.6; }
+
+.wr-help-cmd { grid-template-columns: 26px minmax(0, 1fr) auto; }
+.wr-help-md { grid-template-columns: minmax(140px, 30%) minmax(0, 1fr); }
+.wr-help-icon {
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 7px;
+  border: 1px solid var(--wr-rule);
+  background: var(--wr-chip-bg);
+  color: var(--muted);
+}
+.wr-help-row.is-selected .wr-help-icon { color: var(--brand); }
+.wr-help-main { min-width: 0; }
+.wr-help-label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 8px;
+  font-size: 13.5px;
+  font-weight: 500;
+}
+.wr-help-hint {
+  margin-top: 1px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.wr-help-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 7px;
+  border: 1px solid var(--wr-rule);
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.wr-help-side {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px 8px;
+  min-width: 0;
+}
+.wr-help-keys,
+.wr-help-chips,
+.wr-help-syntax {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+}
+.wr-help-syntax { gap: 6px; }
+.wr-help-or {
+  font-size: 11px;
+  color: var(--muted);
+}
+.wr-help-dialog .wr-kbd kbd {
+  height: 20px;
+  min-width: 20px;
+  font-size: 11px;
+  color: var(--text);
+}
+.wr-help-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 7px;
+  box-sizing: border-box;
+  border: 1px solid var(--glass-divider, rgba(0, 0, 0, 0.1));
+  border-radius: 7px;
+  background: var(--glass-field, rgba(0, 0, 0, 0.05));
+  color: var(--text);
+  font-family: var(--wr-mono);
+  font-size: 12px;
+  line-height: 1;
+  white-space: pre;
+  /* show what to type: no -> arrow ligature in coding fonts */
+  font-variant-ligatures: none;
+  font-feature-settings: 'liga' 0, 'calt' 0;
+}
+.wr-help-chip.is-slash { color: var(--brand); }
+.wr-help-chip.is-gesture {
+  font-family: inherit;
+  font-weight: 600;
+  font-size: 11.5px;
+}
+button.wr-help-chip {
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+button.wr-help-chip:hover,
+button.wr-help-chip:focus-visible {
+  border-color: var(--brand);
+  color: var(--brand);
+}
+.wr-help-space {
+  color: var(--muted);
+  opacity: 0.7;
+  font-size: 11px;
+}
+.wr-help-run {
+  visibility: hidden;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 9px;
+  border: 1px solid var(--brand);
+  border-radius: 999px;
+  background: var(--brand);
+  color: #fff;
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.wr-help-row.is-selected .wr-help-run { visibility: visible; }
+.wr-help-arrow {
+  color: var(--muted);
+  font-size: 12px;
+}
+.wr-help-glyph {
+  font-size: 17px;
+  line-height: 1;
+}
+.wr-help-qc .wr-help-syntax :where(.qc-code) { line-height: 1.5; }
+mark.wr-help-hit {
+  background: rgba(66, 105, 155, 0.18);
+  color: inherit;
+  border-radius: 3px;
+  padding: 0 1px;
+}
+
+/* Preferences: label rows with the Settings switch */
+.wr-help-pref {
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding-top: 10px;
+  padding-bottom: 10px;
+  cursor: pointer;
+}
+.wr-help-pref:hover { background-color: var(--wr-row-hover); }
+.wr-help-pref .appearance-toggle-slider { box-shadow: inset 0 0 0 1px var(--wr-rule); }
+.wr-help-pref .appearance-toggle-switch input:focus-visible + .appearance-toggle-slider {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+.wr-help-prefs-foot {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+.wr-help-reset {
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--glass-divider, rgba(0, 0, 0, 0.1));
+  border-radius: 999px;
+  background: var(--glass-field, #f8fafc);
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.wr-help-reset:disabled { opacity: 0.45; cursor: default; }
+
+/* Empty search */
+.wr-help-empty {
+  padding: 48px 12px;
+  text-align: center;
+}
+.wr-help-empty-title {
+  font-size: 14px;
+  font-weight: 600;
+}
+.wr-help-empty-hint {
+  margin-top: 6px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+/* Footer: keyboard hints (hidden on phones) */
+.wr-help-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 16px;
+  min-height: 20px;
+  padding: 9px 22px 11px;
+  border-top: 1px solid var(--glass-divider, rgba(0, 0, 0, 0.06));
+  font-size: 11.5px;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+.wr-help-foot-text:empty { display: none; }
+.wr-help-foot-keys { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.wr-help-foot-keys:empty { display: none; }
+.wr-help-foot-esc { margin-left: auto; display: inline-flex; align-items: center; gap: 4px; }
+.wr-help-footer .wr-kbd kbd { height: 18px; min-width: 18px; font-size: 10.5px; }
+.wr-help-live {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Settings: one more section (Writing & shortcuts) must never push the
+   dialog off a short screen */
+#appearance-modal .appearance-dialog {
+  display: flex;
+  flex-direction: column;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 32px);
+  max-height: calc(100dvh - 32px);
+}
+#appearance-modal .appearance-body {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* Phones: full-height sheet, rows stack, no keyboard hints */
+@media (max-width: 600px) {
+  .wr-help { padding: 10px; }
+  .wr-help-dialog {
+    height: 100%;
+    border-radius: 20px;
+  }
+  .wr-help-header { padding: 14px 10px 2px 16px; }
+  .wr-help-search { margin: 8px 12px 2px; }
+  .wr-help-tabs { padding: 10px 12px; flex-wrap: nowrap; }
+  .wr-help-body { padding: 2px 16px 16px; }
+  .wr-help-cmd { grid-template-columns: 26px minmax(0, 1fr); }
+  .wr-help-cmd .wr-help-side {
+    grid-column: 2 / -1;
+    justify-content: flex-start;
+  }
+  .wr-help-md { grid-template-columns: minmax(0, 1fr); }
+  .wr-help-pref { grid-template-columns: minmax(0, 1fr) auto; }
+  .wr-help-footer { padding: 8px 16px 10px; }
+}
+.wr-help-touchhint { display: none; }
+body[data-device="mobile"] .wr-help-keyhint { display: none; }
+body[data-device="mobile"] .wr-help-touchhint:not(:empty) { display: inline; }
+/* Nothing left to say there: no empty strip under the list */
+body[data-device="mobile"] .wr-help-footer:not(:has(.wr-help-touchhint:not(:empty))) { display: none; }
+@media (hover: none) and (pointer: coarse) {
+  .wr-help-keyhint { display: none; }
+  .wr-help-touchhint:not(:empty) { display: inline; }
+  .wr-help-footer:not(:has(.wr-help-touchhint:not(:empty))) { display: none; }
+}
+
+/* Dark (base) */
+[data-theme="dark"] .wr-help-dialog { border-color: rgba(255, 255, 255, 0.1); }
+/* Light text on dark reads heavier: one step lighter keeps the rows calm */
+[data-theme="dark"] .wr-help-label { font-weight: 400; }
+[data-theme="dark"] .wr-help-backdrop { background: rgba(2, 6, 14, 0.5); }
+[data-theme="dark"] .wr-help-tab-count,
+[data-theme="dark"] mark.wr-help-hit { background: rgba(166, 200, 245, 0.18); }
+[data-theme="dark"] .wr-help-tab-count { color: #a9c8f5; }
+[data-theme="dark"] .wr-help-tab.is-active,
+[data-theme="dark"] .wr-help-chip.is-slash { color: #a9c8f5; }
+[data-theme="dark"] .wr-help-note { background: rgba(234, 179, 8, 0.14); }
+[data-theme="dark"] .wr-help-run { color: #0b1324; }
+
+/* Glass: the same pane, rim and top glint as the other dialogs (glass-fx 11),
+   glass fields, and the lit azure state on the selected tab / Run */
+html[data-fx="v2"] body[data-style="glass"][data-theme] .wr-help-backdrop {
+  background: var(--glass-scrim);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .wr-help-dialog {
+  background:
+    linear-gradient(90deg, transparent 6%, rgb(var(--fx-cyan) / 44%) 30%, rgb(var(--fx-violet) / 44%) 55%, rgb(var(--fx-pink) / 36%) 78%, transparent 96%) top / 100% 1px no-repeat,
+    radial-gradient(ellipse 180px 60px at calc(100% - 40px) 0%, var(--fx-dialog-glint), transparent 100%),
+    var(--glass-reflection), var(--glass-dialog);
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--radius, 22px);
+  box-shadow: var(--fx-lift-dialog), var(--glass-rim), inset -18px 18px 40px -30px rgb(255 255 255 / 40%);
+  -webkit-backdrop-filter: blur(36px) saturate(145%);
+  backdrop-filter: blur(36px) saturate(145%);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .wr-help-search {
+  background: var(--glass-reflection), var(--glass-field);
+  border-color: var(--glass-divider);
+  box-shadow: inset 0 1px 3px rgb(var(--fx-ink) / 6%);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .wr-help-search:focus-within {
+  border-color: rgb(var(--fx-ind-rgb) / 60%);
+  box-shadow: inset 0 1px 3px rgb(var(--fx-ink) / 5%), 0 0 0 1px rgb(var(--fx-ind-rgb) / 40%), 0 0 14px -2px rgb(var(--fx-ind-rgb) / 40%);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .wr-help-search .wr-help-input:focus-visible { outline: none; }
+html[data-fx="v2"] body[data-style="glass"][data-theme] :is(.wr-help-tab, .wr-help-reset) {
+  background: var(--glass-reflection), var(--glass-field);
+  border-color: var(--glass-divider);
+  box-shadow: var(--fx-lift-pill), var(--glass-rim);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] :is(.wr-help-tab, .wr-help-reset:not(:disabled)):hover {
+  background: var(--glass-reflection), var(--glass-hover);
+  box-shadow: var(--fx-lift-pill-hover), var(--glass-rim);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .wr-help-tab.is-active {
+  border-color: rgb(var(--fx-ind-rgb) / 70%);
+  background: radial-gradient(ellipse 70% 60% at 70% 0%, rgb(var(--fx-ind-rgb) / 18%), transparent 100%),
+    var(--glass-reflection), var(--glass-field);
+  box-shadow: var(--fx-lift-pill-hover), var(--glass-rim), 0 0 0 1px rgb(var(--fx-ind-rgb) / 35%),
+    0 0 18px -4px rgb(var(--fx-ind-rgb) / 55%);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .wr-help-tab.is-empty { box-shadow: var(--glass-rim); }
+html[data-fx="v2"] body[data-style="glass"][data-theme] :is(.wr-help-body, .wr-help-footer) { border-color: var(--glass-divider); }
+html[data-fx="v2"] body[data-style="glass"][data-theme] :is(.wr-help-icon, .wr-help-chip) {
+  background: var(--glass-reflection), var(--glass-field);
+  border-color: var(--glass-divider);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .wr-help-row.is-selected,
+html[data-fx="v2"] body[data-style="glass"][data-theme] .wr-help-pref:hover {
+  background-color: var(--glass-hover);
+  box-shadow: inset 0 0 0 1px var(--glass-divider);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .wr-help-run {
+  background-image: radial-gradient(ellipse 60% 40% at 70% 0%, rgb(255 255 255 / 30%), transparent 100%);
+  box-shadow: var(--fx-lift-pill), inset -1px 1px 1px rgb(255 255 255 / 35%), 0 0 16px -4px rgb(var(--fx-ind-rgb) / 50%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wr-help.open .wr-help-dialog { animation: none; }
+  .wr-help-search,
+  .wr-help-tab,
+  button.wr-help-chip { transition: none; }
+}
+@media (prefers-reduced-transparency: reduce) {
+  html[data-fx="v2"] body[data-style="glass"][data-theme] .wr-help-dialog {
+    background: var(--card);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+
+
+/* ==========================================================================
+   16. CARD NOTES (card notes agent)
+   ========================================================================== */
+/* Layers: the notepad and its viewer open above the Today view (9990), so
+   notes opened from its Quick Access subtasks are visible; still under item
+   bubbles (9999+), the task editor (10010) and every writing popup. The
+   bubble color picker sits on top of the notepad. */
+.notepad-popover {
+  z-index: 9995;
+}
+.note-viewer-modal {
+  z-index: 9996;
+}
+.link-color-popover.notepad-color-popover {
+  z-index: 9997;
+}
+/* The edit pencil (9999) would float over the viewer and the phone sheet's
+   Save button (like the Today view does) */
+body:has(> #note-viewer-modal:not([hidden])) .wrench-btn,
+body:has(> #notepad-popover.notepad-sheet:not([hidden])) .wrench-btn {
+  visibility: hidden;
+}
+
+/* Heading: "Card Notes · <card title>" (or the subtask), ellipsized */
+.notepad-popover-header h4 {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.notepad-popover-header .notepad-context {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+  color: var(--muted);
+}
+.notepad-popover-header .notepad-context::before {
+  content: '·';
+  margin-right: 6px;
+}
+.notepad-popover-close {
+  flex: none;
+}
+
+/* Saved-note bubbles: pinned first (pin glyph), title, checklist progress.
+   Many notes scroll inside the list instead of stretching the popover (four
+   rows, then a clear peek of the fifth); the negative margin keeps room for
+   the bubbles' shadows. */
+.notepad-saved-list {
+  max-height: 154px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  margin: -4px -4px 12px;
+  padding: 4px 4px 12px;
+}
+.notepad-saved-bubble {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  min-width: 0;
+}
+.notepad-bubble-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.notepad-bubble-pin {
+  flex: none;
+  width: 11px;
+  height: 11px;
+  margin-left: -2px;
+  opacity: 0.75;
+  transform: rotate(30deg);
+}
+.notepad-bubble-progress {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 650;
+  line-height: 1.45;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+  background: color-mix(in srgb, currentColor 12%, transparent);
+}
+.notepad-bubble-progress.is-done {
+  color: #047857;
+  background: rgb(16 185 129 / 22%);
+}
+/* The default dark bubble (#475569) keeps light ink: a lighter emerald */
+[data-theme="dark"] .notepad-saved-bubble[style*="475569"] .notepad-bubble-progress.is-done {
+  color: #6ee7b7;
+  background: rgb(16 185 129 / 26%);
+}
+
+/* Viewer header: Pin next to Copy; "Edited …" and progress on their own row */
+.note-viewer-header {
+  flex-wrap: wrap;
+  row-gap: 6px;
+}
+.note-viewer-title-row {
+  min-width: 0;
+}
+.note-viewer-pin {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: var(--muted);
+  opacity: 0.7;
+  cursor: pointer;
+  transition: opacity 0.2s, color 0.2s;
+}
+.note-viewer-pin svg {
+  width: 16px;
+  height: 16px;
+  transform: rotate(30deg);
+  transition: transform 0.2s ease;
+}
+.note-viewer-pin:hover {
+  opacity: 1;
+}
+.note-viewer-pin.is-pinned {
+  color: var(--brand);
+  opacity: 1;
+}
+.note-viewer-pin.is-pinned svg {
+  transform: rotate(0deg);
+}
+.note-viewer-pin.is-pinned svg path {
+  fill: currentColor;
+}
+.note-viewer-meta {
+  flex: 1 0 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 10px;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--muted);
+}
+.note-viewer-meta[hidden] {
+  display: none;
+}
+.note-viewer-edited {
+  cursor: default;
+}
+.note-viewer-progress {
+  font-variant-numeric: tabular-nums;
+}
+.note-viewer-meta > * + *::before {
+  content: '·';
+  margin-right: 10px;
+  color: var(--muted);
+}
+.note-viewer-progress.is-done {
+  color: #059669;
+  font-weight: 600;
+}
+[data-theme="dark"] .note-viewer-progress.is-done {
+  color: #34d399;
+}
+.note-viewer-dialog:focus {
+  outline: none;
+}
+
+/* Phones: six icons beside the title left it about 110px. The title takes the
+   first row (up to two lines) with Close; Copy, Pin, Edit, Export and Delete
+   share the next row with "Edited …" and the checklist progress (and sit
+   right-aligned when there is no meta) */
+body[data-device="mobile"] .note-viewer-header {
+  align-items: center;
+  column-gap: 4px;
+}
+body[data-device="mobile"] :is(.note-viewer-title-row, .note-viewer-actions) {
+  display: contents;
+}
+body[data-device="mobile"] .note-viewer-header h4 {
+  order: 1;
+  /* leaves room for Close only (32px, -6px margin, + gap): the icons wrap below */
+  flex: 1 1 calc(100% - 40px);
+  min-width: 0;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.35;
+}
+body[data-device="mobile"] .note-viewer-close {
+  order: 2;
+  flex: none;
+  align-self: flex-start;
+  width: 32px;
+  height: 32px;
+  margin: -4px -6px 0 0;
+  padding: 0;
+}
+body[data-device="mobile"] .note-viewer-meta {
+  order: 3;
+  /* a basis too wide for what's left beside Close, so it starts row 2 */
+  flex: 1 1 48px;
+  min-width: 0;
+  /* "Edited …" over the progress: no dot left dangling at a line start */
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+}
+body[data-device="mobile"] .note-viewer-meta > * + *::before {
+  content: none;
+}
+body[data-device="mobile"] .note-viewer-header > * > button:not(.note-viewer-close) {
+  order: 4;
+  flex: none;
+}
+body[data-device="mobile"] .note-viewer-copy {
+  margin-left: auto;
+}
+
+/* Viewer checklists can be checked in place (circle click, Space / Enter):
+   open circles a little firmer than the editors' so they read as clickable */
+.note-viewer-content ul.checklist > li:not(.checked)::before {
+  border-color: rgb(100 116 139 / 55%);
+}
+.note-viewer-content ul.checklist > li:not(.checked):hover::before {
+  border-color: rgb(71 85 105 / 85%);
+}
+[data-theme="dark"] .note-viewer-content ul.checklist > li:not(.checked)::before {
+  border-color: rgb(148 163 184 / 50%);
+}
+[data-theme="dark"] .note-viewer-content ul.checklist > li:not(.checked):hover::before {
+  border-color: rgb(203 213 225 / 75%);
+}
+.note-viewer-content ul.checklist > li[role="checkbox"]:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* Phones: the notepad is a sheet at the top of the screen */
+.notepad-popover.notepad-sheet {
+  position: fixed;
+  left: 10px;
+  right: 10px;
+  top: max(10px, env(safe-area-inset-top));
+  width: auto;
+  max-width: none;
+  max-height: calc(100dvh - 20px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.notepad-popover.notepad-sheet .notepad-editor {
+  max-height: min(300px, 40dvh);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .note-viewer-pin svg {
+    transition: none;
+  }
+}
+
+
+
+/* ==========================================================================
+   17. DARK OVERRIDES (shared tokens)
+   ========================================================================== */
+[data-theme="dark"] {
+  --wr-chip-bg: rgba(148, 163, 184, 0.14);
+  --wr-rule: rgba(207, 221, 241, 0.14);
+  --wr-quote-bar: rgba(166, 200, 245, 0.55);
+  --wr-hl-yellow: rgba(234, 179, 8, 0.34);
+  --wr-hl-green: rgba(34, 197, 94, 0.3);
+  --wr-hl-blue: rgba(59, 130, 246, 0.36);
+  --wr-hl-pink: rgba(236, 72, 153, 0.32);
+  --wr-hl-purple: rgba(139, 92, 246, 0.38);
+}
+
+
+
+/* ==========================================================================
+   18. REDUCED MOTION / TRANSPARENCY (every animated writing class goes here)
+   ========================================================================== */
+@media (prefers-reduced-motion: reduce) {
+  .wr-pop.open {
+    animation: none;
+  }
+}
+@media (prefers-reduced-transparency: reduce) {
+  html[data-fx="v2"] body[data-style="glass"][data-theme] :is(.wr-menu, .wr-popover) {
+    background: var(--card);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}

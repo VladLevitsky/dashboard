@@ -2,9 +2,32 @@
 // Handles edit state toggling, popovers, and edit-related UI
 
 import { model, editState, currentData, currentSections } from '../state.js';
-import { $, deepClone, showToast, getColorForCurrentMode, setColorForCurrentMode } from '../utils.js';
+import { $, deepClone, showToast, getColorForCurrentMode, setColorForCurrentMode, moveCursorAfterNode } from '../utils.js';
 import { saveModel } from '../core/storage.js';
 import { attachImageUpload } from './rich-text-images.js';
+import { api as writingApi, attachWritingFeatures, attachWritingView } from './writing/editor.js';
+import { cleanEditorHtml, isEffectivelyEmpty, unwrapInline, replaceRangeHtml, trimRangeEnd, expandToWholeInlines } from './writing/dom.js';
+import { keyHint, isMacPlatform } from '../core/writing-commands.js';
+import { sanitizeRichHtml, htmlHasRiskyStartTag } from '../core/markdown.js';
+
+// --- Stored rich text about to go through innerHTML (defense in depth: import
+// and load sanitize too). Markup that could run code goes through the
+// allowlist sanitizer; everything else is kept exactly as saved. Only real
+// start tags are read (tokenized like the browser does), so a plain-text note
+// with code or escaped HTML in it ('const onLoad =', '&lt;a onclick=') shows
+// as it is. Saved HTML comes from innerHTML, which never writes numeric
+// entities, so '&#' in an attribute value (an obfuscated "javascript:") counts
+// as suspicious too. A cleaned note keeps its newlines and indents (pre-wrap)
+const RISKY_TAG = /^(script|iframe|frame|frameset|object|embed|applet|portal|style|svg|math|link|meta|base|form|template|noscript)$/;
+const RISKY_VALUE = /j\s*a\s*v\s*a\s*s\s*c\s*r\s*i\s*p\s*t\s*:|vbscript\s*:|data\s*:\s*text\/html|&#|&(colon|tab|newline);/i;
+// Handler-like text anywhere inside the tag counts too (<img/src=x/onerror=...>)
+const RISKY_HANDLER = /[\s"'/]on[a-z]+\s*=/i;
+const isRiskyRichHtml = (s) => htmlHasRiskyStartTag(s, (tag, attrs, source) => RISKY_TAG.test(tag) || RISKY_HANDLER.test(source) ||
+  attrs.some(([name, value]) => name.startsWith('on') || (value != null && RISKY_VALUE.test(value))));
+export function safeRichHtml(html) {
+  const s = html == null ? '' : String(html);
+  return s && isRiskyRichHtml(s) ? sanitizeRichHtml(s, { keepWhitespace: true }) : s;
+}
 
 // --- Toggle Edit Mode
 export function toggleEditMode() {
@@ -1347,6 +1370,132 @@ let currentNoteKey = null; // Key of the note being edited (null = new note)
 let notepadInitialState = null; // For unsaved changes detection
 let currentNoteContextType = null; // 'card' or 'subtask'
 let currentSubtaskNoteId = null; // For subtask notes: "sectionId:subtitle:itemKey"
+let viewerNoteKey = null; // Note shown in the viewer (kept apart from the one being edited)
+let closeNoteColorPicker = null; // Set while the bubble color picker is open
+let notepadOpener = null; // Element focused before the notepad opened (focus returns there)
+
+// Note fields beyond { key, title, content, color } (all optional, saved as-is):
+// pinned (true, key deleted when off), createdAt / updatedAt (epoch ms).
+// updatedAt moves only when the title or content really changed.
+
+// Pushpin glyph: bubbles of pinned notes, the viewer's Pin button
+const NOTE_PIN_PATH = '<path d="M9 3h6l-1.2 5.6L17 11.5V14H7v-2.5l3.2-2.9z"/><line x1="12" y1="14" x2="12" y2="21"/>';
+const NOTE_PIN_ICON = `<svg class="notepad-bubble-pin" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="12" height="12" fill="currentColor" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${NOTE_PIN_PATH}</svg>`;
+
+// Escape for HTML attributes (quotes too)
+function noteAttr(text) {
+  return String(text ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// A stored bubble color is used only when it is a plain color value
+function safeNoteColor(color) {
+  return typeof color === 'string' && /^(#[0-9a-f]{3,8}|rgba?\([\d\s.,%]+\))$/i.test(color.trim()) ? color.trim() : null;
+}
+
+function noteTime(note) {
+  return Number(note && (note.updatedAt || note.createdAt)) || 0;
+}
+
+// Pinned first, then most recently edited. Notes from before timestamps come
+// after, newest first (they were appended, so the array end is the newest).
+function sortNotesForList(notes) {
+  return notes
+    .map((note, index) => ({ note, index }))
+    .sort((a, b) => (Number(!!b.note.pinned) - Number(!!a.note.pinned)) ||
+      (noteTime(b.note) - noteTime(a.note)) || (b.index - a.index))
+    .map(entry => entry.note);
+}
+
+// Checklist progress of a note's HTML: { done, total } or null (no checklist).
+// Every checklist item counts, nested ones too.
+const noteProgressCache = new Map();
+function noteChecklistProgress(html) {
+  if (!html || html.indexOf('checklist') === -1) return null;
+  if (noteProgressCache.has(html)) return noteProgressCache.get(html);
+  const temp = document.createElement('template');
+  temp.innerHTML = html;
+  const items = temp.content.querySelectorAll('ul.checklist > li');
+  const result = items.length
+    ? { done: [...items].filter(li => li.classList.contains('checked')).length, total: items.length }
+    : null;
+  if (noteProgressCache.size > 300) noteProgressCache.clear();
+  noteProgressCache.set(html, result);
+  return result;
+}
+
+// "just now", "5m ago", "3h ago", "yesterday", "4d ago", "Sep 28", "Sep 28, 2025"
+function formatNoteTime(ms, now = Date.now()) {
+  const diff = now - ms;
+  if (diff < 45000) return 'just now';
+  if (diff < 3600000) return `${Math.max(1, Math.round(diff / 60000))}m ago`;
+  const then = new Date(ms);
+  const today = new Date(now);
+  const dayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+  if (ms >= dayStart) return `${Math.max(1, Math.round(diff / 3600000))}h ago`;
+  const days = Math.round((dayStart - new Date(then.getFullYear(), then.getMonth(), then.getDate()).getTime()) / 86400000);
+  if (days <= 1) return 'yesterday';
+  if (days < 7) return `${days}d ago`;
+  const opts = { month: 'short', day: 'numeric' };
+  if (then.getFullYear() !== today.getFullYear()) opts.year = 'numeric';
+  return then.toLocaleDateString(undefined, opts);
+}
+
+function formatNoteDate(ms) {
+  return new Date(ms).toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
+
+// "Created Sep 28, 2026, 2:05 PM · Edited Oct 3, 2026, 9:12 AM" (only what is known)
+function noteDatesTooltip(note) {
+  const parts = [];
+  if (note.createdAt) parts.push(`Created ${formatNoteDate(note.createdAt)}`);
+  if (note.updatedAt && note.updatedAt !== note.createdAt) parts.push(`Edited ${formatNoteDate(note.updatedAt)}`);
+  return parts.join(' · ');
+}
+
+// Where the open notepad's notes live
+function noteStoreContext() {
+  return { sectionId: currentNotepadSectionId, type: currentNoteContextType, subtaskId: currentSubtaskNoteId };
+}
+
+// Write a notes array back to the model (mirrored into the edit-mode working
+// copy, like saveNote always did) and save. Notes never wait for Confirm.
+function storeNotes(notes, ctx = noteStoreContext()) {
+  const isSubtask = ctx.type === 'subtask' && ctx.subtaskId;
+  const bucket = isSubtask ? 'subtaskNotes' : 'cardNotes';
+  const id = isSubtask ? ctx.subtaskId : ctx.sectionId;
+  if (!model[bucket] || typeof model[bucket] !== 'object') model[bucket] = {};
+  model[bucket][id] = notes;
+  if (editState.working) {
+    if (!editState.working[bucket]) editState.working[bucket] = {};
+    editState.working[bucket][id] = [...notes];
+  }
+  saveModel();
+}
+
+// Card button / subtask item indicators after a change
+function refreshNoteIndicators(ctx = noteStoreContext()) {
+  if (ctx.type === 'subtask' && ctx.subtaskId) {
+    if (window.renderAllSections) window.renderAllSections();
+  } else if (ctx.sectionId) {
+    updateNotepadButtonIndicator(ctx.sectionId);
+  }
+}
+
+// "Card title" or "Subtask text" shown next to the notepad heading
+function notepadContextLabel(sectionId, contextType, subtaskId) {
+  const section = currentSections().find(s => s.id === sectionId);
+  if (contextType === 'subtask' && subtaskId) {
+    const id = String(subtaskId);
+    const first = id.indexOf(':');
+    const last = id.lastIndexOf(':');
+    const subtitle = first >= 0 && last > first ? id.slice(first + 1, last) : '';
+    const itemKey = last >= 0 ? id.slice(last + 1) : '';
+    const data = currentData();
+    const item = data[sectionId]?.[subtitle]?.subtasks?.find(s => s.key === itemKey);
+    if (item && item.text) return item.text;
+  }
+  return section ? section.title || '' : '';
+}
 
 // --- Generate unique key for notes
 function generateNoteKey() {
@@ -1464,18 +1613,31 @@ function renderSavedNotesList() {
 
   if (notes.length === 0) {
     listContainer.hidden = true;
+    listContainer.textContent = '';
     return;
   }
 
   listContainer.hidden = false;
   const defaultBgColor = model.darkMode ? '#475569' : '#e6f3ff';
-  listContainer.innerHTML = notes.map(note => {
-    const bgColor = note.color || defaultBgColor;
-    return `
-      <button type="button" class="notepad-saved-bubble" data-key="${note.key}" style="background: ${bgColor}">
-        ${escapeHtml(note.title || 'Untitled')}
-      </button>
-    `;
+  const now = Date.now();
+  // Pinned first (pin glyph), then most recently edited; checklist progress
+  // on the bubble, "Edited …" in its tooltip
+  listContainer.innerHTML = sortNotesForList(notes).map(note => {
+    const bgColor = safeNoteColor(note.color) || defaultBgColor;
+    const title = note.title || 'Untitled';
+    const progress = noteChecklistProgress(note.content);
+    const time = noteTime(note);
+    const tip = [
+      title,
+      note.pinned ? 'Pinned' : '',
+      time ? `Edited ${formatNoteTime(time, now)}` : '',
+      progress ? `${progress.done} of ${progress.total} checked` : ''
+    ].filter(Boolean).join(' · ');
+    return `<button type="button" class="notepad-saved-bubble${note.pinned ? ' is-pinned' : ''}" data-key="${noteAttr(note.key)}" style="background: ${bgColor}" title="${noteAttr(tip)}">` +
+      (note.pinned ? NOTE_PIN_ICON : '') +
+      `<span class="notepad-bubble-title">${escapeHtml(title)}</span>` +
+      (progress ? `<span class="notepad-bubble-progress${progress.done === progress.total ? ' is-done' : ''}" aria-label="${progress.done} of ${progress.total} checked">${progress.done}/${progress.total}</span>` : '') +
+      '</button>';
   }).join('');
 
   // Add click handlers
@@ -1500,6 +1662,12 @@ export function openNoteColorPicker() {
   const colorBtn = $('#notepad-color-btn');
   if (!colorBtn) return;
 
+  // The button toggles: a second click closes the open picker
+  if (closeNoteColorPicker) {
+    closeNoteColorPicker();
+    return;
+  }
+
   // Close any existing picker
   const existingPicker = document.querySelector('.link-color-popover');
   if (existingPicker) {
@@ -1512,7 +1680,7 @@ export function openNoteColorPicker() {
   const modeLabel = model.darkMode ? 'Dark' : 'Light';
 
   const picker = document.createElement('div');
-  picker.className = 'link-color-popover';
+  picker.className = 'link-color-popover notepad-color-popover';
   picker.innerHTML = `
     <div class="link-color-popover-header">
       <span>Bubble Color (${modeLabel})</span>
@@ -1566,7 +1734,9 @@ export function openNoteColorPicker() {
   const closePicker = () => {
     picker.remove();
     document.removeEventListener('click', closeHandler);
+    if (closeNoteColorPicker === closePicker) closeNoteColorPicker = null;
   };
+  closeNoteColorPicker = closePicker; // Esc / closing the notepad close it too
 
   // Handle preset clicks - close popover after selection
   picker.querySelectorAll('.color-preset-small').forEach(btn => {
@@ -1605,14 +1775,34 @@ export function openNotepad(sectionId, cursorPos, contextType = 'card', subtaskI
   const pop = $('#notepad-popover');
   if (!pop) return;
 
+  // Already open with unsaved edits (another card's button, a search result...)
+  if (!pop.hidden && notepadHasChanges() && !confirm('You have unsaved changes. Discard them?')) return;
+  if (closeNoteColorPicker) closeNoteColorPicker();
+  closeNoteViewer();
+  if (pop.hidden) {
+    const active = document.activeElement;
+    notepadOpener = active && active !== document.body && !pop.contains(active) ? active : null;
+  }
+
   currentNotepadSectionId = sectionId;
   currentNoteKey = null;
   currentNoteContextType = contextType;
   currentSubtaskNoteId = subtaskId;
 
-  // Update header text based on context
+  // Update header text based on context, with the card / subtask it belongs to
   const header = pop.querySelector('.notepad-popover-header h4');
-  if (header) header.textContent = contextType === 'subtask' ? 'Subtask Notes' : 'Card Notes';
+  if (header) {
+    header.textContent = contextType === 'subtask' ? 'Subtask Notes' : 'Card Notes';
+    const where = notepadContextLabel(sectionId, contextType, subtaskId);
+    header.title = where;
+    pop.setAttribute('aria-label', header.textContent + (where ? ` · ${where}` : ''));
+    if (where) {
+      const span = document.createElement('span');
+      span.className = 'notepad-context';
+      span.textContent = where;
+      header.appendChild(span);
+    }
+  }
 
   // Render saved notes at top
   renderSavedNotesList();
@@ -1622,6 +1812,16 @@ export function openNotepad(sectionId, cursorPos, contextType = 'card', subtaskI
 
   // Make visible to measure size
   pop.hidden = false;
+
+  // Phones: a sheet pinned to the top of the screen (CSS), not a popover at the
+  // tap point that can run below the fold
+  const asSheet = window.innerWidth <= 600;
+  pop.classList.toggle('notepad-sheet', asSheet);
+  if (asSheet) {
+    pop.style.left = '';
+    pop.style.top = '';
+  }
+
   const popWidth = pop.offsetWidth || 384;
   const popHeight = pop.offsetHeight || 300;
   const margin = 12;
@@ -1661,11 +1861,15 @@ export function openNotepad(sectionId, cursorPos, contextType = 'card', subtaskI
     topPos = (window.innerHeight - popHeight) / 2 + scrollY;
   }
 
-  pop.style.left = `${leftPos}px`;
-  pop.style.top = `${topPos}px`;
+  if (!asSheet) {
+    pop.style.left = `${leftPos}px`;
+    pop.style.top = `${topPos}px`;
+  }
 
   // Capture initial state for unsaved changes detection
   notepadInitialState = { title: '', content: '' };
+  const notepadEditor = $('#notepad-editor');
+  if (notepadEditor && notepadEditor._wr) notepadEditor._wr.loaded();
 
   // Focus title input
   setTimeout(() => {
@@ -1689,7 +1893,7 @@ export function enterNotepadEditMode(noteKey) {
   if (titleInput) titleInput.value = note.title || '';
   // Load HTML directly (content is now stored as HTML)
   if (editor) {
-    editor.innerHTML = note.content || '';
+    editor.innerHTML = safeRichHtml(note.content);
     reconcileTaskHighlights(editor);
     const reconciled = editor.innerHTML;
     if (reconciled !== (note.content || '')) {
@@ -1698,10 +1902,13 @@ export function enterNotepadEditMode(noteKey) {
     }
   }
 
-  // Capture initial state for unsaved changes detection
+  // Writing features refresh what they own (chips...) before the baseline is taken
+  if (editor && editor._wr) editor._wr.loaded();
+
+  // Capture initial state for unsaved changes detection (same path as the check)
   notepadInitialState = {
     title: note.title || '',
-    content: sanitizeHtml(note.content || '').trim()
+    content: noteContentKey(editor ? editor.innerHTML : note.content)
   };
 
   // Set current color for editing
@@ -1727,20 +1934,41 @@ function notepadHasChanges() {
   const titleInput = $('#notepad-title');
   const editor = $('#notepad-editor');
   const currentTitle = titleInput?.value || '';
-  const currentContent = sanitizeHtml(editor?.innerHTML || '').trim();
+  const currentContent = noteContentKey(editor?.innerHTML || '');
   return currentTitle !== notepadInitialState.title || currentContent !== notepadInitialState.content;
 }
 
+// Saved form of the editor content for comparisons ('' when effectively empty,
+// so typing then deleting everything is not an unsaved change)
+function noteContentKey(html) {
+  const clean = sanitizeHtml(html || '').trim();
+  return isEffectivelyEmpty(clean) ? '' : clean;
+}
+
 // --- Close Notepad Popover
+// Only closeNotepad(true) skips the unsaved-changes prompt (click handlers
+// pass their MouseEvent, which must not count as "force")
 export function closeNotepad(force) {
-  if (!force && notepadHasChanges()) {
+  if (force !== true && notepadHasChanges()) {
     if (!confirm('You have unsaved changes. Are you sure you want to close it?')) {
       return;
     }
   }
   const pop = $('#notepad-popover');
+  const viewer = $('#note-viewer-modal');
+  const active = document.activeElement;
+  const hadFocus = !!active && ((pop && pop.contains(active)) || (viewer && viewer.contains(active)));
   if (pop) {
     pop.hidden = true;
+  }
+  // Its viewer and color picker belong to it
+  closeNoteViewer();
+  if (closeNoteColorPicker) closeNoteColorPicker();
+  // Keyboard users go back to the button that opened it
+  const opener = notepadOpener;
+  notepadOpener = null;
+  if (hadFocus && opener && opener.isConnected && opener.offsetParent !== null) {
+    try { opener.focus({ preventScroll: true }); } catch { /* not focusable */ }
   }
   currentNotepadSectionId = null;
   currentNoteKey = null;
@@ -1811,12 +2039,15 @@ function editorHtmlToText(element) {
 
 // --- Sanitize HTML content (allow only safe tags)
 function sanitizeHtml(html) {
-  const temp = document.createElement('div');
-  temp.innerHTML = html;
+  // cleanEditorHtml: no image-resize wrapper, no writing UI, and R2 images
+  // keep only their reference (the src is session-only). Parsed in an inert
+  // <template>, so nothing loads while we look at it.
+  const temp = document.createElement('template');
+  temp.innerHTML = cleanEditorHtml(html || '');
 
   // Remove script tags and event handlers
-  temp.querySelectorAll('script').forEach(el => el.remove());
-  temp.querySelectorAll('*').forEach(el => {
+  temp.content.querySelectorAll('script').forEach(el => el.remove());
+  temp.content.querySelectorAll('*').forEach(el => {
     // Remove event handler attributes
     Array.from(el.attributes).forEach(attr => {
       if (attr.name.startsWith('on')) {
@@ -1824,9 +2055,6 @@ function sanitizeHtml(html) {
       }
     });
   });
-
-  // Images kept in file storage save only their reference (the src is session-only)
-  temp.querySelectorAll('img[data-r2-file-id]').forEach(img => img.removeAttribute('src'));
 
   return temp.innerHTML;
 }
@@ -1843,7 +2071,7 @@ export function saveNote() {
   const noteTitle = titleInput.value.trim() || 'Untitled';
   const noteContent = sanitizeHtml(editor.innerHTML).trim();
 
-  if (!noteContent || noteContent === '<br>' || noteContent === '<div><br></div>') {
+  if (isEffectivelyEmpty(noteContent)) {
     showToast('Note is empty');
     return;
   }
@@ -1864,23 +2092,27 @@ export function saveNote() {
     notes = model.cardNotes[currentNotepadSectionId];
   }
 
-  if (currentNoteKey) {
-    // Update existing note
-    const noteIndex = notes.findIndex(n => n.key === currentNoteKey);
-    if (noteIndex !== -1) {
-      notes[noteIndex].title = noteTitle;
-      notes[noteIndex].content = noteContent;
-      if (currentNoteColor) {
-        notes[noteIndex].color = currentNoteColor;
-      }
+  const now = Date.now();
+  const noteIndex = currentNoteKey ? notes.findIndex(n => n.key === currentNoteKey) : -1;
+  if (noteIndex !== -1) {
+    // Update existing note (edited time only when the text really changed)
+    const note = notes[noteIndex];
+    if (note.title !== noteTitle || note.content !== noteContent) note.updatedAt = now;
+    note.title = noteTitle;
+    note.content = noteContent;
+    if (currentNoteColor) {
+      note.color = currentNoteColor;
     }
   } else {
-    // Add new note
+    // Add new note (also when the note being edited was deleted meanwhile, so
+    // the text isn't lost)
     notes.push({
       key: generateNoteKey(),
       title: noteTitle,
       content: noteContent,
-      color: currentNoteColor || null
+      color: currentNoteColor || null,
+      createdAt: now,
+      updatedAt: now
     });
   }
 
@@ -1906,6 +2138,7 @@ export function saveNote() {
   clearNotepadEditor();
   currentNoteColor = null;
   notepadInitialState = { title: '', content: '' };
+  if (editor._wr) editor._wr.loaded();
   renderSavedNotesList();
 
   showToast('Note saved');
@@ -1921,7 +2154,7 @@ export function deleteNote(noteKey) {
 
   if (noteIndex === -1) return;
 
-  notes.splice(noteIndex, 1);
+  const [removed] = notes.splice(noteIndex, 1);
 
   if (isSubtask) {
     model.subtaskNotes[currentSubtaskNoteId] = notes;
@@ -1941,6 +2174,8 @@ export function deleteNote(noteKey) {
   } else {
     updateNotepadButtonIndicator(currentNotepadSectionId);
   }
+  // What was removed, and where (the viewer's Undo puts it back)
+  return { note: removed, index: noteIndex };
 }
 
 // --- Reconcile all task highlights in a DOM element based on actual task status
@@ -2020,7 +2255,7 @@ export function removeNoteTaskHighlight(sectionId, taskId) {
   notes.forEach(note => {
     if (!note.content) return;
     const temp = document.createElement('div');
-    temp.innerHTML = note.content;
+    temp.innerHTML = safeRichHtml(note.content);
     let changed = false;
     temp.querySelectorAll(`span.project-task-highlight[data-task-id="${taskId}"]`).forEach(span => {
       const text = document.createTextNode(span.textContent);
@@ -2056,7 +2291,7 @@ export function markNoteTaskHighlightCompleted(sectionId, taskId) {
   notes.forEach(note => {
     if (!note.content) return;
     const temp = document.createElement('div');
-    temp.innerHTML = note.content;
+    temp.innerHTML = safeRichHtml(note.content);
     let changed = false;
     temp.querySelectorAll(`span.project-task-highlight[data-task-id="${taskId}"]`).forEach(span => {
       span.dataset.highlightColor = 'completed';
@@ -2095,14 +2330,16 @@ export function openNoteViewer(noteKey) {
   const note = notes.find(n => n.key === noteKey);
   if (!note) return;
 
-  currentNoteKey = noteKey;
+  // The viewer has its own key: the note being edited (currentNoteKey) stays
+  // put, so viewing another note can't make Save duplicate or misfile edits
+  viewerNoteKey = noteKey;
 
   const titleEl = $('#note-viewer-title');
   const contentEl = $('#note-viewer-content');
 
   titleEl.textContent = note.title || 'Untitled';
   // Display HTML directly (content is now stored as HTML)
-  contentEl.innerHTML = note.content || '';
+  contentEl.innerHTML = safeRichHtml(note.content);
 
   // Reconcile highlights based on actual task status (completed → green, deleted → plain text)
   reconcileTaskHighlights(contentEl);
@@ -2127,21 +2364,182 @@ export function openNoteViewer(noteKey) {
     }
   });
 
+  // Checklist items can be checked right here (keyboard too: see markViewerChecklist)
+  markViewerChecklist(contentEl);
+
+  // Writing view: safe link clicks, block / chip clicks, export menu
+  attachWritingView(contentEl, {
+    id: 'notes',
+    getTitle: () => note.title || 'Untitled',
+    getDocMeta: () => noteDocMeta(note.title || 'Untitled', note),
+    actionsHost: modal.querySelector('.note-viewer-actions')
+  });
+
+  // Pin state, "Edited …", checklist progress
+  renderNoteViewerMeta(note);
+
+  const wasHidden = modal.hidden;
   modal.hidden = false;
+  // Keyboard users land in the viewer; focus goes back to the bubble on close
+  const dialog = modal.querySelector('.note-viewer-dialog');
+  if (wasHidden && dialog) {
+    if (!dialog.hasAttribute('tabindex')) dialog.setAttribute('tabindex', '-1');
+    try { dialog.focus({ preventScroll: true }); } catch { dialog.focus(); }
+  }
+}
+
+// --- Viewer header: Pin button state, "Edited …" and checklist progress
+function renderNoteViewerMeta(note) {
+  const pinBtn = $('#note-viewer-pin');
+  if (pinBtn) {
+    const pinned = !!note.pinned;
+    pinBtn.classList.toggle('is-pinned', pinned);
+    pinBtn.setAttribute('aria-pressed', String(pinned));
+    pinBtn.title = pinned ? 'Unpin note' : 'Pin note to the top';
+    pinBtn.setAttribute('aria-label', pinned ? 'Unpin note' : 'Pin note');
+  }
+  const meta = $('#note-viewer-meta');
+  if (!meta) return;
+  meta.textContent = '';
+  const time = noteTime(note);
+  if (time) {
+    const edited = document.createElement('span');
+    edited.className = 'note-viewer-edited';
+    edited.textContent = `Edited ${formatNoteTime(time)}`;
+    edited.title = noteDatesTooltip(note);
+    meta.appendChild(edited);
+  }
+  const progress = noteChecklistProgress(note.content);
+  if (progress) {
+    const done = document.createElement('span');
+    done.className = 'note-viewer-progress' + (progress.done === progress.total ? ' is-done' : '');
+    done.textContent = `${progress.done}/${progress.total} checked`;
+    meta.appendChild(done);
+  }
+  meta.hidden = !meta.childElementCount;
+}
+
+// Checklist items without a nested list become keyboard checkboxes (Space /
+// Enter); every item's circle is clickable (wireNotepadEvents)
+function markViewerChecklist(contentEl) {
+  contentEl.querySelectorAll('ul.checklist > li').forEach(li => {
+    if (li.querySelector('ul, ol')) return; // a checkbox can't hold a nested list
+    li.tabIndex = 0;
+    li.setAttribute('role', 'checkbox');
+    li.setAttribute('aria-checked', String(li.classList.contains('checked')));
+  });
+}
+
+// Check / uncheck an item in the viewer and save the note. The STORED html is
+// changed (the rendered copy holds session-only image sources), by the item's
+// position among all checklist items.
+function toggleViewerChecklistItem(li) {
+  const contentEl = $('#note-viewer-content');
+  const key = viewerNoteKey;
+  if (!contentEl || !key) return;
+  const notes = getNotesForSection(currentNotepadSectionId, currentNoteContextType, currentSubtaskNoteId);
+  const note = notes.find(n => n.key === key);
+  if (!note) return;
+  const index = [...contentEl.querySelectorAll('ul.checklist > li')].indexOf(li);
+  if (index < 0) return;
+  const temp = document.createElement('template');
+  temp.innerHTML = note.content || '';
+  const stored = temp.content.querySelectorAll('ul.checklist > li')[index];
+  if (!stored) return;
+  const checked = !li.classList.contains('checked');
+  stored.classList.toggle('checked', checked);
+  if (!stored.classList.length) stored.removeAttribute('class');
+  li.classList.toggle('checked', checked);
+  if (li.hasAttribute('aria-checked')) li.setAttribute('aria-checked', String(checked));
+  note.content = temp.innerHTML;
+  note.updatedAt = Date.now();
+  storeNotes(notes);
+
+  // The same note open in the editor follows (unsaved edits there are kept;
+  // only the same item, matched by position AND text, is flipped)
+  const editor = $('#notepad-editor');
+  if (currentNoteKey === key && editor) {
+    const wasDirty = notepadHasChanges();
+    const editorItem = editor.querySelectorAll('ul.checklist > li')[index];
+    if (editorItem && editorItem.textContent === li.textContent) {
+      editorItem.classList.toggle('checked', checked);
+      if (!wasDirty && notepadInitialState) notepadInitialState.content = noteContentKey(editor.innerHTML);
+    }
+  }
+  renderSavedNotesList();
+  renderNoteViewerMeta(note);
+}
+
+// --- Pin / unpin the note in the viewer (pinned notes lead the bubble list)
+export function toggleNotePinFromViewer() {
+  const key = viewerNoteKey;
+  if (!key) return;
+  const notes = getNotesForSection(currentNotepadSectionId, currentNoteContextType, currentSubtaskNoteId);
+  const note = notes.find(n => n.key === key);
+  if (!note) return;
+  if (note.pinned) delete note.pinned;
+  else note.pinned = true;
+  storeNotes(notes);
+  renderSavedNotesList();
+  renderNoteViewerMeta(note);
+  showToast(note.pinned ? 'Note pinned to the top' : 'Note unpinned');
+}
+
+// --- Doc meta for exports (card title, subtask section, dates)
+function noteDocMeta(title, note) {
+  const section = currentSections().find(s => s.id === currentNotepadSectionId);
+  const cardTitle = section ? section.title || '' : '';
+  const fields = [];
+  if (cardTitle) fields.push({ label: 'Card', value: cardTitle });
+  if (currentNoteContextType === 'subtask' && currentSubtaskNoteId) {
+    const subtitle = String(currentSubtaskNoteId).split(':')[1];
+    if (subtitle && subtitle !== '_default') fields.push({ label: 'Section', value: subtitle });
+    const subtask = notepadContextLabel(currentNotepadSectionId, currentNoteContextType, currentSubtaskNoteId);
+    if (subtask && subtask !== cardTitle) fields.push({ label: 'Subtask', value: subtask });
+  }
+  // The editor passes no note: the one being edited, if any
+  const dated = note || (currentNoteKey
+    ? getNotesForSection(currentNotepadSectionId, currentNoteContextType, currentSubtaskNoteId).find(n => n.key === currentNoteKey)
+    : null);
+  if (dated && dated.createdAt) fields.push({ label: 'Created', value: formatNoteDate(dated.createdAt) });
+  if (dated && dated.updatedAt && dated.updatedAt !== dated.createdAt) fields.push({ label: 'Edited', value: formatNoteDate(dated.updatedAt) });
+  return {
+    kind: 'Note',
+    title: title || 'Untitled',
+    subtitle: currentNoteContextType === 'subtask' ? `Subtask note${cardTitle ? ' · ' + cardTitle : ''}` : cardTitle,
+    fields
+  };
 }
 
 // --- Close Note Viewer Modal
 export function closeNoteViewer() {
   const modal = $('#note-viewer-modal');
+  const key = viewerNoteKey;
+  const hadFocus = !!(modal && !modal.hidden && modal.contains(document.activeElement));
   if (modal) {
     modal.hidden = true;
   }
-  currentNoteKey = null;
+  viewerNoteKey = null;
+  // Focus back to the note's bubble (re-rendered bubbles are found by key)
+  const pop = $('#notepad-popover');
+  if (hadFocus && key && pop && !pop.hidden) {
+    const bubble = [...pop.querySelectorAll('.notepad-saved-bubble')].find(b => b.dataset.key === key);
+    if (bubble) bubble.focus({ preventScroll: true });
+  }
 }
 
 // --- Edit note from viewer
 export function editNoteFromViewer() {
-  const noteKey = currentNoteKey;
+  const noteKey = viewerNoteKey;
+  if (!noteKey) return;
+  // Already editing this note with unsaved changes: keep them
+  if (currentNoteKey === noteKey && notepadHasChanges()) {
+    closeNoteViewer();
+    const editor = $('#notepad-editor');
+    if (editor) editor.focus();
+    return;
+  }
+  if (notepadHasChanges() && !confirm('You have unsaved changes. Discard them and edit this note?')) return;
   closeNoteViewer();
   enterNotepadEditMode(noteKey);
 }
@@ -2151,7 +2549,14 @@ export function copyNoteFromViewer() {
   const contentEl = $('#note-viewer-content');
   if (!contentEl) return;
 
-  const htmlContent = contentEl.innerHTML;
+  // The viewer's keyboard-checkbox attributes are not part of the note
+  const clone = contentEl.cloneNode(true);
+  clone.querySelectorAll('li[role="checkbox"]').forEach(li => {
+    li.removeAttribute('role');
+    li.removeAttribute('tabindex');
+    li.removeAttribute('aria-checked');
+  });
+  const htmlContent = clone.innerHTML;
   const plainText = contentEl.innerText;
 
   if (navigator.clipboard && window.ClipboardItem) {
@@ -2170,16 +2575,43 @@ export function copyNoteFromViewer() {
 
 // --- Delete note from viewer
 export function deleteNoteFromViewer() {
-  const noteKey = currentNoteKey;
+  const noteKey = viewerNoteKey;
   if (!noteKey) return;
 
   if (!confirm('Delete this note?')) return;
 
-  deleteNote(noteKey);
+  const ctx = noteStoreContext();
+  const removed = deleteNote(noteKey);
+  // The editor was showing this note: it goes too (Save would bring it back)
+  if (currentNoteKey === noteKey) {
+    clearNotepadEditor();
+    notepadInitialState = { title: '', content: '' };
+    const editor = $('#notepad-editor');
+    if (editor && editor._wr) editor._wr.loaded();
+  }
   closeNoteViewer();
   renderSavedNotesList();
 
-  showToast('Note deleted');
+  if (!removed) {
+    showToast('Note deleted');
+    return;
+  }
+  writingApi.actionToast('Note deleted', [{ label: 'Undo', run: () => restoreDeletedNote(removed, ctx) }]);
+}
+
+// Put a deleted note back where it was (the delete toast's Undo)
+function restoreDeletedNote({ note, index }, ctx) {
+  const notes = getNotesForSection(ctx.sectionId, ctx.type, ctx.subtaskId).slice();
+  if (notes.some(n => n.key === note.key)) return;
+  notes.splice(Math.min(index, notes.length), 0, note);
+  storeNotes(notes, ctx);
+  refreshNoteIndicators(ctx);
+  const pop = $('#notepad-popover');
+  if (pop && !pop.hidden && currentNotepadSectionId === ctx.sectionId &&
+      currentNoteContextType === ctx.type && currentSubtaskNoteId === ctx.subtaskId) {
+    renderSavedNotesList();
+  }
+  showToast('Note restored');
 }
 
 // --- Update notepad button indicator
@@ -2205,12 +2637,40 @@ export function wireNotepadEvents() {
   const colorBtn = $('#notepad-color-btn');
   const editor = $('#notepad-editor');
 
+  // × and Cancel ask before dropping unsaved changes (no MouseEvent as "force")
   if (closeBtn) {
-    closeBtn.addEventListener('click', closeNotepad);
+    closeBtn.addEventListener('click', () => closeNotepad());
   }
   if (cancelBtn) {
-    cancelBtn.addEventListener('click', closeNotepad);
+    cancelBtn.addEventListener('click', () => closeNotepad());
   }
+  // Title: Enter moves on to the note body
+  const titleField = $('#notepad-title');
+  if (titleField) {
+    titleField.addEventListener('keydown', (e) => {
+      if (e.isComposing || e.keyCode === 229) return;
+      if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey && editor) {
+        e.preventDefault();
+        editor.focus();
+        writingApi.dom.placeCaretAtEnd(editor);
+      }
+    });
+  }
+  // Ctrl/⌘+S anywhere in the notepad saves (the editor's own Ctrl+S is the
+  // writing core's save command, which stops the event before it gets here)
+  const notepadPop = $('#notepad-popover');
+  if (notepadPop) {
+    notepadPop.addEventListener('keydown', (e) => {
+      if (e.isComposing || e.keyCode === 229 || e.defaultPrevented) return;
+      if (e.getModifierState && e.getModifierState('AltGraph')) return;
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        saveNote();
+      }
+    });
+  }
+  // Esc: closes the topmost notepad layer (asks when there are unsaved changes)
+  document.addEventListener('keydown', onNotepadEscape);
   if (saveBtn) {
     saveBtn.addEventListener('click', saveNote);
   }
@@ -2281,6 +2741,31 @@ export function wireNotepadEvents() {
   attachImageResizeHandler(editor);
   attachImageUpload(editor, { label: 'Note', getTitle: () => $('#notepad-title')?.value });
 
+  // Writing features (LITE tier: typing power, at most 2 new toolbar buttons)
+  if (editor) {
+    attachWritingFeatures(editor, {
+      id: 'notes',
+      tier: 'lite',
+      toolbar: $('#notepad-popover .notepad-toolbar'),
+      getTitle: () => ($('#notepad-title')?.value || '').trim() || 'Untitled',
+      getDocMeta: () => noteDocMeta(($('#notepad-title')?.value || '').trim()),
+      getDocId: () => `${currentNoteContextType || 'card'}:${currentSubtaskNoteId || currentNotepadSectionId || ''}:${currentNoteKey || 'new'}`,
+      onSave: () => saveNote(),
+      linkTask: true,
+      makeTask: (text, range) => {
+        if (!window.openAddTaskModalWithCallback) return;
+        const sectionId = currentNotepadSectionId;
+        window.openAddTaskModalWithCallback(text, (task) => {
+          if (!task) return;
+          if (wrapRangeWithTaskPill(range, task) && window.updateTask) {
+            window.updateTask(task.id, { noteHighlight: { sectionId } });
+          }
+          writingApi.notifyChange(editor);
+        });
+      }
+    });
+  }
+
   // Toolbar button handlers
   const toolbarBtns = $$('.notepad-toolbar-btn');
   toolbarBtns.forEach(btn => {
@@ -2290,14 +2775,14 @@ export function wireNotepadEvents() {
     btn.addEventListener('click', (e) => {
       e.preventDefault();
       if (btn.classList.contains('notepad-checklist-btn')) {
-        toggleChecklist();
+        runFormatCommand(editor, 'checklist');
         updateToolbarState();
         if (editor) editor.focus();
         return;
       }
       const command = btn.dataset.command;
       if (command) {
-        document.execCommand(command, false, null);
+        runFormatCommand(editor, command);
         // Update active state
         updateToolbarState();
         // Refocus editor
@@ -2325,8 +2810,11 @@ export function wireNotepadEvents() {
     const isInsideColorPicker = e.target.closest('.link-color-popover');
 
     const isInsideHighlighter = e.target.closest('.highlight-context-menu') || e.target.closest('.highlighter-color-dropdown') || e.target.closest('.task-link-picker') || e.target.closest('.task-mention-dropdown');
+    // Writing menus / popovers, the toast's Undo, and the task editor opened
+    // from "Turn into task" or a task pill
+    const isInsideWritingUi = e.target.closest('[data-wr-ui]') || e.target.closest('#qc-toast') || e.target.closest('#task-editor-modal');
 
-    if (!isInsidePopover && !isNotepadButton && !isInsideViewer && !isInsideColorPicker && !isInsideHighlighter) {
+    if (!isInsidePopover && !isNotepadButton && !isInsideViewer && !isInsideColorPicker && !isInsideHighlighter && !isInsideWritingUi) {
       closeNotepad();
     }
   });
@@ -2353,6 +2841,81 @@ export function wireNotepadEvents() {
   if (viewerBackdrop) {
     viewerBackdrop.addEventListener('click', closeNoteViewer);
   }
+  const viewerPinBtn = $('#note-viewer-pin');
+  if (viewerPinBtn) {
+    viewerPinBtn.addEventListener('click', toggleNotePinFromViewer);
+  }
+  // Screen readers: the notepad and its viewer are dialogs
+  if (notepadPop) notepadPop.setAttribute('role', 'dialog');
+  const viewerDialog = document.querySelector('.note-viewer-dialog');
+  if (viewerDialog) {
+    viewerDialog.setAttribute('role', 'dialog');
+    viewerDialog.setAttribute('aria-modal', 'true');
+    viewerDialog.setAttribute('aria-labelledby', 'note-viewer-title');
+    viewerDialog.setAttribute('tabindex', '-1');
+  }
+
+  // Viewer checklists: the circle (the editors' 24px gutter) or Space / Enter
+  // on a focused item checks it, and the note is saved
+  const viewerContent = $('#note-viewer-content');
+  if (viewerContent) {
+    viewerContent.addEventListener('click', (e) => {
+      const li = e.target.closest && e.target.closest('ul.checklist > li');
+      if (!li || !viewerContent.contains(li)) return;
+      if (e.clientX - li.getBoundingClientRect().left >= 24) return;
+      e.preventDefault();
+      toggleViewerChecklistItem(li);
+    });
+    viewerContent.addEventListener('keydown', (e) => {
+      if ((e.key !== ' ' && e.key !== 'Enter') || e.ctrlKey || e.metaKey || e.altKey) return;
+      const li = e.target;
+      if (!li || li.getAttribute?.('role') !== 'checkbox' || !viewerContent.contains(li)) return;
+      e.preventDefault();
+      toggleViewerChecklistItem(li);
+    });
+  }
+}
+
+// Esc belongs to the notepad (or its viewer) when the key comes from inside it
+// (or from nowhere in particular) and nothing else covers it: the task editor,
+// Today, quick capture... handle their own. Peels one layer per press: a menu
+// of the notepad, the color picker, the viewer, then the notepad itself.
+function onNotepadEscape(e) {
+  if (e.key !== 'Escape' || e.defaultPrevented || e.isComposing) return;
+  const pop = $('#notepad-popover');
+  if (!pop || pop.hidden) return;
+  const viewer = $('#note-viewer-modal');
+  const viewerOpen = !!(viewer && !viewer.hidden);
+  const menus = [
+    highlightContextMenu,
+    taskLinkPicker,
+    document.querySelector('.notepad-color-popover'),
+    ...pop.querySelectorAll('.highlighter-color-dropdown')
+  ].filter(Boolean);
+  const roots = [pop, viewerOpen ? viewer : null, ...menus].filter(Boolean);
+  const target = e.target;
+  const fromInside = target && target.nodeType === 1 && roots.some(r => r.contains(target));
+  if (!fromInside && target !== document.body && target !== document.documentElement) return;
+  const layer = viewerOpen ? (viewer.querySelector('.note-viewer-dialog') || viewer) : pop;
+  const rect = layer.getBoundingClientRect();
+  const x = rect.left + rect.width / 2;
+  const y = rect.top + Math.min(rect.height / 2, 60);
+  if (x >= 0 && y >= 0 && x <= window.innerWidth && y <= window.innerHeight) {
+    const hit = document.elementFromPoint(x, y);
+    if (!hit || !roots.some(r => r.contains(hit))) return;
+  } else if (!fromInside) {
+    return;
+  }
+
+  const shown = (el) => el && el.isConnected && el.style.display !== 'none' && !el.hidden;
+  if (shown(taskLinkPicker)) { e.preventDefault(); hideTaskLinkPicker(); return; }
+  if (shown(highlightContextMenu)) { e.preventDefault(); hideHighlightContextMenu(); return; }
+  const swatches = [...pop.querySelectorAll('.highlighter-color-dropdown')].find(shown);
+  if (swatches) { e.preventDefault(); swatches.style.display = 'none'; return; }
+  if (closeNoteColorPicker) { e.preventDefault(); closeNoteColorPicker(); return; }
+  e.preventDefault();
+  if (viewerOpen) closeNoteViewer();
+  else closeNotepad();
 }
 
 // --- Check if cursor is inside a list item
@@ -2613,14 +3176,23 @@ export function handleEditorKeydown(e) {
         }
         return;
       }
-      // Non-empty checklist item: browser will create new li, clean up checked class
+      // Non-empty checklist item: browser will create new li, clean up checked class.
+      // Done in the input event of this very Enter (the browser has just split
+      // the item and the caret sits in the new one), never on a timer: a late
+      // timer would uncheck whatever item holds the caret by then
       if (li.parentElement && li.parentElement.classList.contains('checklist')) {
-        setTimeout(() => {
+        const host = e.currentTarget || editor;
+        const onSplit = (ev) => {
+          host.removeEventListener('input', onSplit);
+          if (ev.inputType !== 'insertParagraph') return;
           const currentLi = isInListItem();
           if (currentLi && currentLi !== li) {
             currentLi.classList.remove('checked');
           }
-        }, 0);
+        };
+        host.addEventListener('input', onSplit);
+        // Enter handled elsewhere (no input event): drop the listener
+        setTimeout(() => host.removeEventListener('input', onSplit), 0);
       }
     }
   }
@@ -2669,6 +3241,8 @@ function updateToolbarState() {
 // --- Handle input in contenteditable to auto-convert markdown patterns
 export function handleEditorInput(e) {
   const editor = e.target;
+  // Writing editors get their (undoable) rules from writing/input-rules.js
+  if (editor && (editor._wr || (editor.closest && editor.closest('.wr-editor')))) return;
   const selection = window.getSelection();
   if (!selection.rangeCount) { return; }
 
@@ -2895,6 +3469,25 @@ function convertToChecklist(editor, textNode, selection) {
   selection.addRange(newRange);
 }
 
+// --- Legacy toolbar formatting buttons (B / I / U, lists, checklist). In a
+// writing editor they run the writing command, so they follow the same rules
+// as the keys and the writing toolbar (code blocks stay plain, one undo step);
+// any other editor keeps the browser's own command
+const LEGACY_FORMAT_COMMANDS = {
+  bold: 'bold', italic: 'italic', underline: 'underline',
+  insertUnorderedList: 'bulletList', insertOrderedList: 'numberedList', checklist: 'checklist'
+};
+export function runFormatCommand(editor, cmd) {
+  const id = LEGACY_FORMAT_COMMANDS[cmd];
+  if (editor && editor._wr && id && writingApi.hasCommand(id)) {
+    writingApi.ensureSelection(editor);
+    writingApi.runCommand(id, writingApi.context(editor), { source: 'toolbar' });
+    return;
+  }
+  if (cmd === 'checklist') toggleChecklist(editor);
+  else if (cmd) document.execCommand(cmd, false, null);
+}
+
 // --- Toggle checklist on current line/selection
 // editorEl is optional — pass it when calling from context menu for reliable UL detection
 export function toggleChecklist(editorEl) {
@@ -3051,6 +3644,8 @@ export function attachChecklistHandler(editor) {
           e.preventDefault();
           e.stopPropagation();
           node.classList.toggle('checked');
+          // No input event fires: tell the writing core (projects autosave, status bar...)
+          if (editor._wr) editor._wr.notifyChange();
         }
         return;
       }
@@ -3095,33 +3690,41 @@ function getHighlightContextMenu() {
   highlightContextMenu.className = 'highlight-context-menu';
   highlightContextMenu.style.display = 'none';
   highlightContextMenu.innerHTML = `
-    <button type="button" class="highlight-context-item ctx-bold-btn">
+    <button type="button" class="highlight-context-item ctx-bold-btn" data-wr-hint="bold">
       <strong>B</strong>
       Bold
     </button>
-    <button type="button" class="highlight-context-item ctx-italic-btn">
+    <button type="button" class="highlight-context-item ctx-italic-btn" data-wr-hint="italic">
       <em>I</em>
       Italic
     </button>
-    <button type="button" class="highlight-context-item ctx-underline-btn">
+    <button type="button" class="highlight-context-item ctx-underline-btn" data-wr-hint="underline">
       <u>U</u>
       Underline
     </button>
+    <button type="button" class="highlight-context-item ctx-strike-btn" data-wr-hint="strike">
+      <s>S</s>
+      Strikethrough
+    </button>
+    <button type="button" class="highlight-context-item ctx-code-btn" data-wr-hint="inlineCode">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="8 7 3 12 8 17"/><polyline points="16 7 21 12 16 17"/></svg>
+      Inline code
+    </button>
     <div class="highlight-context-divider ctx-lists-divider"></div>
-    <button type="button" class="highlight-context-item ctx-bullet-list-btn">
+    <button type="button" class="highlight-context-item ctx-bullet-list-btn" data-wr-hint="bulletList">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3" cy="6" r="1.5" fill="currentColor" stroke="none"/><circle cx="3" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="3" cy="18" r="1.5" fill="currentColor" stroke="none"/></svg>
       Bullet list
     </button>
-    <button type="button" class="highlight-context-item ctx-numbered-list-btn">
+    <button type="button" class="highlight-context-item ctx-numbered-list-btn" data-wr-hint="numberedList">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><line x1="10" y1="6" x2="21" y2="6"/><line x1="10" y1="12" x2="21" y2="12"/><line x1="10" y1="18" x2="21" y2="18"/><text x="1" y="8" font-size="8" fill="currentColor" stroke="none" font-family="sans-serif">1</text><text x="1" y="14" font-size="8" fill="currentColor" stroke="none" font-family="sans-serif">2</text><text x="1" y="20" font-size="8" fill="currentColor" stroke="none" font-family="sans-serif">3</text></svg>
       Numbered list
     </button>
-    <button type="button" class="highlight-context-item ctx-checklist-btn">
+    <button type="button" class="highlight-context-item ctx-checklist-btn" data-wr-hint="checklist">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="3.5"/><line x1="14" y1="6.5" x2="21" y2="6.5"/><rect x="3" y="14" width="7" height="7" rx="3.5"/><line x1="14" y1="17.5" x2="21" y2="17.5"/><polyline points="4.5 17 6 18.5 8.5 15.5" stroke-width="1.5"/></svg>
       Checklist
     </button>
     <div class="highlight-context-divider ctx-highlight-divider"></div>
-    <button type="button" class="highlight-context-item highlight-apply-btn">
+    <button type="button" class="highlight-context-item highlight-apply-btn" data-wr-hint="highlight">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M12 20h9"></path>
         <path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
@@ -3135,7 +3738,20 @@ function getHighlightContextMenu() {
       </svg>
       Remove highlight
     </button>
+    <div class="highlight-context-divider ctx-link-divider"></div>
+    <button type="button" class="highlight-context-item ctx-link-btn" data-wr-hint="link">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
+      Link…
+    </button>
     <div class="highlight-context-divider ctx-link-task-divider"></div>
+    <button type="button" class="highlight-context-item ctx-make-task-btn">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><polyline points="8.5 12.5 11 15 15.5 9.5"></polyline></svg>
+      Turn into task
+    </button>
+    <button type="button" class="highlight-context-item ctx-add-subtask-btn">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4v7a3 3 0 0 0 3 3h11"></path><polyline points="15 10 19 14 15 18"></polyline></svg>
+      Add as subtask
+    </button>
     <button type="button" class="highlight-context-item ctx-link-task-btn">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
@@ -3168,6 +3784,16 @@ function getHighlightContextMenu() {
       Remove link
     </button>
   `;
+  // Right-aligned shortcut hints from the writing command registry
+  const mac = isMacPlatform();
+  highlightContextMenu.querySelectorAll('[data-wr-hint]').forEach(btn => {
+    const hint = keyHint(btn.dataset.wrHint, mac);
+    if (!hint) return;
+    const kbd = document.createElement('span');
+    kbd.className = 'ctx-kbd';
+    kbd.textContent = hint;
+    btn.appendChild(kbd);
+  });
   document.body.appendChild(highlightContextMenu);
   highlightContextMenu.addEventListener('mousedown', e => e.preventDefault());
   document.addEventListener('click', (e) => {
@@ -3182,6 +3808,31 @@ function hideHighlightContextMenu() {
   const menu = getHighlightContextMenu();
   menu.style.display = 'none';
   hideTaskLinkPicker();
+  document.removeEventListener('keydown', onContextMenuKeydown, true);
+}
+
+// While the menu is open (capture, so it comes before the editor and the
+// panels' own Esc): Esc closes the top-most layer (the task picker, then the
+// menu); typing in the editor closes the menu and the key goes on as usual
+function onContextMenuKeydown(e) {
+  const menu = highlightContextMenu;
+  if (!menu || menu.style.display === 'none') { // closed by an outside click
+    document.removeEventListener('keydown', onContextMenuKeydown, true);
+    return;
+  }
+  if (e.isComposing || e.keyCode === 229) return;
+  if (e.key === 'Escape') {
+    e.preventDefault();
+    e.stopPropagation();
+    e.stopImmediatePropagation();
+    if (taskLinkPicker && taskLinkPicker.style.display !== 'none') hideTaskLinkPicker();
+    else hideHighlightContextMenu();
+    return;
+  }
+  const t = e.target;
+  if (t instanceof Node && (menu.contains(t) || (taskLinkPicker && taskLinkPicker.contains(t)))) return; // the picker's filter
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.key.length === 1 || e.key === 'Backspace' || e.key === 'Delete' || e.key === 'Enter') hideHighlightContextMenu();
 }
 
 // ---- Task Link Picker (for "Link task" context menu item) ----
@@ -3310,66 +3961,170 @@ function showTaskLinkPicker(x, y, editor, savedRange, onTaskLinked) {
   filterInput.focus();
 }
 
-function applyHighlightToSelection(editor) {
-  const sel = window.getSelection();
-  if (!sel || sel.isCollapsed || sel.rangeCount === 0) return;
-  const range = sel.getRangeAt(0);
-  if (!editor.contains(range.commonAncestorContainer)) return;
-
-  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-  const bg = isDark ? activeHighlightColor.dark : activeHighlightColor.color;
-
-  const mark = document.createElement('mark');
-  mark.className = 'text-highlight';
-  mark.style.backgroundColor = bg;
-  mark.dataset.highlightColor = activeHighlightColor.name.toLowerCase();
-
-  try {
-    range.surroundContents(mark);
-  } catch (e) {
-    const contents = range.extractContents();
-    mark.appendChild(contents);
-    range.insertNode(mark);
-  }
-
-  // Move cursor after the mark so subsequent typing is unhighlighted
-  const spacer = document.createTextNode('\u200B');
-  if (mark.nextSibling) {
-    mark.parentNode.insertBefore(spacer, mark.nextSibling);
-  } else {
-    mark.parentNode.appendChild(spacer);
-  }
-  const newRange = document.createRange();
-  newRange.setStartAfter(spacer);
-  newRange.collapse(true);
-  sel.removeAllRanges();
-  sel.addRange(newRange);
-
-  hideHighlightContextMenu();
+// New highlights carry no inline color: writing.css colors them from
+// data-highlight-color, so they follow the theme (light / dark palettes).
+// One-line selections go through execCommand('insertHTML') so Ctrl+Z undoes
+// them; selections spanning blocks get one <mark> per text run (never a mark
+// around block elements).
+// True when the range starts, ends or crosses a code block of the editor
+function rangeTouchesCodeBlock(range, editor) {
+  const preOf = (node) => {
+    const el = node && (node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement);
+    const pre = el && el.closest('pre');
+    return pre && editor.contains(pre) ? pre : null;
+  };
+  if (preOf(range.startContainer) || preOf(range.endContainer)) return true;
+  if (range.collapsed) return false;
+  const c = range.commonAncestorContainer;
+  const root = c.nodeType === Node.ELEMENT_NODE ? c : c.parentElement;
+  return !!root && [...root.querySelectorAll('pre')].some(p => { try { return range.intersectsNode(p); } catch { return false; } });
 }
 
-function removeHighlightFromSelection(editor) {
+export function applyHighlightToSelection(editor, colorName) {
   const sel = window.getSelection();
-  if (!sel || sel.rangeCount === 0) return;
+  if (!sel || sel.isCollapsed || sel.rangeCount === 0) return false;
+  let range = sel.getRangeAt(0);
+  if (!editor || !editor.contains(range.commonAncestorContainer)) return false;
+  const color = colorName || activeHighlightColor.name.toLowerCase();
+  // A triple-click's spill into the next line is not part of the highlight
+  const trimmed = trimRangeEnd(range, editor);
+  if (trimmed !== range) {
+    sel.removeAllRanges();
+    sel.addRange(trimmed);
+    range = trimmed;
+  }
+  // Code blocks stay plain text, as with Ctrl+B and Ctrl+Shift+H (the toolbar pen
+  // and the right-click item come here directly): a mark there would also save
+  // the editor's computed font into the code
+  if (rangeTouchesCodeBlock(range, editor)) {
+    hideHighlightContextMenu();
+    showToast('Code blocks stay plain text');
+    return false;
+  }
+
+  const blockOf = (node) => {
+    let el = node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement;
+    while (el && el !== editor) {
+      if (/^(DIV|P|LI|H[1-6]|BLOCKQUOTE|PRE|TD|TH)$/.test(el.tagName)) return el;
+      el = el.parentElement;
+    }
+    return editor;
+  };
+
+  if (blockOf(range.startContainer) === blockOf(range.endContainer)) {
+    // Over whole bold / link / code elements, so they stay (inside the mark)
+    const whole = expandToWholeInlines(range, editor);
+    const holder = document.createElement('div');
+    holder.appendChild(whole.cloneContents());
+    // A highlight inside a highlight: keep only the new one
+    holder.querySelectorAll('mark.text-highlight').forEach(m => m.replaceWith(...m.childNodes));
+    if (!holder.querySelector('div, p, li, ul, ol, h1, h2, h3, h4, h5, h6, blockquote, pre, table')) {
+      // replaceRangeHtml: no &nbsp; around the mark, and a U+200B after it
+      // so typing continues unhighlighted
+      const ok = replaceRangeHtml(whole,
+        `<mark class="text-highlight" data-highlight-color="${color}">${holder.innerHTML}</mark>`, { zwsp: 'always' });
+      if (ok) {
+        hideHighlightContextMenu();
+        return true;
+      }
+    }
+  }
+
+  // Across blocks: wrap each selected text run on its own (manual DOM)
+  const rootNode = range.commonAncestorContainer.nodeType === Node.TEXT_NODE
+    ? range.commonAncestorContainer.parentNode : range.commonAncestorContainer;
+  const runs = [];
+  const walker = document.createTreeWalker(rootNode, NodeFilter.SHOW_TEXT);
+  let node;
+  while ((node = walker.nextNode())) {
+    if (!range.intersectsNode(node) || !node.data.replace(/[\s\u200B]/g, '')) continue;
+    if (node.parentElement && node.parentElement.closest('mark.text-highlight, [contenteditable="false"]')) continue;
+    runs.push(node);
+  }
+  const startNode = range.startContainer, startOffset = range.startOffset;
+  const endNode = range.endContainer, endOffset = range.endOffset;
+  let last = null;
+  runs.forEach(text => {
+    let target = text;
+    if (text === endNode && endOffset < text.data.length) text.splitText(endOffset);
+    if (text === startNode && startOffset > 0) target = text.splitText(startOffset);
+    const mark = document.createElement('mark');
+    mark.className = 'text-highlight';
+    mark.dataset.highlightColor = color;
+    target.parentNode.insertBefore(mark, target);
+    mark.appendChild(target);
+    last = mark;
+  });
+  if (last) {
+    const spacer = document.createTextNode('\u200B');
+    last.parentNode.insertBefore(spacer, last.nextSibling);
+    const newRange = document.createRange();
+    newRange.setStartAfter(spacer);
+    newRange.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(newRange);
+    if (editor._wr) editor._wr.notifyChange();
+  }
+  hideHighlightContextMenu();
+  return !!last;
+}
+
+// Unwrap the highlight at the caret (one undo step when possible, see unwrapInline)
+export function removeHighlightFromSelection(editor) {
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0) return false;
 
   const node = sel.anchorNode;
-  if (!node || !editor.contains(node)) return;
+  if (!node || !editor.contains(node)) return false;
 
   const mark = node.nodeType === Node.TEXT_NODE
     ? node.parentElement?.closest('mark.text-highlight')
     : node.closest?.('mark.text-highlight');
 
-  if (mark) {
-    const parent = mark.parentNode;
-    while (mark.firstChild) {
-      parent.insertBefore(mark.firstChild, mark);
-    }
-    parent.removeChild(mark);
-    parent.normalize();
+  if (mark && editor.contains(mark)) {
+    if (unwrapInline(mark) === 'manual' && editor._wr) editor._wr.notifyChange();
   }
 
-  sel.removeAllRanges();
   hideHighlightContextMenu();
+  return !!mark;
+}
+
+// The editor (outermost contenteditable) holding the current non-empty selection, or null
+function editorWithSelection() {
+  const sel = window.getSelection();
+  if (!sel || sel.isCollapsed || !sel.rangeCount || !sel.toString().trim()) return null;
+  const start = sel.getRangeAt(0).commonAncestorContainer;
+  const el = start.nodeType === Node.ELEMENT_NODE ? start : start.parentElement;
+  let editor = el ? el.closest('[contenteditable="true"]') : null;
+  while (editor && editor.parentElement && editor.parentElement.closest('[contenteditable="true"]')) {
+    editor = editor.parentElement.closest('[contenteditable="true"]');
+  }
+  return editor;
+}
+
+// Wrap a saved range in a task pill (Turn into task). Returns the pill or null.
+export function wrapRangeWithTaskPill(range, task) {
+  if (!range || !task) return null;
+  const span = document.createElement('span');
+  span.className = 'project-task-highlight';
+  span.dataset.taskId = task.id;
+  span.dataset.highlightColor = task.color;
+  span.style.backgroundColor = TASK_HIGHLIGHT_BG[task.color];
+  span.style.borderBottom = `2px solid ${TASK_HIGHLIGHT_BORDER[task.color]}`;
+  span.style.cursor = 'pointer';
+  span.contentEditable = 'false';
+  try {
+    try {
+      range.surroundContents(span);
+    } catch (err) {
+      span.appendChild(range.extractContents());
+      range.insertNode(span);
+    }
+  } catch (err) {
+    return null; // the range went stale
+  }
+  if (span.parentNode) moveCursorAfterNode(span);
+  return span;
 }
 
 /**
@@ -3382,7 +4137,7 @@ export function createHighlighterButton() {
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.className = 'highlighter-toolbar-btn';
-  btn.title = 'Highlighter';
+  btn.title = `Highlight the selection (${keyHint('highlight', isMacPlatform())}) · the color bar picks the color`;
   btn.innerHTML = `
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <path d="M12 20h9"></path>
@@ -3423,6 +4178,14 @@ export function createHighlighterButton() {
   btn.addEventListener('mousedown', e => e.preventDefault());
   btn.addEventListener('click', (e) => {
     e.stopPropagation();
+    // With text selected the pen highlights it (current color); the color
+    // bar, or a click without a selection, opens the swatches
+    const editor = !e.target.closest('.highlighter-color-indicator') ? editorWithSelection() : null;
+    if (editor) {
+      dropdown.style.display = 'none';
+      applyHighlightToSelection(editor);
+      return;
+    }
     document.querySelectorAll('.highlighter-color-dropdown').forEach(d => {
       if (d !== dropdown) d.style.display = 'none';
     });
@@ -3470,10 +4233,6 @@ export function attachHighlighterContextMenu(editor, options) {
       return btn;
     }
 
-    rewire('.ctx-bold-btn', () => { document.execCommand('bold'); hideHighlightContextMenu(); });
-    rewire('.ctx-italic-btn', () => { document.execCommand('italic'); hideHighlightContextMenu(); });
-    rewire('.ctx-underline-btn', () => { document.execCommand('underline'); hideHighlightContextMenu(); });
-
     // --- List buttons (always visible) — restore focus + selection so commands target the editor ---
     function restoreEditorFocus() {
       editor.focus();
@@ -3481,9 +4240,37 @@ export function attachHighlighterContextMenu(editor, options) {
       s.removeAllRanges();
       s.addRange(savedRange.cloneRange());
     }
-    rewire('.ctx-bullet-list-btn', () => { restoreEditorFocus(); document.execCommand('insertUnorderedList'); hideHighlightContextMenu(); });
-    rewire('.ctx-numbered-list-btn', () => { restoreEditorFocus(); document.execCommand('insertOrderedList'); hideHighlightContextMenu(); });
-    rewire('.ctx-checklist-btn', () => { restoreEditorFocus(); toggleChecklist(editor); hideHighlightContextMenu(); });
+
+    // --- Writing commands (formatting, lists, strike, code, link, turn into task) through the registry ---
+    const writing = editor._wr || null;
+    function runWriting(id, fallback) {
+      restoreEditorFocus();
+      if (writing) writing.run(id, { source: 'context' });
+      else if (fallback) fallback();
+      hideHighlightContextMenu();
+    }
+
+    rewire('.ctx-bold-btn', () => runWriting('bold', () => document.execCommand('bold')));
+    rewire('.ctx-italic-btn', () => runWriting('italic', () => document.execCommand('italic')));
+    rewire('.ctx-underline-btn', () => runWriting('underline', () => document.execCommand('underline')));
+    const strikeBtn = rewire('.ctx-strike-btn', () => runWriting('strike', () => document.execCommand('strikeThrough')));
+    const codeBtn = rewire('.ctx-code-btn', () => runWriting('inlineCode'));
+    const linkBtn = rewire('.ctx-link-btn', () => runWriting('link'));
+    strikeBtn.style.display = '';
+    codeBtn.style.display = writing ? '' : 'none';
+    linkBtn.style.display = writing ? '' : 'none';
+    menu.querySelector('.ctx-link-divider').style.display = writing ? '' : 'none';
+    const insidePill = !!(savedRange.startContainer.parentElement && savedRange.startContainer.parentElement.closest('.project-task-highlight'));
+    const canMakeTask = !!(writing && typeof writing.opts.makeTask === 'function' && hasSelection && !insidePill);
+    const makeTaskBtn = rewire('.ctx-make-task-btn', () => runWriting('makeTask'));
+    makeTaskBtn.style.display = canMakeTask ? '' : 'none';
+    // Add as subtask (task description): the selection, or the caret's line
+    const canAddSubtask = !!(writing && typeof writing.opts.addSubtask === 'function');
+    const addSubtaskBtn = rewire('.ctx-add-subtask-btn', () => runWriting('addSubtask'));
+    addSubtaskBtn.style.display = canAddSubtask ? '' : 'none';
+    rewire('.ctx-bullet-list-btn', () => runWriting('bulletList', () => document.execCommand('insertUnorderedList')));
+    rewire('.ctx-numbered-list-btn', () => runWriting('numberedList', () => document.execCommand('insertOrderedList')));
+    rewire('.ctx-checklist-btn', () => runWriting('checklist', () => toggleChecklist(editor)));
 
     // --- Highlight / Remove highlight (only with selection) ---
     const highlightDivider = menu.querySelector('.ctx-highlight-divider');
@@ -3509,6 +4296,7 @@ export function attachHighlighterContextMenu(editor, options) {
     // --- Link task (only with selection + if enabled) ---
     const linkTaskBtn = menu.querySelector('.ctx-link-task-btn');
     const linkTaskDivider = menu.querySelector('.ctx-link-task-divider');
+    linkTaskDivider.style.display = (canMakeTask || canAddSubtask) ? '' : 'none';
     if (opts.linkTask && hasSelection) {
       linkTaskDivider.style.display = '';
       const newLinkBtn = linkTaskBtn.cloneNode(true);
@@ -3520,7 +4308,7 @@ export function attachHighlighterContextMenu(editor, options) {
         showTaskLinkPicker(rect.right + 4, rect.top, editor, savedRange, opts.onTaskLinked);
       });
     } else {
-      linkTaskDivider.style.display = 'none';
+      if (!canMakeTask && !canAddSubtask) linkTaskDivider.style.display = 'none';
       linkTaskBtn.style.display = 'none';
     }
 
@@ -3528,7 +4316,14 @@ export function attachHighlighterContextMenu(editor, options) {
     const contextLink = e.target.closest('a[href]');
     const onLink = contextLink && editor.contains(contextLink);
     const editLinkDivider = menu.querySelector('.ctx-edit-link-divider');
+    // Writing editors: the links module's popover (undoable); others keep the prompts
+    const editInPopover = (focus) => {
+      restoreEditorFocus();
+      writing.run('link', { source: 'context', link: contextLink, focus });
+      hideHighlightContextMenu();
+    };
     const editLinkTextBtn = rewire('.ctx-edit-link-text-btn', () => {
+      if (contextLink && writing) return editInPopover('text');
       if (contextLink) {
         const newText = prompt('Edit link text:', contextLink.textContent);
         if (newText !== null && newText.trim()) {
@@ -3538,6 +4333,7 @@ export function attachHighlighterContextMenu(editor, options) {
       hideHighlightContextMenu();
     });
     const editLinkUrlBtn = rewire('.ctx-edit-link-url-btn', () => {
+      if (contextLink && writing) return editInPopover('url');
       if (contextLink) {
         const newUrl = prompt('Edit link URL:', contextLink.href);
         if (newUrl !== null && newUrl.trim()) {
@@ -3547,6 +4343,12 @@ export function attachHighlighterContextMenu(editor, options) {
       hideHighlightContextMenu();
     });
     const removeLinkBtn = rewire('.ctx-remove-link-btn', () => {
+      if (contextLink && writing) {
+        restoreEditorFocus();
+        writing.run('link', { source: 'context', link: contextLink, action: 'remove' });
+        hideHighlightContextMenu();
+        return;
+      }
       if (contextLink) {
         const text = document.createTextNode(contextLink.textContent);
         contextLink.parentNode.replaceChild(text, contextLink);
@@ -3554,6 +4356,8 @@ export function attachHighlighterContextMenu(editor, options) {
       hideHighlightContextMenu();
     });
     if (onLink) {
+      // On a link, Edit link text / URL replace the generic Link… item
+      if (writing) { linkBtn.style.display = 'none'; menu.querySelector('.ctx-link-divider').style.display = 'none'; }
       editLinkDivider.style.display = '';
       editLinkTextBtn.style.display = '';
       editLinkUrlBtn.style.display = '';
@@ -3578,6 +4382,7 @@ export function attachHighlighterContextMenu(editor, options) {
     const menuTop = Math.max(8, Math.min(e.clientY, window.innerHeight - mh - 8));
     menu.style.left = `${menuLeft}px`;
     menu.style.top = `${menuTop}px`;
+    document.addEventListener('keydown', onContextMenuKeydown, true); // Esc / typing close it
   });
 }
 

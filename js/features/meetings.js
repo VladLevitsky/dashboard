@@ -4,12 +4,13 @@
 
 import { currentData } from '../state.js';
 import { $, showToast, moveCursorAfterNode, normalizeDescHtml, escapeAttr } from '../utils.js';
-import { handleEditorInput, handleEditorKeydown, createHighlighterButton, attachHighlighterContextMenu, toggleChecklist, isInChecklist, attachChecklistHandler, attachImageResizeHandler } from './edit-mode.js';
+import { handleEditorInput, handleEditorKeydown, createHighlighterButton, attachHighlighterContextMenu, toggleChecklist, isInChecklist, attachChecklistHandler, attachImageResizeHandler, runFormatCommand, safeRichHtml } from './edit-mode.js';
 import { saveModel } from '../core/storage.js';
 import { HIGHLIGHT_COLORS, HIGHLIGHT_BORDER_COLORS, hyperlinkSelection, canHyperlink, attachTaskMention } from './projects.js';
 import { uploadFile, openFile } from '../core/file-service.js';
 import { attachImageUpload } from './rich-text-images.js';
-import { stripHydratedImageSrc } from '../core/rich-text-refs.js';
+import { attachWritingFeatures, attachWritingView } from './writing/editor.js';
+import { cleanEditorHtml, restoreRange } from './writing/dom.js';
 
 // Module state
 let meetingsEditingId = null;
@@ -137,8 +138,9 @@ export function openMeetingsModal(meetingId) {
     `;
     document.body.appendChild(modal);
 
-    modal.querySelector('.meetings-backdrop').addEventListener('click', closeMeetingsModal);
-    modal.querySelector('.meetings-close-btn').addEventListener('click', closeMeetingsModal);
+    // Wrapped: the click event must not be read as `force` (skips the unsaved check)
+    modal.querySelector('.meetings-backdrop').addEventListener('click', () => closeMeetingsModal());
+    modal.querySelector('.meetings-close-btn').addEventListener('click', () => closeMeetingsModal());
 
     $('#meetings-add-btn').addEventListener('click', () => {
       if (meetingsHasChanges()) {
@@ -158,6 +160,12 @@ export function openMeetingsModal(meetingId) {
     });
   }
 
+  // Opening a meeting from inside an edit form (a [[ link): ask before dropping edits
+  if (typeof meetingId === 'string' && !modal.hidden && meetingsHasChanges() &&
+      !confirm('You have unsaved changes. Are you sure you want to close it?')) {
+    return false;
+  }
+
   // Close other slide-out panels
   if (window.closeTasksSummaryModal) window.closeTasksSummaryModal();
 
@@ -168,12 +176,11 @@ export function openMeetingsModal(meetingId) {
   modal.hidden = false;
 }
 
-// --- Check if meetings edit form has unsaved changes
-function meetingsHasChanges() {
-  if (!meetingsInEditMode || !meetingsInitialState) return false;
+// --- The edit form as the unsaved-changes check compares it
+function meetingsFormState() {
   const name = ($('#meetings-inline-name')?.value || '').trim();
   const type = $('#meetings-inline-type')?.value || 'one-time';
-  const desc = normalizeDescHtml($('#meetings-inline-desc-editor')?.innerHTML || '') || '';
+  const description = normalizeDescHtml($('#meetings-inline-desc-editor')?.innerHTML || '') || '';
   const linkRows = document.querySelectorAll('#meetings-inline-link-rows .meeting-link-row');
   const links = [];
   linkRows.forEach(row => {
@@ -181,6 +188,13 @@ function meetingsHasChanges() {
     const u = row.querySelector('.meeting-link-url');
     links.push({ title: (t?.value || '').trim(), url: (u?.value || '').trim() });
   });
+  return { name, type, description, links };
+}
+
+// --- Check if meetings edit form has unsaved changes
+function meetingsHasChanges() {
+  if (!meetingsInEditMode || !meetingsInitialState) return false;
+  const { name, type, description: desc, links } = meetingsFormState();
   if (name !== meetingsInitialState.name) return true;
   if (type !== meetingsInitialState.type) return true;
   if (desc !== meetingsInitialState.description) return true;
@@ -243,7 +257,7 @@ function showMeetingsViewMode(meeting) {
   viewSection.innerHTML = `
     <div class="meetings-view-type">${meeting.type === 'routine' ? 'Recurring' : 'One-Time'}</div>
     <h3 class="meetings-view-title">${escapeAttr(meeting.title || 'Untitled')}</h3>
-    <div class="meetings-view-content">${meeting.description || '<span style="color:var(--muted)">No description</span>'}</div>
+    <div class="meetings-view-content">${safeRichHtml(meeting.description) || '<span style="color:var(--muted)">No description</span>'}</div>
     <div class="meetings-view-links" id="meetings-view-links"></div>
     <div class="meetings-view-actions">
       <button type="button" class="meetings-view-icon-btn" id="meetings-view-edit" title="Edit">
@@ -299,6 +313,16 @@ function showMeetingsViewMode(meeting) {
       meeting.description = reconciled;
       saveModel();
     }
+  }
+
+  // Writing view: safe link clicks, block / chip clicks, export menu in the actions row
+  if (viewContent) {
+    attachWritingView(viewContent, {
+      id: 'meetings',
+      getTitle: () => meeting.title || 'Untitled meeting',
+      getDocMeta: () => meetingDocMeta(meeting),
+      actionsHost: viewSection.querySelector('.meetings-view-actions')
+    });
   }
 
   // Click on task highlights or links in view mode
@@ -533,7 +557,7 @@ function showMeetingsEditMode(meeting) {
 
   // Populate description
   const descEditorEl = $('#meetings-inline-desc-editor');
-  descEditorEl.innerHTML = meetingData.description || '';
+  descEditorEl.innerHTML = safeRichHtml(meetingData.description);
   if (window.reconcileTaskHighlights) {
     window.reconcileTaskHighlights(descEditorEl);
     const reconciled = descEditorEl.innerHTML;
@@ -548,12 +572,12 @@ function showMeetingsEditMode(meeting) {
     btn.addEventListener('mousedown', e => e.preventDefault());
     btn.addEventListener('click', () => {
       if (btn.classList.contains('meetings-checklist-btn')) {
-        toggleChecklist();
+        runFormatCommand($('#meetings-inline-desc-editor'), 'checklist');
         updateInlineToolbarState();
         $('#meetings-inline-desc-editor').focus();
         return;
       }
-      document.execCommand(btn.dataset.cmd, false, null);
+      runFormatCommand($('#meetings-inline-desc-editor'), btn.dataset.cmd);
       updateInlineToolbarState();
       $('#meetings-inline-desc-editor').focus();
     });
@@ -584,7 +608,7 @@ function showMeetingsEditMode(meeting) {
       }
       const meeting = getAllMeetings().find(m => m.id === meetingsEditingId);
       if (meeting) {
-        meeting.description = stripHydratedImageSrc($('#meetings-inline-desc-editor').innerHTML);
+        meeting.description = cleanEditorHtml($('#meetings-inline-desc-editor'));
         saveModel();
       }
     }
@@ -606,7 +630,7 @@ function showMeetingsEditMode(meeting) {
     convertBtn.addEventListener('mousedown', e => e.preventDefault());
     convertBtn.addEventListener('click', (e) => {
       e.preventDefault();
-      convertMeetingSelectionToTask(meetingsEditingId);
+      turnSelectionIntoTask();
     });
   }
 
@@ -652,6 +676,23 @@ function showMeetingsEditMode(meeting) {
     }
   });
 
+  // Writing features (FULL tier). The editor is rebuilt on every open, so this
+  // attaches to a fresh element each time (state lives in a WeakMap)
+  attachWritingFeatures(descEditor, {
+    id: 'meetings',
+    tier: 'full',
+    toolbar: meetingsToolbar,
+    getTitle: () => ($('#meetings-inline-name')?.value || '').trim() || 'Untitled meeting',
+    getDocMeta: () => meetingDocMetaFromForm(),
+    getDocId: () => meetingsEditingId || 'new',
+    onSave: () => { const btn = $('#meetings-inline-save'); if (btn) btn.click(); },
+    linkTask: true,
+    makeTask: (text, range) => {
+      restoreRange(range, descEditor);
+      turnSelectionIntoTask();
+    }
+  });
+
   // @ mention autocomplete for linking existing tasks
   attachTaskMention(descEditor, (task) => {
     if (window.updateTask) {
@@ -662,7 +703,7 @@ function showMeetingsEditMode(meeting) {
     // Save the updated description
     const meeting = getAllMeetings().find(m => m.id === meetingsEditingId);
     if (meeting) {
-      meeting.description = stripHydratedImageSrc(descEditor.innerHTML);
+      meeting.description = cleanEditorHtml(descEditor);
       saveModel();
     }
   });
@@ -699,14 +740,15 @@ function showMeetingsEditMode(meeting) {
     }
   });
 
-  // Save button
-  $('#meetings-inline-save').addEventListener('click', () => {
+  // Save button. quiet: save a new meeting but stay in the form (Turn into
+  // task needs an id to link back to); returns the saved meeting or null
+  const saveMeetingForm = (quiet = false) => {
     const nameInput = $('#meetings-inline-name');
     const title = nameInput.value.trim();
     if (!title) {
-      showToast('Please enter a meeting name');
-      nameInput.focus();
-      return;
+      showToast(quiet ? 'Give the meeting a name first' : 'Please enter a meeting name');
+      if (!quiet) nameInput.focus();
+      return null;
     }
 
     const type = $('#meetings-inline-type').value;
@@ -755,27 +797,113 @@ function showMeetingsEditMode(meeting) {
     } else {
       savedMeeting = createMeeting(title, type, description, meetingLinks);
       updateMeeting(savedMeeting.id, { files: meetingFiles, date, repeat, repeatWeeks, repeatMonthlyType });
-      showToast('Meeting created');
+      showToast(quiet ? 'Meeting saved' : 'Meeting created');
+    }
+
+    if (quiet) {
+      // Stay in the form, now editing the saved meeting; what is on screen is saved
+      meetingsEditingId = savedMeeting.id;
+      $('#meetings-title').textContent = 'Meetings';
+      renderMeetingsList();
+      if (window.updateNotificationBadge) window.updateNotificationBadge();
+      meetingsInitialState = meetingsFormState();
+      return savedMeeting;
     }
 
     // Re-render list and show saved meeting in view mode
     renderMeetingsList();
     if (savedMeeting) showMeetingsViewMode(savedMeeting);
     if (window.updateNotificationBadge) window.updateNotificationBadge();
-  });
+    return savedMeeting;
+  };
+  $('#meetings-inline-save').addEventListener('click', () => saveMeetingForm());
+
+  // Turn the selection into a linked task. A new meeting is saved first
+  // (quietly) so the task can point back at it
+  const turnSelectionIntoTask = () => {
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed || !sel.rangeCount || !sel.toString().trim()) return;
+    if (!descEditor.contains(sel.getRangeAt(0).commonAncestorContainer)) return;
+    const id = meetingsEditingId || (saveMeetingForm(true) || {}).id;
+    if (id) convertMeetingSelectionToTask(id);
+  };
 
   // Mark edit mode and capture initial state for unsaved changes detection
   meetingsInEditMode = true;
   const initialLinks = (meetingData.links || []).map(l => ({ title: (l.title || '').trim(), url: (l.url || '').trim() }));
+  if (descEditor._wr) descEditor._wr.loaded();
   meetingsInitialState = {
     name: meetingData.title || '',
     type: meetingData.type || 'one-time',
-    description: normalizeDescHtml(meetingData.description || '') || '',
+    description: normalizeDescHtml(descEditor.innerHTML || '') || '',
     links: initialLinks
   };
 
   // Focus name input
   requestAnimationFrame(() => $('#meetings-inline-name').focus());
+}
+
+// ============================================================
+// WRITING: doc meta for exports
+// ============================================================
+
+const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+function recurrenceText({ type, date, repeat, repeatWeeks, repeatMonthlyType }) {
+  if (type !== 'routine' || !repeat || repeat === 'none') return '';
+  const d = date ? new Date(date + 'T00:00:00') : null;
+  if (repeat === 'weekly') {
+    const n = parseInt(repeatWeeks, 10) || 1;
+    const every = n === 1 ? 'Weekly' : `Every ${n} weeks`;
+    return d ? `${every} on ${WEEKDAYS[d.getDay()]}` : every;
+  }
+  if (repeat === 'monthly') {
+    if (repeatMonthlyType === 'firstWeekday') return 'Monthly, first weekday';
+    return d ? `Monthly on day ${d.getDate()}` : 'Monthly';
+  }
+  return '';
+}
+
+function buildMeetingMeta({ title, type, date, repeat, repeatWeeks, repeatMonthlyType, links, files }) {
+  const kindLabel = type === 'routine' ? 'Recurring' : 'One-time';
+  const fields = [{ label: 'Type', value: kindLabel }];
+  if (date) fields.push({ label: 'Date', value: date });
+  const rec = recurrenceText({ type, date, repeat, repeatWeeks, repeatMonthlyType });
+  if (rec) fields.push({ label: 'Repeats', value: rec });
+  const sections = [];
+  const linkItems = (links || []).filter(l => l && l.url).map(l => (l.title && l.title !== l.url ? `${l.title} (${l.url})` : l.url));
+  if (linkItems.length) sections.push({ title: 'Links', items: linkItems });
+  const fileItems = (files || []).filter(f => f && f.fileId).map(f => `[file: ${f.fileName || 'file'}]`);
+  if (fileItems.length) sections.push({ title: 'Files', items: fileItems });
+  return { kind: 'Meeting', title: title || 'Untitled meeting', subtitle: rec || kindLabel, fields, sections };
+}
+
+function meetingDocMeta(meeting) {
+  return buildMeetingMeta(meeting || {});
+}
+
+// While editing: read the form, so exports match what is on screen
+function meetingDocMetaFromForm() {
+  const type = $('#meetings-inline-type')?.value || 'one-time';
+  const links = [];
+  document.querySelectorAll('#meetings-inline-link-rows .meeting-link-row').forEach(row => {
+    const url = (row.querySelector('.meeting-link-url')?.value || '').trim();
+    if (url) links.push({ title: (row.querySelector('.meeting-link-title')?.value || '').trim() || url, url });
+  });
+  const files = [];
+  document.querySelectorAll('#meetings-inline-file-rows .meeting-file-row').forEach(row => {
+    if (row.dataset.fileId) files.push({ fileId: row.dataset.fileId, fileName: row.querySelector('.meeting-file-name')?.textContent || '' });
+  });
+  return buildMeetingMeta({
+    title: ($('#meetings-inline-name')?.value || '').trim(),
+    type,
+    date: $('#meetings-inline-date')?.value || null,
+    repeat: type === 'routine' ? $('#meetings-inline-repeat')?.value : null,
+    repeatWeeks: $('#meetings-inline-weekly-type')?.value,
+    repeatMonthlyType: $('#meetings-inline-monthly-type')?.value,
+    links,
+    files
+  });
 }
 
 // ============================================================
@@ -960,8 +1088,10 @@ function convertMeetingSelectionToTask(meetingId) {
     // Save the updated description to the meeting
     const meeting = getAllMeetings().find(m => m.id === meetingId);
     if (meeting) {
-      meeting.description = stripHydratedImageSrc(editor.innerHTML);
+      meeting.description = cleanEditorHtml(editor);
       saveModel();
+      // the description on screen is saved now: not an unsaved change
+      if (meetingsInitialState && meetingsEditingId === meetingId) meetingsInitialState.description = normalizeDescHtml(editor.innerHTML) || '';
     }
   });
 }

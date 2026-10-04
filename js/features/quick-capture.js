@@ -924,7 +924,8 @@ function hideActionToast() {
 // COMMAND REFERENCE (ⓘ)
 // ============================================================
 
-const KEY_ROWS = [
+// Also listed in the writing help's Quick capture tab (writing/help.js)
+export const KEY_ROWS = [
   [['Enter'], 'Save'],
   [['Shift', 'Enter'], 'Save, then open the task'],
   [['Esc'], 'Close (or close an open list)'],
@@ -994,6 +995,18 @@ function renderHelp() {
   const foot = document.createElement('p');
   foot.className = 'qc-help-foot';
   foot.textContent = 'Click a command to add it to your line. Commands can go anywhere in the line.';
+  // Every other shortcut lives in the writing help window (it opens under this bar, so close first)
+  if (typeof window.openWritingHelp === 'function') {
+    const all = document.createElement('button');
+    all.type = 'button';
+    all.className = 'qc-hint-link qc-help-all';
+    all.textContent = 'All shortcuts';
+    all.addEventListener('click', () => {
+      closeQuickCapture();
+      window.openWritingHelp('quick');
+    });
+    foot.append(' ', all);
+  }
   body.appendChild(foot);
 }
 

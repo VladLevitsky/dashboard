@@ -10082,6 +10082,10 @@ body[data-theme="dark"][data-style="glass"][data-glass-theme="sunset"] .tasks-su
   color: var(--muted);
   font-style: italic;
 }
+/* The meetings editor borrows the task editor's class */
+#meetings-inline-desc-editor:empty::before {
+  content: 'Meeting notes\2026  type / for blocks';
+}
 
 [data-theme="dark"] .task-desc-editor {
   background: #1e293b;
@@ -10207,18 +10211,26 @@ body[data-theme="dark"][data-style="glass"][data-glass-theme="sunset"] .tasks-su
 .task-desc-view-content h5 { font-size: 0.9em; }
 .task-desc-view-content h6 { font-size: 0.85em; color: var(--muted); }
 
-/* Responsive: stack on narrow screens */
+/* Responsive: stack on narrow screens. The dialog body scrolls as one column,
+   and while the description is being edited it gets a real writing area
+   (the whole visible body; the old fixed 300px left the editor a sliver) */
 @media (max-width: 700px) {
   .task-editor-body {
     flex-direction: column;
+    overflow-y: auto;
   }
   .task-editor-content {
     flex: 0 0 auto;
+    overflow: visible;
   }
   .task-editor-description {
+    flex: 0 0 auto;
     border-left: none;
     border-top: 1px solid #e5e7eb;
-    max-height: 300px;
+  }
+  .task-editor-description:has(> .task-desc-editor-wrap:not([hidden])) {
+    height: 100%;
+    min-height: 320px;
   }
   [data-theme="dark"] .task-editor-description {
     border-left: none;
@@ -12153,6 +12165,10 @@ body[data-theme="dark"][data-style="glass"][data-glass-theme="sunset"] .tasks-su
   border-radius: 8px;
   min-height: 40px;
   margin-bottom: 12px;
+  /* Long notes scroll inside the box: the Edit / Export / Delete row stays
+     below it instead of being painted over */
+  flex: 0 1 auto;
+  overflow-y: auto;
 }
 
 [data-theme="dark"] .meetings-view-content {
@@ -12256,6 +12272,87 @@ body[data-theme="dark"][data-style="glass"][data-glass-theme="sunset"] .tasks-su
 
 .meetings-view-section .task-desc-editor {
   min-height: 120px;
+}
+
+/* Phones: the meeting list sits above the open meeting instead of a 200px
+   column beside it, so the form and the description editor get the full
+   width. While a meeting is open the list is a short scrolling strip */
+@media (max-width: 600px) {
+  .meetings-body {
+    flex-direction: column;
+  }
+  .meetings-sidebar {
+    width: auto;
+    min-width: 0;
+    flex: 1 1 auto;
+    min-height: 0;
+    padding: 0 16px 12px;
+    border-right: none;
+  }
+  .meetings-body:has(> .meetings-view-section:not([hidden])) > .meetings-sidebar {
+    flex: 0 0 auto;
+    max-height: 26vh;
+    border-bottom: 1px solid #e5e7eb;
+  }
+  [data-theme="dark"] .meetings-body:has(> .meetings-view-section:not([hidden])) > .meetings-sidebar {
+    border-bottom-color: #374151;
+  }
+  .meetings-view-section {
+    min-height: 0;
+    padding: 16px;
+  }
+  /* Name on its own row, type + date share the next one */
+  .meeting-editor-top-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .meeting-editor-top-row > .meeting-editor-name-col {
+    grid-column: 1 / -1;
+  }
+  /* Long notes scroll the whole form, so the writing toolbar stays pinned to
+     the top of it while the description is on screen (no Ctrl shortcuts on a
+     phone). Frosted while pinned, so the lines sliding under it fade out */
+  #meetings-inline-toolbar {
+    position: sticky;
+    top: -16px; /* the section's padding: flush with its top edge */
+    z-index: 3;
+    --tb-glass: linear-gradient(var(--glass-dialog), var(--glass-dialog));
+  }
+  /* Three layers of the dialog glass (a nested backdrop blur doesn't render
+     inside the dialog's own). Browsers without scroll-state queries keep it on */
+  body[data-style="glass"][data-theme] #meetings-inline-toolbar {
+    background: var(--glass-reflection), var(--tb-glass), var(--tb-glass), var(--glass-dialog) !important;
+  }
+  @supports (container-type: scroll-state) {
+    /* Not pinned it looks like every other toolbar; the frost fades in on a
+       layer behind the buttons once it sticks */
+    #meetings-inline-toolbar {
+      container-type: scroll-state;
+    }
+    body[data-style="glass"][data-theme] #meetings-inline-toolbar {
+      background: transparent !important;
+    }
+    body[data-style="glass"][data-theme] #meetings-inline-toolbar::before {
+      content: '';
+      position: absolute;
+      inset: -1px;
+      z-index: -1;
+      border-radius: inherit;
+      background: var(--glass-reflection), var(--tb-glass), var(--tb-glass), var(--glass-dialog);
+      opacity: 0;
+      transition: opacity 0.15s ease;
+      pointer-events: none;
+    }
+    @container scroll-state(stuck: top) {
+      body[data-style="glass"][data-theme] #meetings-inline-toolbar::before {
+        opacity: 1;
+      }
+    }
+  }
+  /* pinned at the form's top edge, swatches opening upward would be clipped */
+  #meetings-inline-toolbar .highlighter-color-dropdown {
+    bottom: auto;
+    top: calc(100% + 6px);
+  }
 }
 
 /* Meeting toolbar: hyperlink + convert-to-task buttons */
@@ -14588,7 +14685,8 @@ ul.checklist ul.checklist {
   text-decoration-color: #4ade80;
 }
 [data-theme="dark"] ul.checklist > li.checked::before {
-  background: #22c55e;
+  /* background-color only: the shorthand would drop the tick image */
+  background-color: #22c55e;
   border-color: #22c55e;
 }
 

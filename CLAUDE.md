@@ -66,8 +66,10 @@ const model = {
   // Feature data
   projects: [{ id, title, content }],
   meetings: [{ id, title, type, description, links, files?: [{ fileId, fileName }], date?, repeat?, repeatWeeks?, repeatMonthlyType? }],
-  ideas: [{ id, title, content }],
-  cardNotes: { [sectionId]: [{ key, title, content, color? }] },
+  ideas: [{ id, title, description }],   // rich text lives in `description` (not `content`)
+  // pinned: true or key deleted; createdAt / updatedAt epoch ms (updatedAt moves only on a real change).
+  // subtaskNotes["sectionId:subtitle:itemKey"] holds the same shape for subtask notes
+  cardNotes: { [sectionId]: [{ key, title, content, color?, pinned?, createdAt?, updatedAt? }] },
   // Listed in the Today view. Entries copy the card item and name it: sectionType (card id),
   // subtitle, name (item key). quickLinks: [{ key, title, url }] added with the link button
   quickAccessItems: { icons: [], listItems: [], quickLinks: [] },
@@ -92,6 +94,7 @@ Images inside rich text (descriptions, projects, meetings, ideas, notes) are sto
 ├── styles.css               # Structural styles
 ├── glass.css                # Glass visual system (loaded after styles.css)
 ├── glass-fx.css             # Glass FX v2 layer (loaded after glass.css; scoped under html[data-fx="v2"])
+├── writing.css              # Writing engine styles (loaded last; one numbered section per writing module)
 ├── CLAUDE.md
 ├── js/
 │   ├── main.js              # Entry point, exports to window.*
@@ -108,6 +111,10 @@ Images inside rich text (descriptions, projects, meetings, ideas, notes) are sto
 │   │   ├── rich-text-refs.js # Pure string rules for <img data-r2-file-id> in rich text (no DOM, Node-testable)
 │   │   ├── quick-capture-parse.js # Pure quick capture rules: dates, !commands, escapes, help list (no DOM, Node-testable)
 │   │   ├── agenda.js        # Pure due rules: what's due today/overdue, meeting recurrences, badge count (no DOM, Node-testable)
+│   │   ├── writing-commands.js # Pure writing registry: every command, its keys / markdown / slash aliases / tiers, key matching, help builder
+│   │   ├── writing-rules.js # Pure typing rules: block + inline markdown triggers, smart typography, autolink, safe URLs, help rows
+│   │   ├── writing-templates.js # Pure built-in templates (canonical HTML with {{date}} {{time}} {{title}})
+│   │   ├── markdown.js      # Pure HTML parser, HTML↔Markdown, allowlist sanitizer, plain text, word stats (no DOM, Node-testable)
 │   │   └── file-service.js  # R2 file operations, image ref classification, Base64 migration
 │   ├── features/
 │   │   ├── edit-mode.js     # Toggle, popovers, color pickers, notepad, highlighter, context menu
@@ -134,12 +141,29 @@ Images inside rich text (descriptions, projects, meetings, ideas, notes) are sto
 │   │   ├── calendar.js      # Calendar (opened from the badge) + Due Today/Overdue list, notification badge
 │   │   ├── auth-ui.js       # Auth modal UI, cloud sync triggers
 │   │   ├── glass-glow.js    # Samples rendered colors into glow vars; reflected item light on card rims
-│   │   └── glass-fx.js      # FX v2 pointer-caught rim light (constructed stylesheet, no DOM writes)
+│   │   ├── glass-fx.js      # FX v2 pointer-caught rim light (constructed stylesheet, no DOM writes)
+│   │   └── writing/         # The writing engine (see Writing Engine below)
+│   │       ├── editor.js    # attachWritingFeatures / attachWritingView, api, key dispatch, toolbar additions, basic commands, prefs
+│   │       ├── dom.js       # Selection/range/block helpers, undo-safe exec wrappers, cleanEditorHtml, isEffectivelyEmpty
+│   │       ├── ui.js        # Popups: anchored menus, caret-anchored lists, popovers, icons, kbd rendering
+│   │       ├── blocks.js    # Headings/quote/callouts/toggles/code blocks/tables/dividers, Enter/Tab/Backspace in blocks, table tools, move/duplicate
+│   │       ├── input-rules.js # Markdown-as-you-type, inline marks, smart typography, escapes, Backspace-undo of a conversion
+│   │       ├── menus.js     # "/" slash menu, "@" date rows, "[[" doc picker, ":" emoji
+│   │       ├── refs.js      # Date + doc-ref chips: labels, title refresh, clicks
+│   │       ├── links.js     # Ctrl+K link popover, link card, autolink, paste URL over selection
+│   │       ├── paste.js     # Clean HTML paste, Markdown paste (+ Undo toast), Ctrl+Shift+V plain paste
+│   │       ├── find.js      # Find & replace bar (CSS Custom Highlight API)
+│   │       ├── doc-tools.js # Status line (words/chars/read time/checklist) + outline popover
+│   │       ├── focus.js     # Focus mode (full-screen sheet, typewriter scrolling, outline rail)
+│   │       ├── export.js    # Export menu: .md, PDF (print iframe), copy Markdown / formatted; templates menu + empty hint
+│   │       └── help.js      # Shortcuts & commands window, writing preferences, Settings entry, global "?"
 │   └── components/
 │       └── sections.js      # Section rendering (icons, lists, reminders, copy-paste)
 ├── assets/
 └── Reference/               # (gitignored) Backend docs, screenshots, working context
-    ├── migration-test.mjs   # Node smoke test: schema migrations + device-profile round-trip
+    ├── writing/             # Writing engine build spec (SPEC.md), plan, code maps, research digests
+    ├── wr/                  # Playwright harness (harness.cjs) + browser suites: smoke-e2e, qa-foundation-e2e, blocks-, input-rules-, menus-, links-, find-, focus-, export-, help-, notes-e2e
+    ├── writing-commands-test.mjs / writing-rules-test.mjs / writing-templates-test.mjs / markdown-test.mjs # Node tests for the pure writing modules
     ├── collapse-test.mjs    # Node smoke test: collapse display-layout compaction
     ├── time-log-test.mjs    # Node smoke test: time-log start/stop, totals, merge, import, period ranges
     ├── sync-merge-test.mjs  # Node smoke test: cloudSave() time-log merge against a fake API
@@ -155,6 +179,7 @@ Images inside rich text (descriptions, projects, meetings, ideas, notes) are sto
 - **Sync model**: localStorage for immediate edits → cloud sync on confirm, every 20 min, and on import
 - **Time-log merge**: the profile is saved whole (last write wins), so before every `PUT /profile`, `cloudSave()` fetches the cloud copy and folds its `timeTracking` into the local log (`mergeTimeLogs`): sessions union (deduped by start, earliest stop wins), tombstones win, the newer start/stop decides the running timer, and sessions older than an import only come from the importing side. Other profile data is still last-write-wins
 - **Dirty generation**: a save only clears the dirty flag if nothing changed while the upload was in flight
+- **Rich text is sanitized on the way in**: `sanitizeStoredRichText()` (storage.js) runs in `restoreModel` (covers cloud profiles, which arrive via localStorage + reload) and on JSON import; it passes project/meeting/idea/task/subtask/note HTML through markdown.js `sanitizeStoredHtml` only when it holds something dangerous (script, on* handlers, javascript: links, overlay classes), leaving clean fields untouched. The editors' render sites also guard before `innerHTML`
 
 ---
 
@@ -278,30 +303,55 @@ One set of rules for the Today view, the calendar and the badge, so they always 
 - Off in edit mode (toast; an open one closes when editing starts). Esc closes it unless something is open on top. z-index 9990: under item bubbles (9999+), calendar (10000), meetings (10001), task editor (10010) and the quick-link dialog (10005), so they all stack above it. The edit pencil (9999) is hidden while it is open; `#toast` sits above every modal (100150)
 - `refreshTodayView()` coalesces repaint requests into one render (microtask); it runs from `renderEisenhowerMatrix`, `updateNotificationBadge` and Quick Access changes
 
+### Writing Engine (`js/features/writing/` + `js/core/writing-*.js` + `js/core/markdown.js` + `writing.css`)
+One engine powers all 6 rich-text editors, in two tiers. Build spec + research: `Reference/writing/` (SPEC.md is the design reference; version history in it was dropped on request).
+- **Tiers**: LITE = Card Notes (typing power only: markdown, shortcuts, a short `/` list; toolbar gains just Link and `?`). FULL = task description, subtask description, ideas, projects, meetings (everything below)
+- **Attach**: each editor calls `attachWritingFeatures(editor, opts)` where it is set up (meetings re-attaches on every edit open; attach is idempotent and leak-free). opts: `{ id, tier, toolbar, getTitle, getDocMeta, getDocId, onChange, onSave, linkTask, makeTask, addSubtask }`. Every editor calls `editor._wr.loaded()` after (re)loading content, BEFORE taking its unsaved-changes baseline. Read-only views (`#task-desc-view-content`, `#ideas-view-content`, `.meetings-view-content`, `#note-viewer-content`) call `attachWritingView(viewEl, { id, getTitle, getDocMeta, actionsHost })` after every render (safe link clicks, toggle/copy/chip clicks, Export menu). Editors and views get class `wr-doc`
+- **One registry** (`js/core/writing-commands.js` `WRITING_COMMANDS`): id, label, group, keys, markdown, slash aliases, tiers, editors. It drives the key dispatcher, slash menu, toolbar tooltips, context-menu hints and the help window, so they can't drift. Modules implement commands with `api.registerCommand(id, { run, isActive?, isAvailable? })`; a key whose command isn't registered (or returns false) goes to the browser
+- **Core flow** (editor.js): capture-phase keydown → module hooks in install order (menus, blocks, input-rules, links, paste, find, doc-tools, focus, export, help, refs) → registry key match → command. Hooks: `api.hooks.{keydown,input,beforeinput,selection,click,paste,composition,load,change}`; returning true consumes the event. Plain click on a link places the caret (link card); Ctrl/⌘+click opens it
+- **Shortcuts** (Mod = Ctrl / ⌘; NEVER Ctrl+Alt: on Windows it is AltGr and Canadian French AltGr+2 types `@`; digits match `e.code`, events with AltGraph or IME composition are ignored): Ctrl+Shift+0/1/2/3 text/H1-H3, Ctrl+Shift+7/8/9 numbered/bullets/checklist, Ctrl+Shift+. quote, Ctrl+Enter check item / open-close toggle, Ctrl+Shift+X (or S) strike, Ctrl+E inline code, Ctrl+Shift+H highlight, Ctrl+\ clear formatting, Ctrl+K link, Alt+Shift+↑/↓ move block, Ctrl+D duplicate, Ctrl+S save, Ctrl+F / Ctrl+H find / replace, Ctrl+P export PDF, Ctrl+Shift+F focus mode, Ctrl+/ help, Ctrl+Shift+V plain paste. Ctrl+F/H/P/Shift+F only inside FULL editors
+- **Typing rules** (input-rules.js + pure `writing-rules.js`): `# ## ###`, `- *`, `1.`, `[] [ ] [x]`, `>`, `---` (both tiers); FULL only: ```` ``` ````/```` ```js ```` code, `!!` callout, `<>` decision, `+` toggle. Inline `**b** *i* _i_ ~~s~~ \`c\` ==h== [t](url)`. Smart typography `-> <- <-> => != <= >= +- (c) --` (pref). Backslash keeps a marker literal. Backspace (or Ctrl+Z) right after a conversion restores exactly what was typed. All conversions go through execCommand (undo-safe); never inside code or during IME composition. The legacy `handleEditorInput` rules are a no-op for attached editors
+- **Canonical HTML** (compact, no whitespace between tags; `wr-` prefix): headings `h1-h3`; `<blockquote><div>`; `<hr>`; callout `div.wr-callout[data-kind=note|tip|decision|warning|caution]` (icon + label via `::before`, gutter click cycles kind); toggle `div.wr-toggle[data-open]` > `.wr-toggle-title` + `.wr-toggle-body` (open state is saved; toggling in a VIEW uses `data-wr-open`, never saved); code `pre.wr-code[data-lang]>code` with real `\n`; table `table.wr-table>tbody` (optional th header row); `<s>`, `<code>`; highlight `mark.text-highlight[data-highlight-color]` (colors from CSS, theme-aware, no inline style); date chip `span.wr-date[data-date=YYYY-MM-DD][contenteditable=false]`; doc ref `span.wr-ref[data-ref-type=project|meeting|idea][data-ref-id]` (title refreshed from live data, deleted target → plain text). Never put `<button>` inside content (glass-glow styles every button); UI inside an editor carries `data-wr-ephemeral` and is stripped by `cleanEditorHtml()` (dom.js), which also unwraps the image-resize wrapper. `isEffectivelyEmpty()` decides emptiness (used by `normalizeDescHtml`, notes, projects)
+- **Menus**: `/` slash menu (line start / after a space; grouped, aliases, recent picks first in localStorage `dashboard_writing_recent`, `/table 4x3` sizes); `@` adds a Date section to the task mention list when the query reads as a date (quick-capture date rules; dates-only list in editors without task mentions); `[[` links a project, meeting or idea; `:smile` emoji (emoji-picker-element database, lazy). Toolbar (FULL): `Text ▾` block style, strike / code / link after U, `+` Insert menu, right group Find · Outline · Focus · Export ▾ · ?, folding into `⋯` when narrow
+- **Blocks** (blocks.js): turn-into wraps the current block(s); Enter on an empty last line exits a callout/quote/toggle; Backspace at a block start unwraps it; code: Enter = newline, Tab = 2 spaces, Enter on a blank last line or ArrowDown exits; tables: Tab / Shift+Tab move cells (Tab on the last cell adds a row), floating table tools bar under the table (rows, columns, header, delete)
+- **Links & paste**: Ctrl+K popover (text + URL, Remove), link card (Open / Edit / Copy / Remove), autolink on Space/Enter (pref), paste a URL over a selection = link; only http(s)/mailto/#. Paste: HTML → `sanitizeRichHtml` allowlist (markdown.js); plain text that looks like Markdown → formatted, with an Undo toast (pref); image files still go through `attachImageUpload`
+- **Doc tools**: find & replace bar (CSS Custom Highlight API, case / whole word, Replace all with toast Undo); status line under FULL editors (words · characters · read time · checklist done/total, pref); outline popover (H1-H3, click jumps); focus mode (full-screen sheet, optional typewriter scrolling pref, outline rail ≥1100px, Esc exits and restores layout + caret)
+- **Export** (export.js): Export ▾ in FULL toolbars and in the 4 views: Download Markdown (`<Kind> - <title> <date>.md`, images → `[image: name]`, callouts → GitHub alerts, toggles → `<details>`), Export PDF (hidden same-origin print iframe; choose "Save as PDF"), Copy as Markdown, Copy formatted (inline-styled HTML for email). Templates (`writing-templates.js`, 12 built-ins incl. Meeting notes, 1:1, Project brief, Decision record, Weekly review, Retrospective, Task brief) via `/template` or the Insert menu; empty projects/meetings/task editors show a "Start with a template" hint
+- **Help** (help.js): "Shortcuts & commands" window (`#wr-help`, z 10060) with tabs Writing / Card notes / Markdown & typing / Quick capture / Dashboard / Preferences, live search, ⌘ on Mac. Opened by Ctrl+/, the `?` toolbar button, the `?` key anywhere when not typing, Settings → Writing & shortcuts, and the slash menu footer. `window.openWritingHelp(tab)`. Rows come only from the registry, `MARKDOWN_RULES_HELP` and `QUICK_CAPTURE_HELP`
+- **Preferences** (per browser, localStorage `dashboard_writing_prefs`): smartTypography, autolink, markdownPaste, statusBar (on by default), typewriter (off)
+- **z-index**: writing menus/popovers 100004 (above context menu 100002 / link picker 100003), focus sheet 10040 (or just above its window), help 10060; notepad 9995, note viewer 9996
+- **Tests**: `Reference/wr/harness.cjs` (Playwright: real profile import, `openEditor(page, id)` for all 6 editors, `save`, `getModelValue`, `shot`) + one browser suite per module; Node tests for the pure modules
+
 ### Text Highlighter
 Available in all rich-text editors (projects, meetings, tasks, subtasks, ideas, card notes):
-- 5 pastel colors (yellow, green, blue, pink, purple) selectable in toolbar
-- Right-click context menu: Bold, Italic, Underline, Bullet/Numbered/Checklist, Highlight, Remove highlight, Link task
-- Context menu works with or without text selection (highlight/link task require selection)
+- 5 pastel colors (yellow, green, blue, pink, purple). Clicking the pen with text selected applies the current color; the color dot (or a click without a selection) opens the swatches. Ctrl+Shift+H and typing `==text==` apply it too
+- Colors come from CSS keyed on `data-highlight-color` (light + dark palettes, `!important` so old inline-colored highlights follow the theme too)
+- Right-click context menu: Bold, Italic, Underline, Strikethrough, Inline code, Link…, Bullet/Numbered/Checklist, Highlight, Remove highlight, Link task, Turn into task (where available), Add as subtask (task description), each with its shortcut hint; Esc or typing closes it
 
 ### Checklists
-Available in all rich-text editors via toolbar button, context menu, or `[] ` markdown shortcut:
+Available in all rich-text editors via toolbar button, context menu, Ctrl+Shift+9, or `[] ` / `[ ] ` / `[x] ` markdown:
 - Uses `<ul class="checklist">` with CSS `::before` circle checkboxes
-- Click circle to toggle: checked items get green text, strikethrough, green filled circle with checkmark
+- Click circle (or Ctrl+Enter) to toggle: checked items get green text, strikethrough, green filled circle with checkmark
 - Enter on checked item creates unchecked new item; Enter on empty item exits list
 - Tab/Shift+Tab indents/outdents (nested lists inherit `checklist` class)
-- `toggleChecklist()` handles conversion between list types (bullet ↔ numbered ↔ checklist)
+- `toggleChecklist(editor)` handles conversion between list types (bullet ↔ numbered ↔ checklist); always pass the editor
 
 ### Card Notes (Notepad)
-Per-card note system with rich-text editing, color coding, and task linking.
-Notes viewer reconciles task highlights on open.
+Per-card (and per-subtask) note system, LITE writing tier, color coding, and task linking.
+- Saved notes list: pinned first (pin glyph), then most recently edited; chips show checklist progress (`2/5`) and an "Edited …" tooltip
+- Viewer: "Edited …" meta, Pin / Unpin, Export menu (Copy as Markdown, Download .md, Export PDF), checklist items can be ticked right there (saved), links open safely in a new tab; delete offers Undo
+- Esc closes the notepad (asks first if unsaved, as do × and Cancel); Ctrl+S saves; on phones it opens as a sheet
+- Search (header bar) matches note TEXT (`htmlToPlainText`), covers subtask notes too, and shows a snippet around the match
+- Notes viewer reconciles task highlights on open
 
 ### Settings Modal
 Accessible via gear icon in edit mode. Contains:
 - Theme: Light / Dark toggle
 - Theme: Classic (Grey) / Sunset dropdown
 - Tasks: opens Task Settings (categories)
+- Writing & shortcuts: opens the Shortcuts & commands window (writing preferences live in its Preferences tab)
 - JSON File Backup: Download and Upload with overwrite warning (includes `taskCategories` and `timeTracking`; importing a log resets history older than the import)
+- The dialog body scrolls on short screens
 
 ### Quick Access (listed in the Today view; the old panel and its header button were removed)
 - Long-press (750ms) any icon, reminder, subtask or copy-paste item on a card to add it; again to take it out. In view mode its card shows it first, with the azure pulse
@@ -458,6 +508,16 @@ Accessible via gear icon in edit mode. Contains:
 - `showActionToast(message, actions)` (exported; the item creator reuses it for Undo)
 - quick-capture-parse.js: `parseQuickCapture(text, { now, categories })` / `matchCategory()` / `normalizeUrl()` / `toDateKey()` / `fromDateKey()` / `QUICK_CAPTURE_HELP`
 
+### Writing Engine
+- `attachWritingFeatures(editor, opts)` / `attachWritingView(viewEl, opts)` (editor.js; also on `window`); `editor._wr.loaded()` after loading content
+- `api` (`window.writingApi`): `registerCommand`, `runCommand`, `hasCommand`, `context(editor)`, `activeEditor`, `notifyChange`, `hooks`, `prefs`, `ui`, `dom`, `registry`
+- dom.js: `cleanEditorHtml(htmlOrEl)`, `isEffectivelyEmpty(html)`, `exec` / `insertHTML` / `insertText` (re-entrancy guarded), `replaceRangeHtml`, `unwrapInline`, `caretRect`, `safeUrl`, `openSafe`
+- writing-commands.js: `WRITING_COMMANDS`, `matchKeyEvent(ev, mac)`, `formatKeys`, `commandsFor(tier, editorId)`, `slashItemsFor`, `buildWritingHelp(mac)`
+- markdown.js: `htmlToMarkdown(html, { imageName })`, `markdownToHtml(md)`, `sanitizeRichHtml(html)`, `sanitizeStoredHtml(html)`, `htmlToPlainText(html)`, `textStats(text)`, `looksLikeMarkdown(text)`
+- writing-rules.js: `matchBlockTrigger`, `matchInlineTrigger`, `matchTypography`, `matchAutolink`, `isSafeUrl`, `normalizeLinkUrl`, `MARKDOWN_RULES_HELP`
+- writing-templates.js: `WRITING_TEMPLATES`, `templatesFor(editorId)`, `renderTemplate(tpl, vars)`, `templateVars({ now, title })`
+- `window.openWritingHelp(tab)`; storage.js `sanitizeStoredRichText(data)`
+
 ### Shared Utilities (`js/utils.js`)
 - `moveCursorAfterNode(node)` - Move cursor after a contenteditable node
 - `normalizeDescHtml(html)` - Strip empty descriptions
@@ -522,9 +582,9 @@ All 6 editors share the same toolbar features and must be updated together:
 | Meetings | `meetings.js` | `#meetings-inline-desc-editor` | `.meetings-inline-toolbar-btn` | `updateInlineToolbarState()` |
 | Card Notes | `edit-mode.js` + `index.html` | `#notepad-editor` | `.notepad-toolbar-btn` | `updateToolbarState()` |
 
-Each editor needs: toolbar HTML buttons, click handlers, `attachHighlighterContextMenu()`, `attachChecklistHandler()`, `attachImageResizeHandler()` + `attachImageUpload()` (pasted images → R2), toolbar state update with checklist support, `handleEditorInput`/`handleEditorKeydown` wiring. Save the editor's HTML through `normalizeDescHtml()` / `stripHydratedImageSrc()` so stored images keep only their file reference.
+Each editor needs: toolbar HTML buttons, click handlers, `attachHighlighterContextMenu()`, `attachChecklistHandler()`, `attachImageResizeHandler()` + `attachImageUpload()` (pasted images → R2), toolbar state update with checklist support, `handleEditorInput`/`handleEditorKeydown` wiring, and `attachWritingFeatures()` (+ `attachWritingView()` on its read-only view). Save the editor's HTML through `normalizeDescHtml()` / `cleanEditorHtml()` so stored images keep only their file reference and no writing UI is saved.
 
-Shared logic lives in `edit-mode.js`: `handleEditorKeydown`, `handleEditorInput`, `toggleChecklist`, `isInChecklist`, `attachChecklistHandler`, `attachHighlighterContextMenu`, `createHighlighterButton`.
+Shared logic lives in `edit-mode.js`: `handleEditorKeydown`, `handleEditorInput`, `toggleChecklist`, `isInChecklist`, `attachChecklistHandler`, `attachHighlighterContextMenu`, `createHighlighterButton`. **New writing features belong in the writing engine, not per editor**: add the command to `WRITING_COMMANDS` (keys / markdown / slash / tiers), implement it with `api.registerCommand` in the matching `js/features/writing/` module, style it in that module's `writing.css` section, and it appears in every editor, the slash menu, tooltips and the help window at once.
 
 ### Adding Features Checklist
 1. Use minimalist SVG icons with currentColor
@@ -535,13 +595,27 @@ Shared logic lives in `edit-mode.js`: `handleEditorKeydown`, `handleEditorInput`
 6. Show toast feedback for actions
 7. Handle both URL and R2 file references where applicable
 8. Ensure new fields are in saveModel, restoreModel, deepMergeModel, import/export
-9. For rich-text editor features: update all 6 editors listed above
+9. For rich-text editor features: go through the writing engine (registry + module), never hand-wire 6 editors
+10. Keyboard shortcuts: never Ctrl+Alt (AltGr on Windows); add them to the registry so the help window lists them
 
 ---
 
 ## Version History
 
-### v5.2 (Current)
+### v5.3 (Current)
+- **Writing power-up**: one writing engine for all 6 rich-text editors (LITE card notes, FULL task / subtask / ideas / projects / meetings), driven by a single command registry
+- Markdown as you type (block + inline), smart typography, Backspace-to-undo a conversion, backslash escapes
+- Keyboard shortcuts for headings, lists, quote, strike, code, highlight, link, move / duplicate block, save, find, focus, PDF, help (no Ctrl+Alt anywhere)
+- `/` slash menu, `@` date chips, `[[` links between projects / meetings / ideas, `:` emoji
+- Callouts (note / tip / decision / warning / caution), toggles, code blocks with copy, tables with a tools bar, dividers
+- Ctrl+K link popover + link card, autolink, clean HTML paste, Markdown paste, plain paste
+- Find & replace, status line, outline, focus mode
+- Export: Markdown, PDF, copy Markdown / formatted; 12 templates
+- Shortcuts & commands window (Ctrl+/, `?`, Settings → Writing & shortcuts) with writing preferences
+- Card notes: pin, sort by edit date, checklist progress, viewer export / tick items, Esc, plain-text search incl. subtask notes
+- Highlighter pen applies the color; highlights follow the theme; rich text from storage / imports is sanitized; empty editors save as empty; task editor and meetings ask before discarding unsaved writing; phone layouts for the task description and meetings form
+
+### v5.2
 - **Task time tracking**: stopwatch on every task pill, exact start/end sessions saved with the profile, Time Tracking panel (tracked tasks + sessions, category donut) replaces the old standalone timers
 - **Task categories**: category chips in the task editor; Settings → Tasks → Task Settings to manage them
 - **Categories period filter**: funnel button above the category legend: Today, This week, Last 14 days, This month, Last month, This year, or a custom From/To range; Clear returns to all time. Remembered per browser

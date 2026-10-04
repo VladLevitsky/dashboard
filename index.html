@@ -8,10 +8,12 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Caveat:wght@500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=2026-10-01-tt-complete">
+  <link rel="stylesheet" href="styles.css?v=2026-10-04-writing">
   <link rel="stylesheet" href="glass.css?v=2026-09-30-today">
   <!-- Glass FX v2 layer: every rule is scoped under html[data-fx="v2"] -->
   <link rel="stylesheet" href="glass-fx.css?v=2026-10-01-tt-check">
+  <!-- Writing power-up: toolbar additions, menus, block styles (one section per module) -->
+  <link rel="stylesheet" href="writing.css?v=2026-10-04-writing2">
   <script type="module" src="js/features/glass-glow.js?v=2026-09-30-today"></script>
   <script type="module" src="js/features/glass-fx.js?v=2026-09-28-fx"></script>
   <!-- Emoji Picker Element - Web Component -->
@@ -503,6 +505,12 @@
                 <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
               </svg>
             </button>
+            <button type="button" class="note-viewer-pin" id="note-viewer-pin" title="Pin note to the top" aria-label="Pin note" aria-pressed="false">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M9 3h6l-1.2 5.6L17 11.5V14H7v-2.5l3.2-2.9z"></path>
+                <line x1="12" y1="14" x2="12" y2="21"></line>
+              </svg>
+            </button>
           </div>
           <div class="note-viewer-actions">
             <button type="button" class="note-viewer-edit" id="note-viewer-edit" title="Edit note">
@@ -519,6 +527,7 @@
             </button>
             <button type="button" class="note-viewer-close" id="note-viewer-close" title="Close">&times;</button>
           </div>
+          <div class="note-viewer-meta" id="note-viewer-meta" hidden></div>
         </div>
         <div id="note-viewer-content" class="note-viewer-content"></div>
       </div>
@@ -625,6 +634,18 @@
                 <circle cx="4.6" cy="5.1" r="1.6"/>
               </svg>
               Tasks
+            </button>
+          </div>
+          <!-- Writing: shortcuts, commands and writing preferences (js/features/writing/help.js) -->
+          <div class="appearance-divider"></div>
+          <div class="appearance-section" id="writing-help-section">
+            <div class="appearance-label">Writing</div>
+            <button type="button" id="settings-writing-help-btn" class="appearance-backup-btn" style="width: 100%;" aria-haspopup="dialog">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="2.5" y="5.5" width="19" height="13" rx="2.5"/>
+                <path d="M6.5 9.5h.01M10 9.5h.01M13.5 9.5h.01M17 9.5h.01M7.5 14.5h9"/>
+              </svg>
+              Writing &amp; shortcuts
             </button>
           </div>
           <!-- File Manager -->
@@ -777,7 +798,7 @@
     </div>
 
     <!-- ES6 Modules - fully modularized, no app.js dependency -->
-    <script type="module" src="js/main.js?v=2026-10-01-tt-complete"></script>
+    <script type="module" src="js/main.js?v=2026-10-04-writing"></script>
   </body>
   </html>
 
