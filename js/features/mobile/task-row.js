@@ -28,7 +28,7 @@ import { getTaskCategory, categoryColor } from '../task-categories.js';
 import { phaseFor } from '../../core/mobile-common.js';
 import { rowMeta, normColor, MOBILE_COLOR_LABELS } from '../../core/mobile-tasks.js';
 import { TASK_COLOR_LABELS } from '../../constants.js';
-import { closeAnyReveal } from './task-gestures.js?v=2026-10-mobile-1';
+import { closeAnyReveal } from './task-gestures.js?v=2026-10-mobile-2';
 
 // A double tap on a stopwatch would start and at once stop the timer (and
 // stop the one that was running before it): the user's second tap on any row

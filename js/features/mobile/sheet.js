@@ -9,8 +9,8 @@
 // Motion is WAAPI with no fill (sheet in 220ms, out 160ms); nothing keeps a
 // transform, so editors or popups opened from a sheet position correctly.
 
-import { registerLayer, syncHistory, anyLayerOpen } from './layers.js?v=2026-10-mobile-1';
-import { animate, createMover, reduceMotion } from './ui.js?v=2026-10-mobile-1';
+import { registerLayer, syncHistory, anyLayerOpen } from './layers.js?v=2026-10-mobile-2';
+import { animate, createMover, reduceMotion } from './ui.js?v=2026-10-mobile-2';
 
 const BACKGROUND = ['mx-topbar', 'mx-screens', 'mx-live', 'mx-carry', 'mx-dock', 'mx-plus'];
 // The screens hold every row of every tab: toggling inert on them restyles

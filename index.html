@@ -43,12 +43,12 @@
   <!-- Writing power-up: toolbar additions, menus, block styles (one section per module) -->
   <link rel="stylesheet" href="writing.css?v=2026-10-04-writing2">
   <!-- Mobile shell: every rule is scoped under html[data-shell="mobile"] (one file per unit) -->
-  <link rel="stylesheet" href="mobile.css?v=2026-10-mobile-1">
-  <link rel="stylesheet" href="mobile-tasks.css?v=2026-10-mobile-1">
-  <link rel="stylesheet" href="mobile-compose.css?v=2026-10-mobile-1">
-  <link rel="stylesheet" href="mobile-write.css?v=2026-10-mobile-1">
-  <link rel="stylesheet" href="mobile-today.css?v=2026-10-mobile-1">
-  <link rel="stylesheet" href="mobile-links.css?v=2026-10-mobile-1">
+  <link rel="stylesheet" href="mobile.css?v=2026-10-mobile-2">
+  <link rel="stylesheet" href="mobile-tasks.css?v=2026-10-mobile-2">
+  <link rel="stylesheet" href="mobile-compose.css?v=2026-10-mobile-2">
+  <link rel="stylesheet" href="mobile-write.css?v=2026-10-mobile-2">
+  <link rel="stylesheet" href="mobile-today.css?v=2026-10-mobile-2">
+  <link rel="stylesheet" href="mobile-links.css?v=2026-10-mobile-2">
   <link rel="apple-touch-icon" href="assets/icons/app-icon-180.png">
   <script type="module" src="js/features/glass-glow.js?v=2026-09-30-today"></script>
   <script type="module" src="js/features/glass-fx.js?v=2026-09-28-fx"></script>
@@ -284,6 +284,7 @@
       <!-- The + : a sibling of the dock (not inside it), so its own frosted lens blurs the
            page. Its breathing halo is a sibling too: inside the lens it would widen the blur. -->
       <button type="button" id="mx-plus" class="mx-plus" aria-label="Create" aria-haspopup="dialog">
+        <span class="mx-plus-rim" aria-hidden="true"></span>
         <svg class="mx-plus-glyph" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
       </button>
       <span class="mx-plus-halo" aria-hidden="true"></span>
@@ -924,7 +925,7 @@
     </div>
 
     <!-- ES6 Modules - fully modularized, no app.js dependency -->
-    <script type="module" src="js/main.js?v=2026-10-mobile-1"></script>
+    <script type="module" src="js/main.js?v=2026-10-mobile-2"></script>
   </body>
   </html>
 

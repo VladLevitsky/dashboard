@@ -24,11 +24,11 @@ import { dueState } from '../../core/agenda.js';
 import {
   MOBILE_COLOR_ORDER, MOBILE_COLOR_LABELS, SEGMENT_LABELS, lensCounts, defaultLens, lensTasks, rowSignature, normColor,
 } from '../../core/mobile-tasks.js';
-import { createTaskRow, fullColorLabel } from './task-row.js?v=2026-10-mobile-1';
-import { attachGestures, closeAnyReveal } from './task-gestures.js?v=2026-10-mobile-1';
-import { createTaskActions } from './task-actions.js?v=2026-10-mobile-1';
-import { openMoveSheet } from './move-sheet.js?v=2026-10-mobile-1';
-import { openCompleted } from './completed-view.js?v=2026-10-mobile-1';
+import { createTaskRow, fullColorLabel } from './task-row.js?v=2026-10-mobile-2';
+import { attachGestures, closeAnyReveal } from './task-gestures.js?v=2026-10-mobile-2';
+import { createTaskActions } from './task-actions.js?v=2026-10-mobile-2';
+import { openMoveSheet } from './move-sheet.js?v=2026-10-mobile-2';
+import { openCompleted } from './completed-view.js?v=2026-10-mobile-2';
 
 const PRIORITY_RGB = { red: '249 76 100', orange: '255 133 35', yellow: '242 189 24', blue: '61 151 248' };
 const CHECK_DONE = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="5 12.5 10 17 19 7.5"></polyline></svg>';

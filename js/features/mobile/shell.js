@@ -39,11 +39,11 @@ import { getTaskById } from '../tasks.js';
 import { formatClock, renderTimeTrackingPanel } from '../time-tracking.js';
 import { showActionToast } from '../quick-capture.js';
 import { getActiveMode } from '../grid-engine.js';
-import { registerLayer, registerBuiltInLayers, syncHistory, startLayers, stopLayers, anyLayerOpen, openLayers, historyDepth } from './layers.js?v=2026-10-mobile-1';
-import { openSheet, pushScreen, closeAllSheets, refreshInert } from './sheet.js?v=2026-10-mobile-1';
-import * as ui from './ui.js?v=2026-10-mobile-1';
-import { startViewport, stopViewport } from './viewport.js?v=2026-10-mobile-1';
-import * as syncGuard from './sync-guard.js?v=2026-10-mobile-1';
+import { registerLayer, registerBuiltInLayers, syncHistory, startLayers, stopLayers, anyLayerOpen, openLayers, historyDepth } from './layers.js?v=2026-10-mobile-2';
+import { openSheet, pushScreen, closeAllSheets, refreshInert } from './sheet.js?v=2026-10-mobile-2';
+import * as ui from './ui.js?v=2026-10-mobile-2';
+import { startViewport, stopViewport } from './viewport.js?v=2026-10-mobile-2';
+import * as syncGuard from './sync-guard.js?v=2026-10-mobile-2';
 
 // Unit entry modules (stubs until each unit lands; a stub registers a
 // placeholder screen). 'compose' has no screen; it provides the composer.

@@ -12,8 +12,8 @@ import { toDateKey } from '../../core/quick-capture-parse.js';
 import { addDays } from '../../core/agenda.js';
 import { shortDay } from '../../core/mobile-common.js';
 import { normColor, MOBILE_COLOR_LABELS } from '../../core/mobile-tasks.js';
-import { ICONS } from './task-row.js?v=2026-10-mobile-1';
-import { shieldTaps } from './task-gestures.js?v=2026-10-mobile-1';
+import { ICONS } from './task-row.js?v=2026-10-mobile-2';
+import { shieldTaps } from './task-gestures.js?v=2026-10-mobile-2';
 
 const PAGE = 30;
 

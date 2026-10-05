@@ -19,7 +19,7 @@ import {
 } from '../../core/mobile-write.js';
 import * as tasksApi from '../tasks.js';
 import * as projectsApi from '../projects.js';
-import { createWriter } from './writer.js?v=2026-10-mobile-1';
+import { createWriter } from './writer.js?v=2026-10-mobile-2';
 
 const FILTERS = [
   { value: 'all', label: 'All' },

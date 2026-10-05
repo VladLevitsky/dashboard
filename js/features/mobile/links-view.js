@@ -24,9 +24,9 @@ import { orderCardsForMobile, cardTitle } from '../../core/mobile-common.js';
 import { cardSummary, labelForIcon, fitThumbs, fitParts, linkedRefsSig, localDayKey } from '../../core/mobile-links.js';
 import { getQuickAccessItems, reconcileQuickAccessItems, openQuickLinkModal } from '../quick-access.js';
 import { openItemCreator } from '../item-creator.js';
-import { initCardItems, enhance, openItemSheet, buildCardBody, buildQuickAccess, iconThumb } from './card-items.js?v=2026-10-mobile-1';
-import { initSearch, openSearch } from './search-view.js?v=2026-10-mobile-1';
-import { initFileSheet, installFileOpener, uninstallFileOpener } from './file-sheet.js?v=2026-10-mobile-1';
+import { initCardItems, enhance, openItemSheet, buildCardBody, buildQuickAccess, iconThumb } from './card-items.js?v=2026-10-mobile-2';
+import { initSearch, openSearch } from './search-view.js?v=2026-10-mobile-2';
+import { initFileSheet, installFileOpener, uninstallFileOpener } from './file-sheet.js?v=2026-10-mobile-2';
 
 const PLUS_SVG = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true" focusable="false"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>';
 const CHEVRON_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="6 9 12 15 18 9"/></svg>';

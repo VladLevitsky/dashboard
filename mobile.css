@@ -337,9 +337,9 @@ html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx
   animation: mxTabPool 6.1s var(--fx-breathe) -2.6s infinite;
 }
 
-/* The + : a raised frosted lens (the edit pencil's lens at full size) with the
-   azure pool and its white-hot core in the lit top-right corner, and a halo
-   that breathes on a sibling span (the button's pseudos hold the light). The
+/* The + : a raised frosted lens (the edit pencil's lens at full size) with a
+   light that travels its rim, and a halo that breathes on a sibling span. No
+   corner pool or core: that light means "this icon has links / tasks". The
    button itself never gets a transform or filter; only the glyph scales. */
 html[data-shell="mobile"] #mx-plus {
   position: fixed; z-index: var(--mx-z-plus);
@@ -364,23 +364,26 @@ html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] #mx
     inset 2px 2px 4px -1px var(--fx-bevel-shade),
     inset -2px -2px 4px -1px var(--fx-bevel-shade);
 }
-/* The pool: a soft azure light gathered in the lit corner, clipped to the lens */
-html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] #mx-plus::before {
-  content: ""; position: absolute; z-index: 0; pointer-events: none;
-  width: 44px; height: 44px; left: calc(68% - 22px); top: calc(26% - 22px);
-  border-radius: 50%;
-  background: radial-gradient(circle closest-side,
-    rgb(var(--fx-ind-rgb) / calc(var(--fx-ind-pool-a) * 0.86)) 0%, rgb(var(--fx-ind-rgb) / calc(var(--fx-ind-pool-a) * 0.5)) 30%,
-    rgb(var(--fx-ind-rgb) / calc(var(--fx-ind-pool-a) * 0.2)) 52%, rgb(var(--fx-ind-fringe) / 10%) 72%, transparent 100%);
-  animation: fxPool 7.3s var(--fx-breathe) -1.1s infinite;
+/* The rim light (the lane's recipe): .mx-plus-rim is a thin ring (mask), and an
+   azure arc with a white-hot head rotates inside it on its pseudo (transform
+   only), slower than the lane's sweep so the two never pulse together */
+html[data-shell="mobile"] .mx-plus-rim { display: none; }
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-plus-rim {
+  display: block; position: absolute; inset: 0; z-index: 0;
+  box-sizing: border-box; padding: 1.5px;
+  border-radius: inherit; overflow: hidden;
+  pointer-events: none;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
 }
-html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] #mx-plus::after {
-  content: ""; position: absolute; z-index: 1; pointer-events: none;
-  width: 16px; height: 16px; left: calc(68% - 8px); top: calc(26% - 8px);
-  border-radius: 50%;
-  background: radial-gradient(circle closest-side, #fff 0%, rgb(236 250 255 / 96%) 18%,
-    rgb(var(--fx-ind-rgb) / var(--fx-core-a, 74%)) 40%, rgb(var(--fx-ind-rgb) / var(--fx-core-halo-a, 28%)) 66%, transparent 100%);
-  animation: fxCore 4.1s ease-in-out -0.6s infinite;
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-plus-rim::before {
+  content: ""; position: absolute; left: 50%; top: 50%; width: 150%; aspect-ratio: 1; margin-left: -75%;
+  transform-origin: 50% 50%; translate: 0 -50%;
+  background: conic-gradient(from 0deg, transparent 0turn 0.5turn, rgb(var(--fx-ind-rgb) / 0%) 0.5turn,
+    rgb(var(--fx-ind-rgb) / 45%) 0.8turn, rgb(236 250 255 / 90%) 0.9turn, transparent 0.9turn);
+  opacity: 0.85;
+  animation: fxSweep 7.4s linear -3.1s infinite;
 }
 /* The halo: a fixed sibling under the lens (inside it, Chrome would widen the
    lens's backdrop blur to the halo box and draw a grey disc) */

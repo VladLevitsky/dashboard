@@ -27,8 +27,8 @@ import { createTaskTimerControl, refreshTimeTrackingUI } from '../time-tracking.
 import { createCardItemElement } from '../../components/sections.js';
 import { getTaskCategories } from '../task-categories.js';
 import * as mobileTasks from '../../core/mobile-tasks.js';
-import { createTimeSheet } from './time-sheet.js?v=2026-10-mobile-1';
-import { createMoreSheet } from './more-sheet.js?v=2026-10-mobile-1';
+import { createTimeSheet } from './time-sheet.js?v=2026-10-mobile-2';
+import { createMoreSheet } from './more-sheet.js?v=2026-10-mobile-2';
 
 const SHORT_LABELS = { red: 'Urgent & important', orange: 'Urgent', yellow: 'Important', blue: 'Later' };
 const COMING_DAYS = 7;

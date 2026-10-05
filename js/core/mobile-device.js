@@ -13,7 +13,7 @@
 export const PHONE_MAX_SHORT_SIDE = 600;
 // Bumped with every mobile deploy, together with the main.js shell specifier
 // and every mobile*.css ?v= in index.html (the specifier test checks them).
-export const MOBILE_BUILD = '2026-10-mobile-1';
+export const MOBILE_BUILD = '2026-10-mobile-2';
 
 export function isPhoneScreen({ width = 0, height = 0, coarse = false } = {}) {
   const short = Math.min(width || 0, height || 0);

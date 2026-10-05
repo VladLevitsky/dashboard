@@ -19,7 +19,7 @@ import { searchAll, cardSummary, isColorCode, localDayKey, linkedRefsSig } from 
 import { rowSignature } from '../../core/mobile-tasks.js';
 import { relativeTime } from '../../core/mobile-common.js';
 import { createCardItemElement } from '../../components/sections.js';
-import { enhance, buildIconCell, taskRowFor } from './card-items.js?v=2026-10-mobile-1';
+import { enhance, buildIconCell, taskRowFor } from './card-items.js?v=2026-10-mobile-2';
 
 const PER_GROUP = 5;
 const DEBOUNCE_MS = 120;
