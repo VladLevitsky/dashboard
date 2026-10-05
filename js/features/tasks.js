@@ -368,6 +368,41 @@ export function clearCompletedTasks() {
   }
 }
 
+// Put a completed task back among the open tasks (the mobile shell's Undo and
+// Restore). place = { color?, pinned? }; it goes to the end of its colour, like
+// createTask. Linked card items get the task back; project / meeting / note
+// highlights recover on their next display (reconcileTaskHighlights).
+// Returns the task, or null when it is not in the completed list.
+export function restoreCompletedTask(taskId, place = {}) {
+  const data = currentData();
+  const done = data.completedTasks || [];
+  const idx = done.findIndex(t => t.id === taskId);
+  if (idx === -1) return null;
+  const task = done[idx];
+  done.splice(idx, 1);
+  delete task.completed;
+  delete task.completedAt;
+  if (place.color) task.color = place.color;
+  if (place.pinned !== undefined) task.pinned = !!place.pinned;
+  // Last of its colour (and so of its group): after the highest order, since
+  // earlier completions leave gaps and `length` could land mid-list or collide
+  const orders = getTasksByColor(task.color).map(t => Number(t.order) || 0);
+  task.order = orders.length ? Math.max(...orders) + 1 : 0;
+  data.tasks = data.tasks || [];
+  data.tasks.push(task);
+  getLinkedItems(task).forEach(ref => {
+    const item = findItemByReference(ref);
+    if (item) {
+      item.taskIds = item.taskIds || [];
+      if (!item.taskIds.includes(taskId)) item.taskIds.push(taskId);
+    }
+  });
+  syncTaskTimeMeta(task);
+  saveModel();
+  if (window.refreshProjectHighlights) window.refreshProjectHighlights();
+  return task;
+}
+
 // Helper: remove project highlight (called when deleting a task)
 function removeProjectHighlight(projectId, taskId) {
   if (window.removeProjectTaskHighlight) {
@@ -1485,6 +1520,14 @@ export function refreshTaskViews() {
 function renderEisenhowerMatrix() {
   const grid = $('#eisenhower-grid');
   if (!grid) return;
+  // Mobile shell: the Tasks tab replaces the matrix (it repaints through the
+  // model:saved funnel), so only keep the timers and an open Today view current
+  if (document.documentElement.dataset.shell === 'mobile') {
+    grid.textContent = '';
+    refreshTimeTrackingUI();
+    if (window.refreshTodayView) window.refreshTodayView();
+    return;
+  }
 
   grid.innerHTML = '';
 
@@ -1913,6 +1956,9 @@ function initEisenhowerDropZone(container, targetColor, targetPinned) {
 function initDeleteDropZone() {
   const dropTarget = $('#delete-task-drop');
   if (!dropTarget) return;
+  // Wired once (the matrix re-renders often; repeated listeners asked repeatedly)
+  if (dropTarget.dataset.dropWired) return;
+  dropTarget.dataset.dropWired = '1';
 
   dropTarget.addEventListener('dragover', (e) => {
     e.preventDefault();
@@ -2710,7 +2756,7 @@ function openTaskEditorModal(taskData, titleText) {
           input.style.color = 'var(--accent)';
           input.style.cursor = 'pointer';
           input.addEventListener('click', () => {
-            openFile(linkItem.fileId, linkItem.fileName);
+            (window.openFile || openFile)(linkItem.fileId, linkItem.fileName);
           });
         } else {
           input.value = linkItem.value || '';
@@ -2729,7 +2775,7 @@ function openTaskEditorModal(taskData, titleText) {
           openBtn.title = 'Open file';
           openBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>';
           openBtn.addEventListener('click', () => {
-            openFile(linkItem.fileId, linkItem.fileName);
+            (window.openFile || openFile)(linkItem.fileId, linkItem.fileName);
           });
           wrap.appendChild(input);
           wrap.appendChild(openBtn);
@@ -2818,7 +2864,9 @@ function openTaskEditorModal(taskData, titleText) {
     if (categories.length === 0) {
       const hint = document.createElement('span');
       hint.className = 'task-editor-categories-empty';
-      hint.textContent = 'No categories yet. Add them in edit mode → Settings → Tasks.';
+      hint.textContent = document.documentElement.dataset.shell === 'mobile'
+        ? 'No categories yet. Add them in More → Task categories.'
+        : 'No categories yet. Add them in edit mode → Settings → Tasks.';
       categoriesContainer.appendChild(hint);
       return;
     }
@@ -2878,8 +2926,8 @@ function openTaskEditorModal(taskData, titleText) {
     const editor = $('#task-desc-editor');
     editor.innerHTML = '';
     if (editor._wr) editor._wr.loaded();
-    // Focus after modal is visible
-    requestAnimationFrame(() => editor.focus());
+    // Focus after modal is visible (not in the mobile shell: no stray keyboard)
+    if (document.documentElement.dataset.shell !== 'mobile') requestAnimationFrame(() => editor.focus());
   }
 
   // Linked items (multi) - seeded from task, committed on save
@@ -3132,7 +3180,17 @@ function openTaskEditorModal(taskData, titleText) {
   }
 
   modal.hidden = false;
-  nameInput.focus();
+  // Mobile shell: an existing task opens read-first (focus on the dialog itself,
+  // so no keyboard rises); a new one keeps the name focus
+  if (!(document.documentElement.dataset.shell === 'mobile' && currentEditingTaskId)) {
+    nameInput.focus();
+  } else {
+    const dialog = modal.querySelector('.task-editor-dialog');
+    if (dialog) {
+      if (!dialog.hasAttribute('tabindex')) dialog.tabIndex = -1;
+      dialog.focus({ preventScroll: true });
+    }
+  }
 
   // Capture initial state for unsaved changes detection. The description
   // baseline is read back from what is on screen (the writing view refreshes
@@ -3158,7 +3216,7 @@ function currentTaskDescHtml() {
 }
 
 // --- Check if task editor has unsaved changes
-function taskEditorHasChanges() {
+export function taskEditorHasChanges() {
   if (!taskEditorInitialState) return false;
   const nameInput = $('#task-editor-name');
   const linkInput = $('#task-editor-link');
@@ -3207,7 +3265,7 @@ function renderEditorLinkedItems(container, textEl, refs, onRemove) {
 // --- Open the link/file an item points to
 function openLinkedItemTarget(item) {
   if (item.linkType === 'file' && item.fileId) {
-    openFile(item.fileId, item.fileName);
+    (window.openFile || openFile)(item.fileId, item.fileName);
   } else if (item.url) {
     openUrl(item.url);
   }
@@ -3868,7 +3926,8 @@ function openSubtaskDescriptionModal(subtask) {
   editor.innerHTML = safeRichHtml(subtask.description);
   if (editor._wr) editor._wr.loaded();
   modal.hidden = false;
-  requestAnimationFrame(() => editor.focus());
+  // Not in the mobile shell: it opens to read, a tap in the text edits (no stray keyboard)
+  if (document.documentElement.dataset.shell !== 'mobile') requestAnimationFrame(() => editor.focus());
 
   // Persist subtasks to the task when editing an existing task,
   // then push to the cloud immediately so a refresh can't lose it
@@ -4146,7 +4205,7 @@ function closeSubtaskTemplatePicker() {
   }
 }
 
-function closeTaskEditorModal(force) {
+export function closeTaskEditorModal(force) {
   if (!force && taskEditorHasChanges()) {
     if (!confirm('You have unsaved changes. Are you sure you want to close it?')) {
       return;
@@ -4181,13 +4240,13 @@ function closeTaskEditorModal(force) {
 let ideasEditingId = null;
 
 // Get all ideas from model
-function getAllIdeas() {
+export function getAllIdeas() {
   const data = currentData();
   return data.ideas || [];
 }
 
 // Create a new idea
-function createIdea(title, description) {
+export function createIdea(title, description) {
   const data = currentData();
   data.ideas = data.ideas || [];
   const idea = {
@@ -4201,7 +4260,7 @@ function createIdea(title, description) {
 }
 
 // Update an idea
-function updateIdea(ideaId, updates) {
+export function updateIdea(ideaId, updates) {
   const ideas = getAllIdeas();
   const idea = ideas.find(i => i.id === ideaId);
   if (!idea) return null;
@@ -4211,7 +4270,7 @@ function updateIdea(ideaId, updates) {
 }
 
 // Delete an idea
-function deleteIdea(ideaId) {
+export function deleteIdea(ideaId) {
   const data = currentData();
   const ideas = data.ideas || [];
   const idx = ideas.findIndex(i => i.id === ideaId);

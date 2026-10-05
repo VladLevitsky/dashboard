@@ -117,7 +117,12 @@ export function positionPopup(el, anchor, opts = {}) {
   const rect = rectOf(anchor);
   if (!el || !rect) return;
   const gap = opts.gap ?? 6;
-  const vw = window.innerWidth, vh = window.innerHeight;
+  // Mobile shell: clamp to the VISUAL viewport, so a menu never opens under
+  // the on-screen keyboard (desktop: the layout viewport, as before)
+  const vv = document.documentElement.dataset.shell === 'mobile' ? window.visualViewport : null;
+  const vTop = vv ? vv.offsetTop : 0;
+  const vw = vv ? vv.offsetLeft + vv.width : window.innerWidth;
+  const vh = vv ? vTop + vv.height : window.innerHeight;
   // Natural size, measured where the popup already is when that can't
   // change it. From 0,0 the first time, or when the right edge may be
   // squeezing its width; without the max-height clamp when one is on
@@ -141,11 +146,11 @@ export function positionPopup(el, anchor, opts = {}) {
   } else {
     left = placement.endsWith('end') ? rect.right - w : rect.left;
     const below = vh - rect.bottom - gap - MARGIN;
-    const above = rect.top - gap - MARGIN;
+    const above = rect.top - gap - MARGIN - vTop;
     const preferTop = placement.startsWith('top');
     if ((preferTop && h <= above) || (!preferTop && h > below && above > below)) {
       top = rect.top - gap - h;
-      if (top < MARGIN) { maxHeight = Math.max(120, above) + 'px'; top = MARGIN; }
+      if (top < vTop + MARGIN) { maxHeight = Math.max(120, above) + 'px'; top = vTop + MARGIN; }
     } else {
       top = rect.bottom + gap;
       if (h > below) maxHeight = Math.max(120, below) + 'px';
@@ -155,7 +160,7 @@ export function positionPopup(el, anchor, opts = {}) {
   // Clamp with the height it will really have (the max-height just chosen), so a
   // shortened menu is never pulled back up over the line being typed
   const effH = maxHeight ? Math.min(h, parseFloat(maxHeight)) : h;
-  top = Math.max(MARGIN, Math.min(top, vh - Math.min(effH, vh - 2 * MARGIN) - MARGIN));
+  top = Math.max(vTop + MARGIN, Math.min(top, vh - Math.min(effH, vh - vTop - 2 * MARGIN) - MARGIN));
   setStyle(el, 'maxHeight', maxHeight);
   setStyle(el, 'left', Math.round(left) + 'px');
   setStyle(el, 'top', Math.round(top) + 'px');

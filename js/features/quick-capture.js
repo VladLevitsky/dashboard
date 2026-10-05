@@ -806,7 +806,7 @@ function submit({ openAfter = false } = {}) {
   ]);
 }
 
-function createFromPlan(plan) {
+export function createFromPlan(plan) {
   const p = plan.parsed;
   // Same calls as the task editor's Save: createTask, then updateTask with the rest
   const task = createTask(p.title, p.color || 'blue', null, plan.urls[0] || null);
@@ -818,7 +818,7 @@ function createFromPlan(plan) {
   return { taskId: task.id, created: true, before: null };
 }
 
-function updateFromPlan(plan) {
+export function updateFromPlan(plan) {
   const task = plan.target;
   const p = plan.parsed;
   const before = JSON.parse(JSON.stringify(task));
@@ -842,10 +842,11 @@ function updateFromPlan(plan) {
   return { taskId: task.id, created: false, before };
 }
 
-function undo(record) {
+// silent: no bottom toast (the mobile composer says what happened on its own line)
+function undo(record, { silent = false } = {}) {
   const task = getTaskById(record.taskId);
   if (!task || JSON.stringify(task) !== record.after) {
-    showToast('Can’t undo: the task has changed since');
+    if (!silent) showToast('Can’t undo: the task has changed since');
     return;
   }
   if (record.timer && record.timer.started) {
@@ -867,8 +868,12 @@ function undo(record) {
     if (task.projectHighlight && window.refreshProjectHighlights) window.refreshProjectHighlights();
   }
   refreshTaskViews();
-  showToast(record.created ? 'Task removed' : 'Change undone');
+  if (!silent) showToast(record.created ? 'Task removed' : 'Change undone');
 }
+
+// The mobile composer (unit F2) commits through createFromPlan / updateFromPlan
+// and undoes through this, exactly like the bar (opts: { silent })
+export function undoCapture(record, opts) { return undo(record, opts); }
 
 // Toast with buttons (the shared #toast is text only). Also used by the item
 // creator (item-creator.js) for its Undo

@@ -8,7 +8,7 @@ import { markDirtyAndSave, openEditPopover, openSubtitleColorPicker } from '../f
 import { saveModel } from '../core/storage.js';
 import { initializeDragHandlers, initializeItemDragHandlers, initializeContainerDragHandlers, initializeReminderDragHandlers, initializeCardDropZone } from '../features/drag-drop.js';
 import { createCardDeleteButton, createCardReorderButtons } from '../features/cards.js';
-import { applyCellSize, applyGridPlacement, computeDisplayLayout, reconcileRowSpans, autoAssignGridPositions as gridAutoAssign } from '../features/grid-engine.js';
+import { applyCellSize, applyGridPlacement, computeDisplayLayout, reconcileRowSpans, autoAssignGridPositions as gridAutoAssign, getActiveMode } from '../features/grid-engine.js';
 import { persistImageFromLibraryEntry } from '../features/media-library.js';
 import { setImageFromRef, classifyImageRef, uploadFile, dataURLtoBlob, filenameFromDataUrl, deleteR2File } from '../core/file-service.js';
 import { isLoggedIn } from '../core/auth.js';
@@ -60,6 +60,17 @@ export async function resolveIconMedia(chosenMedia) {
 
 // --- Render all sections
 export function renderAllSections() {
+  // Mobile layout: the shell (js/features/mobile/shell.js) replaces the grid.
+  // Every repaint request (theme, sign-in, cloud load, import, item creator,
+  // refreshTaskViews…) lands here, so this one branch hands all of them over.
+  if (getActiveMode() === 'mobile' && window.syncMobileShell && window.syncMobileShell('mobile')) {
+    document.querySelectorAll('.app-main > section.card').forEach(el => el.remove()); // no hidden grid cards or ids
+    applyCellSize();                                       // keeps body[data-device] current
+    if (window.renderMobileShell) window.renderMobileShell('sections');
+    if (window.updateNotificationBadge) window.updateNotificationBadge();             // calendar + Today chain
+    return;
+  }
+
   // Preserve scroll position before re-rendering
   const scrollX = window.scrollX;
   const scrollY = window.scrollY;

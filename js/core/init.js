@@ -8,6 +8,7 @@ import { saveModel, restoreModel, exportBackupFile, deepMergeModel, cleanupOldBa
 import { setImageFromRef, getDisplaySrc, classifyImageRef, uploadFile, dataURLtoBlob, filenameFromDataUrl } from './file-service.js';
 import { isLoggedIn } from './auth.js';
 import { htmlToPlainText } from './markdown.js';
+import { isPhoneDevice } from './mobile-device.js';
 import {
   toggleEditMode,
   hideEditPopover,
@@ -132,6 +133,8 @@ function initSearch() {
 
   // Global keyboard shortcut: Ctrl+F or / to focus search
   document.addEventListener('keydown', (e) => {
+    // The mobile shell has its own search (and keeps Ctrl+F for the browser)
+    if (document.documentElement.dataset.shell === 'mobile') return;
     // Don't trigger if user is typing in an input/textarea/contenteditable
     const activeEl = document.activeElement;
     const isTyping = activeEl.tagName === 'INPUT' ||
@@ -750,7 +753,9 @@ export async function init() {
   if (window.updateFileManagerVisibility) window.updateFileManagerVisibility();
   ensureSectionPlusButtons();
   refreshEditingClasses();
-  initStickyNotes();
+  // Not on phones: sticky notes are hidden there, and their non-passive
+  // document touchmove listener would slow every scroll
+  if (!isPhoneDevice()) initStickyNotes();
   if (window.initResizeObserver) window.initResizeObserver();
   initSearch();
 
@@ -1468,7 +1473,8 @@ export function wireUI() {
 
 // When coming back online, sync any pending changes
 window.addEventListener('online', () => {
-  if (isLoggedIn()) {
+  // On phones the shell's sync guard pushes quietly instead (no toast per reconnect)
+  if (isLoggedIn() && document.documentElement.dataset.mxSync !== 'phone') {
     immediateCloudSave();
   }
 });

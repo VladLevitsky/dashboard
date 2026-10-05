@@ -1,0 +1,858 @@
+/* ==========================================================================
+   Mobile shell (unit F0): the phone app frame and the desktop "Mobile" preview.
+   Loaded after writing.css. EVERY rule keys on html[data-shell="mobile"] (set
+   by the inline boot script on phones before the first paint, and by
+   js/features/mobile/shell.js on mount), so tablet and desktop never see any
+   of it. Structural rules use html[data-shell="mobile"] …; glass rules use
+   html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] …
+   (0,5,2+), which beats glass.css (0,3,1) and glass-fx.css (0,4,2) without
+   !important. Classes are prefixed mx-.
+   House rules (glass-glow.js watches the whole document):
+   - state lives in <html> attributes, never on #mobile-shell or big ancestors
+   - no transform / filter / backdrop-filter / contain / will-change on html,
+     body, #mobile-shell or .mx-screens
+   - colour on buttons goes in background-image (no glass-glow bloom)
+   - motion: opacity / transform on small pseudo layers, uneven periods
+   Every fixed shell layer stays under z-index 1000: reused modals (lowest
+   1500) always stack above the chrome.
+   Sections: 0 hide · 1 tokens · 2 canvas · 3 frame + preview · 4 top bar ·
+   5 dock, +, lane, carry slot · 6 shared controls · 7 sheets, scrim, pushed
+   screens, conflict sheet · 8 reused-root column pinning + toast lane ·
+   9 landscape · 10 dark · 11 sunset · 12 keyframes · 13 a11y guards
+   ========================================================================== */
+
+/* --- 0. Hide the desktop chrome ------------------------------------------
+   display:none !important: JS re-shows several of these (hidden = false). */
+#mobile-shell { display: none; }
+html[data-shell="mobile"] :is(#top-header, .app-main, #search-results, #edit-toggle, #edit-fab-group, #add-card-fab,
+  #connect-folder, #appearance-toggle, #sticky-note-container, body > .sticky-note, .sticky-note-preview,
+  #card-edit-modal, .grid-drag-ghost, .resize-span-indicator, .card-swap-glow, .sep-place-hint, .device-mode-bubbles,
+  #eisenhower-card, #time-tracking-card:not(.mx-hosted), #today-modal, #completed-tasks-modal) { display: none !important; }
+html[data-shell="mobile"] #mobile-shell { display: block; }
+
+/* --- 1. Tokens ------------------------------------------------------------ */
+html[data-shell="mobile"] {
+  --mx-col: 100vw; --mx-inline: 0px;
+  --mx-safe-t: env(safe-area-inset-top, 0px); --mx-safe-b: env(safe-area-inset-bottom, 0px);
+  --mx-safe-l: env(safe-area-inset-left, 0px); --mx-safe-r: env(safe-area-inset-right, 0px);
+  --mx-gutter: 12px; --mx-top-h: 52px; --mx-sub-h: 48px; --mx-dock-h: 60px; --mx-plus: 60px; --mx-plus-raise: 10px;
+  --mx-dock-b: max(10px, calc(var(--mx-safe-b) - 6px)); --mx-live-h: 44px; --mx-live-space: 0px;
+  --mx-hit: 44px; --mx-radius: 22px; --mx-radius-sheet: 26px;          /* pinned: glass.css gives 22px only at <=600px */
+  --mx-z-sub: 880; --mx-z-top: 900; --mx-z-live: 910; --mx-z-dock: 920; --mx-z-plus: 930; --mx-z-switch: 935;
+  --mx-z-scrim: 940; --mx-z-sheet: 950; --mx-z-compose-scrim: 970; --mx-z-compose: 980; --mx-z-ghost: 990;
+  --mx-vvh: 100dvh; --mx-vv-top: 0px; --mx-kb: 0px;                    /* overwritten at runtime by viewport.js */
+  overscroll-behavior-y: none; -webkit-text-size-adjust: 100%; text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+html[data-shell="mobile"]:is([data-mx-live], [data-mx-carry]) { --mx-live-space: 60px; }
+html[data-shell="mobile"][data-shell-frame="preview"] {
+  --mx-col: 390px; --mx-inline: max(0px, calc(50% - 195px)); --mx-safe-t: 0px; --mx-safe-b: 0px;
+  --mx-safe-l: 0px; --mx-safe-r: 0px;
+}
+html[data-shell="mobile"] body { overflow-x: clip; overscroll-behavior-y: none; }
+
+/* --- 2. Canvas: inherit the aurora, never copy it -------------------------
+   A fixed layer paints the body's own canvas (classic / sunset, light / dark
+   follow automatically) instead of background-attachment: fixed, which
+   stretches on iOS and repaints on the main thread on Android. */
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] { background-size: 0 0; }
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme]::before {
+  content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background: inherit; background-size: auto; background-attachment: scroll;
+}
+
+/* --- 3. Frame and the desktop preview -------------------------------------- */
+html[data-shell="mobile"] .mx-screens {
+  display: block;
+  box-sizing: border-box;
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding-top: calc(var(--mx-safe-t) + var(--mx-top-h));
+  padding-bottom: calc(var(--mx-dock-b) + var(--mx-dock-h) + 24px + var(--mx-live-space));
+  padding-left: var(--mx-safe-l);
+  padding-right: var(--mx-safe-r);
+  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  color: var(--text);
+}
+html[data-shell="mobile"] .mx-screen {
+  display: block;
+  box-sizing: border-box;
+  padding: 0 var(--mx-gutter) 8px;
+  min-width: 0;
+}
+html[data-shell="mobile"] .mx-screen[hidden] { display: none; }
+html[data-shell="mobile"][data-shell-frame="preview"] .mx-screens {
+  max-width: var(--mx-col);
+  margin-inline: auto;
+}
+html[data-shell="mobile"] :is(#mx-preview-switch, #mx-preview-dim, #mx-preview-bezel) { display: none; }
+html[data-shell="mobile"][data-shell-frame="preview"] #mx-preview-dim {
+  display: block;
+  position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background: linear-gradient(90deg, var(--glass-scrim) 0 var(--mx-inline), transparent var(--mx-inline) calc(100% - var(--mx-inline)),
+    var(--glass-scrim) calc(100% - var(--mx-inline)) 100%);
+}
+html[data-shell="mobile"][data-shell-frame="preview"] #mx-preview-bezel {
+  display: block;
+  position: fixed; top: 0; bottom: 0; left: var(--mx-inline); right: var(--mx-inline); z-index: -1; pointer-events: none;
+  border-inline: 1px solid var(--glass-edge);
+  box-shadow: var(--fx-lift-dialog);
+}
+html[data-shell="mobile"][data-shell-frame="preview"] #mx-preview-switch {
+  display: flex;
+  /* just right of the column, outside it (where the desktop device picker sat) */
+  position: fixed; top: 16px; left: calc(100% - var(--mx-inline) + 20px); z-index: var(--mx-z-switch);
+  gap: 4px; padding: 4px;
+  border-radius: 999px;
+  background: var(--glass-reflection), var(--glass-dialog);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  backdrop-filter: blur(20px) saturate(140%);
+  box-shadow: var(--fx-lift-control), var(--glass-rim);
+  font: 600 13px/1 'Inter', system-ui, sans-serif;
+}
+html[data-shell="mobile"] .mx-switch-opt {
+  display: inline-flex; align-items: center; gap: 6px;
+  min-height: 36px; padding: 0 14px;
+  border: 1px solid transparent; border-radius: 999px;
+  background: transparent; color: var(--muted);
+  font: inherit; cursor: pointer;
+}
+html[data-shell="mobile"] .mx-switch-opt svg { width: 16px; height: 16px; }
+html[data-shell="mobile"] .mx-switch-opt:hover { color: var(--text); background-color: var(--glass-hover); }
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-switch-opt[aria-pressed="true"] {
+  color: var(--text);
+  border-color: rgb(var(--fx-ind-rgb) / 60%);
+  background-image: radial-gradient(ellipse 70% 80% at 70% 0%, rgb(var(--fx-ind-rgb) / 18%), transparent 100%), var(--glass-reflection);
+  background-color: var(--glass-field);
+  box-shadow: var(--fx-lift-pill), 0 0 14px -4px rgb(var(--fx-ind-rgb) / 55%);
+}
+/* Not enough room beside the column for the row: a column of options in the
+   bottom-right corner; too narrow for that: hidden (More → Layout covers it) */
+@media (max-width: 1079px) {
+  html[data-shell="mobile"][data-shell-frame="preview"] #mx-preview-switch {
+    left: auto; right: 12px; top: auto; bottom: 12px;
+    flex-direction: column; border-radius: 22px;
+  }
+}
+@media (max-width: 759px) {
+  html[data-shell="mobile"][data-shell-frame="preview"] #mx-preview-switch { display: none; }
+}
+
+/* First-paint skeleton rows (Tasks) and unit placeholders */
+html[data-shell="mobile"] .mx-skeleton {
+  display: grid; gap: 8px; padding-top: 14px;
+}
+html[data-shell="mobile"] .mx-skeleton-row {
+  height: 52px; border-radius: 16px;
+  background: var(--glass-reflection), var(--glass-field);
+  box-shadow: var(--glass-rim);
+  animation: mxSkeleton 2.4s var(--fx-breathe, ease-in-out) infinite;
+}
+html[data-shell="mobile"] .mx-skeleton-row:nth-child(2) { animation-delay: -0.8s; animation-duration: 2.9s; }
+html[data-shell="mobile"] .mx-skeleton-row:nth-child(3) { animation-delay: -1.7s; animation-duration: 2.6s; }
+html[data-shell="mobile"] :is(.mx-placeholder, .mx-load-fail) {
+  margin-top: 16px;
+  padding: 28px 22px;
+  border-radius: var(--mx-radius);
+  text-align: center;
+  color: var(--muted);
+  background: var(--glass-reflection), var(--glass-fill);
+  border: 1px dashed var(--glass-divider);
+}
+html[data-shell="mobile"] .mx-placeholder-title { margin: 0 0 6px; font-size: 17px; font-weight: 700; color: var(--text); letter-spacing: -0.01em; }
+html[data-shell="mobile"] .mx-placeholder-text { margin: 0; font-size: 14px; line-height: 1.45; }
+html[data-shell="mobile"] .mx-load-fail p { margin: 0 0 12px; font-size: 15px; color: var(--text); }
+
+/* --- 4. Top bar -------------------------------------------------------------- */
+html[data-shell="mobile"] #mx-topbar {
+  position: fixed; top: 0; left: var(--mx-inline); right: var(--mx-inline); z-index: var(--mx-z-top);
+  box-sizing: border-box;
+  height: calc(var(--mx-safe-t) + var(--mx-top-h));
+  padding: var(--mx-safe-t) max(var(--mx-gutter), var(--mx-safe-r)) 0 max(calc(var(--mx-gutter) - 6px), var(--mx-safe-l));
+  display: grid;
+  grid-template-columns: var(--mx-hit) minmax(0, 1fr) var(--mx-hit) var(--mx-hit);
+  align-items: center;
+  column-gap: 6px;
+  color: var(--text);
+  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] #mx-topbar {
+  background-color: transparent;
+  background-image: linear-gradient(180deg, var(--glass-dialog), color-mix(in srgb, var(--glass-dialog) 72%, transparent)), var(--glass-reflection);
+  -webkit-backdrop-filter: blur(24px) saturate(150%);
+  backdrop-filter: blur(24px) saturate(150%);
+  box-shadow: 0 1px 0 var(--glass-divider), var(--fx-lift-pill), inset -1px 1px 1px var(--fx-bevel-lit);
+}
+@supports (animation-timeline: scroll()) {
+  html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] #mx-topbar {
+    animation: mxTopDense linear both;
+    animation-timeline: scroll(root);
+    animation-range: 0 120px;
+  }
+}
+html[data-shell="mobile"] .mx-topbar-slot {
+  min-width: 0;
+  display: flex; flex-direction: column; justify-content: center;
+  padding-left: 4px;
+}
+html[data-shell="mobile"] .mx-slot-title {
+  margin: 0;
+  font-size: 20px; font-weight: 700; line-height: 1.15; letter-spacing: -0.02em;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+html[data-shell="mobile"] .mx-slot-sub {
+  margin: 1px 0 0;
+  font-size: 12px; line-height: 1.2; color: var(--muted); font-weight: 500;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+html[data-shell="mobile"] .mx-icon-btn {
+  position: relative;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: var(--mx-hit); height: var(--mx-hit);
+  padding: 0; margin: 0;
+  border: 0; border-radius: 50%;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+html[data-shell="mobile"] .mx-icon-btn svg { width: 22px; height: 22px; }
+html[data-shell="mobile"] .mx-icon-btn:active { background-color: var(--glass-hover); }
+html[data-shell="mobile"] .mx-icon-btn:focus-visible,
+html[data-shell="mobile"] #mx-due-lens:focus-visible { outline: 2px solid rgb(66 105 155 / 70%); outline-offset: -2px; }
+
+/* Avatar: 32px photo in a 44px hit area, sync dot on its lit top-right corner */
+html[data-shell="mobile"] .mx-avatar {
+  display: block; width: 32px; height: 32px; border-radius: 50%; overflow: hidden;
+  box-shadow: 0 0 0 1.5px var(--glass-edge), var(--fx-lift-pill, 0 2px 6px rgb(0 0 0 / 18%));
+}
+html[data-shell="mobile"] .mx-avatar-img { display: block; width: 100%; height: 100%; object-fit: cover; }
+html[data-shell="mobile"] .mx-sync-dot {
+  position: absolute; top: 5px; right: 4px;
+  width: 9px; height: 9px; border-radius: 50%;
+  box-sizing: border-box;
+  pointer-events: none;
+  display: none;
+}
+html[data-shell="mobile"] .mx-sync-dot[data-state="pending"] {
+  display: block; background: var(--warn); box-shadow: 0 0 0 1.5px var(--glass-edge), 0 0 6px rgb(245 158 11 / 60%);
+}
+html[data-shell="mobile"] .mx-sync-dot[data-state="pending"]::after {
+  content: ""; position: absolute; inset: -3px; border-radius: 50%;
+  box-shadow: 0 0 8px 2px rgb(245 158 11 / 45%);
+  animation: fxBreath 5.4s var(--fx-breathe, ease-in-out) -1.7s infinite;
+}
+html[data-shell="mobile"] .mx-sync-dot[data-state="error"] {
+  display: block; background: var(--danger); box-shadow: 0 0 0 1.5px var(--glass-edge), 0 0 6px rgb(239 68 68 / 60%);
+}
+html[data-shell="mobile"] .mx-sync-dot[data-state="out"] {
+  display: block; background: transparent; border: 1.5px solid var(--muted); box-shadow: 0 0 0 1px var(--glass-edge);
+}
+
+/* Due lens: a 44px hit area around the badge recipe (glass-fx.css section 10:
+   red breathing lens with a count, or the quiet .is-clear calendar glass).
+   Only the badge's geometry changes here. */
+html[data-shell="mobile"] #mx-due-lens {
+  position: relative;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: var(--mx-hit); height: var(--mx-hit);
+  border-radius: 50%;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+html[data-shell="mobile"] .mx-due-badge.notification-badge {
+  position: relative; top: auto; right: auto; inset: auto; z-index: auto;
+  box-sizing: border-box;
+  min-width: 30px; height: 30px; padding: 0 8px;
+  border-radius: 15px;
+  font: 600 13px/30px 'Inter', system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+  transform: none;
+  transition: none;
+  pointer-events: none;
+}
+html[data-shell="mobile"] .mx-due-badge.notification-badge.is-clear { width: 30px; min-width: 30px; padding: 0; }
+html[data-shell="mobile"] .mx-due-badge.notification-badge:hover { transform: none; }
+
+/* --- 5. Dock, the + lens, now-playing lane, carry slot ------------------------- */
+html[data-shell="mobile"] #mx-dock {
+  position: fixed; z-index: var(--mx-z-dock);
+  left: calc(var(--mx-inline) + 10px + var(--mx-safe-l)); right: calc(var(--mx-inline) + 10px + var(--mx-safe-r));
+  bottom: var(--mx-dock-b);
+  height: var(--mx-dock-h);
+  box-sizing: border-box;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) 76px repeat(2, minmax(0, 1fr));
+  align-items: stretch;
+  padding: 0 6px;
+  border-radius: 28px;
+  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] #mx-dock {
+  background: radial-gradient(ellipse 120px 40px at 78% 0%, rgb(255 255 255 / 48%), transparent 70%),
+    var(--glass-reflection), var(--glass-dialog);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  backdrop-filter: blur(20px) saturate(150%);
+  box-shadow: var(--fx-lift-control),
+    inset -1px 1px 1px var(--fx-bevel-lit),
+    inset 1px -1px 1px var(--fx-bevel-soft),
+    inset 2px 2px 4px -1px var(--fx-bevel-shade),
+    inset -2px -2px 4px -1px var(--fx-bevel-shade);
+}
+/* Prism hairline along the top edge (the dialogs' lit rim) */
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] #mx-dock::before {
+  content: ""; position: absolute; left: 22px; right: 22px; top: 0; height: 1px; pointer-events: none;
+  background: linear-gradient(90deg, transparent, rgb(var(--fx-cyan) / 55%) 28%, rgb(var(--fx-violet) / 50%) 56%,
+    rgb(var(--fx-pink) / 40%) 80%, transparent);
+  border-radius: 1px;
+}
+html[data-shell="mobile"] .mx-dock-gap { display: block; }
+html[data-shell="mobile"] .mx-tab {
+  position: relative;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  min-width: var(--mx-hit); min-height: var(--mx-hit);
+  padding: 6px 0 4px; margin: 0;
+  border: 0; border-radius: 22px;
+  background: transparent;
+  color: var(--muted);
+  font: 600 11px/1.1 'Inter', system-ui, sans-serif;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+html[data-shell="mobile"] .mx-tab svg { position: relative; z-index: 1; width: 22px; height: 22px; }
+html[data-shell="mobile"] .mx-tab-label { position: relative; z-index: 1; }
+html[data-shell="mobile"] .mx-tab[aria-selected="true"] { color: var(--text); }
+html[data-shell="mobile"] .mx-tab:active { background-color: var(--glass-hover); }
+html[data-shell="mobile"] .mx-tab:focus-visible { outline: 2px solid rgb(var(--fx-ind-rgb, 22 160 255) / 70%); outline-offset: -3px; }
+/* The active tab sits in a pool of the azure living light, a white-hot core under the glyph */
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-tab[aria-selected="true"]::after {
+  content: ""; position: absolute; z-index: 0; pointer-events: none;
+  left: 50%; top: 7px; width: 40px; height: 26px; margin-left: -20px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle 3px at 64% 34%, rgb(255 255 255 / 95%), rgb(236 250 255 / 70%) 55%, transparent 100%),
+    radial-gradient(ellipse closest-side, rgb(var(--fx-ind-rgb) / calc(var(--fx-ind-pool-a) * 0.78)) 0%,
+      rgb(var(--fx-ind-rgb) / calc(var(--fx-ind-pool-a) * 0.42)) 38%, rgb(var(--fx-ind-fringe) / 16%) 66%, transparent 100%);
+  animation: mxTabPool 6.1s var(--fx-breathe) -2.6s infinite;
+}
+
+/* The + : a raised frosted lens (the edit pencil's lens at full size) with the
+   azure pool and its white-hot core in the lit top-right corner, and a halo
+   that breathes on a sibling span (the button's pseudos hold the light). The
+   button itself never gets a transform or filter; only the glyph scales. */
+html[data-shell="mobile"] #mx-plus {
+  position: fixed; z-index: var(--mx-z-plus);
+  left: 50%; margin-left: calc(var(--mx-plus) / -2);
+  bottom: calc(var(--mx-dock-b) + var(--mx-plus-raise));
+  width: var(--mx-plus); height: var(--mx-plus);
+  padding: 0;
+  border: 0; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] #mx-plus {
+  background: radial-gradient(circle 38px at 72% 20%, rgb(255 255 255 / 58%), rgb(255 255 255 / 12%) 55%, transparent 100%),
+    var(--glass-reflection), var(--glass-dialog);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  backdrop-filter: blur(20px) saturate(150%);
+  box-shadow: var(--fx-lift-control),
+    inset -1px 1px 1px var(--fx-bevel-lit),
+    inset 1px -1px 1px var(--fx-bevel-soft),
+    inset 2px 2px 4px -1px var(--fx-bevel-shade),
+    inset -2px -2px 4px -1px var(--fx-bevel-shade);
+}
+/* The pool: a soft azure light gathered in the lit corner, clipped to the lens */
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] #mx-plus::before {
+  content: ""; position: absolute; z-index: 0; pointer-events: none;
+  width: 44px; height: 44px; left: calc(68% - 22px); top: calc(26% - 22px);
+  border-radius: 50%;
+  background: radial-gradient(circle closest-side,
+    rgb(var(--fx-ind-rgb) / calc(var(--fx-ind-pool-a) * 0.86)) 0%, rgb(var(--fx-ind-rgb) / calc(var(--fx-ind-pool-a) * 0.5)) 30%,
+    rgb(var(--fx-ind-rgb) / calc(var(--fx-ind-pool-a) * 0.2)) 52%, rgb(var(--fx-ind-fringe) / 10%) 72%, transparent 100%);
+  animation: fxPool 7.3s var(--fx-breathe) -1.1s infinite;
+}
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] #mx-plus::after {
+  content: ""; position: absolute; z-index: 1; pointer-events: none;
+  width: 16px; height: 16px; left: calc(68% - 8px); top: calc(26% - 8px);
+  border-radius: 50%;
+  background: radial-gradient(circle closest-side, #fff 0%, rgb(236 250 255 / 96%) 18%,
+    rgb(var(--fx-ind-rgb) / var(--fx-core-a, 74%)) 40%, rgb(var(--fx-ind-rgb) / var(--fx-core-halo-a, 28%)) 66%, transparent 100%);
+  animation: fxCore 4.1s ease-in-out -0.6s infinite;
+}
+/* The halo: a fixed sibling under the lens (inside it, Chrome would widen the
+   lens's backdrop blur to the halo box and draw a grey disc) */
+html[data-shell="mobile"] .mx-plus-halo {
+  position: fixed; z-index: calc(var(--mx-z-plus) - 1); pointer-events: none;
+  left: 50%; margin-left: calc(var(--mx-plus) / -2);
+  bottom: calc(var(--mx-dock-b) + var(--mx-plus-raise));
+  width: var(--mx-plus); height: var(--mx-plus);
+  border-radius: 50%;
+  box-shadow: 0 0 24px 3px rgb(var(--fx-ind-rgb, 22 160 255) / 30%);
+  opacity: 0.7;
+  animation: fxHalo 6.3s var(--fx-breathe, ease-in-out) -2.2s infinite;
+}
+html[data-shell="mobile"] #mx-plus:active + .mx-plus-halo { box-shadow: 0 0 28px 7px rgb(var(--fx-ind-rgb, 22 160 255) / 46%); }
+html[data-shell="mobile"] .mx-plus-glyph {
+  position: relative; z-index: 2;
+  width: 26px; height: 26px;
+  stroke: var(--text); stroke-width: 2.4; fill: none; stroke-linecap: round;
+}
+html[data-shell="mobile"] #mx-plus:focus-visible { outline: 2px solid rgb(var(--fx-ind-rgb, 22 160 255) / 75%); outline-offset: 3px; }
+
+/* Keyboard up or composer open: the dock, the + and the lane step aside */
+html[data-shell="mobile"]:is([data-mx-kb], [data-mx-compose]) :is(#mx-dock, #mx-plus, .mx-plus-halo, #mx-live, #mx-carry) { display: none; }
+/* Lift & place: the dock and + stay in place (no layout jump), dimmed; the shell sets inert.
+   Only their contents dim: a see-through dock would let the rows behind it run into the tab labels */
+html[data-shell="mobile"][data-mx-carry] :is(#mx-dock, #mx-plus) { pointer-events: none; }
+html[data-shell="mobile"][data-mx-carry] :is(#mx-dock > *, #mx-plus > *, .mx-plus-halo) { opacity: 0.45; }
+
+/* Now-playing lane: the 9b emerald crystal stretched to a capsule */
+html[data-shell="mobile"] #mx-live,
+html[data-shell="mobile"] #mx-carry {
+  position: fixed; z-index: var(--mx-z-live);
+  left: calc(var(--mx-inline) + 10px + var(--mx-safe-l)); right: calc(var(--mx-inline) + 10px + var(--mx-safe-r));
+  bottom: calc(var(--mx-dock-b) + var(--mx-dock-h) + 16px);
+  height: var(--mx-live-h);
+  box-sizing: border-box;
+  display: none;
+  align-items: center;
+  border-radius: 22px;
+  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  color: var(--text);
+}
+html[data-shell="mobile"][data-mx-live]:not([data-mx-carry]) #mx-live { display: flex; }
+html[data-shell="mobile"][data-mx-carry] #mx-carry { display: flex; }
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] #mx-live {
+  background-image: radial-gradient(ellipse 140px 40px at 80% 0%, rgb(255 255 255 / 40%), transparent 70%),
+    linear-gradient(135deg, rgb(var(--fx-live-rgb) / 30%), rgb(var(--fx-live-deep) / 20%)), var(--glass-reflection);
+  background-color: var(--glass-dialog);
+  border: 1px solid rgb(var(--fx-live-rgb) / 55%);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  backdrop-filter: blur(20px) saturate(150%);
+  box-shadow: var(--fx-lift-control), 0 0 22px -6px rgb(var(--fx-live-rgb) / 60%), var(--glass-rim);
+  overflow: hidden;
+}
+/* A thin light arc sweeps the rim like a second hand (the 9b stopwatch's sweep):
+   .mx-live-rim is a 2px ring (mask), and the conic light rotates inside it on
+   its pseudo (transform only), so the title and clock stay clear */
+html[data-shell="mobile"] .mx-live-rim { display: none; }
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-live-rim {
+  display: block; position: absolute; inset: 0; z-index: 0;
+  box-sizing: border-box; padding: 2px;
+  border-radius: inherit; overflow: hidden;
+  pointer-events: none;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+}
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-live-rim::before {
+  content: ""; position: absolute; left: 50%; top: 50%; width: 140%; aspect-ratio: 1; margin-left: -70%;
+  transform-origin: 50% 50%; translate: 0 -50%;
+  background: conic-gradient(from 0deg, transparent 0turn 0.56turn, rgb(236 255 245 / 0%) 0.56turn,
+    rgb(236 255 245 / 55%) 0.84turn, rgb(255 255 255 / 95%) 0.92turn, transparent 0.92turn);
+  opacity: 0.8;
+  animation: fxSweep 6s linear infinite;
+}
+html[data-shell="mobile"] .mx-live-body {
+  position: relative; z-index: 1;
+  flex: 1 1 auto; min-width: 0; height: 100%;
+  display: flex; align-items: center; gap: 10px;
+  padding: 0 6px 0 14px; margin: 0;
+  border: 0; background: transparent; color: inherit;
+  font: inherit; text-align: left;
+  cursor: pointer;
+}
+html[data-shell="mobile"] .mx-live-orb {
+  flex: 0 0 auto; width: 10px; height: 10px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #fff 0%, rgb(var(--fx-live-rgb, 24 211 116)) 45%, rgb(var(--fx-live-deep, 6 122 66)) 100%);
+  box-shadow: 0 0 8px 2px rgb(var(--fx-live-rgb, 24 211 116) / 60%);
+  animation: fxCore 5.4s ease-in-out -1.9s infinite;
+}
+html[data-shell="mobile"] .mx-live-title {
+  flex: 1 1 auto; min-width: 0;
+  font-size: 14px; font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+html[data-shell="mobile"] .mx-live-clock {
+  flex: 0 0 auto;
+  font-size: 15px; font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+html[data-shell="mobile"] .mx-live-stop {
+  position: relative; z-index: 1;
+  flex: 0 0 auto;
+  width: var(--mx-hit); height: var(--mx-hit);
+  margin: 0; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 0; border-radius: 50%;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+html[data-shell="mobile"] .mx-live-stop-lens {
+  width: 30px; height: 30px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: radial-gradient(circle 18px at 70% 24%, rgb(255 255 255 / 52%), rgb(255 255 255 / 10%) 60%, transparent 100%),
+    var(--glass-reflection), var(--glass-field);
+  box-shadow: var(--fx-lift-pill, none), var(--glass-rim, none);
+}
+html[data-shell="mobile"] .mx-live-stop-lens::before {
+  content: ""; width: 10px; height: 10px; border-radius: 2.5px; background: currentColor;
+}
+html[data-shell="mobile"] .mx-live-stop:active .mx-live-stop-lens { background-color: var(--glass-hover); }
+
+/* Carry dock: the dock lens with an azure rim and its own breathing halo (F1 fills it) */
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] #mx-carry {
+  background: radial-gradient(ellipse 120px 40px at 78% 0%, rgb(255 255 255 / 44%), transparent 70%),
+    var(--glass-reflection), var(--glass-dialog);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  backdrop-filter: blur(20px) saturate(150%);
+  box-shadow: var(--fx-lift-control), 0 0 0 1px rgb(var(--fx-ind-rgb) / 45%), var(--glass-rim);
+  padding: 0 6px 0 14px;
+  gap: 8px;
+}
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] #mx-carry::before {
+  content: ""; position: absolute; inset: -4px; border-radius: 26px; pointer-events: none; z-index: -1;
+  box-shadow: 0 0 22px 2px rgb(var(--fx-ind-rgb) / 40%);
+  animation: fxHalo 4.6s var(--fx-breathe) -1.3s infinite;
+}
+
+/* --- 6. Shared controls: segmented, chips, buttons, lists --------------------------- */
+html[data-shell="mobile"] .mx-seg {
+  display: inline-grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr);
+  box-sizing: border-box;
+  min-height: 40px; padding: 3px;
+  border-radius: 999px;
+  background: var(--glass-divider);
+  font-family: 'Inter', system-ui, sans-serif;
+}
+html[data-shell="mobile"] .mx-seg-opt {
+  position: relative;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  min-height: 34px; padding: 0 14px;
+  border: 0; border-radius: 999px;
+  background: transparent; color: var(--muted);
+  font: 600 14px/1 'Inter', system-ui, sans-serif;
+  white-space: nowrap;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+html[data-shell="mobile"] .mx-seg-opt::before { content: ""; position: absolute; inset: -5px 0; }  /* 40px track, 44px hit */
+html[data-shell="mobile"] .mx-seg-count { font-variant-numeric: tabular-nums; font-weight: 700; }
+html[data-shell="mobile"] .mx-seg-opt[aria-selected="true"] { color: var(--text); }
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-seg-opt[aria-selected="true"] {
+  background: var(--glass-reflection), var(--glass-dialog);
+  box-shadow: var(--fx-lift-pill), var(--glass-rim);
+}
+html[data-shell="mobile"] .mx-chip {
+  position: relative;
+  display: inline-flex; align-items: center; gap: 6px;
+  box-sizing: border-box;
+  min-height: 36px; padding: 0 12px;
+  margin: 4px 0;                                  /* 36px look, 44px hit */
+  border: 1px solid var(--glass-divider); border-radius: 999px;
+  background: var(--glass-reflection), var(--glass-field);
+  color: var(--text);
+  font: 600 13px/1 'Inter', system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+html[data-shell="mobile"] .mx-chip::before { content: ""; position: absolute; inset: -4px 0; }  /* 44px hit */
+html[data-shell="mobile"] .mx-chip-dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  background: rgb(var(--priority-rgb));
+  box-shadow: 0 0 8px rgb(var(--priority-rgb) / 60%);
+}
+html[data-shell="mobile"] .mx-chip-count { color: var(--muted); }
+html[data-shell="mobile"] .mx-chip:active { background-color: var(--glass-hover); }
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-chip { box-shadow: var(--fx-lift-pill), var(--glass-rim); }
+/* Selected colour chip: tinted by its priority; neutral chips carry the azure light */
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-chip[aria-pressed="true"][style*="--priority-rgb"] {
+  background: radial-gradient(ellipse 70% 80% at 70% 0%, rgb(var(--priority-rgb) / 22%), transparent), var(--glass-field);
+  border-color: rgb(var(--priority-rgb) / 54%);
+  box-shadow: var(--fx-lift-pill), 0 6px 14px -8px rgb(var(--priority-rgb) / 60%);
+}
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-chip[aria-pressed="true"]:not([style*="--priority-rgb"]) {
+  border-color: rgb(var(--fx-ind-rgb) / 70%);
+  background: radial-gradient(ellipse 70% 60% at 70% 0%, rgb(var(--fx-ind-rgb) / 18%), transparent 100%),
+    var(--glass-reflection), var(--glass-field);
+  box-shadow: var(--fx-lift-pill-hover), var(--glass-rim), 0 0 0 1px rgb(var(--fx-ind-rgb) / 35%),
+    0 0 18px -4px rgb(var(--fx-ind-rgb) / 55%);
+}
+/* Drag / carry target state */
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] :is(.mx-chip, .mx-seg-opt).is-target {
+  box-shadow: 0 0 0 1px rgb(var(--fx-ind-rgb) / 60%), 0 0 16px -4px rgb(var(--fx-ind-rgb) / 55%);
+}
+html[data-shell="mobile"] .mx-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  box-sizing: border-box;
+  min-height: var(--mx-hit); padding: 0 18px;
+  border: 1px solid var(--glass-divider); border-radius: 14px;
+  background: var(--glass-reflection), var(--glass-field);
+  color: var(--text);
+  font: 600 15px/1.2 'Inter', system-ui, sans-serif;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+html[data-shell="mobile"] .mx-btn:active { background-color: var(--glass-hover); }
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-btn { box-shadow: var(--fx-lift-pill), var(--glass-rim); }
+/* Primary: the .ic-save recipe (colour through background-image: no glass-glow bloom) */
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-btn-primary {
+  border-color: transparent;
+  color: #fff;
+  background-color: transparent;
+  background-image: radial-gradient(ellipse 60% 40% at 70% 0%, rgb(255 255 255 / 30%), transparent 100%),
+    linear-gradient(var(--glass-action), var(--glass-action));
+  box-shadow: var(--fx-lift-pill), inset -1px 1px 1px rgb(255 255 255 / 35%), 0 0 16px -4px rgb(var(--fx-ind-rgb) / 50%);
+}
+html[data-shell="mobile"] .mx-btn-block { display: flex; width: 100%; }
+html[data-shell="mobile"] .mx-btn-quiet { border-color: transparent; background: transparent; color: var(--muted); }
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-btn-quiet { box-shadow: none; }
+html[data-shell="mobile"] .mx-btn-danger { color: var(--danger); }
+html[data-shell="mobile"] .mx-list { display: grid; gap: 10px; }
+html[data-shell="mobile"] .mx-visually-hidden {
+  position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+/* --- 7. Sheets, scrim, pushed screens, the conflict sheet ------------------------ */
+html[data-shell="mobile"] #mx-layer-host,
+html[data-shell="mobile"] #mx-drag-layer { position: static; }
+html[data-shell="mobile"] #mx-drag-layer { pointer-events: none; }
+html[data-shell="mobile"] .mx-scrim {
+  position: fixed; top: 0; bottom: 0; left: var(--mx-inline); right: var(--mx-inline);
+  z-index: var(--mx-z-scrim);
+  background: var(--glass-scrim);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+  /* A drag on the dimmed area must not scroll the list underneath (a tap still closes) */
+  touch-action: none;
+  overscroll-behavior: none;
+}
+html[data-shell="mobile"] .mx-sheet {
+  position: fixed; z-index: var(--mx-z-sheet);
+  left: var(--mx-inline); right: var(--mx-inline); bottom: 0;
+  box-sizing: border-box;
+  display: flex; flex-direction: column;
+  max-height: calc(var(--mx-vvh) - var(--mx-safe-t) - 24px);
+  padding-bottom: var(--mx-safe-b);
+  border: 1px solid var(--glass-edge); border-bottom: 0;
+  border-radius: var(--mx-radius-sheet) var(--mx-radius-sheet) 0 0;
+  color: var(--text);
+  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  outline: none;
+  overscroll-behavior: contain;
+}
+html[data-shell="mobile"] .mx-sheet--tall { min-height: min(70vh, calc(var(--mx-vvh) - var(--mx-safe-t) - 24px)); }
+html[data-shell="mobile"] .mx-sheet--full {
+  top: 0; max-height: none; height: var(--mx-vvh);
+  border-radius: 0; border: 0;
+  padding-top: var(--mx-safe-t);
+}
+html[data-shell="mobile"] .mx-sheet--kb { bottom: var(--mx-kb); max-height: calc(var(--mx-vvh) - var(--mx-safe-t) - 12px); }
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] :is(.mx-sheet, .mx-pushed) {
+  background:
+    linear-gradient(90deg, transparent 6%, rgb(var(--fx-cyan) / 44%) 30%, rgb(var(--fx-violet) / 44%) 55%, rgb(var(--fx-pink) / 36%) 78%, transparent 96%) top / 100% 1px no-repeat,
+    radial-gradient(ellipse 180px 60px at calc(100% - 40px) 0%, var(--fx-dialog-glint), transparent 100%),
+    var(--glass-reflection), var(--glass-dialog);
+  -webkit-backdrop-filter: blur(36px) saturate(145%);
+  backdrop-filter: blur(36px) saturate(145%);
+  box-shadow: var(--fx-lift-dialog), var(--glass-rim), inset -18px 18px 40px -30px rgb(255 255 255 / 40%);
+}
+html[data-shell="mobile"] .mx-sheet-grab {
+  flex: 0 0 auto;
+  display: flex; justify-content: center; align-items: center;
+  height: 22px;
+  touch-action: none;
+  cursor: grab;
+}
+html[data-shell="mobile"] .mx-grabber { width: 36px; height: 5px; border-radius: 3px; background: var(--glass-divider); }
+html[data-shell="mobile"] .mx-sheet-head { flex: 0 0 auto; padding: 2px 20px 8px; touch-action: none; }
+html[data-shell="mobile"] .mx-sheet-title { margin: 0; font-size: 18px; font-weight: 700; letter-spacing: -0.015em; line-height: 1.25; }
+html[data-shell="mobile"] .mx-sheet-body {
+  flex: 1 1 auto; min-height: 0;
+  overflow-y: auto; overscroll-behavior: contain;
+  padding: 4px 18px 18px;
+}
+html[data-shell="mobile"] .mx-sheet-text { margin: 0 0 6px; font-size: 15px; line-height: 1.45; }
+html[data-shell="mobile"] .mx-sheet-note { margin: 0 0 14px; font-size: 13px; line-height: 1.4; color: var(--muted); }
+html[data-shell="mobile"] .mx-pushed {
+  position: fixed; z-index: var(--mx-z-sheet);
+  top: 0; bottom: 0; left: var(--mx-inline); right: var(--mx-inline);
+  display: flex; flex-direction: column;
+  color: var(--text);
+  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  outline: none;
+}
+html[data-shell="mobile"] .mx-pushed-bar {
+  flex: 0 0 auto;
+  display: flex; align-items: center; gap: 4px;
+  box-sizing: border-box;
+  height: calc(var(--mx-safe-t) + var(--mx-top-h));
+  padding: var(--mx-safe-t) var(--mx-gutter) 0 6px;
+  border-bottom: 1px solid var(--glass-divider);
+}
+html[data-shell="mobile"] .mx-pushed-title {
+  margin: 0; min-width: 0;
+  font-size: 18px; font-weight: 700; letter-spacing: -0.015em;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+html[data-shell="mobile"] .mx-pushed-body {
+  flex: 1 1 auto; min-height: 0;
+  overflow-y: auto; overscroll-behavior: contain;
+  padding: 8px var(--mx-gutter) calc(var(--mx-safe-b) + 24px);
+}
+html[data-shell="mobile"] .mx-conflict .mx-btn { margin-top: 10px; }
+html[data-shell="mobile"] .mx-conflict .mx-sheet-text { font-size: 15px; }
+
+/* --- 8. Reused modals pinned to the preview column; the toast lane ------------ */
+html[data-shell-frame="preview"] :is(#task-editor-modal, #subtask-desc-modal, #projects-modal, #ideas-modal,
+  #meetings-modal, #notepad-popover, #note-viewer-modal, #calendar-view-modal, .ic-overlay, #media-library,
+  .quick-link-modal, #quick-capture, .wr-focus, #wr-help, #appearance-modal, #auth-modal, #task-settings-modal,
+  #file-manager-modal) { left: var(--mx-inline) !important; right: var(--mx-inline) !important; }
+
+html[data-shell="mobile"] :is(#toast, #qc-toast) {
+  bottom: calc(var(--mx-dock-b) + var(--mx-dock-h) + var(--mx-plus-raise) + var(--mx-live-space) + 14px);
+  max-width: calc(var(--mx-col) - 32px);
+  box-sizing: border-box;
+}
+html[data-shell="mobile"] #toast { width: max-content; text-align: center; }
+html[data-shell="mobile"][data-mx-kb] :is(#toast, #qc-toast) { bottom: calc(var(--mx-kb) + 12px); }
+html[data-shell="mobile"][data-mx-compose] :is(#toast, #qc-toast) { bottom: calc(var(--mx-kb) + var(--mx-compose-h, 190px) + 8px); }
+html[data-shell="mobile"]:has(#qc-toast.show) #toast { bottom: calc(var(--mx-dock-b) + var(--mx-dock-h) + var(--mx-live-space) + 66px); }
+
+/* --- 9. Landscape phones ----------------------------------------------------------- */
+@media (orientation: landscape) and (max-height: 500px) {
+  html[data-shell="mobile"] { --mx-top-h: 44px; --mx-dock-h: 48px; --mx-plus: 52px; --mx-live-h: 40px; --mx-plus-raise: 6px; }
+  html[data-shell="mobile"]:is([data-mx-live], [data-mx-carry]) { --mx-live-space: 52px; }
+  html[data-shell="mobile"] .mx-screens {
+    max-width: 640px; margin-inline: auto;
+    padding-left: max(12px, var(--mx-safe-l)); padding-right: max(12px, var(--mx-safe-r));
+  }
+  html[data-shell="mobile"] .mx-tab-label { display: none; }
+  html[data-shell="mobile"] .mx-tab { padding: 0; }
+  /* Centred on the glyph (the glass prefix: the pool's own rule sets top with it) */
+  html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-tab[aria-selected="true"]::after { top: 50%; margin-top: -13px; }
+  html[data-shell="mobile"] #mx-dock { left: max(calc(50% - 320px), calc(10px + var(--mx-safe-l))); right: max(calc(50% - 320px), calc(10px + var(--mx-safe-r))); }
+  html[data-shell="mobile"] :is(#mx-live, #mx-carry) {
+    bottom: calc(var(--mx-dock-b) + var(--mx-dock-h) + 12px);
+    left: max(calc(50% - 320px), calc(10px + var(--mx-safe-l))); right: max(calc(50% - 320px), calc(10px + var(--mx-safe-r)));
+  }
+  html[data-shell="mobile"] .mx-slot-sub { display: none; }
+  /* Sheets and pushed screens span the screen: their content stays clear of
+     the sensor housing and the rounded corners (viewport-fit=cover) */
+  html[data-shell="mobile"] .mx-sheet-head { padding-left: max(20px, var(--mx-safe-l)); padding-right: max(20px, var(--mx-safe-r)); }
+  html[data-shell="mobile"] .mx-sheet-body { padding-left: max(18px, var(--mx-safe-l)); padding-right: max(18px, var(--mx-safe-r)); }
+  html[data-shell="mobile"] .mx-pushed-bar { padding-left: max(6px, var(--mx-safe-l)); padding-right: max(var(--mx-gutter), var(--mx-safe-r)); }
+  html[data-shell="mobile"] .mx-pushed-body { padding-left: max(var(--mx-gutter), var(--mx-safe-l)); padding-right: max(var(--mx-gutter), var(--mx-safe-r)); }
+}
+
+/* --- 9b. Contrast -------------------------------------------------------------------
+   Muted text here sits on translucent glass (tab labels, counts, captions, row
+   meta): one step stronger than the desktop token so it reads at 4.5:1 in
+   both themes and both glass themes. The overdue chip sits on a saturated red
+   row: a solid backing instead of the desktop's 15% red tint */
+html[data-shell="mobile"] body[data-style="glass"][data-theme] { --muted: #43474f; }
+html[data-shell="mobile"] body[data-style="glass"][data-theme="dark"] { --muted: #dde1e8; }
+html[data-shell="mobile"] .today-chip.is-overdue { color: #991b1b; background: rgb(255 255 255 / 72%); }
+html[data-shell="mobile"] body[data-theme="dark"] .today-chip.is-overdue { color: #fecaca; background: rgb(24 8 10 / 62%); }
+
+/* --- 10. Dark ------------------------------------------------------------------------ */
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme="dark"] #mx-dock {
+  background: radial-gradient(ellipse 120px 40px at 78% 0%, rgb(224 234 250 / 18%), transparent 70%),
+    var(--glass-reflection), var(--glass-dialog);
+}
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme="dark"] #mx-carry {
+  background: radial-gradient(ellipse 120px 40px at 78% 0%, rgb(224 234 250 / 16%), transparent 70%),
+    var(--glass-reflection), var(--glass-dialog);
+}
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme="dark"] #mx-plus {
+  background: radial-gradient(circle 38px at 72% 20%, rgb(255 255 255 / 30%), rgb(210 226 255 / 6%) 55%, transparent 100%),
+    var(--glass-reflection), var(--glass-dialog);
+}
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme="dark"] #mx-topbar {
+  box-shadow: 0 1px 0 var(--glass-divider), var(--fx-lift-pill), inset -1px 1px 1px rgb(224 234 250 / 18%);
+}
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme="dark"] :is(.mx-sheet, .mx-pushed) {
+  box-shadow: var(--fx-lift-dialog), var(--glass-rim), inset -18px 18px 40px -30px rgb(190 214 255 / 14%);
+}
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme="dark"] #mx-live {
+  background-image: radial-gradient(ellipse 140px 40px at 80% 0%, rgb(224 234 250 / 16%), transparent 70%),
+    linear-gradient(135deg, rgb(var(--fx-live-rgb) / 26%), rgb(var(--fx-live-deep) / 30%)), var(--glass-reflection);
+}
+html[data-shell="mobile"] body[data-theme="dark"] .mx-live-stop-lens {
+  background: radial-gradient(circle 18px at 70% 24%, rgb(224 234 250 / 22%), transparent 70%), var(--glass-reflection), var(--glass-field);
+}
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme="dark"] .mx-tab[aria-selected="true"]::after {
+  background:
+    radial-gradient(circle 3px at 64% 34%, rgb(255 255 255 / 90%), rgb(220 244 255 / 60%) 55%, transparent 100%),
+    radial-gradient(ellipse closest-side, rgb(var(--fx-ind-rgb) / 52%) 0%, rgb(var(--fx-ind-rgb) / 26%) 40%,
+      rgb(var(--fx-ind-fringe) / 14%) 66%, transparent 100%);
+}
+
+/* --- 11. Sunset ---------------------------------------------------------------------- */
+/* The canvas, glass and lift tokens already carry the sunset tint (section 2
+   inherits the canvas). The preview surround dims a little warmer. */
+html[data-shell="mobile"][data-shell-frame="preview"] body[data-glass-theme="sunset"] #mx-preview-dim {
+  background: linear-gradient(90deg, rgb(92 52 40 / 16%) 0 var(--mx-inline), transparent var(--mx-inline) calc(100% - var(--mx-inline)),
+    rgb(92 52 40 / 16%) calc(100% - var(--mx-inline)) 100%);
+}
+html[data-shell="mobile"][data-shell-frame="preview"] body[data-glass-theme="sunset"][data-theme="dark"] #mx-preview-dim {
+  background: linear-gradient(90deg, rgb(10 4 2 / 30%) 0 var(--mx-inline), transparent var(--mx-inline) calc(100% - var(--mx-inline)),
+    rgb(10 4 2 / 30%) calc(100% - var(--mx-inline)) 100%);
+}
+
+/* --- 12. Keyframes (opacity / transform / background-color only) --------------------- */
+@keyframes mxTabPool {
+  0%, 100% { opacity: 0.72; transform: scale(0.94); }
+  19% { opacity: 1;    transform: scale(1.04); }
+  37% { opacity: 0.8;  transform: scale(0.97); }
+  58% { opacity: 0.96; transform: scale(1.08); }
+  79% { opacity: 0.68; transform: scale(0.92); }
+}
+@keyframes mxTopDense {
+  to { background-color: var(--glass-dialog); }
+}
+@keyframes mxSkeleton {
+  0%, 100% { opacity: 0.55; }
+  45% { opacity: 1; }
+  70% { opacity: 0.7; }
+}
+
+/* --- 13. Accessibility guards -------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] *,
+  html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] *::before,
+  html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+  html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] #mx-topbar { animation: none; background-color: transparent; }
+}
+@media (prefers-reduced-transparency: reduce) {
+  html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] :is(#mx-topbar, #mx-dock, #mx-plus, #mx-live,
+    #mx-carry, #mx-preview-switch, .mx-scrim, .mx-sheet, .mx-pushed) {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] :is(#mx-topbar, #mx-dock, #mx-plus, #mx-carry,
+    .mx-sheet, .mx-pushed) {
+    background: var(--card);
+  }
+  html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] #mx-live {
+    background-image: linear-gradient(135deg, rgb(var(--fx-live-rgb) / 30%), rgb(var(--fx-live-deep) / 20%));
+    background-color: var(--card);
+  }
+}
+@media (forced-colors: active) {
+  html[data-shell="mobile"] :is(.mx-tab, .mx-chip, .mx-seg-opt, #mx-plus, #mx-due-lens, .mx-btn, #mx-live, #mx-dock) {
+    outline: 1px solid CanvasText;
+  }
+  html[data-shell="mobile"] .mx-tab[aria-selected="true"] { outline: 2px solid Highlight; }
+}

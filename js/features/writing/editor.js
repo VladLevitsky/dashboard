@@ -252,12 +252,20 @@ function resetUndo(st) {
 
 // Direct children that leave the editor are tagged with the doc generation
 // they left in: only those can come back through another doc's undo step
-// (every other node of the old doc is detached with them)
+// (every other node of the old doc is detached with them).
+// Records can reach the callback before the editor's own input handler reads
+// them (any capture-phase input listener higher up runs first, and the
+// microtask checkpoint after it delivers them), so the callback also keeps
+// the nodes they added until that handler has looked at them
 function watchChildren(editor, st) {
   st.gen = 0;
   st.leftIn = new WeakMap();
+  st.added = [];
   if (typeof MutationObserver !== 'function') return;
-  st.childWatch = new MutationObserver(records => noteRemoved(st, records));
+  st.childWatch = new MutationObserver(records => {
+    records.forEach(r => r.addedNodes.forEach(n => st.added.push(n)));
+    noteRemoved(st, records);
+  });
   st.childWatch.observe(editor, { childList: true });
 }
 
@@ -271,6 +279,7 @@ function noteRemoved(st, records) {
 // New doc in the element: what left so far belongs to the previous one
 function bumpGeneration(st) {
   if (st.childWatch) noteRemoved(st, st.childWatch.takeRecords());
+  st.added = [];
   st.gen++;
 }
 
@@ -278,11 +287,13 @@ function bumpGeneration(st) {
 function foreignNodes(editor, st) {
   if (!st.childWatch) return [];
   const records = st.childWatch.takeRecords();
-  const foreign = [];
-  records.forEach(r => r.addedNodes.forEach(n => {
+  const added = st.added;
+  st.added = [];
+  records.forEach(r => r.addedNodes.forEach(n => added.push(n)));
+  const foreign = added.filter(n => {
     const gen = st.leftIn.get(n);
-    if (gen !== undefined && gen < st.gen && n.parentNode === editor) foreign.push(n);
-  }));
+    return gen !== undefined && gen < st.gen && n.parentNode === editor;
+  });
   noteRemoved(st, records);
   return foreign;
 }
@@ -317,6 +328,7 @@ function trackUndo(editor, st, e) {
   }
   st.redoDepth = 0; // a new edit clears the browser's redo stack
   st.undoDepth++;
+  st.added = [];    // what this edit added is this doc's own
   return true;
 }
 

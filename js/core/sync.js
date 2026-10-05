@@ -7,6 +7,7 @@ import { isLoggedIn, getUsername, getAuthToken, apiCall } from './auth.js';
 import { model } from '../state.js';
 import { showToast } from '../utils.js';
 import { mergeTimeLogs, normalizeTimeLog } from './time-log.js';
+import { makeSyncStamp } from './mobile-sync.js';
 
 // --- Scoped localStorage key management ---
 
@@ -59,6 +60,17 @@ export function isCloudDirty() {
   return _dirty;
 }
 
+// Unsynced changes in this page OR left by an earlier session (the persisted
+// flag). The in-memory flag starts false on every load and only syncOnLogin()
+// reads the stored one, which it skips when the cloud can't be reached at
+// startup. Phones (sync-guard.js) ask this one, so an offline start never
+// reads as "synced" and a resume check never pulls over those changes
+export function hasUnsyncedChanges() {
+  if (_dirty) return true;
+  if (!isLoggedIn()) return false;
+  try { return localStorage.getItem(getDirtyFlagKey()) === '1'; } catch (e) { return false; }
+}
+
 // --- Time log merge before upload ---
 // The profile is saved whole (last write wins), so a device that tracked time
 // while another device also did would erase the other's sessions. Before each
@@ -96,6 +108,13 @@ export async function cloudSave(prefetchedProfile = null) {
       return mergeResult;
     }
 
+    // Phones (mobile shell, sync-guard.js) hold the upload when another device
+    // saved a newer copy this one has not seen, and ask instead. They also hold
+    // it when the GET failed (they can't tell): that is a plain failure, retried
+    if (typeof window !== 'undefined' && typeof window.__mxPushGate === 'function' && window.__mxPushGate(mergeResult) === false) {
+      return mergeResult && !mergeResult.ok ? mergeResult : { ok: false, held: true };
+    }
+
     // Read the current localStorage payload (same format as what saveModel writes)
     const generation = _dirtyGeneration;
     const raw = localStorage.getItem(getActiveStorageKey());
@@ -103,7 +122,16 @@ export async function cloudSave(prefetchedProfile = null) {
       return { ok: false, error: 'No local data to save.' };
     }
 
-    const result = await apiCall('PUT', '/profile', JSON.parse(raw));
+    // Every upload says which device saved it (phones compare it, sync-guard.js).
+    // saveModel() stamps its payload; a copy written another way (a JSON import)
+    // is stamped here, and kept stamped locally
+    const payload = JSON.parse(raw);
+    if (payload && typeof payload === 'object' && (!payload._sync || typeof payload._sync !== 'object')) {
+      payload._sync = makeSyncStamp();
+      try { localStorage.setItem(getActiveStorageKey(), JSON.stringify(payload)); } catch (e) { /* the upload still carries it */ }
+    }
+
+    const result = await apiCall('PUT', '/profile', payload);
 
     if (result.ok) {
       // Changes made while the upload was in flight still need a sync
@@ -165,7 +193,7 @@ export async function immediateCloudSave() {
 
   if (result.ok) {
     showToast('Saved to cloud');
-  } else if (result.status !== 401 && result.status !== 413) {
+  } else if (result.status !== 401 && result.status !== 413 && !result.held) {
     // Subtle failure notice (non-intrusive)
     showToast("Couldn't sync to cloud. Will retry.");
   }

@@ -17,6 +17,7 @@
 //    section.layouts; the flat props are the active mode's working copy.
 
 import { model, editState, currentSections } from '../state.js';
+import { isPhoneDevice } from '../core/mobile-device.js';
 
 // ============================================================
 // CONSTANTS
@@ -58,6 +59,8 @@ function autoDetectMode() {
 
 /** Currently active device mode ('mobile' | 'tablet' | 'desktop'). */
 export function getActiveMode() {
+  // Phones are always mobile, whatever this browser stored (the pref is not rewritten)
+  if (isPhoneDevice()) return (_activeMode = 'mobile');
   if (_activeMode && DEVICE_MODES[_activeMode]) return _activeMode;
   const stored = localStorage.getItem(DEVICE_MODE_STORAGE_KEY);
   _activeMode = DEVICE_MODES[stored] ? stored : autoDetectMode();
@@ -707,10 +710,16 @@ export function hydrateLayout(sections, mode) {
 /**
  * Switch the active device mode: persist the current flat layout into its
  * profile, swap in the target profile, resize the container, re-render.
- * Works both in view mode and mid-edit (operates on currentSections()).
+ * Refused on phones (always mobile) and while editing: a switch mid-edit
+ * left flat props of one mode labelled as the other after Cancel.
  */
 export function switchDeviceMode(mode) {
   if (!DEVICE_MODES[mode] || mode === getActiveMode()) return;
+  if (isPhoneDevice() && mode !== 'mobile') return;
+  if (editState.enabled) {
+    if (window.showToast) window.showToast('Save or cancel your edits before switching layouts');
+    return;
+  }
 
   const sections = currentSections();
 
@@ -722,6 +731,10 @@ export function switchDeviceMode(mode) {
   try { localStorage.setItem(DEVICE_MODE_STORAGE_KEY, mode); } catch (e) { /* private mode */ }
   model.lastActiveMode = mode;
   if (editState.working) editState.working.lastActiveMode = mode;
+
+  // Mount / unmount the mobile shell BEFORE applyCellSize measures .app-main
+  // (the grid is display:none while the shell is mounted)
+  if (window.syncMobileShell) window.syncMobileShell(mode);
 
   // Swap in the new mode's layout
   hydrateLayout(sections, mode);

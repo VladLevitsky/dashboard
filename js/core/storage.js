@@ -7,6 +7,7 @@ import { showToast } from '../utils.js';
 import { getActiveStorageKey, markCloudDirty } from './sync.js';
 import { normalizeTimeLog } from './time-log.js';
 import { sanitizeStoredHtml } from './markdown.js';
+import { makeSyncStamp, noteRestoredStamp } from './mobile-sync.js';
 import { migrateToGrid24, migrateToDeviceLayouts, hydrateLayout, persistActiveLayout, getActiveMode, DEFAULT_COL_SPAN, DEFAULT_ROW_SPAN } from '../features/grid-engine.js';
 
 // --- Migrate legacy card types to unified card structure (schemaVersion 3)
@@ -504,6 +505,9 @@ export function saveModel() {
     completedTasks: data.completedTasks || [],
     projects: data.projects || [],
     subtaskTemplates: data.subtaskTemplates || [],
+    // Which device saved this copy, and when (payload only: never in the
+    // model or an export). Lets a phone notice a newer save from elsewhere.
+    _sync: makeSyncStamp(),
   };
 
   // Add ALL sections - all are now unified format
@@ -540,7 +544,25 @@ export function saveModel() {
     markCloudDirty();
   }
 
+  announceSave();
   return true;
+}
+
+// One change funnel: every persisted write raises a coalesced window event
+// 'model:saved' (one per microtask, detail.seq = saves so far). The mobile
+// shell re-renders from it. Node-safe (no window, no event).
+let _saveSeq = 0;
+let _saveEventQueued = false;
+function announceSave() {
+  if (typeof window === 'undefined' || typeof window.dispatchEvent !== 'function') return;
+  _saveSeq++;
+  window.__modelSaveSeq = _saveSeq;
+  if (_saveEventQueued) return;
+  _saveEventQueued = true;
+  queueMicrotask(() => {
+    _saveEventQueued = false;
+    try { window.dispatchEvent(new CustomEvent('model:saved', { detail: { seq: _saveSeq } })); } catch (e) { /* no CustomEvent */ }
+  });
 }
 
 // --- Restore model from localStorage
@@ -559,6 +581,9 @@ export async function restoreModel() {
     if (!saved) {
       return;
     }
+
+    // A copy saved by another device came from the cloud: this browser has seen it
+    noteRestoredStamp(saved._sync, storageKey);
 
     // Run migration for legacy card types (schemaVersion < 2)
     saved = migrateToUnifiedCards(saved);

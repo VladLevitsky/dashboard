@@ -839,8 +839,9 @@ function showMeetingsEditMode(meeting) {
     links: initialLinks
   };
 
-  // Focus name input
-  requestAnimationFrame(() => $('#meetings-inline-name').focus());
+  // Focus name input (not in the mobile shell: Edit opens to read first, and
+  // jump-in / Start notes put the caret in the description themselves)
+  if (document.documentElement.dataset.shell !== 'mobile') requestAnimationFrame(() => $('#meetings-inline-name').focus());
 }
 
 // ============================================================
@@ -999,7 +1000,7 @@ function addInlineFileRow(fileId, fileName) {
   openBtn.className = 'meeting-file-open';
   openBtn.title = 'Open file';
   openBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>`;
-  openBtn.addEventListener('click', () => openFile(fileId, fileName));
+  openBtn.addEventListener('click', () => (window.openFile || openFile)(fileId, fileName));
 
   const removeBtn = document.createElement('button');
   removeBtn.type = 'button';

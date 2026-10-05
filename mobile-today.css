@@ -1,0 +1,618 @@
+/* ==========================================================================
+   mobile-today.css (unit F4): the Today tab, the Time sheet, the More sheet
+   and the reused dialogs opened from them (calendar, sign in, task settings,
+   cloud files, the Time Tracking period popover).
+   Every rule keys on html[data-shell="mobile"] (tablet and desktop never see
+   any of it); glass rules use the shell prefix
+   html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme]
+   (see mobile.css for the conventions). Classes are prefixed mx-today- /
+   mx-time- / mx-more-. Tokens only, no new hues; emerald = live / done.
+   Icon images and copy-paste swatches are never touched.
+   Sections: 1 Today screen · 2 rows, subtask rail, meetings, reminders,
+   coming-up rows · 3 Time sheet + the hosted card · 4 More sheet · 5 reused:
+   calendar, auth, task settings, file manager, .tt-range-pop · 6 dark ·
+   7 sunset · 8 keyframes · 9 a11y · 10 landscape
+   ========================================================================== */
+
+/* --- 1. Today screen ------------------------------------------------------ */
+html[data-shell="mobile"] .mx-today {
+  display: flex; flex-direction: column; gap: 22px;
+  padding-top: 14px;
+}
+html[data-shell="mobile"] .mx-today-section { min-width: 0; }
+html[data-shell="mobile"] .mx-today-section[hidden],
+html[data-shell="mobile"] .mx-today-empty[hidden] { display: none; }
+html[data-shell="mobile"] .mx-today-head {
+  display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap;
+  margin: 0 0 9px; padding: 0 6px;
+  font-size: 11.5px; font-weight: 700; line-height: 1.3;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--muted);
+}
+html[data-shell="mobile"] .mx-today-head-extra:empty { display: none; }
+html[data-shell="mobile"] .mx-today-head-extra {
+  font-weight: 600; letter-spacing: 0.02em; text-transform: none; font-size: 12.5px;
+}
+html[data-shell="mobile"] .mx-today-head-extra::before { content: "· "; }
+html[data-shell="mobile"] .mx-today-lanes { display: flex; flex-direction: column; gap: 12px; }
+
+/* Panes: the desktop Today group (styles.css .today-color-group) at phone size.
+   The pane carries the blur; rows on it don't */
+html[data-shell="mobile"] .mx-today-pane.eisenhower-priority-card {
+  flex: none;
+  min-width: 0; min-height: 0;
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 6px 8px 8px;
+  border-radius: 20px;
+  transition: none;
+}
+html[data-shell="mobile"] .mx-today-pane-head {
+  display: flex; align-items: center; gap: 8px;
+  min-height: 30px; padding: 0 6px;
+  font-size: 13px; font-weight: 700; color: var(--text);
+}
+html[data-shell="mobile"] .mx-today-pane-dot {
+  flex: 0 0 auto; width: 9px; height: 9px; border-radius: 50%;
+  background: rgb(var(--priority-rgb, 148 163 184));
+  box-shadow: 0 0 8px rgb(var(--priority-rgb, 148 163 184) / 60%);
+}
+html[data-shell="mobile"] .mx-today-pane-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+html[data-shell="mobile"] .mx-today-pane-count { color: var(--muted); font-variant-numeric: tabular-nums; font-weight: 600; }
+html[data-shell="mobile"] .mx-today-list { display: flex; flex-direction: column; gap: 6px; }
+html[data-shell="mobile"] .mx-today-entry { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+
+/* Empty state + Calendar link */
+html[data-shell="mobile"] .mx-today-empty {
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  padding: 30px 22px 24px;
+  border-radius: var(--mx-radius);
+  text-align: center;
+}
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-today-empty {
+  background: radial-gradient(ellipse 160px 70px at 50% 0%, rgb(var(--fx-ind-rgb) / 12%), transparent 100%),
+    var(--glass-reflection), var(--glass-fill);
+  border: 1px solid var(--glass-edge);
+  box-shadow: var(--fx-lift-pill), var(--glass-rim);
+}
+html[data-shell="mobile"] .mx-today-empty-glyph { position: relative; display: inline-flex; color: var(--text); }
+html[data-shell="mobile"] .mx-today-empty-glyph::before {
+  content: ""; position: absolute; inset: -12px; border-radius: 50%; z-index: -1;
+  background: radial-gradient(circle closest-side, rgb(var(--fx-ind-rgb, 22 160 255) / 26%), transparent 100%);
+  animation: fxPool 7.9s var(--fx-breathe, ease-in-out) -3.1s infinite;
+}
+html[data-shell="mobile"] .mx-today-empty-title { margin: 0; font-size: 17px; font-weight: 700; letter-spacing: -0.01em; }
+html[data-shell="mobile"] .mx-today-foot { display: flex; justify-content: flex-end; margin-top: -6px; }
+html[data-shell="mobile"] .mx-today-calendar {
+  display: inline-flex; align-items: center; gap: 6px;
+  min-height: var(--mx-hit); padding: 0 8px 0 12px;
+  border: 0; border-radius: 22px; background: transparent;
+  color: var(--muted);
+  font: 600 14px/1 'Inter', system-ui, sans-serif;
+  cursor: pointer; touch-action: manipulation;
+}
+html[data-shell="mobile"] .mx-today-calendar span { color: var(--text); }
+html[data-shell="mobile"] .mx-today-calendar:active { background-color: var(--glass-hover); }
+
+/* --- 2. Rows (fallback when F1's taskRow is absent), rail, meetings, reminders, coming up --- */
+html[data-shell="mobile"] .mx-today-slot {
+  position: relative;
+  border-radius: 16px;
+  touch-action: pan-y;
+  user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+}
+/* Swipe → underlay: emerald, opaque only under the pill, shown while swiping */
+html[data-shell="mobile"] .mx-today-under {
+  position: absolute; inset: 0;
+  display: none; align-items: center; gap: 8px;
+  padding-left: 18px;
+  border-radius: inherit;
+  color: #fff;
+  font: 700 14px/1 'Inter', system-ui, sans-serif;
+  background-image: linear-gradient(90deg, rgb(var(--fx-live-rgb, 24 211 116) / 70%), rgb(var(--fx-live-deep, 6 122 66) / 55%));
+}
+html[data-shell="mobile"] .mx-today-slot.is-swiping .mx-today-under { display: flex; }
+html[data-shell="mobile"] .mx-today-slot.is-armed .mx-today-under {
+  background-image: linear-gradient(90deg, rgb(var(--fx-live-rgb, 24 211 116) / 92%), rgb(var(--fx-live-deep, 6 122 66) / 80%));
+}
+html[data-shell="mobile"] .mx-today-under svg { width: 18px; height: 18px; }
+
+html[data-shell="mobile"] .mx-today-row.eisenhower-task {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 2px;
+  min-height: 52px;
+  padding: 6px 4px 6px 0;
+  border-radius: 16px;
+  white-space: normal;
+  font-size: 15px;
+  transition: none;
+}
+html[data-shell="mobile"] .mx-today-row.eisenhower-task:hover,
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-today-row.eisenhower-task:hover { transform: none; }
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-today-row.eisenhower-task {
+  -webkit-backdrop-filter: none; backdrop-filter: none;
+}
+html[data-shell="mobile"] .mx-today-row:active { filter: none; }
+html[data-shell="mobile"] .mx-today-row:focus-visible { outline: 2px solid rgb(var(--fx-ind-rgb, 22 160 255) / 70%); outline-offset: 2px; }
+html[data-shell="mobile"] .mx-today-main { min-width: 0; display: flex; flex-direction: column; gap: 4px; padding: 2px 0; }
+html[data-shell="mobile"] .mx-today-title {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2;
+  overflow: hidden;
+  font-size: 15px; line-height: 1.33; font-weight: 500;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+html[data-shell="mobile"] .eisenhower-task-pinned .mx-today-title { font-weight: 600; }
+html[data-shell="mobile"] .mx-today-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+html[data-shell="mobile"] .mx-today-meta:empty { display: none; }
+html[data-shell="mobile"] .mx-today-subcount {
+  display: inline-flex; align-items: center; gap: 3px;
+  font-size: 12px; font-weight: 600; color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+/* The stopwatch (createTaskTimerControl, unchanged) gets a 44px hit */
+html[data-shell="mobile"] .mx-today-row .task-timer { align-self: center; margin-right: 2px; }
+html[data-shell="mobile"] .mx-today-row .task-timer-btn { width: 40px; height: 40px; margin: -2px 0; }
+
+/* The complete ring: 22px, the priority hue at rest; completing fills it with
+   the emerald 9b crystal and strokes the check (done is always emerald) */
+html[data-shell="mobile"] :is(.mx-today-check, .mx-today-sub-check) {
+  flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 44px; height: 44px; padding: 0; margin: 0;
+  border: 0; border-radius: 50%; background: transparent;
+  color: #fff;
+  cursor: pointer; touch-action: manipulation;
+}
+html[data-shell="mobile"] .mx-today-ring {
+  position: relative;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; box-sizing: border-box;
+  border-radius: 50%;
+  border: 2px solid rgb(var(--priority-rgb, 148 163 184) / 80%);
+  background: var(--glass-field);
+  box-shadow: 0 0 10px -3px rgb(var(--priority-rgb, 148 163 184) / 55%);
+}
+html[data-shell="mobile"] .mx-today-ring svg { width: 13px; height: 13px; opacity: 0; stroke-dasharray: 24; stroke-dashoffset: 24; }
+html[data-shell="mobile"] :is(.mx-today-check, .mx-today-sub-check):active .mx-today-ring {
+  border-color: rgb(var(--fx-live-rgb, 24 211 116) / 85%);
+}
+html[data-shell="mobile"] .is-completing .mx-today-ring {
+  border-color: rgb(var(--fx-live-rgb, 24 211 116));
+  background-color: transparent;
+  background-image: radial-gradient(circle at 34% 28%, rgb(255 255 255 / 70%), transparent 46%),
+    linear-gradient(145deg, rgb(var(--fx-live-rgb, 24 211 116)), rgb(var(--fx-live-deep, 6 122 66)));
+  box-shadow: 0 0 12px -2px rgb(var(--fx-live-rgb, 24 211 116) / 75%);
+}
+html[data-shell="mobile"] .is-completing .mx-today-ring svg { opacity: 1; stroke-dashoffset: 0; transition: stroke-dashoffset 0.12s ease-out; }
+
+/* Due subtasks hang on a rail in their task's colour */
+html[data-shell="mobile"] .mx-today-subs {
+  display: flex; flex-direction: column; gap: 4px;
+  margin: 0 0 2px 21px; padding-left: 9px;
+  border-left: 2px solid rgb(var(--priority-rgb, 148 163 184) / 45%);
+}
+html[data-shell="mobile"] .mx-today-sub {
+  display: flex; align-items: center;
+  min-height: 44px;
+  border-radius: 14px;
+}
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-today-sub {
+  background: var(--glass-reflection), var(--glass-field);
+  border: 1px solid var(--glass-edge);
+  box-shadow: var(--fx-lift-pill), var(--glass-rim);
+}
+html[data-shell="mobile"] .mx-today-sub-open {
+  flex: 1 1 auto; min-width: 0; align-self: stretch;
+  display: flex; align-items: center; gap: 8px;
+  padding: 4px 10px 4px 0; margin: 0;
+  border: 0; background: transparent; color: var(--text);
+  font: 600 14px/1.3 'Inter', system-ui, sans-serif; text-align: left;
+  cursor: pointer;
+}
+html[data-shell="mobile"] .mx-today-sub-title { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+html[data-shell="mobile"] .mx-today-sub.is-completing { opacity: 0.7; }
+
+/* Meetings today */
+html[data-shell="mobile"] .mx-today-meeting-list { display: flex; flex-direction: column; gap: 8px; }
+html[data-shell="mobile"] .mx-today-meeting {
+  display: flex; align-items: center; gap: 6px;
+  min-height: 56px; padding: 0 6px 0 0;
+  border-radius: 16px;
+  border: 1px solid rgb(139 92 246 / 28%);
+}
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-today-meeting {
+  background: radial-gradient(ellipse 140px 40px at 85% 0%, rgb(255 255 255 / 30%), transparent 100%),
+    linear-gradient(135deg, rgb(139 92 246 / 14%), rgb(139 92 246 / 6%)), var(--glass-reflection);
+  background-color: var(--glass-field);
+  box-shadow: var(--fx-lift-pill), var(--glass-rim);
+}
+html[data-shell="mobile"] .mx-today-meeting-main {
+  flex: 1 1 auto; min-width: 0; align-self: stretch;
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 4px 8px 14px; margin: 0;
+  border: 0; background: transparent; color: var(--text);
+  font: 600 15px/1.3 'Inter', system-ui, sans-serif; text-align: left;
+  cursor: pointer;
+}
+html[data-shell="mobile"] .mx-today-meeting-icon { display: flex; flex: 0 0 auto; color: #7c3aed; }
+html[data-shell="mobile"] .mx-today-meeting-text { min-width: 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+html[data-shell="mobile"] .mx-today-meeting-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+html[data-shell="mobile"] .mx-today-notes { min-height: 40px; padding: 0 12px; font-size: 14px; border-radius: 12px; }
+
+/* Reminders: the real card items, one column (the host is a container, like a card) */
+html[data-shell="mobile"] .mx-today-reminders-host { container-type: inline-size; min-width: 0; }
+html[data-shell="mobile"] .mx-today-reminders.unified-reminders-group {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  gap: 8px !important;
+  margin: 0; padding: 0;
+}
+html[data-shell="mobile"] .mx-today-reminders .unified-reminder-item { min-height: 48px; }
+
+/* Coming up: compact 44px rows in one frosted list */
+html[data-shell="mobile"] .mx-today-coming-list {
+  display: flex; flex-direction: column;
+  border-radius: 18px; overflow: hidden;
+}
+html[data-shell="mobile"] .mx-today-coming-list:empty { display: none; }
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-today-coming-list {
+  background: radial-gradient(ellipse 180px 50px at calc(100% - 30px) 0%, var(--fx-dialog-glint, rgb(255 255 255 / 30%)), transparent 100%),
+    var(--glass-reflection), var(--glass-fill);
+  border: 1px solid var(--glass-edge);
+  box-shadow: var(--fx-lift-pill), var(--glass-rim);
+}
+html[data-shell="mobile"] .mx-today-coming-row {
+  display: grid; grid-template-columns: 54px 20px minmax(0, 1fr); align-items: center; column-gap: 8px;
+  min-height: 46px; padding: 6px 14px;
+  border: 0; border-top: 1px solid var(--glass-divider);
+  background: transparent; color: var(--text);
+  font: 500 14px/1.3 'Inter', system-ui, sans-serif; text-align: left;
+  cursor: pointer; touch-action: manipulation;
+}
+html[data-shell="mobile"] .mx-today-coming-item { display: flex; flex-direction: column; }
+html[data-shell="mobile"] .mx-today-coming-item:first-child > .mx-today-coming-row { border-top: 0; }
+html[data-shell="mobile"] .mx-today-coming-row:active { background-color: var(--glass-hover); }
+html[data-shell="mobile"] .mx-today-coming-day {
+  font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--muted);
+}
+html[data-shell="mobile"] .mx-today-coming-mark { display: inline-flex; align-items: center; justify-content: center; color: var(--muted); }
+html[data-shell="mobile"] .mx-today-coming-row.is-meeting .mx-today-coming-mark { color: #7c3aed; }
+html[data-shell="mobile"] .mx-today-coming-mark.is-dot::before {
+  content: ""; width: 9px; height: 9px; border-radius: 50%;
+  background: rgb(var(--mx-dot-rgb, 61 151 248));
+  box-shadow: 0 0 7px rgb(var(--mx-dot-rgb, 61 151 248) / 55%);
+}
+html[data-shell="mobile"] .mx-today-coming-mark[data-color="red"] { --mx-dot-rgb: 249 76 100; }
+html[data-shell="mobile"] .mx-today-coming-mark[data-color="orange"] { --mx-dot-rgb: 255 133 35; }
+html[data-shell="mobile"] .mx-today-coming-mark[data-color="yellow"] { --mx-dot-rgb: 242 189 24; }
+html[data-shell="mobile"] .mx-today-coming-mark[data-color="blue"] { --mx-dot-rgb: 61 151 248; }
+html[data-shell="mobile"] .mx-today-coming-text { min-width: 0; display: flex; flex-direction: column; }
+html[data-shell="mobile"] .mx-today-coming-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+html[data-shell="mobile"] .mx-today-coming-detail { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+html[data-shell="mobile"] .mx-today-coming-empty { margin: 0; padding: 0 6px; font-size: 14px; color: var(--muted); }
+html[data-shell="mobile"] .mx-today-coming-empty[hidden] { display: none; }
+
+/* --- 3. Time sheet and the hosted #time-tracking-card ---------------------- */
+html[data-shell="mobile"] .mx-time-body { padding-top: 2px; }
+html[data-shell="mobile"] .mx-time-live {
+  position: relative;
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 14px 14px 14px;
+  margin-bottom: 14px;
+  border-radius: 22px;
+  overflow: hidden;
+}
+html[data-shell="mobile"] .mx-time-live[hidden] { display: none; }
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-time-live {
+  background-image: radial-gradient(ellipse 160px 50px at 82% 0%, rgb(255 255 255 / 42%), transparent 70%),
+    linear-gradient(135deg, rgb(var(--fx-live-rgb) / 24%), rgb(var(--fx-live-deep) / 14%)), var(--glass-reflection);
+  background-color: var(--glass-field);
+  border: 1px solid rgb(var(--fx-live-rgb) / 50%);
+  box-shadow: var(--fx-lift-pill), 0 0 24px -8px rgb(var(--fx-live-rgb) / 60%), var(--glass-rim);
+}
+html[data-shell="mobile"] .mx-time-live-head { display: flex; align-items: center; gap: 8px; max-width: 100%; }
+html[data-shell="mobile"] .mx-time-orb {
+  flex: 0 0 auto; width: 10px; height: 10px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #fff 0%, rgb(var(--fx-live-rgb, 24 211 116)) 45%, rgb(var(--fx-live-deep, 6 122 66)) 100%);
+  box-shadow: 0 0 8px 2px rgb(var(--fx-live-rgb, 24 211 116) / 60%);
+  animation: fxCore 5.4s ease-in-out -3.2s infinite;
+}
+html[data-shell="mobile"] .mx-time-title {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 15px; font-weight: 600;
+}
+html[data-shell="mobile"] .mx-time-clock {
+  font-size: 44px; line-height: 1.1; font-weight: 600; letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+html[data-shell="mobile"] .mx-time-actions {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px;
+  width: 100%; margin-top: 8px;
+}
+html[data-shell="mobile"] .mx-time-actions:has(> [hidden]) { grid-template-columns: minmax(0, 1fr); }
+html[data-shell="mobile"] .mx-time-btn { padding: 0 10px; font-size: 14px; gap: 6px; }
+html[data-shell="mobile"] .mx-time-btn svg { flex: 0 0 auto; width: 18px; height: 18px; }
+html[data-shell="mobile"] .mx-time-btn[hidden] { display: none; }
+html[data-shell="mobile"] .mx-time-stop-glyph { width: 11px; height: 11px; border-radius: 2.5px; background: currentColor; }
+html[data-shell="mobile"] .mx-time-complete svg { color: rgb(var(--fx-live-deep, 6 122 66)); }
+
+/* The re-hosted card keeps its frosted card glass (a pane inside the sheet,
+   like Today's panes), but the sheet already blurs: no second backdrop */
+html[data-shell="mobile"] #time-tracking-card.mx-hosted.active {
+  padding: 12px 10px 14px !important;
+  margin: 0 !important;
+  max-width: none;
+  width: auto;
+  min-height: 0;
+  border-radius: 22px;
+  transition: none;
+}
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] #time-tracking-card.mx-hosted {
+  -webkit-backdrop-filter: none !important; backdrop-filter: none !important;
+}
+html[data-shell="mobile"] #time-tracking-card.mx-hosted .tt-header { display: none; }
+html[data-shell="mobile"] #time-tracking-card.mx-hosted .tt-body { gap: 22px; }
+html[data-shell="mobile"] #time-tracking-card.mx-hosted .tt-section-heading { margin-left: 4px; }
+/* Title · category chip · time · actions. The card is its own inline-size
+   container: at phone width (≤ 480px, portrait) styles.css hides the chip, so
+   the row drops to 3 columns; wider (landscape) the chip stays and gets its
+   column, so the Complete button and stopwatch never wrap to a second line */
+html[data-shell="mobile"] #time-tracking-card.mx-hosted .tt-task-line {
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  gap: 4px;
+  padding: 2px 2px 2px 2px;
+}
+@container (max-width: 480px) {
+  html[data-shell="mobile"] #time-tracking-card.mx-hosted .tt-task-line { grid-template-columns: minmax(0, 1fr) auto auto; }
+}
+html[data-shell="mobile"] #time-tracking-card.mx-hosted .tt-task-main { min-height: 44px; font-size: 15px; }
+html[data-shell="mobile"] #time-tracking-card.mx-hosted .tt-task-actions { gap: 0; min-width: 88px; }
+html[data-shell="mobile"] #time-tracking-card.mx-hosted .tt-task-actions:empty { min-width: 0; }
+html[data-shell="mobile"] #time-tracking-card.mx-hosted :is(.tt-task-complete.task-complete-btn, .tt-task-toggle.task-timer-btn) {
+  width: 44px; height: 44px;
+}
+html[data-shell="mobile"] #time-tracking-card.mx-hosted .tt-session { grid-template-columns: auto minmax(0, 1fr) auto 36px; min-height: 40px; }
+html[data-shell="mobile"] #time-tracking-card.mx-hosted .tt-session-delete { width: 36px; height: 36px; }
+html[data-shell="mobile"] #time-tracking-card.mx-hosted .tt-clear-btn { min-height: 44px; padding: 0 4px; }
+html[data-shell="mobile"] #time-tracking-card.mx-hosted .tt-past-toggle { min-height: 44px; }
+html[data-shell="mobile"] #time-tracking-card.mx-hosted .tt-range-btn { position: relative; min-height: 36px; font-size: 13px; }
+html[data-shell="mobile"] #time-tracking-card.mx-hosted .tt-range-btn::after { content: ""; position: absolute; inset: -4px 0; }
+html[data-shell="mobile"] #time-tracking-card.mx-hosted .tt-session-list { max-height: none; }
+
+/* --- 4. More sheet ---------------------------------------------------------- */
+html[data-shell="mobile"] .mx-more { display: flex; flex-direction: column; gap: 18px; padding-bottom: 22px; }
+html[data-shell="mobile"] .mx-more-account {
+  display: grid; grid-template-columns: 52px minmax(0, 1fr) auto; align-items: center; column-gap: 12px;
+  padding: 12px 12px 12px 12px;
+  border-radius: 20px;
+}
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-more-account {
+  background: radial-gradient(ellipse 160px 50px at calc(100% - 30px) 0%, var(--fx-dialog-glint, rgb(255 255 255 / 30%)), transparent 100%),
+    var(--glass-reflection), var(--glass-field);
+  border: 1px solid var(--glass-edge);
+  box-shadow: var(--fx-lift-pill), var(--glass-rim);
+}
+html[data-shell="mobile"] .mx-more-photo {
+  display: block; width: 52px; height: 52px; border-radius: 50%; overflow: hidden;
+  box-shadow: 0 0 0 1.5px var(--glass-edge), var(--fx-lift-pill, 0 2px 6px rgb(0 0 0 / 18%));
+}
+html[data-shell="mobile"] .mx-more-photo-img { display: block; width: 100%; height: 100%; object-fit: cover; }
+html[data-shell="mobile"] .mx-more-who { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+html[data-shell="mobile"] .mx-more-name {
+  font-size: 17px; font-weight: 700; letter-spacing: -0.01em;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+html[data-shell="mobile"] .mx-more-status { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); min-width: 0; }
+html[data-shell="mobile"] .mx-more-status-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+html[data-shell="mobile"] .mx-more-status-dot {
+  position: relative; flex: 0 0 auto; width: 8px; height: 8px; border-radius: 50%; box-sizing: border-box;
+  background: rgb(var(--fx-live-rgb, 24 211 116));
+  box-shadow: 0 0 6px rgb(var(--fx-live-rgb, 24 211 116) / 60%);
+}
+html[data-shell="mobile"] .mx-more-status-dot[data-state="pending"] { background: var(--warn); box-shadow: 0 0 6px rgb(245 158 11 / 60%); }
+html[data-shell="mobile"] .mx-more-status-dot[data-state="pending"]::after {
+  content: ""; position: absolute; inset: -3px; border-radius: 50%;
+  box-shadow: 0 0 8px 2px rgb(245 158 11 / 45%);
+  animation: fxBreath 5.4s var(--fx-breathe, ease-in-out) -0.9s infinite;
+}
+html[data-shell="mobile"] .mx-more-status-dot[data-state="error"] { background: var(--danger); box-shadow: 0 0 6px rgb(239 68 68 / 60%); }
+html[data-shell="mobile"] .mx-more-status-dot[data-state="out"] { background: transparent; border: 1.5px solid var(--muted); box-shadow: none; }
+html[data-shell="mobile"] .mx-more-user { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+html[data-shell="mobile"] .mx-more-action { padding: 0 14px; font-size: 14px; white-space: nowrap; }
+html[data-shell="mobile"] .mx-more-action:disabled { opacity: 0.6; cursor: default; }
+
+html[data-shell="mobile"] .mx-more-group { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+html[data-shell="mobile"] .mx-more-heading {
+  margin: 0; padding: 0 6px;
+  font-size: 11.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--muted);
+}
+html[data-shell="mobile"] .mx-more-appearance { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
+html[data-shell="mobile"] .mx-more-seg { display: grid; width: 100%; }
+html[data-shell="mobile"] .mx-more-seg .mx-seg-opt { padding: 0 8px; }
+html[data-shell="mobile"] .mx-more-list {
+  display: flex; flex-direction: column;
+  border-radius: 18px; overflow: hidden;
+}
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-more-list {
+  background: var(--glass-reflection), var(--glass-field);
+  border: 1px solid var(--glass-edge);
+  box-shadow: var(--fx-lift-pill), var(--glass-rim);
+}
+html[data-shell="mobile"] .mx-more-row {
+  display: grid; grid-template-columns: 24px minmax(0, 1fr) auto 16px; align-items: center; column-gap: 12px;
+  min-height: 52px; padding: 0 12px 0 14px; margin: 0;
+  border: 0; border-top: 1px solid var(--glass-divider);
+  background: transparent; color: var(--text);
+  font: 600 15px/1.25 'Inter', system-ui, sans-serif; text-align: left;
+  cursor: pointer; touch-action: manipulation;
+}
+html[data-shell="mobile"] .mx-more-row:first-child { border-top: 0; }
+html[data-shell="mobile"] .mx-more-row:active { background-color: var(--glass-hover); }
+html[data-shell="mobile"] .mx-more-row:focus-visible { outline: 2px solid rgb(var(--fx-ind-rgb, 22 160 255) / 70%); outline-offset: -2px; }
+html[data-shell="mobile"] .mx-more-row-icon { display: inline-flex; color: var(--muted); }
+html[data-shell="mobile"] .mx-more-row-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+html[data-shell="mobile"] .mx-more-row-value { font-size: 14px; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; }
+html[data-shell="mobile"] .mx-more-row-chevron { display: inline-flex; color: var(--muted); opacity: 0.8; }
+/* A running timer: the row's value glows emerald (live) */
+html[data-shell="mobile"] .mx-more-row.is-live .mx-more-row-value { color: rgb(var(--fx-live-deep, 6 122 66)); }
+html[data-shell="mobile"] .mx-more-row.is-live .mx-more-row-icon { color: rgb(var(--fx-live-deep, 6 122 66)); }
+html[data-shell="mobile"] .mx-more-backup { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
+html[data-shell="mobile"] .mx-more-note { margin: 0; padding: 0 6px; font-size: 12.5px; line-height: 1.4; color: var(--muted); }
+html[data-shell="mobile"] .mx-more-signout { align-self: center; min-width: 160px; }
+html[data-shell="mobile"] .mx-more-nom { margin: 0; display: flex; flex-direction: column; gap: 4px; }
+html[data-shell="mobile"] .mx-more-nom dt { margin: 10px 0 0; font-size: 15px; font-weight: 700; }
+html[data-shell="mobile"] .mx-more-nom dd { margin: 0; font-size: 14px; line-height: 1.45; color: var(--muted); }
+
+/* --- 5. Reused dialogs opened from Today, Time and More -----------------------
+   The phone @media rules of styles.css are restated under the shell prefix,
+   so the desktop preview's 390px column looks exactly like a phone. */
+
+/* Calendar: a full-screen sheet (the stacked ≤760px layout) */
+html[data-shell="mobile"] #calendar-view-modal { align-items: stretch; justify-content: stretch; }
+html[data-shell="mobile"] #calendar-view-modal .calendar-view-backdrop { display: none; }
+html[data-shell="mobile"] #calendar-view-modal .calendar-view-dialog {
+  width: 100%; max-width: none;
+  height: var(--mx-vvh, 100dvh); max-height: none;
+  border-radius: 0;
+  border-left: 0; border-right: 0;
+  animation: none;
+}
+html[data-shell="mobile"] #calendar-view-modal .calendar-view-header {
+  flex: 0 0 auto;
+  min-height: calc(var(--mx-safe-t) + var(--mx-top-h));
+  box-sizing: border-box;
+  padding: var(--mx-safe-t) 6px 0 18px;
+}
+html[data-shell="mobile"] #calendar-view-modal .calendar-view-header h4 { font-size: 20px; font-weight: 700; letter-spacing: -0.02em; }
+html[data-shell="mobile"] #calendar-view-modal .calendar-view-close {
+  width: var(--mx-hit); height: var(--mx-hit);
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 50%; font-size: 28px;
+}
+html[data-shell="mobile"] #calendar-view-modal .calendar-view-close:active { background-color: var(--glass-hover); }
+html[data-shell="mobile"] #calendar-view-modal .calendar-view-body {
+  flex: 1 1 auto; min-height: 0;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  padding: 10px 12px calc(var(--mx-safe-b) + 24px);
+  overscroll-behavior: contain;
+}
+html[data-shell="mobile"] #calendar-view-modal .calendar-view-due {
+  padding-left: 0; border-left: none;
+  padding-top: 14px; border-top: 1px solid var(--glass-divider);
+}
+html[data-shell="mobile"] #calendar-view-modal .calendar-view-nav-btn { width: var(--mx-hit); height: var(--mx-hit); }
+html[data-shell="mobile"] #calendar-view-modal .calendar-view-month-label { min-height: var(--mx-hit); font-size: 16px; }
+html[data-shell="mobile"] #calendar-view-modal .calendar-view-day { min-height: 46px; padding: 7px 2px 4px; justify-content: flex-start; }
+html[data-shell="mobile"] #calendar-view-modal .calendar-view-day-num { font-size: 14px; }
+html[data-shell="mobile"] #calendar-view-modal .calendar-view-item.is-clickable { min-height: 44px; }
+html[data-shell="mobile"] #calendar-view-modal .calendar-view-item { font-size: 14px; align-items: center; }   /* dot, label and Nd chip on one line in the 44px row */
+
+/* Sign in */
+html[data-shell="mobile"] #auth-modal .auth-dialog { width: calc(var(--mx-col) - 24px); max-width: 400px; }
+html[data-shell="mobile"] #auth-modal :is(input, select, textarea) { font-size: 16px; }
+html[data-shell="mobile"] #auth-modal .auth-close-btn {
+  width: var(--mx-hit); height: var(--mx-hit); margin: -10px -12px -10px 0;
+  display: inline-flex; align-items: center; justify-content: center; font-size: 26px;
+}
+html[data-shell="mobile"] #auth-modal button[type="submit"] { min-height: var(--mx-hit); }
+
+/* Task settings (categories) */
+html[data-shell="mobile"] #task-settings-modal .task-settings-dialog { width: calc(var(--mx-col) - 24px); max-width: 420px; }
+html[data-shell="mobile"] #task-settings-modal .appearance-close-btn {
+  width: var(--mx-hit); height: var(--mx-hit); margin: -10px -12px -10px 0;
+  display: inline-flex; align-items: center; justify-content: center; font-size: 26px;
+}
+html[data-shell="mobile"] #task-settings-modal :is(.task-settings-input, input) { font-size: 16px; min-height: 44px; box-sizing: border-box; }
+html[data-shell="mobile"] #task-settings-modal :is(.task-settings-add-btn, .appearance-btn) { min-height: var(--mx-hit); }
+html[data-shell="mobile"] #task-settings-modal .task-settings-delete-btn { width: var(--mx-hit); height: var(--mx-hit); }
+
+/* Cloud files */
+html[data-shell="mobile"] #file-manager-modal .file-manager-dialog {
+  width: calc(var(--mx-col) - 24px); max-width: 560px;
+  max-height: calc(var(--mx-vvh, 100dvh) - var(--mx-safe-t) - var(--mx-safe-b) - 32px);
+}
+html[data-shell="mobile"] #file-manager-modal .file-manager-close-btn {
+  width: var(--mx-hit); height: var(--mx-hit); margin: -10px -12px -10px 0;
+  display: inline-flex; align-items: center; justify-content: center; font-size: 26px;
+}
+html[data-shell="mobile"] #file-manager-modal button { min-height: 40px; }
+
+/* Time Tracking period popover (above the Time sheet: 9000 > 950) */
+html[data-shell="mobile"] .tt-range-pop { max-width: calc(var(--mx-col) - 24px); }
+html[data-shell="mobile"] .tt-range-pop .tt-range-option { min-height: 52px; }
+html[data-shell="mobile"] .tt-range-pop :is(input, .tt-range-apply, .tt-range-clear, button) { min-height: 44px; }
+html[data-shell="mobile"] .tt-range-pop input { font-size: 16px; }
+
+/* --- 6. Dark ------------------------------------------------------------------ */
+html[data-shell="mobile"] body[data-theme="dark"] .mx-today-meeting-icon,
+html[data-shell="mobile"] body[data-theme="dark"] .mx-today-coming-row.is-meeting .mx-today-coming-mark { color: #c4b5fd; }
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme="dark"] .mx-today-meeting {
+  background: radial-gradient(ellipse 140px 40px at 85% 0%, rgb(224 234 250 / 12%), transparent 100%),
+    linear-gradient(135deg, rgb(167 139 250 / 16%), rgb(167 139 250 / 6%)), var(--glass-reflection);
+  background-color: var(--glass-field);
+}
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme="dark"] .mx-time-live {
+  background-image: radial-gradient(ellipse 160px 50px at 82% 0%, rgb(224 234 250 / 16%), transparent 70%),
+    linear-gradient(135deg, rgb(var(--fx-live-rgb) / 22%), rgb(var(--fx-live-deep) / 26%)), var(--glass-reflection);
+}
+html[data-shell="mobile"] body[data-theme="dark"] :is(.mx-more-row.is-live .mx-more-row-value, .mx-more-row.is-live .mx-more-row-icon, .mx-time-complete svg) {
+  color: rgb(var(--fx-live-rgb, 24 211 116));
+}
+html[data-shell="mobile"] body[data-theme="dark"] .mx-today-slot.is-swiping .mx-today-under {
+  background-image: linear-gradient(90deg, rgb(var(--fx-live-rgb, 24 211 116) / 55%), rgb(var(--fx-live-deep, 6 122 66) / 50%));
+}
+html[data-shell="mobile"] body[data-theme="dark"] .mx-today-slot.is-armed .mx-today-under {
+  background-image: linear-gradient(90deg, rgb(var(--fx-live-rgb, 24 211 116) / 80%), rgb(var(--fx-live-deep, 6 122 66) / 72%));
+}
+
+/* --- 7. Sunset ---------------------------------------------------------------- */
+/* Glass, lift and canvas tokens carry the sunset tint; meetings warm a little */
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-glass-theme="sunset"][data-theme="light"] .mx-today-meeting {
+  border-color: rgb(160 92 196 / 30%);
+}
+
+/* --- 8. Keyframes ------------------------------------------------------------- */
+/* None of its own: fxPool, fxCore, fxBreath come from glass-fx.css (uneven
+   periods and negative delays chosen so nothing breathes in sync with the
+   chrome: empty-state pool 7.9s / -3.1s, Time orb 5.4s / -3.2s, More dot -0.9s) */
+
+/* --- 9. Accessibility guards -------------------------------------------------- */
+@media (prefers-reduced-transparency: reduce) {
+  html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] :is(.mx-today-coming-list, .mx-more-list,
+    .mx-more-account, .mx-today-empty, .mx-today-sub) {
+    background: var(--card);
+  }
+  html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-time-live {
+    background-image: linear-gradient(135deg, rgb(var(--fx-live-rgb) / 22%), rgb(var(--fx-live-deep) / 14%));
+    background-color: var(--card);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-shell="mobile"] .is-completing .mx-today-ring svg { transition: none; }
+}
+@media (forced-colors: active) {
+  html[data-shell="mobile"] :is(.mx-today-ring, .mx-today-coming-row, .mx-more-row, .mx-today-sub, .mx-today-meeting,
+    .mx-today-calendar, .mx-today-pane) { outline: 1px solid CanvasText; }
+}
+
+/* --- 10. Landscape phones ---------------------------------------------------------- */
+@media (orientation: landscape) and (max-height: 500px) {
+  html[data-shell="mobile"] .mx-time-clock { font-size: 34px; }
+  html[data-shell="mobile"] .mx-time-live { flex-direction: row; flex-wrap: wrap; justify-content: space-between; }
+  html[data-shell="mobile"] .mx-time-actions { margin-top: 4px; }
+  html[data-shell="mobile"] #calendar-view-modal .calendar-view-body {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 300px);
+  }
+  html[data-shell="mobile"] #calendar-view-modal .calendar-view-due {
+    padding-top: 0; border-top: 0; padding-left: 16px; border-left: 1px solid var(--glass-divider);
+  }
+  html[data-shell="mobile"] #calendar-view-modal .calendar-view-day { min-height: 40px; }
+  /* Clear of the sensor housing and the rounded corners */
+  html[data-shell="mobile"] #calendar-view-modal .calendar-view-header { padding-left: max(18px, var(--mx-safe-l)); padding-right: max(6px, var(--mx-safe-r)); }
+  html[data-shell="mobile"] #calendar-view-modal .calendar-view-body { padding-left: max(12px, var(--mx-safe-l)); padding-right: max(12px, var(--mx-safe-r)); }
+}

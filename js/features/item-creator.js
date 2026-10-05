@@ -487,13 +487,16 @@ function setType(type) {
 }
 
 function focusFirstField() {
-  requestAnimationFrame(() => {
+  const run = () => {
     if (!root || root.hidden) return;
     const target = activeType === 'icon'
       ? root.querySelector('[data-act="library"]')
       : activeType === 'separator' ? els.cancel : els.name;
     if (target) target.focus();
-  });
+  };
+  // The mobile shell: still inside the tap, or iOS raises no keyboard
+  if (document.documentElement.dataset.shell === 'mobile') run();
+  else requestAnimationFrame(run);
 }
 
 function setLinkKind(kind) {

@@ -3,6 +3,34 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Mobile shell (js/features/mobile/shell.js): decide the layout before any
+       stylesheet loads, so a phone never paints the desktop header. Phones
+       (short screen side under 600px + coarse pointer) are always 'mobile';
+       anything else keeps the stored dashboard_device_mode, else auto by width.
+       A computer gets the 390px preview frame; a small touch-only tablet
+       (coarse pointer, no hover, short side under 768) the full width. Mirrors js/core/mobile-device.js
+       (Reference/mobile-device-test.mjs runs this script in a vm against it). -->
+  <script data-mx-boot>
+  (function () { try {
+    var s = window.screen || {}, d = document.documentElement;
+    var short = Math.min(s.width || 0, s.height || 0);
+    var coarse = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+    var phone = short > 0 && short < 600 && coarse;
+    var stored = null; try { stored = localStorage.getItem('dashboard_device_mode'); } catch (e) {}
+    var w = s.width || window.innerWidth || 1280;
+    var mode = phone ? 'mobile' : (/^(mobile|tablet|desktop)$/.test(stored || '') ? stored
+             : (w < 768 ? 'mobile' : (w < 1600 ? 'tablet' : 'desktop')));
+    if (mode !== 'mobile') return;
+    d.setAttribute('data-shell', 'mobile');
+    if (phone) {
+      d.setAttribute('data-phone', '');
+      var m = document.querySelector('meta[name="viewport"]');
+      if (m) m.setAttribute('content', 'width=device-width, initial-scale=1, viewport-fit=cover');
+    } else if (!(coarse && short > 0 && short < 768 && window.matchMedia('(hover: none)').matches)) {
+      d.setAttribute('data-shell-frame', 'preview');
+    }
+  } catch (e) {} })();
+  </script>
   <title>Personal Dashboard</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📊</text></svg>">
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -14,6 +42,14 @@
   <link rel="stylesheet" href="glass-fx.css?v=2026-10-01-tt-check">
   <!-- Writing power-up: toolbar additions, menus, block styles (one section per module) -->
   <link rel="stylesheet" href="writing.css?v=2026-10-04-writing2">
+  <!-- Mobile shell: every rule is scoped under html[data-shell="mobile"] (one file per unit) -->
+  <link rel="stylesheet" href="mobile.css?v=2026-10-mobile-1">
+  <link rel="stylesheet" href="mobile-tasks.css?v=2026-10-mobile-1">
+  <link rel="stylesheet" href="mobile-compose.css?v=2026-10-mobile-1">
+  <link rel="stylesheet" href="mobile-write.css?v=2026-10-mobile-1">
+  <link rel="stylesheet" href="mobile-today.css?v=2026-10-mobile-1">
+  <link rel="stylesheet" href="mobile-links.css?v=2026-10-mobile-1">
+  <link rel="apple-touch-icon" href="assets/icons/app-icon-180.png">
   <script type="module" src="js/features/glass-glow.js?v=2026-09-30-today"></script>
   <script type="module" src="js/features/glass-fx.js?v=2026-09-28-fx"></script>
   <!-- Emoji Picker Element - Web Component -->
@@ -181,6 +217,96 @@
     <main class="app-main">
       <!-- Sections will be dynamically rendered by JavaScript -->
     </main>
+
+    <!-- Mobile shell skeleton (js/features/mobile/shell.js). Shown only under
+         html[data-shell="mobile"] (mobile.css), so the chrome is there on the
+         first paint. Units render INSIDE these nodes and never replace them. -->
+    <div id="mobile-shell" class="mx-shell">
+      <header id="mx-topbar" class="mx-topbar">
+        <button type="button" id="mx-avatar-btn" class="mx-icon-btn mx-avatar-btn" aria-label="Account and settings">
+          <span class="mx-avatar"><img class="mx-avatar-img" src="assets/icons/placeholder-profile.svg" alt=""></span>
+          <span class="mx-sync-dot" aria-hidden="true"></span>
+        </button>
+        <div id="mx-topbar-slot" class="mx-topbar-slot"><h1 class="mx-slot-title">Tasks</h1></div>
+        <button type="button" id="mx-search-btn" class="mx-icon-btn" aria-label="Search">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="7.5"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+        </button>
+        <div id="mx-due-lens" class="mx-due-lens" role="button" tabindex="0" aria-label="Open the calendar">
+          <span class="notification-badge mx-due-badge is-clear" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="4.5" width="18" height="16.5" rx="3"></rect><line x1="16" y1="2.5" x2="16" y2="6.5"></line><line x1="8" y1="2.5" x2="8" y2="6.5"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg></span>
+        </div>
+      </header>
+
+      <main id="mx-screens" class="mx-screens">
+        <section id="mx-screen-tasks" class="mx-screen" data-tab="tasks" role="tabpanel" aria-labelledby="mx-tab-tasks">
+          <div class="mx-skeleton" aria-hidden="true">
+            <div class="mx-skeleton-row"></div>
+            <div class="mx-skeleton-row"></div>
+            <div class="mx-skeleton-row"></div>
+          </div>
+        </section>
+        <section id="mx-screen-today" class="mx-screen" data-tab="today" role="tabpanel" aria-labelledby="mx-tab-today" hidden></section>
+        <section id="mx-screen-write" class="mx-screen" data-tab="write" role="tabpanel" aria-labelledby="mx-tab-write" hidden></section>
+        <section id="mx-screen-links" class="mx-screen" data-tab="links" role="tabpanel" aria-labelledby="mx-tab-links" hidden></section>
+      </main>
+
+      <!-- Now-playing lane: shown while a task timer runs (html[data-mx-live]) -->
+      <div id="mx-live" class="mx-live" role="group" aria-label="Running timer">
+        <span class="mx-live-rim" aria-hidden="true"></span>
+        <button type="button" class="mx-live-body" aria-label="Timer running">
+          <span class="mx-live-orb" aria-hidden="true"></span>
+          <span class="mx-live-title"></span>
+          <span class="mx-live-clock" data-live-timer aria-hidden="true">0:00</span>
+        </button>
+        <button type="button" class="mx-live-stop" aria-label="Stop the timer"><span class="mx-live-stop-lens" aria-hidden="true"></span></button>
+      </div>
+      <!-- Carry dock (Lift & place, unit F1): shown while html[data-mx-carry] -->
+      <div id="mx-carry" class="mx-carry"></div>
+
+      <nav id="mx-dock" class="mx-dock" role="tablist" aria-label="Sections">
+        <button type="button" class="mx-tab" role="tab" id="mx-tab-tasks" aria-controls="mx-screen-tasks" data-tab="tasks" aria-selected="true">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="9 11 12 14 22 4"></polyline><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
+          <span class="mx-tab-label">Tasks</span>
+        </button>
+        <button type="button" class="mx-tab" role="tab" id="mx-tab-today" aria-controls="mx-screen-today" data-tab="today" aria-selected="false" tabindex="-1">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path></svg>
+          <span class="mx-tab-label">Today</span>
+        </button>
+        <span class="mx-dock-gap" aria-hidden="true"></span>
+        <button type="button" class="mx-tab" role="tab" id="mx-tab-write" aria-controls="mx-screen-write" data-tab="write" aria-selected="false" tabindex="-1">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+          <span class="mx-tab-label">Write</span>
+        </button>
+        <button type="button" class="mx-tab" role="tab" id="mx-tab-links" aria-controls="mx-screen-links" data-tab="links" aria-selected="false" tabindex="-1">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
+          <span class="mx-tab-label">Links</span>
+        </button>
+      </nav>
+      <!-- The + : a sibling of the dock (not inside it), so its own frosted lens blurs the
+           page. Its breathing halo is a sibling too: inside the lens it would widen the blur. -->
+      <button type="button" id="mx-plus" class="mx-plus" aria-label="Create" aria-haspopup="dialog">
+        <svg class="mx-plus-glyph" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+      </button>
+      <span class="mx-plus-halo" aria-hidden="true"></span>
+
+      <div id="mx-layer-host"></div>
+      <div id="mx-drag-layer" aria-hidden="true"></div>
+
+      <!-- Desktop preview only: the layout switch outside the column, the dimmed surround, the column edges -->
+      <div id="mx-preview-switch" class="mx-preview-switch" role="group" aria-label="Layout">
+        <button type="button" class="mx-switch-opt" data-mode="mobile" aria-pressed="true">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="7" y="2" width="10" height="20" rx="2" ry="2"/><line x1="11" y1="18.5" x2="13" y2="18.5"/></svg>Mobile
+        </button>
+        <button type="button" class="mx-switch-opt" data-mode="tablet" aria-pressed="false">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="4" y="2" width="16" height="20" rx="2" ry="2"/><line x1="10" y1="18.5" x2="14" y2="18.5"/></svg>Tablet
+        </button>
+        <button type="button" class="mx-switch-opt" data-mode="desktop" aria-pressed="false">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>Desktop
+        </button>
+      </div>
+      <div id="mx-preview-dim" aria-hidden="true"></div>
+      <div id="mx-preview-bezel" aria-hidden="true"></div>
+      <div id="mx-live-region" class="mx-visually-hidden" aria-live="polite"></div>
+    </div>
 
     <button id="edit-toggle" class="wrench-btn" title="Toggle edit mode" aria-label="Toggle edit mode">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
@@ -798,7 +924,7 @@
     </div>
 
     <!-- ES6 Modules - fully modularized, no app.js dependency -->
-    <script type="module" src="js/main.js?v=2026-10-04-writing"></script>
+    <script type="module" src="js/main.js?v=2026-10-mobile-1"></script>
   </body>
   </html>
 

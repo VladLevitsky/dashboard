@@ -9,6 +9,7 @@ import { api as writingApi, attachWritingFeatures, attachWritingView } from './w
 import { cleanEditorHtml, isEffectivelyEmpty, unwrapInline, replaceRangeHtml, trimRangeEnd, expandToWholeInlines } from './writing/dom.js';
 import { keyHint, isMacPlatform } from '../core/writing-commands.js';
 import { sanitizeRichHtml, htmlHasRiskyStartTag } from '../core/markdown.js';
+import { getActiveMode } from './grid-engine.js';
 
 // --- Stored rich text about to go through innerHTML (defense in depth: import
 // and load sanitize too). Markup that could run code goes through the
@@ -31,6 +32,13 @@ export function safeRichHtml(html) {
 
 // --- Toggle Edit Mode
 export function toggleEditMode() {
+  // The Mobile layout has no card editing (the shell shows no grid); leaving
+  // edit mode always works
+  if (!editState.enabled && getActiveMode() === 'mobile') {
+    showToast('Card editing is on the tablet and desktop layouts');
+    return;
+  }
+
   // Find the card closest to the center of the viewport to restore position after render
   const viewportCenter = window.scrollY + window.innerHeight / 2;
   let closestCard = null;
@@ -1815,7 +1823,7 @@ export function openNotepad(sectionId, cursorPos, contextType = 'card', subtaskI
 
   // Phones: a sheet pinned to the top of the screen (CSS), not a popover at the
   // tap point that can run below the fold
-  const asSheet = window.innerWidth <= 600;
+  const asSheet = window.innerWidth <= 600 || document.documentElement.dataset.shell === 'mobile';
   pop.classList.toggle('notepad-sheet', asSheet);
   if (asSheet) {
     pop.style.left = '';
@@ -1871,8 +1879,11 @@ export function openNotepad(sectionId, cursorPos, contextType = 'card', subtaskI
   const notepadEditor = $('#notepad-editor');
   if (notepadEditor && notepadEditor._wr) notepadEditor._wr.loaded();
 
-  // Focus title input
+  // Focus title input (not when the note viewer opened over it meanwhile, or
+  // focus already moved into the notepad: no stray keyboard on phones)
   setTimeout(() => {
+    const v = $('#note-viewer-modal');
+    if ((v && !v.hidden) || pop.contains(document.activeElement)) return;
     const titleInput = $('#notepad-title');
     if (titleInput) titleInput.focus();
   }, 50);
@@ -1937,6 +1948,9 @@ function notepadHasChanges() {
   const currentContent = noteContentKey(editor?.innerHTML || '');
   return currentTitle !== notepadInitialState.title || currentContent !== notepadInitialState.content;
 }
+
+// For the mobile shell's Back = keep (unit F3)
+export function isNotepadDirty() { return notepadHasChanges(); }
 
 // Saved form of the editor content for comparisons ('' when effectively empty,
 // so typing then deleting everything is not an unsaved change)

@@ -1,0 +1,1128 @@
+/* ==========================================================================
+   mobile-write.css (unit F3): the Write tab and the writer frame.
+   Every rule keys on html[data-shell="mobile"] (tablet and desktop never see
+   any of it); glass rules use the shell prefix
+   html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme]
+   (see mobile.css for the conventions). Classes are prefixed mx-write- (the
+   tab) and mx-writer- / mx-draft- (bits injected into the reused editors).
+   The writer frame turns the 7 reused editors (task editor, subtask
+   description, projects, ideas, meetings, the notepad and its note viewer)
+   into one full-screen frame fitted to the visual viewport: a writer bar
+   (back chevron, title, one action), the document at 17/1.6, the toolbar
+   docked at the bottom (so on the keyboard), every field >= 16px (no iOS
+   zoom). Their own code is untouched; only geometry and chrome change here.
+   Tokens only, no new hues; colour on buttons goes in background-image.
+   Sections: 1 Write screen · 2 doc rows, continue cards, drafts · 3 rename
+   sheets, writer-bar extras · 4 the writer frame contract · 5 per-surface
+   rules (incl. focus mode and help) · 6 dark · 7 sunset · 8 keyframes ·
+   9 a11y · 10 landscape
+   ========================================================================== */
+
+/* Injected writer-bar extras exist only while the shell is mounted; never on
+   the desktop editors (writer.js also removes them on unmount) */
+html:not([data-shell="mobile"]) :is(.mx-writer-title, .mx-writer-more, .mx-draft-banner, .mx-viewer-where) { display: none !important; }
+
+/* --- 1. Write screen ------------------------------------------------------- */
+html[data-shell="mobile"] .mx-write {
+  display: flex; flex-direction: column;
+  padding-top: 10px;
+  min-width: 0;
+}
+html[data-shell="mobile"] .mx-write-search {
+  display: flex; align-items: center; gap: 6px;
+  box-sizing: border-box;
+  min-height: 44px; padding: 0 4px 0 12px;
+  border-radius: 14px;
+  color: var(--muted);
+  cursor: text;
+}
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-write-search {
+  background: var(--glass-reflection), var(--glass-field);
+  border: 1px solid var(--glass-edge);
+  box-shadow: var(--fx-lift-pill), var(--glass-rim);
+}
+html[data-shell="mobile"] .mx-write-search:focus-within { color: var(--text); }
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-write-search:focus-within {
+  border-color: rgb(var(--fx-ind-rgb) / 55%);
+  box-shadow: var(--fx-lift-pill), var(--glass-rim), 0 0 0 3px rgb(var(--fx-ind-rgb) / 14%);
+}
+html[data-shell="mobile"] .mx-write-search-icon { display: inline-flex; flex: none; }
+html[data-shell="mobile"] .mx-write-search-input {
+  flex: 1 1 auto; min-width: 0;
+  height: 42px; padding: 0; margin: 0;
+  border: 0; outline: none; background: transparent;
+  color: var(--text);
+  font: 400 16px/1.2 'Inter', system-ui, -apple-system, sans-serif;
+  -webkit-appearance: none; appearance: none;
+}
+html[data-shell="mobile"] .mx-write-search-input::placeholder { color: var(--muted); opacity: 1; }
+html[data-shell="mobile"] .mx-write-search-input::-webkit-search-cancel-button,
+html[data-shell="mobile"] .mx-write-search-input::-webkit-search-decoration { -webkit-appearance: none; appearance: none; }
+html[data-shell="mobile"] .mx-write-search-clear {
+  flex: none;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px; padding: 0;
+  border: 0; border-radius: 50%;
+  background: transparent; color: var(--muted);
+  cursor: pointer; touch-action: manipulation;
+}
+html[data-shell="mobile"] .mx-write-search-clear[hidden] { display: none; }
+html[data-shell="mobile"] .mx-write-search-clear:active { background-color: var(--glass-hover); }
+
+/* Sticky filter chips under the top bar (48px), sideways scrolling */
+html[data-shell="mobile"] .mx-write-chips {
+  position: sticky; top: calc(var(--mx-safe-t) + var(--mx-top-h)); z-index: var(--mx-z-sub);
+  box-sizing: border-box;
+  min-height: var(--mx-sub-h);
+  margin: 6px calc(var(--mx-gutter) * -1) 0;
+  padding: 0;
+}
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-write-chips {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--glass-dialog) 70%, transparent),
+    color-mix(in srgb, var(--glass-dialog) 40%, transparent));
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  backdrop-filter: blur(20px) saturate(140%);
+}
+html[data-shell="mobile"] .mx-write-chip-row {
+  display: flex; align-items: center; gap: 8px;
+  min-height: var(--mx-sub-h);
+  padding: 0 var(--mx-gutter);
+  overflow-x: auto; overflow-y: hidden;
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+}
+html[data-shell="mobile"] .mx-write-chip-row::-webkit-scrollbar { display: none; }
+html[data-shell="mobile"] .mx-write-chip-row > .mx-chip { flex: none; }
+html[data-shell="mobile"] .mx-write-chip-row > .mx-chip[hidden] { display: none; }
+html[data-shell="mobile"] .mx-write-card-chip .mx-chip-label { color: var(--muted); font-weight: 600; }
+html[data-shell="mobile"] .mx-write-card-name { max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
+html[data-shell="mobile"] .mx-write-card-x { display: inline-flex; margin-right: -4px; color: var(--muted); }
+html[data-shell="mobile"] .mx-write-card-x svg { width: 14px; height: 14px; }
+
+html[data-shell="mobile"] .mx-write-body {
+  display: flex; flex-direction: column; gap: 22px;
+  padding-top: 12px;
+  min-width: 0;
+}
+html[data-shell="mobile"] .mx-write-sec { min-width: 0; }
+html[data-shell="mobile"] :is(.mx-write-sec, .mx-write-empty, .mx-write-none)[hidden] { display: none; }
+html[data-shell="mobile"] .mx-write-head {
+  display: flex; align-items: center; gap: 6px;
+  min-height: var(--mx-hit);
+  margin: -6px 0 2px;
+  padding: 0 0 0 6px;
+}
+html[data-shell="mobile"] .mx-write-label {
+  margin: 0;
+  font-size: 11.5px; font-weight: 700; line-height: 1.3;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--muted);
+}
+html[data-shell="mobile"] .mx-write-continue > .mx-write-label,
+html[data-shell="mobile"] .mx-write-drafts > .mx-write-label { padding: 0 6px; margin-bottom: 9px; }
+html[data-shell="mobile"] .mx-write-count {
+  font-size: 12px; font-weight: 600; color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+html[data-shell="mobile"] .mx-write-add {
+  position: relative;
+  margin-left: auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: var(--mx-hit); height: var(--mx-hit); padding: 0;
+  border: 0; border-radius: 50%;
+  background: transparent; color: var(--text);
+  cursor: pointer; touch-action: manipulation;
+}
+html[data-shell="mobile"] .mx-write-add svg { width: 20px; height: 20px; position: relative; z-index: 1; }
+/* a quiet frosted lens behind the + (30px), the azure light in its lit corner */
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-write-add::before {
+  content: ""; position: absolute; inset: 7px; border-radius: 50%;
+  background: radial-gradient(circle 12px at 72% 22%, rgb(var(--fx-ind-rgb) / 22%), transparent 100%),
+    var(--glass-reflection), var(--glass-field);
+  box-shadow: var(--fx-lift-pill), var(--glass-rim);
+}
+html[data-shell="mobile"] .mx-write-add:active::before { background-color: var(--glass-hover); }
+html[data-shell="mobile"] .mx-write-add:focus-visible { outline: 2px solid rgb(var(--fx-ind-rgb, 22 160 255) / 70%); outline-offset: -4px; }
+
+/* --- 2. Doc rows, continue cards, drafts, note groups ----------------------------- */
+html[data-shell="mobile"] .mx-write-list {
+  display: flex; flex-direction: column;
+  padding: 3px;
+  border-radius: 20px;
+  min-width: 0;
+}
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-write-list {
+  background: var(--glass-reflection), var(--glass-fill);
+  border: 1px solid var(--glass-edge);
+  box-shadow: var(--fx-lift-pill), var(--glass-rim), inset -1px 1px 1px var(--fx-bevel-lit);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  backdrop-filter: blur(18px) saturate(140%);
+}
+html[data-shell="mobile"] .mx-write-row {
+  position: relative;
+  display: grid; grid-template-columns: minmax(0, 1fr) var(--mx-hit);
+  align-items: center;
+  min-height: 64px;
+  border-radius: 17px;
+}
+/* Hairline between rows (inset past the glyph lens) */
+html[data-shell="mobile"] .mx-write-row + .mx-write-row::before {
+  content: ""; position: absolute; top: 0; left: 58px; right: 14px; height: 1px;
+  background: var(--glass-divider);
+  pointer-events: none;
+}
+html[data-shell="mobile"] .mx-write-row-main {
+  display: grid; grid-template-columns: 36px minmax(0, 1fr) auto;
+  align-items: center; column-gap: 12px;
+  min-width: 0; min-height: 64px;
+  padding: 10px 2px 10px 9px; margin: 0;
+  border: 0; border-radius: 17px;
+  background: transparent; color: var(--text);
+  font: inherit; text-align: left;
+  cursor: pointer; touch-action: manipulation;
+  -webkit-user-select: none; user-select: none;
+}
+html[data-shell="mobile"] .mx-write-row-main:active { background-color: var(--glass-hover); }
+html[data-shell="mobile"] .mx-write-row-main:focus-visible { outline: 2px solid rgb(var(--fx-ind-rgb, 22 160 255) / 70%); outline-offset: -2px; }
+html[data-shell="mobile"] .mx-write-glyph {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px; border-radius: 12px;
+  color: var(--text);
+}
+html[data-shell="mobile"] .mx-write-glyph svg { width: 18px; height: 18px; opacity: 0.86; }
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-write-glyph {
+  background: radial-gradient(circle 16px at 76% 18%, rgb(255 255 255 / 46%), transparent 100%),
+    var(--glass-reflection), var(--glass-field);
+  box-shadow: var(--fx-lift-pill), var(--glass-rim), inset -1px 1px 1px var(--fx-bevel-lit);
+}
+html[data-shell="mobile"] .mx-write-row-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+html[data-shell="mobile"] .mx-write-row-titleline { display: flex; align-items: center; gap: 5px; min-width: 0; }
+html[data-shell="mobile"] .mx-write-row-title {
+  min-width: 0;
+  font-size: 16px; font-weight: 600; line-height: 1.25; letter-spacing: -0.01em;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+html[data-shell="mobile"] .mx-write-pin { flex: none; display: inline-flex; color: var(--muted); }
+html[data-shell="mobile"] .mx-write-row-snippet {
+  font-size: 13px; line-height: 1.3; color: var(--muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+html[data-shell="mobile"] .mx-write-row-snippet.is-empty { font-style: italic; opacity: 0.8; }
+html[data-shell="mobile"] .mx-write-row-meta {
+  align-self: start;
+  margin-top: 3px;
+  max-width: 128px;
+  font-size: 12px; font-weight: 600; line-height: 1.3; color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+html[data-shell="mobile"] .mx-write-more {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: var(--mx-hit); height: var(--mx-hit); padding: 0; margin: 0;
+  border: 0; border-radius: 50%;
+  background: transparent; color: var(--muted);
+  cursor: pointer; touch-action: manipulation;
+}
+html[data-shell="mobile"] .mx-write-more:active { background-color: var(--glass-hover); color: var(--text); }
+html[data-shell="mobile"] .mx-write-more:focus-visible { outline: 2px solid rgb(var(--fx-ind-rgb, 22 160 255) / 70%); outline-offset: -4px; }
+
+/* Notes: one pane per card, in desktop reading order */
+html[data-shell="mobile"] .mx-write-groups { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+html[data-shell="mobile"] .mx-write-group-head {
+  display: flex; align-items: baseline; gap: 6px;
+  margin: 0 0 7px; padding: 0 6px;
+  font-size: 13.5px; font-weight: 650; line-height: 1.3; letter-spacing: -0.005em;
+  color: var(--text);
+}
+html[data-shell="mobile"] .mx-write-group-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+html[data-shell="mobile"] .mx-write-group-count { color: var(--muted); font-weight: 600; font-variant-numeric: tabular-nums; }
+html[data-shell="mobile"] .mx-write-group-count::before { content: "· "; }
+
+/* Continue writing: snap cards 160 x 112, three preview lines */
+html[data-shell="mobile"] .mx-write-cards {
+  display: flex; gap: 10px;
+  margin: 0 calc(var(--mx-gutter) * -1);
+  padding: 2px var(--mx-gutter) 10px;
+  overflow-x: auto; overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  scroll-padding-inline: var(--mx-gutter);
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+}
+html[data-shell="mobile"] .mx-write-cards::-webkit-scrollbar { display: none; }
+html[data-shell="mobile"] .mx-write-card {
+  position: relative;
+  flex: 0 0 160px;
+  box-sizing: border-box;
+  height: 112px;
+  display: flex; flex-direction: column; gap: 3px;
+  padding: 11px 12px 10px;
+  margin: 0;
+  border-radius: 18px;
+  overflow: hidden;
+  scroll-snap-align: start;
+  color: var(--text);
+  font: inherit; text-align: left;
+  cursor: pointer; touch-action: manipulation;
+  -webkit-user-select: none; user-select: none;
+}
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-write-card {
+  background: radial-gradient(ellipse 110px 46px at 92% 0%, rgb(var(--fx-ind-rgb) / 15%), transparent 100%),
+    radial-gradient(ellipse 120px 50px at 90% 0%, rgb(255 255 255 / 34%), transparent 100%),
+    var(--glass-reflection), var(--glass-fill);
+  border: 1px solid var(--glass-edge);
+  box-shadow: var(--fx-lift-pill), var(--glass-rim),
+    inset -1px 1px 1px var(--fx-bevel-lit), inset 1px -1px 1px var(--fx-bevel-soft);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  backdrop-filter: blur(18px) saturate(140%);
+}
+html[data-shell="mobile"] .mx-write-card:active { background-color: var(--glass-hover); }
+html[data-shell="mobile"] .mx-write-card:focus-visible { outline: 2px solid rgb(var(--fx-ind-rgb, 22 160 255) / 70%); outline-offset: 2px; }
+html[data-shell="mobile"] .mx-write-card-kicker {
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+html[data-shell="mobile"] .mx-write-card-title {
+  flex: none;
+  font-size: 15px; font-weight: 650; line-height: 1.25; letter-spacing: -0.01em;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2;
+  overflow: hidden; overflow-wrap: anywhere;
+}
+html[data-shell="mobile"] .mx-write-card-preview {
+  min-height: 0;
+  font-size: 12.5px; line-height: 1.32; color: var(--muted);
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3;
+  overflow: hidden; overflow-wrap: anywhere;
+}
+
+/* Recovered drafts: a dashed azure rim, the glyph in the azure light */
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-write-drafts .mx-write-list {
+  border: 1px dashed rgb(var(--fx-ind-rgb) / 50%);
+  background: radial-gradient(ellipse 60% 70% at 90% 0%, rgb(var(--fx-ind-rgb) / 10%), transparent 100%),
+    var(--glass-reflection), var(--glass-fill);
+}
+html[data-shell="mobile"] .mx-write-draft .mx-write-glyph { color: rgb(var(--fx-ind-rgb, 22 160 255)); }
+
+html[data-shell="mobile"] .mx-write-none {
+  margin: 0; padding: 14px 16px;
+  border-radius: 18px;
+  font-size: 14px; line-height: 1.4; color: var(--muted);
+  border: 1px dashed var(--glass-divider);
+}
+html[data-shell="mobile"] .mx-write-empty {
+  padding: 28px 22px;
+  border-radius: var(--mx-radius);
+  text-align: center;
+  border: 1px dashed var(--glass-divider);
+}
+html[data-shell="mobile"] .mx-write-empty-title { margin: 0 0 4px; font-size: 16px; font-weight: 700; color: var(--text); }
+html[data-shell="mobile"] .mx-write-empty-text { margin: 0; font-size: 14px; line-height: 1.4; color: var(--muted); overflow-wrap: anywhere; }
+
+/* --- 3. Sheets of the tab (⋯ actions, rename), writer-bar extras ----------------------- */
+html[data-shell="mobile"] .mx-write-sheet-where { margin: -4px 0 12px; overflow-wrap: anywhere; }
+html[data-shell="mobile"] .mx-write-actions { gap: 8px; }
+html[data-shell="mobile"] .mx-btn.mx-write-action { justify-content: flex-start; gap: 12px; min-height: 48px; padding: 0 16px; }
+html[data-shell="mobile"] .mx-write-action-glyph { display: inline-flex; color: var(--muted); }
+html[data-shell="mobile"] .mx-btn-danger .mx-write-action-glyph { color: var(--danger); }
+html[data-shell="mobile"] .mx-write-rename { display: flex; flex-direction: column; gap: 12px; }
+html[data-shell="mobile"] .mx-write-rename-input,
+html[data-shell="mobile"] .mx-rename-input {
+  box-sizing: border-box; width: 100%;
+  min-height: 46px; padding: 0 14px;
+  border: 1px solid var(--glass-edge); border-radius: 14px;
+  background: var(--glass-reflection), var(--glass-field);
+  color: var(--text);
+  font: 500 17px/1.2 'Inter', system-ui, sans-serif;
+  outline: none;
+}
+html[data-shell="mobile"] :is(.mx-write-rename-input, .mx-rename-input):focus {
+  border-color: rgb(var(--fx-ind-rgb, 22 160 255) / 60%);
+  box-shadow: 0 0 0 3px rgb(var(--fx-ind-rgb, 22 160 255) / 15%);
+}
+html[data-shell="mobile"] .mx-write-rename-row { display: flex; justify-content: flex-end; gap: 8px; }
+
+/* The project title in the writer bar: a button (tap = rename) */
+html[data-shell="mobile"] .mx-writer-title {
+  flex: 1 1 auto; min-width: 0;
+  display: block;
+  min-height: var(--mx-hit); padding: 0 6px; margin: 0;
+  border: 0; border-radius: 12px;
+  background: transparent; color: var(--text);
+  font: 650 17px/var(--mx-hit) 'Inter', system-ui, sans-serif; letter-spacing: -0.015em;
+  text-align: left;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  cursor: pointer; touch-action: manipulation;
+}
+html[data-shell="mobile"] .mx-writer-title:active { background-color: var(--glass-hover); }
+html[data-shell="mobile"] .mx-writer-more {
+  flex: none;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: var(--mx-hit); height: var(--mx-hit); padding: 0; margin: 0;
+  border: 0; border-radius: 50%;
+  background: transparent; color: var(--text);
+  cursor: pointer; touch-action: manipulation;
+}
+html[data-shell="mobile"] .mx-writer-more:active { background-color: var(--glass-hover); }
+html[data-shell="mobile"] :is(.mx-writer-title, .mx-writer-more):focus-visible { outline: 2px solid rgb(var(--fx-ind-rgb, 22 160 255) / 70%); outline-offset: -3px; }
+html[data-shell="mobile"] .mx-writer-menu { min-width: 210px; }
+html[data-shell="mobile"] .mx-writer-menu .wr-menu-item { min-height: 44px; }
+html[data-shell="mobile"] .mx-rename-popover { width: min(320px, calc(var(--mx-col) - 32px)); }
+html[data-shell="mobile"] .mx-rename-pop { display: flex; gap: 8px; padding: 4px; }
+html[data-shell="mobile"] .mx-rename-pop .mx-rename-input { flex: 1 1 auto; min-width: 0; }
+html[data-shell="mobile"] .mx-rename-save {
+  flex: none; min-height: 46px; padding: 0 14px;
+  border: 0; border-radius: 14px;
+  color: #fff;
+  font: 600 15px/1 'Inter', system-ui, sans-serif;
+  background-color: transparent;
+  background-image: radial-gradient(ellipse 60% 40% at 70% 0%, rgb(255 255 255 / 30%), transparent 100%),
+    linear-gradient(var(--glass-action), var(--glass-action));
+  cursor: pointer;
+}
+
+/* The draft banner: "Unsaved text from 10:42 · Restore · Discard" */
+html[data-shell="mobile"] .mx-draft-banner {
+  flex: none;
+  display: flex; align-items: center; gap: 0; flex-wrap: wrap;
+  margin: 10px 10px 4px;
+  padding: 2px 2px 2px 10px;
+  border-radius: 14px;
+  font: 600 14px/1.3 'Inter', system-ui, sans-serif;
+  color: var(--text);
+  border: 1px solid rgb(var(--fx-ind-rgb, 22 160 255) / 45%);
+  background: radial-gradient(ellipse 70% 90% at 92% 0%, rgb(var(--fx-ind-rgb, 22 160 255) / 14%), transparent 100%),
+    var(--glass-reflection), var(--glass-field);
+}
+html[data-shell="mobile"] .mx-draft-text { flex: 1 1 auto; min-width: 0; display: inline-flex; align-items: center; gap: 6px; }
+html[data-shell="mobile"] .mx-draft-text svg { flex: none; color: rgb(var(--fx-ind-rgb, 22 160 255)); }
+html[data-shell="mobile"] .mx-draft-btn {
+  flex: none;
+  min-height: var(--mx-hit); padding: 0 10px;
+  border: 0; border-radius: 12px;
+  background: transparent; color: var(--muted);
+  font: 600 14px/1 'Inter', system-ui, sans-serif;
+  cursor: pointer;
+}
+html[data-shell="mobile"] .mx-draft-btn.mx-draft-restore { color: rgb(var(--fx-ind-rgb, 22 160 255)); }
+html[data-shell="mobile"] .mx-draft-btn:active { background-color: var(--glass-hover); }
+/* Over a read view: first in the column, inside its padding */
+html[data-shell="mobile"] :is(#ideas-view-section, #meetings-view-section) > .mx-draft-banner-view { order: -2; margin: 0 0 4px; }
+
+/* --- 4. The writer frame contract (the 7 roots) ------------------------------------ */
+/* Root: fitted to the visual viewport (the keyboard top is the frame's bottom),
+   pinned to the column in the preview (F0's !important left / right). z-index
+   unchanged, so every reused modal keeps its own stacking */
+html[data-shell="mobile"] :is(#task-editor-modal, #subtask-desc-modal, #projects-modal, #ideas-modal,
+  #meetings-modal, #note-viewer-modal) {
+  position: fixed;
+  left: var(--mx-inline); right: var(--mx-inline);
+  top: var(--mx-vv-top, 0px); bottom: auto;
+  height: var(--mx-vvh, 100dvh);
+  padding: 0;
+  align-items: stretch; justify-content: stretch;
+}
+/* No accidental backdrop taps */
+html[data-shell="mobile"] :is(.task-editor-backdrop, .subtask-desc-backdrop, .projects-backdrop, .ideas-backdrop,
+  .meetings-backdrop, .note-viewer-backdrop) { display: none; }
+/* Dialog: the full frame, a column; keeps the dialog glass (prism hairline,
+   top-right glint, reflection, dialog fill) from glass-fx.css */
+html[data-shell="mobile"] :is(.task-editor-dialog, .subtask-desc-dialog, .projects-dialog, .ideas-dialog,
+  .meetings-dialog, .note-viewer-dialog),
+html[data-shell="mobile"] #notepad-popover.notepad-sheet {
+  position: relative;
+  box-sizing: border-box;
+  width: 100%; height: 100%;
+  max-width: none; max-height: none; min-height: 0;
+  margin: 0;
+  padding: var(--mx-safe-t) 0 0;
+  display: flex; flex-direction: column;
+  overflow: hidden;
+  border-radius: 0;
+  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  color: var(--text);
+}
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] :is(.task-editor-dialog, .subtask-desc-dialog,
+  .projects-dialog, .ideas-dialog, .meetings-dialog, .note-viewer-dialog) {
+  border: 0 !important;
+  border-radius: 0;
+  box-shadow: none;
+}
+/* The notepad sheet IS its dialog: the same frame and the dialog glass */
+html[data-shell="mobile"] #notepad-popover[hidden] { display: none !important; }
+html[data-shell="mobile"] #notepad-popover.notepad-sheet {
+  position: fixed;
+  left: var(--mx-inline); right: var(--mx-inline);
+  top: var(--mx-vv-top, 0px); bottom: auto;
+  height: var(--mx-vvh, 100dvh);
+  width: auto;
+  overflow: hidden;
+  overscroll-behavior: contain;
+}
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] #notepad-popover.notepad-sheet {
+  background:
+    linear-gradient(90deg, transparent 6%, rgb(var(--fx-cyan) / 44%) 30%, rgb(var(--fx-violet) / 44%) 55%, rgb(var(--fx-pink) / 36%) 78%, transparent 96%) top / 100% 1px no-repeat,
+    radial-gradient(ellipse 180px 60px at calc(100% - 40px) 0%, var(--fx-dialog-glint), transparent 100%),
+    var(--glass-reflection), var(--glass-dialog) !important;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  -webkit-backdrop-filter: blur(36px) saturate(145%);
+  backdrop-filter: blur(36px) saturate(145%);
+}
+
+/* Writer bar: back chevron · title · the surface's one action (52px) */
+html[data-shell="mobile"] :is(.task-editor-header, .subtask-desc-header, .projects-title-bar, .ideas-header,
+  .meetings-header, .notepad-popover-header) {
+  position: relative;
+  flex: none;
+  box-sizing: border-box;
+  display: flex; align-items: center; justify-content: flex-start; gap: 2px;
+  min-height: 52px;
+  margin: 0;
+  padding: 4px 12px 4px 4px;
+  border: 0;
+  border-bottom: 1px solid var(--glass-divider);
+  background: transparent;
+}
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] :is(.task-editor-header, .subtask-desc-header,
+  .projects-title-bar, .ideas-header, .meetings-header) {
+  background: transparent;
+  border-bottom-color: var(--glass-divider);
+}
+html[data-shell="mobile"] :is(.task-editor-header, .subtask-desc-header, .ideas-header, .meetings-header,
+  .notepad-popover-header) > :is(h3, h4) {
+  flex: 1 1 auto; min-width: 0;
+  margin: 0; padding: 0 6px;
+  font: 650 17px/1.25 'Inter', system-ui, sans-serif; letter-spacing: -0.015em;
+  color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* "Edit Task" reads "Edit task" */
+html[data-shell="mobile"] #task-editor-title { text-transform: lowercase; }
+html[data-shell="mobile"] #task-editor-title::first-letter { text-transform: uppercase; }
+
+/* The close buttons become a 44px back chevron (glyph by mask) */
+html[data-shell="mobile"] :is(.task-editor-close-btn, .subtask-desc-close-btn, .projects-close-btn, .ideas-close-btn,
+  .meetings-close-btn, #notepad-close, #note-viewer-close) {
+  order: -1;
+  position: relative;
+  flex: none;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: var(--mx-hit); height: var(--mx-hit);
+  min-width: var(--mx-hit);
+  margin: 0; padding: 0;
+  border: 0; border-radius: 50%;
+  background: transparent;
+  color: var(--text);
+  font-size: 0; line-height: 0;
+  opacity: 1;
+  transform: none; transition: none;
+  cursor: pointer; touch-action: manipulation;
+}
+html[data-shell="mobile"] :is(.task-editor-close-btn, .subtask-desc-close-btn, .projects-close-btn, .ideas-close-btn,
+  .meetings-close-btn, #notepad-close, #note-viewer-close)::before {
+  content: "";
+  width: 24px; height: 24px;
+  background-color: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='15 18 9 12 15 6'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='15 18 9 12 15 6'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+html[data-shell="mobile"] :is(.task-editor-close-btn, .subtask-desc-close-btn, .projects-close-btn, .ideas-close-btn,
+  .meetings-close-btn, #notepad-close, #note-viewer-close) > * { display: none; }
+html[data-shell="mobile"] :is(.task-editor-close-btn, .subtask-desc-close-btn, .projects-close-btn, .ideas-close-btn,
+  .meetings-close-btn, #notepad-close, #note-viewer-close):is(:hover, :active) {
+  transform: none; opacity: 1; color: var(--text);
+}
+html[data-shell="mobile"] :is(.task-editor-close-btn, .subtask-desc-close-btn, .projects-close-btn, .ideas-close-btn,
+  .meetings-close-btn, #notepad-close, #note-viewer-close):active { background-color: var(--glass-hover); }
+html[data-shell="mobile"] :is(.task-editor-close-btn, .subtask-desc-close-btn, .projects-close-btn, .ideas-close-btn,
+  .meetings-close-btn, #notepad-close, #note-viewer-close):focus-visible { outline: 2px solid rgb(var(--fx-ind-rgb, 22 160 255) / 70%); outline-offset: -3px; }
+
+/* The primary action, lifted into the bar's right slot (absolute against the
+   frame, so it never scrolls and the keyboard never hides it) */
+html[data-shell="mobile"] :is(#task-editor-save, #subtask-desc-save, #ideas-save-btn, #meetings-inline-save, #notepad-save) {
+  position: absolute; z-index: 6;
+  top: calc(var(--mx-safe-t) + 6px); right: 12px;
+  box-sizing: border-box;
+  height: 40px; min-height: 40px; min-width: 72px;
+  margin: 0; padding: 0 18px;
+  border-radius: 20px;
+  font: 600 15px/1 'Inter', system-ui, sans-serif;
+  transform: none;
+  touch-action: manipulation;
+}
+html[data-shell="mobile"] :is(#task-editor-save, #subtask-desc-save, #ideas-save-btn, #meetings-inline-save, #notepad-save)::after {
+  content: ""; position: absolute; inset: -2px -4px;              /* 44px hit */
+}
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] :is(#task-editor-save, #subtask-desc-save,
+  #ideas-save-btn, #meetings-inline-save, #notepad-save) {
+  border: 0;
+  color: #fff;
+  background-color: transparent;
+  background-image: radial-gradient(ellipse 60% 40% at 70% 0%, rgb(255 255 255 / 30%), transparent 100%),
+    linear-gradient(var(--glass-action), var(--glass-action));
+  box-shadow: var(--fx-lift-pill), inset -1px 1px 1px rgb(255 255 255 / 35%), 0 0 16px -4px rgb(var(--fx-ind-rgb) / 50%);
+}
+html[data-shell="mobile"] :is(#task-editor-save, #subtask-desc-save, #ideas-save-btn, #meetings-inline-save, #notepad-save):active {
+  background-image: radial-gradient(ellipse 60% 40% at 70% 0%, rgb(255 255 255 / 18%), transparent 100%),
+    linear-gradient(var(--glass-action), var(--glass-action));
+}
+/* Bars with a lifted action leave it room */
+html[data-shell="mobile"] :is(.task-editor-header, .subtask-desc-header, .notepad-popover-header) { padding-right: 100px; }
+html[data-shell="mobile"] .ideas-dialog:has(#ideas-editor-section:not([hidden])) .ideas-header { padding-right: 96px; }
+html[data-shell="mobile"] .meetings-dialog:has(#meetings-inline-save) .meetings-header { padding-right: 96px; }
+/* Containers between a lifted action and its frame stay unpositioned */
+html[data-shell="mobile"] :is(.task-editor-actions, .task-editor-actions-right, .subtask-desc-actions, .ideas-editor-section,
+  .ideas-editor-actions, .ideas-editor-actions-right, .meetings-body, #meetings-view-section, .meetings-edit-actions,
+  .meetings-edit-actions-right, .notepad-popover-actions, .projects-body, .projects-editor-wrap, #projects-editor-toolbar) {
+  position: static;
+}
+
+/* Every field 16px or more (iOS zooms into anything smaller) */
+html[data-shell="mobile"] :is(#task-editor-modal, #subtask-desc-modal, #projects-modal, #ideas-modal, #meetings-modal,
+  #notepad-popover, #note-viewer-modal) :is(input:not([type="checkbox"]):not([type="radio"]):not([type="file"]), select, textarea, [contenteditable="true"]) {
+  font-size: max(16px, 1em);
+}
+
+/* The document: 17 / 1.6, room to breathe */
+html[data-shell="mobile"] :is(#task-editor-modal, #subtask-desc-modal, #projects-modal, #ideas-modal, #meetings-modal,
+  #notepad-popover, #note-viewer-modal) :is(#project-editor, #ideas-editor, #meetings-inline-desc-editor, #notepad-editor,
+  #task-desc-editor, #subtask-desc-editor, #note-viewer-content, #ideas-view-content, .meetings-view-content,
+  #task-desc-view-content) {
+  font-size: 17px;
+  line-height: 1.6;
+}
+/* Full-frame documents have no field ring: the frame is the field */
+html[data-shell="mobile"] :is(#ideas-editor, #subtask-desc-editor, #notepad-editor, #project-editor):focus { outline: none; box-shadow: none; border-color: transparent; }
+
+/* The toolbar, docked at the bottom of the frame (= on the keyboard): one
+   row that scrolls sideways, 40px buttons */
+html[data-shell="mobile"] :is(#projects-editor-toolbar, .ideas-editor-toolbar, #meetings-inline-toolbar, .notepad-toolbar,
+  #task-desc-editor-wrap > .task-desc-toolbar, .subtask-desc-body > .task-desc-toolbar) {
+  order: 99;
+  flex: none;
+  box-sizing: border-box;
+  display: flex; flex-wrap: nowrap; align-items: center; gap: 2px;
+  min-height: 48px;
+  margin: 0;
+  padding: 3px 8px;
+  overflow-x: auto; overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  border: 0;
+  border-top: 1px solid var(--glass-divider);
+  border-radius: 0;
+  --tb-glass: linear-gradient(var(--glass-dialog), var(--glass-dialog));
+}
+/* With the keyboard down it is the frame's last row (the task and subtask
+   frames have their action bar under it): clear of the home indicator / the
+   gesture bar. The keyboard covers that band, so not while it is up
+   (frame-qualified: the rule above weighs an id + a class through :is) */
+html[data-shell="mobile"] :is(#projects-modal #projects-editor-toolbar, #ideas-modal .ideas-editor-toolbar,
+  #meetings-modal #meetings-inline-toolbar, #notepad-popover .notepad-toolbar) {
+  padding-bottom: calc(3px + var(--mx-safe-b));
+}
+html[data-shell="mobile"][data-mx-kb] :is(#projects-modal #projects-editor-toolbar, #ideas-modal .ideas-editor-toolbar,
+  #meetings-modal #meetings-inline-toolbar, #notepad-popover .notepad-toolbar) {
+  padding-bottom: 3px;
+}
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] :is(#projects-editor-toolbar, .ideas-editor-toolbar,
+  #meetings-inline-toolbar, .notepad-toolbar, #task-desc-editor-wrap > .task-desc-toolbar, .subtask-desc-body > .task-desc-toolbar) {
+  /* three layers of the dialog glass: a nested backdrop blur doesn't render
+     inside the dialog's own */
+  background: var(--glass-reflection), var(--tb-glass), var(--tb-glass), var(--glass-dialog) !important;
+  border-color: transparent;
+  border-top-color: var(--glass-divider);
+  box-shadow: none;
+}
+html[data-shell="mobile"] :is(#projects-editor-toolbar, .ideas-editor-toolbar, #meetings-inline-toolbar, .notepad-toolbar,
+  #task-desc-editor-wrap > .task-desc-toolbar, .subtask-desc-body > .task-desc-toolbar)::-webkit-scrollbar { display: none; }
+html[data-shell="mobile"] :is(#projects-editor-toolbar, .ideas-editor-toolbar, #meetings-inline-toolbar, .notepad-toolbar,
+  .task-desc-toolbar) > :is(button, .wr-tb-group, .wr-tb-right, .highlighter-wrap, .highlighter-btn-wrap, span) { flex: none; }
+html[data-shell="mobile"] :is(#projects-editor-toolbar, .ideas-editor-toolbar, #meetings-inline-toolbar, .notepad-toolbar,
+  .task-desc-toolbar) .wr-tb-right { display: flex; flex-wrap: nowrap; margin-left: 0; }
+html[data-shell="mobile"] :is(#task-editor-modal, #subtask-desc-modal, #projects-modal, #ideas-modal, #meetings-modal,
+  #notepad-popover) :is(.wr-tb-btn, .task-desc-toolbar-btn, .projects-toolbar-btn, .ideas-toolbar-btn, .subtask-toolbar-btn,
+  .notepad-toolbar-btn, .meetings-inline-toolbar-btn, .project-hyperlink-btn, .project-convert-task-btn,
+  .meeting-hyperlink-btn, .meeting-convert-task-btn, .highlighter-btn) {
+  flex: none;
+  min-width: 40px; height: 40px; min-height: 40px;
+  padding: 0 8px;
+  border-radius: 12px;
+  touch-action: manipulation;
+}
+html[data-shell="mobile"] :is(#projects-editor-toolbar, .ideas-editor-toolbar, #meetings-inline-toolbar, .notepad-toolbar,
+  .task-desc-toolbar) :is(.task-desc-toolbar-divider, .notepad-toolbar-divider, .wr-tb-divider, .projects-toolbar-spacer) {
+  flex: none;
+}
+html[data-shell="mobile"] #projects-editor-toolbar .projects-toolbar-spacer { width: 0; min-width: 0; }
+/* The Focus tool stays in the row (never folded into its ⋯) */
+html[data-shell="mobile"] :is(#projects-editor-toolbar, .ideas-editor-toolbar, #meetings-inline-toolbar,
+  .task-desc-toolbar) [data-wr-slot="focus"][hidden] { display: inline-flex !important; }
+/* Writing status line and find bar sit just above the toolbar */
+html[data-shell="mobile"] :is(#task-editor-modal, #subtask-desc-modal, #projects-modal, #ideas-modal, #meetings-modal,
+  #notepad-popover) .wr-status {
+  order: 97;
+  flex: none;
+  padding: 4px 18px 6px;
+  font-size: 12px;
+}
+html[data-shell="mobile"] :is(#task-editor-modal, #subtask-desc-modal, #projects-modal, #ideas-modal, #meetings-modal) .wr-find {
+  order: 98;
+  flex: none;
+  margin: 0;
+  border-radius: 0;
+}
+
+/* --- 5. Per surface ------------------------------------------------------------------ */
+/* Projects: the hub is the switcher (no tabs); the editor fills the frame, the
+   toolbar sits under it; "Saved" and ✓ are lifted into the bar */
+html[data-shell="mobile"] #projects-modal .projects-title-bar > h3 { display: none; }
+html[data-shell="mobile"] #projects-modal .projects-title-bar { padding-right: 108px; }
+html[data-shell="mobile"] #projects-modal .projects-header { display: none; }
+html[data-shell="mobile"] #projects-modal .projects-tab-delete { display: none; }
+html[data-shell="mobile"] #projects-modal .projects-body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+html[data-shell="mobile"] #projects-modal .projects-editor-wrap { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+html[data-shell="mobile"] #projects-modal .projects-editor-wrap[hidden] { display: none; }
+html[data-shell="mobile"] #project-editor {
+  flex: 1 1 auto; min-height: 0;
+  overflow-y: auto; overscroll-behavior: contain;
+  padding: 16px 18px 24px;
+}
+/* Hanging bullets at phone width (the desktop's inside markers wrap under the bullet) */
+html[data-shell="mobile"] #project-editor :is(ul, ol):not(.checklist) { padding-left: 24px; list-style-position: outside; }
+html[data-shell="mobile"] #projects-modal #project-save-btn {
+  position: absolute; z-index: 6;
+  top: calc(var(--mx-safe-t) + 4px); right: 8px;
+  width: var(--mx-hit); height: var(--mx-hit); min-width: var(--mx-hit);
+  padding: 0; margin: 0;
+  border-radius: 50%;
+}
+html[data-shell="mobile"] #projects-modal #project-save-label {
+  position: absolute; z-index: 6;
+  top: calc(var(--mx-safe-t) + 4px); right: 52px;
+  height: var(--mx-hit);
+  display: inline-flex; align-items: center;
+  margin: 0; padding: 0 2px;
+  opacity: 1; visibility: visible;
+  font: 600 13px/1 'Inter', system-ui, sans-serif;
+  color: var(--muted);
+  pointer-events: none;
+  white-space: nowrap;
+}
+/* Quiet status beside ✓: Saved (clean) or Editing (autosave pending) */
+html[data-shell="mobile"] #projects-modal #project-save-label:empty::before { content: "Saved"; }
+html[data-shell="mobile"] #projects-modal #project-save-label[data-mx-state="dirty"]:empty::before { content: "Editing"; }
+html[data-shell="mobile"] #projects-modal .projects-title-bar .mx-writer-more { margin-right: -4px; }
+html[data-shell="mobile"] #projects-modal .projects-empty-state { padding: 24px; text-align: center; }
+
+/* Full-frame editors (ideas, subtask description, notepad) show the frame through them, but
+   never with a fully transparent background: Chrome's editing code reads the host's background from its
+   matched rules (ignoring !important), and a transparent one makes every inline Markdown conversion
+   store <span style="background-color: transparent"> wrappers in the saved HTML. A 1% white tint is invisible */
+/* Ideas: the hub is the list; title 20/600; the editor fills the frame */
+html[data-shell="mobile"] #ideas-modal .ideas-items { display: none !important; }
+html[data-shell="mobile"] #ideas-modal .ideas-editor-section {
+  flex: 1 1 auto; min-height: 0;
+  display: flex; flex-direction: column; gap: 0;
+  padding: 0;
+  overflow: hidden;
+}
+html[data-shell="mobile"] #ideas-modal .ideas-editor-field { flex: none; padding: 12px 18px 0; }
+html[data-shell="mobile"] #ideas-title-input,
+html[data-shell="mobile"] #notepad-title,
+html[data-shell="mobile"] #task-editor-name {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 46px;
+  padding: 8px 4px;
+  border: 0;
+  border-bottom: 1px solid var(--glass-divider);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text);
+  font: 600 20px/1.3 'Inter', system-ui, sans-serif; letter-spacing: -0.015em;
+  outline: none;
+}
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] :is(#ideas-title-input, #notepad-title, #task-editor-name) {
+  background: transparent;
+  border-color: transparent;
+  border-bottom-color: var(--glass-divider);
+  box-shadow: none;
+}
+html[data-shell="mobile"] :is(#ideas-title-input, #notepad-title, #task-editor-name):focus {
+  border-bottom-color: rgb(var(--fx-ind-rgb, 22 160 255) / 60%);
+  box-shadow: none;
+}
+html[data-shell="mobile"] #ideas-editor {
+  flex: 1 1 auto; min-height: 0; max-height: none;
+  overflow-y: auto; overscroll-behavior: contain;
+  padding: 14px 18px 24px;
+  border: 0; border-radius: 0;
+  background: rgb(255 255 255 / 1%); box-shadow: none;
+}
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] #ideas-editor { background: rgb(255 255 255 / 1%); border: 0; box-shadow: none; }
+html[data-shell="mobile"] #ideas-modal .ideas-editor-actions { flex: none; display: contents; }
+html[data-shell="mobile"] #ideas-modal .ideas-view-section {
+  flex: 1 1 auto; min-height: 0;
+  overflow-y: auto; overscroll-behavior: contain;
+  padding: 16px 18px 24px;
+  display: flex; flex-direction: column; gap: 12px;
+}
+html[data-shell="mobile"] #ideas-modal .ideas-view-section[hidden] { display: none; }
+html[data-shell="mobile"] #ideas-modal .ideas-view-title { margin: 0; font-size: 22px; font-weight: 700; line-height: 1.25; letter-spacing: -0.02em; }
+html[data-shell="mobile"] #ideas-view-content { padding: 0; max-height: none; overflow: visible; background: transparent; }
+html[data-shell="mobile"] #ideas-modal :is(.ideas-view-actions, .meetings-view-actions) { order: -1; }
+html[data-shell="mobile"] #ideas-view-close,
+html[data-shell="mobile"] #meetings-view-close { display: none; }
+
+/* View-mode action rows (ideas, meetings, task description): 44px buttons */
+html[data-shell="mobile"] :is(.ideas-view-actions, .meetings-view-actions:not(.meetings-edit-actions), #task-desc-view-actions) {
+  display: flex; align-items: center; gap: 4px; flex-wrap: wrap;
+  margin: 0;
+}
+html[data-shell="mobile"] :is(.ideas-view-icon-btn, .meetings-view-icon-btn, .wr-view-export, .task-desc-edit-btn) {
+  min-width: var(--mx-hit); min-height: var(--mx-hit);
+  border-radius: 14px;
+  touch-action: manipulation;
+}
+
+/* Meetings: the list shows only when no meeting is open (the hub is the list);
+   the form is one scrolling column, the description takes the rest of it */
+html[data-shell="mobile"] #meetings-modal .meetings-header-controls { display: contents; }
+html[data-shell="mobile"] #meetings-modal #meetings-add-btn { display: none; }
+html[data-shell="mobile"] #meetings-modal .meetings-header .mx-writer-more { margin-left: auto; }
+html[data-shell="mobile"] #meetings-modal .meetings-body { flex: 1 1 auto; min-height: 0; flex-direction: column; overflow: hidden; }
+html[data-shell="mobile"] #meetings-modal .meetings-sidebar {
+  width: auto; min-width: 0; flex: 1 1 auto; min-height: 0;
+  padding: 12px 14px 16px;
+  border: 0;
+  overflow-y: auto;
+}
+html[data-shell="mobile"] #meetings-modal .meetings-body:has(> .meetings-view-section:not([hidden])) > .meetings-sidebar { display: none; }
+html[data-shell="mobile"] #meetings-modal .meetings-item { min-height: var(--mx-hit); box-sizing: border-box; display: flex; align-items: center; font-size: 15px; }
+html[data-shell="mobile"] #meetings-view-section {
+  flex: 1 1 auto; min-height: 0;
+  overflow-y: auto; overscroll-behavior: contain;
+  padding: 14px 16px 24px;
+  display: flex; flex-direction: column;
+}
+html[data-shell="mobile"] #meetings-modal .meetings-view-title { font-size: 22px; line-height: 1.25; letter-spacing: -0.02em; }
+html[data-shell="mobile"] #meetings-modal .meetings-view-content { padding: 0; max-height: none; }
+html[data-shell="mobile"] #meetings-modal .meeting-editor-top-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+}
+html[data-shell="mobile"] #meetings-modal .meeting-editor-top-row > .meeting-editor-name-col { grid-column: 1 / -1; }
+html[data-shell="mobile"] #meetings-modal :is(.meeting-editor-field input, .meeting-editor-field select) { min-height: 44px; box-sizing: border-box; }
+html[data-shell="mobile"] #meetings-modal .meeting-editor-description {
+  flex: 1 0 auto;
+  display: flex; flex-direction: column;
+}
+html[data-shell="mobile"] #meetings-modal #meetings-inline-desc-wrap { flex: 1 0 auto; display: flex; flex-direction: column; }
+html[data-shell="mobile"] #meetings-inline-desc-editor {
+  flex: 1 0 auto;
+  min-height: max(220px, calc(var(--mx-vvh, 100dvh) - 330px));
+  padding: 12px 14px 20px;
+}
+/* Long notes scroll the whole form: the toolbar sticks to the frame's bottom
+   (= the keyboard) instead of the top */
+html[data-shell="mobile"] #meetings-inline-toolbar {
+  position: sticky; top: auto; bottom: -24px; z-index: 3;          /* -24px: the scroller's bottom padding */
+  margin: 0 -16px;
+  padding-left: 16px; padding-right: 16px;
+}
+/* The caret is revealed above the stuck toolbar + status line, never under
+   them (writer.js also nudges it on every selection change: caret reveal
+   ignores scroll-padding in some engines) */
+html[data-shell="mobile"] #meetings-view-section:has(#meetings-inline-toolbar) { scroll-padding-bottom: 84px; }
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] #meetings-inline-toolbar::before { content: none; }
+html[data-shell="mobile"] #meetings-inline-toolbar .highlighter-color-dropdown { top: auto; bottom: calc(100% + 6px); }
+html[data-shell="mobile"] #meetings-modal :is(.meeting-editor-field, .meeting-links-section, .meeting-files-section,
+  .meeting-editor-description) > label {
+  font-size: 11.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted);
+}
+html[data-shell="mobile"] #meetings-modal .meetings-edit-actions { margin-top: 18px; }
+html[data-shell="mobile"] #meetings-modal :is(.meeting-add-link-btn, .meeting-link-row button, .meeting-file-row button) { min-height: var(--mx-hit); }
+
+/* Task editor: one scrolling column; the actions become a bottom bar; Save
+   is in the writer bar */
+html[data-shell="mobile"] #task-editor-modal .task-editor-body {
+  flex: 1 1 auto; min-height: 0;
+  display: flex; flex-direction: column;
+  overflow-y: auto; overscroll-behavior: contain;
+}
+html[data-shell="mobile"] #task-editor-modal .task-editor-content {
+  flex: 0 0 auto;
+  overflow: visible;
+  padding: 14px 16px 18px;
+  gap: 18px;
+}
+html[data-shell="mobile"] #task-editor-modal .task-editor-description {
+  flex: 0 0 auto;
+  min-height: 0;
+  overflow: visible;
+  padding: 14px 16px 18px;
+  border: 0;
+  border-top: 1px solid var(--glass-divider);
+}
+html[data-shell="mobile"] #task-editor-modal .task-editor-description:has(> .task-desc-editor-wrap:not([hidden])) {
+  min-height: max(320px, calc(var(--mx-vvh, 100dvh) - 160px));
+  display: flex; flex-direction: column;
+}
+html[data-shell="mobile"] #task-desc-editor-wrap { flex: 1 0 auto; display: flex; flex-direction: column; }
+html[data-shell="mobile"] #task-desc-editor-wrap[hidden] { display: none; }
+/* Stuck to the scroller's bottom edge (it has no padding), never past it */
+html[data-shell="mobile"] #task-desc-editor-wrap > .task-desc-toolbar {
+  position: sticky; bottom: 0; z-index: 3;
+  margin: 0 -16px;
+  padding-left: 12px; padding-right: 12px;
+}
+html[data-shell="mobile"] #task-editor-modal .task-editor-body:has(#task-desc-editor-wrap:not([hidden])) { scroll-padding-bottom: 84px; }
+/* Text scrolls under these two stuck toolbars: two more layers of the glass
+   so no ghost of it reads through */
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] :is(#meetings-inline-toolbar, #task-desc-editor-wrap > .task-desc-toolbar) {
+  background: var(--glass-reflection), var(--tb-glass), var(--tb-glass), var(--tb-glass), var(--tb-glass), var(--glass-dialog) !important;
+}
+html[data-shell="mobile"] #task-desc-editor { flex: 1 0 auto; min-height: 200px; max-height: none; padding: 10px 2px 16px; }
+html[data-shell="mobile"] #task-editor-modal .task-desc-view { min-height: 0; max-height: none; }
+html[data-shell="mobile"] #task-editor-modal .task-editor-field > label:not(.task-editor-primary-label),
+html[data-shell="mobile"] #task-editor-modal .task-editor-description > label {
+  font-size: 11.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted);
+}
+html[data-shell="mobile"] #task-editor-modal .task-editor-color-btn { width: var(--mx-hit); height: var(--mx-hit); min-width: var(--mx-hit); }
+html[data-shell="mobile"] #task-editor-modal .task-editor-primary-label {
+  align-self: flex-start;
+  display: inline-flex; align-items: center; gap: 8px;
+  font-weight: 600; text-transform: none; letter-spacing: 0; color: var(--text);
+  min-height: var(--mx-hit); padding: 0 14px 0 10px;
+  border-radius: 999px;
+  border: 1px solid var(--glass-divider);
+  background: var(--glass-reflection), var(--glass-field);
+  font-size: 15px;
+}
+html[data-shell="mobile"] #task-editor-modal :is(.task-subtask-check, .task-subtask-menu-btn, .task-subtask-important,
+  .task-subtask-date-btn, .task-subtasks-add-btn, .task-link-remove, .task-editor-link-btn) {
+  min-width: var(--mx-hit); min-height: var(--mx-hit);
+}
+/* The 44px controls leave a short title field: a long subtask ends in "…", never mid-letter */
+html[data-shell="mobile"] #task-editor-modal .task-subtask-title-input.locked { text-overflow: ellipsis; }
+html[data-shell="mobile"] #task-editor-item-selector .task-editor-item-btn,
+html[data-shell="mobile"] #task-subtasks-save-template-btn { display: none; }
+html[data-shell="mobile"] #task-editor-modal .task-editor-actions {
+  flex: none;
+  min-height: 56px;
+  padding: 6px 12px calc(6px + var(--mx-safe-b));
+  border-top: 1px solid var(--glass-divider);
+}
+html[data-shell="mobile"] #task-editor-modal :is(.task-editor-delete-btn, .task-editor-complete-btn) { min-width: var(--mx-hit); min-height: var(--mx-hit); }
+html[data-shell="mobile"] #task-editor-cancel { min-height: var(--mx-hit); padding: 0 18px; border-radius: 14px; }
+
+/* Subtask description: the editor fills the frame, the toolbar under it */
+html[data-shell="mobile"] #subtask-desc-modal .subtask-desc-body {
+  flex: 1 1 auto; min-height: 0;
+  display: flex; flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+}
+html[data-shell="mobile"] #subtask-desc-editor {
+  flex: 1 1 auto; min-height: 0; max-height: none;
+  overflow-y: auto; overscroll-behavior: contain;
+  padding: 16px 18px 24px;
+  border: 0; border-radius: 0;
+  background: rgb(255 255 255 / 1%); box-shadow: none;
+}
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] #subtask-desc-editor { background: rgb(255 255 255 / 1%); border: 0; box-shadow: none; }
+html[data-shell="mobile"] #subtask-desc-modal .subtask-desc-actions {
+  flex: none;
+  display: flex; align-items: center; justify-content: flex-start; gap: 8px;
+  min-height: 56px;
+  padding: 6px 12px calc(6px + var(--mx-safe-b));
+  border-top: 1px solid var(--glass-divider);
+}
+html[data-shell="mobile"] #subtask-desc-modal .subtask-desc-actions > button:not(#subtask-desc-save) { min-height: var(--mx-hit); padding: 0 18px; border-radius: 14px; }
+
+/* Notepad: always the full-screen sheet (the hub lists the notes) */
+html[data-shell="mobile"] #notepad-popover .notepad-popover-header > h4 { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; }
+html[data-shell="mobile"] #notepad-popover .notepad-context { font-size: 12px; font-weight: 500; color: var(--muted); max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+html[data-shell="mobile"] #notepad-popover .notepad-context::before { content: none; }
+html[data-shell="mobile"] #notepad-saved-list { display: none !important; }
+html[data-shell="mobile"] #notepad-title { flex: none; margin: 12px 18px 0; width: calc(100% - 36px); }
+html[data-shell="mobile"] #notepad-editor {
+  flex: 1 1 auto; min-height: 0; max-height: none;
+  overflow-y: auto; overscroll-behavior: contain;
+  margin: 0;
+  padding: 14px 18px 24px;
+  border: 0; border-radius: 0;
+  background: rgb(255 255 255 / 1%); box-shadow: none;
+}
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] #notepad-editor { background: rgb(255 255 255 / 1%); border: 0; box-shadow: none; }
+html[data-shell="mobile"] #notepad-popover .notepad-toolbar { margin: 0; }
+html[data-shell="mobile"] #notepad-popover .notepad-popover-actions {
+  order: 98;
+  flex: none;
+  display: flex; align-items: center; gap: 8px;
+  min-height: 52px;
+  margin: 0;
+  padding: 4px 12px;
+  border-top: 1px solid var(--glass-divider);
+}
+html[data-shell="mobile"] #notepad-cancel { min-height: var(--mx-hit); padding: 0 16px; border-radius: 14px; }
+html[data-shell="mobile"] #notepad-color-btn { position: relative; width: 28px; height: 28px; margin: 8px; }   /* anchors its 44px hit */
+html[data-shell="mobile"] #notepad-color-btn::after { content: ""; position: absolute; inset: -8px; }
+
+/* Note viewer (W13): ‹ title · Pin · Edit · ⋯, the meta line under it, 17px reading */
+html[data-shell="mobile"] #note-viewer-modal .note-viewer-header {
+  flex: none;
+  display: flex; flex-wrap: wrap; align-items: center; column-gap: 0; row-gap: 0;
+  min-height: 52px;
+  margin: 0;
+  padding: 4px 6px 4px 4px;
+  border: 0;
+  border-bottom: 1px solid var(--glass-divider);
+}
+html[data-shell="mobile"] #note-viewer-modal :is(.note-viewer-title-row, .note-viewer-actions) { display: contents; }
+html[data-shell="mobile"] #note-viewer-modal #note-viewer-close { order: -1; margin: 0; align-self: center; }
+html[data-shell="mobile"] #note-viewer-modal #note-viewer-title {
+  order: 1;
+  flex: 1 1 0; min-width: 0;
+  display: block;
+  padding: 0 6px;
+  font: 650 17px/1.25 'Inter', system-ui, sans-serif; letter-spacing: -0.015em;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  -webkit-line-clamp: unset;
+}
+html[data-shell="mobile"] #note-viewer-modal :is(#note-viewer-pin, #note-viewer-edit, .mx-writer-more) {
+  order: 2;
+  flex: none;
+  width: var(--mx-hit); height: var(--mx-hit); min-width: var(--mx-hit);
+  margin: 0; padding: 0;
+  border-radius: 50%;
+  color: var(--text); opacity: 1;
+}
+html[data-shell="mobile"] #note-viewer-modal :is(#note-viewer-pin, #note-viewer-edit) svg { width: 20px; height: 20px; }
+html[data-shell="mobile"] #note-viewer-modal :is(#note-viewer-copy, #note-viewer-delete, .wr-view-export) { display: none; }
+html[data-shell="mobile"] #note-viewer-modal .mx-viewer-where {
+  order: 3;
+  flex: 1 0 100%;
+  margin: -8px 0 6px; padding: 0 12px 0 50px;
+  font-size: 12.5px; font-weight: 600; line-height: 1.3; color: var(--muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+html[data-shell="mobile"] #note-viewer-modal .mx-viewer-where[hidden] { display: none; }
+html[data-shell="mobile"] #note-viewer-modal .mx-viewer-where:not([hidden]) + .note-viewer-meta { margin-top: -4px; }
+html[data-shell="mobile"] #note-viewer-modal .note-viewer-meta {
+  order: 4;
+  flex: 1 0 100%;
+  display: flex; flex-direction: row; align-items: center; gap: 6px; flex-wrap: wrap;
+  margin: -6px 0 6px; padding: 0 12px 0 54px;
+  font-size: 12.5px; color: var(--muted);
+}
+html[data-shell="mobile"] #note-viewer-modal .note-viewer-meta[hidden] { display: none; }
+html[data-shell="mobile"] #note-viewer-modal .note-viewer-meta > * + *::before { content: "· "; }
+html[data-shell="mobile"] #note-viewer-content {
+  flex: 1 1 auto; min-height: 0; max-height: none;
+  overflow-y: auto; overscroll-behavior: contain;
+  margin: 0;
+  padding: 16px 18px calc(28px + var(--mx-safe-b));
+  border-radius: 0;
+  background: transparent;
+}
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] #note-viewer-content { background: transparent; border: 0; box-shadow: none; }
+
+/* With the keyboard up, the bottom bars step aside: the toolbar sits on the keyboard */
+html[data-shell="mobile"][data-mx-kb] #task-editor-modal .task-editor-actions { min-height: 0; padding: 0; border: 0; }
+html[data-shell="mobile"][data-mx-kb] #task-editor-modal :is(.task-editor-actions-left, #task-editor-cancel) { display: none; }
+html[data-shell="mobile"][data-mx-kb] #subtask-desc-modal .subtask-desc-actions { min-height: 0; padding: 0; border: 0; }
+html[data-shell="mobile"][data-mx-kb] #subtask-desc-modal .subtask-desc-actions > button:not(#subtask-desc-save) { display: none; }
+html[data-shell="mobile"][data-mx-kb] #notepad-popover .notepad-popover-actions { min-height: 0; padding: 0; border: 0; }
+html[data-shell="mobile"][data-mx-kb] #notepad-popover .notepad-popover-actions > :not(#notepad-save) { display: none; }
+
+/* Focus mode (writing.css phone rules, keyed on the shell so the preview is a phone too) */
+html[data-shell="mobile"] .wr-focus { left: var(--mx-inline); right: var(--mx-inline); }
+html[data-shell="mobile"] .wr-focus-top { min-height: 48px; padding: max(6px, var(--mx-safe-t)) 12px 4px; }
+html[data-shell="mobile"] .wr-focus-exit .wr-kbd { display: none; }
+html[data-shell="mobile"] .wr-focus-exit { min-height: var(--mx-hit); padding: 0 12px 0 10px; }
+html[data-shell="mobile"] .wr-focus-tw { width: 34px; padding: 0; justify-content: center; }
+html[data-shell="mobile"] .wr-focus-tw-label { display: none; }
+html[data-shell="mobile"] .wr-focus-bar { width: calc(100% - 16px); border-radius: 14px; padding: 3px 4px; }
+html[data-shell="mobile"] .wr-focus-layout { padding: 0 18px; column-gap: 0; grid-template-columns: minmax(0, 1fr); }
+html[data-shell="mobile"] .wr-focus-rail { display: none; }
+html[data-shell="mobile"] .wr-focus-column { padding: 22px 0 50vh; max-width: none; }
+html[data-shell="mobile"] body .wr-focus .wr-focus-column > .wr-editor { font-size: 17px; line-height: 1.7; }
+html[data-shell="mobile"] .wr-focus .wr-focus-column > .wr-editor ul.checklist > li::before { top: calc(0.85em - 8px); }
+
+/* Writing help: the full-height sheet, pinned to the column */
+html[data-shell="mobile"] .wr-help { padding: calc(var(--mx-safe-t) + 8px) 8px calc(var(--mx-safe-b) + 8px); }
+html[data-shell="mobile"] .wr-help-dialog { height: 100%; width: 100%; max-width: none; border-radius: 20px; }
+html[data-shell="mobile"] .wr-help-header { padding: 14px 10px 2px 16px; }
+html[data-shell="mobile"] .wr-help-search { margin: 8px 12px 2px; }
+html[data-shell="mobile"] .wr-help-tabs { padding: 10px 12px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+html[data-shell="mobile"] .wr-help-body { padding: 2px 16px 16px; }
+html[data-shell="mobile"] .wr-help-cmd { grid-template-columns: 26px minmax(0, 1fr); }
+html[data-shell="mobile"] .wr-help-cmd .wr-help-side { grid-column: 2 / -1; justify-content: flex-start; }
+html[data-shell="mobile"] .wr-help-md { grid-template-columns: minmax(0, 1fr); }
+html[data-shell="mobile"] .wr-help-pref { grid-template-columns: minmax(0, 1fr) auto; }
+html[data-shell="mobile"] .wr-help-footer { padding: 8px 16px 10px; }
+html[data-shell="mobile"] .wr-help-keyhint { display: none; }
+html[data-shell="mobile"] .wr-help-touchhint:not(:empty) { display: inline; }
+html[data-shell="mobile"] #wr-help input { font-size: max(16px, 1em); }
+
+/* --- 6. Dark ----------------------------------------------------------------------- */
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme="dark"] .mx-write-glyph {
+  background: radial-gradient(circle 16px at 76% 18%, rgb(224 234 250 / 16%), transparent 100%),
+    var(--glass-reflection), var(--glass-field);
+}
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme="dark"] .mx-write-card {
+  background: radial-gradient(ellipse 110px 46px at 92% 0%, rgb(var(--fx-ind-rgb) / 16%), transparent 100%),
+    radial-gradient(ellipse 120px 50px at 90% 0%, rgb(224 234 250 / 10%), transparent 100%),
+    var(--glass-reflection), var(--glass-fill);
+}
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme="dark"] :is(.mx-write-list, .mx-write-card, .mx-write-glyph) {
+  --fx-bevel-lit: rgb(224 234 250 / 14%);
+}
+
+/* --- 7. Sunset ---------------------------------------------------------------------- */
+/* The glass, lift and canvas tokens carry the sunset tint; nothing else changes */
+
+/* --- 8. Keyframes -------------------------------------------------------------------- */
+/* none of its own: the tab and the frames use the shared fx* / mx* animations */
+
+/* --- 9. Accessibility guards ---------------------------------------------------------- */
+@media (prefers-reduced-transparency: reduce) {
+  html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] :is(.mx-write-chips, .mx-write-list, .mx-write-card,
+    #notepad-popover.notepad-sheet) {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] :is(.mx-write-chips, .mx-write-list, .mx-write-card) {
+    background: var(--card);
+  }
+  html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] #notepad-popover.notepad-sheet {
+    background: var(--card) !important;
+  }
+}
+@media (forced-colors: active) {
+  html[data-shell="mobile"] :is(.mx-write-row-main, .mx-write-card, .mx-write-search, .mx-write-add, .mx-writer-title,
+    .mx-writer-more, .mx-draft-banner, .mx-draft-btn) {
+    outline: 1px solid CanvasText;
+  }
+}
+
+/* --- 10. Landscape phones ---------------------------------------------------------------- */
+@media (orientation: landscape) and (max-height: 500px) {
+  html[data-shell="mobile"] .mx-write-cards { padding-bottom: 6px; }
+  html[data-shell="mobile"] .mx-write-card { height: 96px; }
+  html[data-shell="mobile"] .mx-write-card-preview { -webkit-line-clamp: 2; line-clamp: 2; }
+  html[data-shell="mobile"] :is(.task-editor-header, .subtask-desc-header, .projects-title-bar, .ideas-header,
+    .meetings-header, .notepad-popover-header, #note-viewer-modal .note-viewer-header) { min-height: 44px; padding-top: 0; padding-bottom: 0; }
+  html[data-shell="mobile"] :is(#task-editor-save, #subtask-desc-save, #ideas-save-btn, #meetings-inline-save, #notepad-save) {
+    top: calc(var(--mx-safe-t) + 2px); height: 38px; min-height: 38px;
+  }
+  html[data-shell="mobile"] :is(#project-editor, #ideas-editor, #notepad-editor, #subtask-desc-editor, #note-viewer-content) {
+    padding-left: max(18px, var(--mx-safe-l)); padding-right: max(18px, var(--mx-safe-r));
+  }
+}

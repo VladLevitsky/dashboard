@@ -1,0 +1,723 @@
+/* ==========================================================================
+   mobile-tasks.css (unit F1): the Tasks tab of the mobile shell.
+   Every rule keys on html[data-shell="mobile"] (see mobile.css for the house
+   rules): structural rules use html[data-shell="mobile"] …, glass rules use
+   html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] …
+   Rows keep the matrix pill's look (glass.css / glass-fx.css 7, 9, 9b): Primary
+   rows are the pinned light body that breathes, Secondary rows the tinted glass
+   field. Panes are the matrix's tinted .eisenhower-priority-card-<c> and carry
+   the blur, rows don't. Colour on buttons goes through background-image (no
+   glass-glow bloom). Motion: WAAPI with no fill from the JS; CSS animates
+   opacity / transform of small pseudo layers only.
+   Sections: 1 screen + sub-bar chips · 2 panes, rows, ring, meta · 3 gestures:
+   underlay, ghost, carry gaps, .is-carried, carry dock · 4 sheets: actions,
+   move, completed, read · 5 dark · 6 sunset · 7 keyframes mxTask* · 8 a11y ·
+   9 landscape
+   ========================================================================== */
+
+/* --- 1. Screen and the sticky sub-bar of colour chips ------------------------ */
+html[data-shell="mobile"] .mx-tasks-screen { padding-bottom: 16px; }
+html[data-shell="mobile"] .mx-tasks-sub {
+  position: sticky; top: calc(var(--mx-safe-t) + var(--mx-top-h)); z-index: var(--mx-z-sub);
+  box-sizing: border-box;
+  height: var(--mx-sub-h);
+  margin: 0 calc(-1 * var(--mx-gutter));
+  padding: 0 var(--mx-gutter);
+  display: flex; align-items: center; gap: 6px;
+}
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-tasks-sub {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--glass-dialog) 64%, transparent), color-mix(in srgb, var(--glass-dialog) 34%, transparent));
+  -webkit-backdrop-filter: blur(22px) saturate(150%);
+  backdrop-filter: blur(22px) saturate(150%);
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--glass-divider) 70%, transparent);
+}
+html[data-shell="mobile"] .mx-lens-chip { margin: 0; padding: 0 12px; gap: 6px; flex: 0 0 auto; }
+html[data-shell="mobile"] .mx-lens-chip[data-lens="all"] { padding: 0 13px; }
+html[data-shell="mobile"] .mx-lens-chip .mx-chip-count { color: var(--text); opacity: 0.78; }
+html[data-shell="mobile"] .mx-lens-chip[aria-pressed="true"] .mx-chip-count { opacity: 1; }
+html[data-shell="mobile"] .mx-lens-chip.is-empty { opacity: 0.55; }
+html[data-shell="mobile"] .mx-lens-chip.is-empty.is-target { opacity: 0.8; }
+/* Overdue hot dot: on the chip's lit top-right corner, breathing (delays per chip in the JS) */
+html[data-shell="mobile"] .mx-chip-hot {
+  position: absolute; top: 2px; right: 2px;
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--danger);
+  box-shadow: 0 0 0 1.5px var(--glass-edge), 0 0 6px rgb(239 68 68 / 65%);
+  pointer-events: none;
+  animation: fxBreath 5.4s var(--fx-breathe, ease-in-out) infinite;
+}
+html[data-shell="mobile"] .mx-chip-hot[hidden] { display: none; }
+/* Drag hover: a bloom on top of the azure target rim (mobile.css 6) */
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] :is(.mx-chip, .mx-seg-opt).is-hover {
+  background-image: radial-gradient(ellipse 80% 90% at 70% 0%, rgb(var(--fx-ind-rgb) / 26%), transparent 100%), var(--glass-reflection);
+  box-shadow: 0 0 0 2px rgb(var(--fx-ind-rgb) / 80%), 0 0 22px 2px rgb(var(--fx-ind-rgb) / 55%);
+}
+/* The segment in the top-bar slot (Primary 21 | Secondary 7) */
+html[data-shell="mobile"] .mx-tasks-seg { width: 100%; max-width: 236px; }
+html[data-shell="mobile"] .mx-tasks-seg .mx-seg-opt { padding: 0 8px; gap: 5px; }
+@media (max-width: 360px) {
+  html[data-shell="mobile"] .mx-tasks-seg .mx-seg-opt { padding: 0 6px; gap: 2px; font-size: 13px; }
+  html[data-shell="mobile"] .mx-tasks-seg .mx-seg-count { font-size: 10px; align-self: flex-start; margin-top: 7px; }
+  html[data-shell="mobile"] .mx-lens-chip { padding: 0 9px; gap: 5px; }
+}
+
+/* --- 2. Panes, rows, the complete ring, the meta line ------------------------- */
+html[data-shell="mobile"] .mx-task-list { display: flex; flex-direction: column; gap: 10px; padding-top: 6px; }
+html[data-shell="mobile"] .mx-pane.eisenhower-priority-card {
+  flex: none; min-width: 0; min-height: 0;
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 6px 8px 8px;
+  border-radius: 20px;
+  transition: none;
+}
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-pane.eisenhower-priority-card {
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  backdrop-filter: blur(14px) saturate(140%);
+}
+html[data-shell="mobile"] .mx-pane-head {
+  display: flex; align-items: center; gap: 8px;
+  min-height: 36px; padding: 0 4px 0 8px;
+  border-radius: 14px;
+}
+html[data-shell="mobile"] .mx-pane-title {
+  flex: 1 1 auto; min-width: 0;
+  display: flex; align-items: center; gap: 8px;
+  margin: 0;
+  font: 700 13px/1.2 'Inter', system-ui, sans-serif; letter-spacing: 0.005em;
+  color: var(--text);
+}
+html[data-shell="mobile"] .mx-pane-dot,
+html[data-shell="mobile"] .mx-actions-dot,
+html[data-shell="mobile"] .mx-task-dot,
+html[data-shell="mobile"] .mx-done-dot,
+html[data-shell="mobile"] .mx-tile-dot {
+  flex: 0 0 auto;
+  width: 10px; height: 10px; border-radius: 50%;
+  background: rgb(var(--priority-rgb));
+  box-shadow: 0 0 8px rgb(var(--priority-rgb) / 60%);
+}
+html[data-shell="mobile"] .mx-pane-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+html[data-shell="mobile"] .mx-pane-count { font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; }
+html[data-shell="mobile"] .mx-pane-chips { display: flex; gap: 6px; flex: 0 0 auto; }
+html[data-shell="mobile"] .mx-pane-rows { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+html[data-shell="mobile"] .mx-pane-rows:empty { display: none; }
+html[data-shell="mobile"] .mx-pane-empty { margin: 2px 8px 6px; font-size: 14px; line-height: 1.45; color: var(--muted); }
+html[data-shell="mobile"] .mx-lens-empty { margin: 12px 14px 2px; }
+/* An empty colour in the All lens: a dimmed 44px header that still takes a drop */
+html[data-shell="mobile"] .mx-pane.eisenhower-priority-card.is-empty { padding: 4px 8px; opacity: 0.6; }
+html[data-shell="mobile"] .mx-pane.is-empty .mx-pane-title { font-weight: 600; }
+/* The header targeted by a drag: its own hue lights the rim */
+html[data-shell="mobile"] .mx-pane-head.is-hover {
+  box-shadow: inset 0 0 0 1.5px rgb(var(--priority-rgb) / 75%), 0 0 18px -4px rgb(var(--priority-rgb) / 70%);
+  background-image: linear-gradient(150deg, rgb(var(--priority-rgb) / 18%), transparent 80%);
+}
+html[data-shell="mobile"] .mx-pane.is-empty:has(.mx-pane-head.is-hover) { opacity: 1; }
+
+/* Tone: the priority hue for a row wherever it sits (a pane, Today, a ghost) */
+html[data-shell="mobile"] .mx-tone-red    { --priority-rgb: 249 76 100; }
+html[data-shell="mobile"] .mx-tone-orange { --priority-rgb: 255 133 35; }
+html[data-shell="mobile"] .mx-tone-yellow { --priority-rgb: 242 189 24; }
+html[data-shell="mobile"] .mx-tone-blue   { --priority-rgb: 61 151 248; }
+
+/* The row */
+html[data-shell="mobile"] .mx-task-slot {
+  position: relative;
+  border-radius: 16px;
+  touch-action: pan-y;
+  -webkit-user-select: none; user-select: none;
+  -webkit-touch-callout: none;
+}
+html[data-shell="mobile"] .mx-task-slot[hidden] { display: none; }
+html[data-shell="mobile"] .mx-task-slot.is-lifted { visibility: hidden; }
+html[data-shell="mobile"] .mx-task-slot[data-swipe],
+html[data-shell="mobile"] .mx-task-slot[data-state="completing"] { overflow: hidden; }
+html[data-shell="mobile"] .mx-task-slot[data-state="completing"] { pointer-events: none; }
+html[data-shell="mobile"] .mx-task.eisenhower-task {
+  position: relative; z-index: 1;
+  display: flex; align-items: center; justify-content: flex-start; gap: 2px;
+  box-sizing: border-box;
+  min-height: 52px;
+  padding: 10px 6px 10px 4px;
+  border-radius: 16px;
+  font: 500 15px/1.33 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  color: var(--text);
+  cursor: pointer;
+  transition: none;
+  transform: none;
+  -webkit-tap-highlight-color: transparent;
+  outline: none;
+}
+html[data-shell="mobile"] .mx-task.eisenhower-task:hover { transform: none; }
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-task.eisenhower-task {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  border-radius: 16px;
+  transition: none;
+}
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-task.eisenhower-task:hover { transform: none; }
+@media (hover: none) {
+  html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-task.eisenhower-task:not(.eisenhower-task-pinned):hover { background-color: var(--glass-field); }
+}
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-task.eisenhower-task:not(.eisenhower-task-pinned):active { background-color: var(--glass-hover); }
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-task.eisenhower-task.eisenhower-task-pinned:active {
+  box-shadow: var(--light-contact), 0 8px 18px -8px rgb(var(--priority-rgb) / 62%), 0 0 0 1px rgb(var(--priority-rgb) / 40%);
+}
+html[data-shell="mobile"] .mx-task.eisenhower-task:focus-visible { outline: 2px solid rgb(var(--fx-ind-rgb, 22 160 255) / 75%); outline-offset: 2px; }
+html[data-shell="mobile"] .mx-task-main {
+  flex: 1 1 auto; min-width: 0;
+  display: flex; flex-direction: column; gap: 3px;
+  padding-left: 2px;
+}
+html[data-shell="mobile"] .mx-task-title {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2;
+  overflow: hidden;
+  white-space: normal; overflow-wrap: anywhere;
+  font-size: 15px; line-height: 20px; font-weight: 500;
+  letter-spacing: -0.005em;
+}
+html[data-shell="mobile"] .eisenhower-task-pinned .mx-task-title { font-weight: 600; }
+html[data-shell="mobile"] .mx-task-meta {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 3px 10px;
+  min-width: 0;
+  font: 500 12px/18px 'Inter', system-ui, sans-serif;
+  color: color-mix(in srgb, var(--text) 66%, transparent);
+  font-variant-numeric: tabular-nums;
+}
+html[data-shell="mobile"] .mx-task-meta .today-chip,
+html[data-shell="mobile"] .mx-actions-meta .today-chip { height: 18px; padding: 0 7px; font-size: 11px; }
+html[data-shell="mobile"] .mx-meta-item { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+html[data-shell="mobile"] .mx-meta-item svg { width: 13px; height: 13px; flex: 0 0 auto; opacity: 0.85; }
+html[data-shell="mobile"] .mx-cat-dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
+
+/* Complete ring: 22px in a 44px hit. Done is always emerald (the 9b crystal) */
+html[data-shell="mobile"] .mx-check {
+  position: relative;
+  flex: 0 0 auto;
+  width: 44px; height: 44px;
+  margin: -12px 0 -12px -2px;
+  padding: 0;
+  border: 0; border-radius: 50%;
+  background: transparent;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: #fff;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+html[data-shell="mobile"] .mx-ring {
+  width: 22px; height: 22px; border-radius: 50%;
+  box-sizing: border-box;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 2px solid rgb(var(--priority-rgb, 148 163 184) / 80%);
+  background: var(--glass-field);
+  box-shadow: 0 0 10px -3px rgb(var(--priority-rgb, 148 163 184) / 55%), inset 0 1px 1px rgb(255 255 255 / 45%);
+}
+html[data-shell="mobile"] .mx-ring svg {
+  width: 13px; height: 13px; stroke-width: 3;
+  stroke-dasharray: 24; stroke-dashoffset: 24;
+  opacity: 0;
+}
+html[data-shell="mobile"] .mx-check:active .mx-ring { box-shadow: 0 0 14px -2px rgb(var(--priority-rgb, 148 163 184) / 75%), inset 0 0 0 4px rgb(var(--priority-rgb, 148 163 184) / 18%); }
+html[data-shell="mobile"] .mx-check:focus-visible { outline: 2px solid rgb(var(--fx-ind-rgb, 22 160 255) / 75%); outline-offset: -6px; }
+html[data-shell="mobile"] [data-state="completing"] .mx-ring {
+  border-color: transparent;
+  background-color: transparent;
+  background-image:
+    radial-gradient(circle at 70% 22%, rgb(255 255 255 / 80%) 0%, rgb(255 255 255 / 22%) 22%, transparent 44%),
+    radial-gradient(circle at 26% 86%, rgb(196 255 226 / 46%) 0%, transparent 48%),
+    linear-gradient(150deg, rgb(var(--fx-live-rgb, 24 211 116) / 88%), rgb(var(--fx-live-deep, 6 122 66) / 96%));
+  box-shadow: inset -1px 1px 1px rgb(255 255 255 / 72%), inset 1px -1px 1px rgb(255 255 255 / 30%),
+    0 0 0 0.5px rgb(var(--fx-live-rgb, 24 211 116) / 55%), 0 0 12px rgb(var(--fx-live-rgb, 24 211 116) / 50%);
+}
+html[data-shell="mobile"] [data-state="completing"] .mx-ring svg { opacity: 1; animation: mxTaskCheck 120ms ease-out forwards; }
+
+/* The stopwatch (time-tracking.js control): a 30px lens in a 44px hit (its wrapper) */
+html[data-shell="mobile"] .mx-task .task-timer {
+  flex: 0 0 auto;
+  gap: 4px;
+  margin: -12px -2px -12px 0;
+  padding: 7px 4px 7px 6px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+html[data-shell="mobile"] .mx-task .task-timer-btn { width: 30px; height: 30px; opacity: 0.66; }
+html[data-shell="mobile"] .mx-task .task-timer-btn svg { width: 17px; height: 17px; }
+html[data-shell="mobile"] .mx-task .task-timer.is-running .task-timer-btn { opacity: 1; }
+html[data-shell="mobile"] .mx-task .task-timer-time { font-size: 13px; }
+/* Screen readers / keyboard: the visually hidden "Actions for …" shows when focused */
+html[data-shell="mobile"] .mx-task .mx-row-actions:focus-visible {
+  clip: auto; width: auto; height: auto; margin: 0; overflow: visible;
+  right: 52px; top: 50%; translate: 0 -50%;
+  padding: 6px 12px; border-radius: 999px; z-index: 5;
+  background: var(--glass-dialog); color: var(--text);
+  font: 600 13px 'Inter', system-ui, sans-serif;
+  outline: 2px solid rgb(var(--fx-ind-rgb, 22 160 255) / 75%);
+}
+/* Today: a parent whose subtask is due steps back */
+html[data-shell="mobile"] .mx-task.is-context { opacity: 0.82; border-style: dashed !important; }
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-task.is-context.eisenhower-task-pinned::before { animation: none; opacity: 0.35; }
+/* Search: a colour dot instead of the ring */
+html[data-shell="mobile"] .mx-mode-search .mx-task-dot { margin: 0 10px 0 8px; }
+html[data-shell="mobile"] .mx-mode-search .mx-task.eisenhower-task { min-height: 48px; padding: 8px 12px 8px 4px; }
+
+/* Restored / moved rows: one azure bloom */
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-just { animation: fxJustAdded 2.6s var(--fx-breathe) both; }
+
+/* Footer: the completed link and the one-time tip */
+html[data-shell="mobile"] .mx-tasks-foot { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 14px 2px 0; }
+html[data-shell="mobile"] .mx-completed-link {
+  display: inline-flex; align-items: center; gap: 9px;
+  min-height: 44px; padding: 0 12px 0 8px;
+  border: 1px solid var(--glass-divider); border-radius: 999px;
+  background: var(--glass-reflection), var(--glass-field);
+  color: var(--text);
+  font: 600 14px/1 'Inter', system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+html[data-shell="mobile"] .mx-completed-link[hidden] { display: none; }
+html[data-shell="mobile"] .mx-completed-link:active { background-color: var(--glass-hover); }
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-completed-link { box-shadow: var(--fx-lift-pill), var(--glass-rim); }
+html[data-shell="mobile"] .mx-completed-icon,
+html[data-shell="mobile"] .mx-done-lens {
+  width: 24px; height: 24px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: #fff;
+  background-image:
+    radial-gradient(circle at 70% 22%, rgb(255 255 255 / 75%) 0%, rgb(255 255 255 / 20%) 24%, transparent 46%),
+    linear-gradient(150deg, rgb(var(--fx-live-rgb, 24 211 116) / 86%), rgb(var(--fx-live-deep, 6 122 66) / 96%));
+  box-shadow: inset -1px 1px 1px rgb(255 255 255 / 70%), inset 1px -1px 2px rgb(0 44 22 / 30%), 0 0 10px -2px rgb(var(--fx-live-rgb, 24 211 116) / 55%);
+}
+html[data-shell="mobile"] .mx-completed-icon svg { width: 14px; height: 14px; }
+html[data-shell="mobile"] .mx-completed-chev { display: inline-flex; color: var(--muted); }
+html[data-shell="mobile"] .mx-tasks-hint {
+  display: flex; align-items: center; gap: 4px;
+  margin: 0; padding-left: 10px;
+  font-size: 12.5px; line-height: 1.4; color: var(--muted);
+}
+html[data-shell="mobile"] .mx-tasks-hint[hidden] { display: none; }
+/* Dismissed by a lift or swipe: invisible, but its height stays until the next render (no jump under the finger) */
+html[data-shell="mobile"] .mx-tasks-hint.is-leaving { visibility: hidden; }
+html[data-shell="mobile"] .mx-hint-close {
+  width: 36px; height: 36px; padding: 0; border: 0; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: transparent; color: var(--muted); cursor: pointer;
+}
+
+/* --- 3. Gestures: swipe underlay, drag ghost, carry gaps, carried row, carry dock --- */
+html[data-shell="mobile"] .mx-swipe-under {
+  position: absolute; inset: 0; z-index: 0;
+  display: none;
+  border-radius: 16px;
+  overflow: hidden;
+}
+html[data-shell="mobile"] .mx-task-slot[data-swipe] > .mx-swipe-under { display: block; }
+html[data-shell="mobile"] .mx-under-done {
+  position: absolute; inset: 0;
+  display: none; align-items: center; gap: 8px;
+  padding-left: 18px;
+  color: #fff;
+  font: 700 14px/1 'Inter', system-ui, sans-serif; letter-spacing: 0.01em;
+  background-image:
+    radial-gradient(ellipse 140px 50px at 20% 0%, rgb(255 255 255 / 30%), transparent 70%),
+    linear-gradient(90deg, rgb(var(--fx-live-rgb, 24 211 116) / 85%), rgb(var(--fx-live-deep, 6 122 66) / 70%));
+  opacity: 0.72;
+}
+html[data-shell="mobile"] .mx-under-done svg { width: 22px; height: 22px; stroke-width: 2.6; }
+html[data-shell="mobile"] .mx-task-slot[data-swipe="done"] .mx-under-done { display: flex; }
+/* While it slides, the glass pill gets a backing in its own hue, so the
+   underlay never muddies its body (it only shows where the pill has left) */
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-task-slot[data-swipe] > .mx-task.eisenhower-task {
+  background-color: color-mix(in srgb, var(--card) 82%, rgb(var(--priority-rgb)));
+}
+html[data-shell="mobile"] .mx-task-slot[data-armed] .mx-under-done { opacity: 1; }
+html[data-shell="mobile"] .mx-under-actions {
+  position: absolute; top: 0; right: 0; bottom: 0;
+  width: 144px;
+  display: none;
+}
+html[data-shell="mobile"] .mx-task-slot[data-swipe="reveal"] .mx-under-actions { display: flex; }
+html[data-shell="mobile"] .mx-under-btn {
+  flex: 0 0 72px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  margin: 0; padding: 0;
+  border: 0;
+  color: var(--text);
+  font: 600 11px/1.1 'Inter', system-ui, sans-serif;
+  cursor: pointer;
+  background-color: transparent;
+  background-image:
+    radial-gradient(ellipse 70% 55% at 72% 18%, rgb(255 255 255 / 42%), transparent 100%),
+    linear-gradient(160deg, rgb(var(--fx-ind-rgb, 22 160 255) / 30%), rgb(var(--fx-ind-rgb, 22 160 255) / 14%)),
+    var(--glass-reflection);
+}
+html[data-shell="mobile"] .mx-under-more {
+  background-image:
+    radial-gradient(ellipse 70% 55% at 72% 18%, rgb(255 255 255 / 42%), transparent 100%),
+    linear-gradient(160deg, rgb(var(--fx-ind-rgb, 22 160 255) / 18%), rgb(var(--fx-ind-fringe, 132 108 255) / 12%)),
+    var(--glass-reflection);
+  box-shadow: inset 1px 0 0 var(--glass-divider);
+}
+html[data-shell="mobile"] .mx-under-btn:active { background-color: var(--glass-hover); }
+html[data-shell="mobile"] .mx-under-btn svg { width: 20px; height: 20px; }
+
+/* Drag ghost: the row lifted above everything in the shell (z 990) */
+html[data-shell="mobile"] .mx-ghost { position: fixed; z-index: var(--mx-z-ghost); pointer-events: none; margin: 0; box-sizing: border-box; }
+html[data-shell="mobile"] .mx-ghost > .mx-task.eisenhower-task { height: 100%; opacity: 1; cursor: grabbing; }
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-ghost > .mx-task.eisenhower-task {
+  background-color: color-mix(in srgb, var(--card) 80%, rgb(var(--priority-rgb)));
+  box-shadow: var(--fx-lift-tile-hover), 0 0 0 1px rgb(var(--fx-ind-rgb) / 45%), 0 0 22px -6px rgb(var(--fx-ind-rgb) / 55%);
+}
+
+/* Lift & place: rows rest, gaps glow */
+html[data-shell="mobile"][data-mx-carry] .mx-task-slot { pointer-events: none; }
+html[data-shell="mobile"] .mx-task-slot.is-carried > .mx-task.eisenhower-task {
+  opacity: 0.4;
+  outline: 1.5px dashed rgb(var(--priority-rgb) / 85%);
+  outline-offset: -1px;
+}
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-task-slot.is-carried > .mx-task.eisenhower-task-pinned::before { animation: none; }
+html[data-shell="mobile"] .mx-gap {
+  position: relative; z-index: 2;
+  display: block; width: 100%; height: 44px;
+  margin: -6px 0; padding: 0;
+  border: 0; border-radius: 14px;
+  background: transparent;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+html[data-shell="mobile"] .mx-gap::before {
+  content: ""; position: absolute; left: 8%; right: 8%; top: 50%; height: 18px; margin-top: -9px;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgb(var(--fx-ind-rgb, 22 160 255) / 40%), rgb(var(--fx-ind-rgb, 22 160 255) / 14%) 60%, transparent 100%);
+  opacity: 0.6;
+  pointer-events: none;
+  animation: fxSlotBreath 4.6s var(--fx-breathe, ease-in-out) infinite;
+  animation-delay: calc(var(--i, 0) * -0.7s);
+}
+html[data-shell="mobile"] .mx-gap-beam {
+  position: absolute; left: 10px; right: 10px; top: 50%; height: 2px; margin-top: -1px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, rgb(var(--fx-ind-rgb, 22 160 255) / 0%) 0%, rgb(var(--fx-ind-rgb, 22 160 255) / 82%) 15%,
+    rgb(214 244 255) 40%, #fff 50%, rgb(214 244 255) 60%, rgb(var(--fx-ind-rgb, 22 160 255) / 82%) 85%, rgb(var(--fx-ind-rgb, 22 160 255) / 0%) 100%);
+  filter: drop-shadow(0 0 2px rgb(var(--fx-ind-rgb, 22 160 255) / 90%)) drop-shadow(0 0 6px rgb(var(--fx-ind-rgb, 22 160 255) / 45%));
+  opacity: 0.78;
+  pointer-events: none;
+}
+html[data-shell="mobile"] .mx-gap:is(:focus-visible, :active) .mx-gap-beam { opacity: 1; height: 3px; margin-top: -1.5px; }
+html[data-shell="mobile"] .mx-gap:is(:focus-visible, :active)::before { opacity: 1; animation: none; }
+html[data-shell="mobile"] .mx-gap:focus-visible { outline: none; }
+
+/* The carry dock (#mx-carry, F0's slot): Moving “…”  [Move…] [Cancel] */
+html[data-shell="mobile"] #mx-carry .mx-carry-grip { display: inline-flex; flex: 0 0 auto; color: rgb(var(--fx-ind-rgb, 22 160 255)); }
+html[data-shell="mobile"] #mx-carry .mx-carry-text {
+  flex: 1 1 auto; min-width: 0;
+  font: 600 14px/1.2 'Inter', system-ui, sans-serif;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+html[data-shell="mobile"] .mx-carry-btn {
+  position: relative; flex: 0 0 auto;
+  min-height: 32px; padding: 0 12px;
+  border: 1px solid var(--glass-divider); border-radius: 999px;
+  background: var(--glass-reflection), var(--glass-field);
+  color: var(--text);
+  font: 600 13px/1 'Inter', system-ui, sans-serif;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+html[data-shell="mobile"] .mx-carry-btn::before { content: ""; position: absolute; inset: -6px -2px; }
+html[data-shell="mobile"] .mx-carry-btn:active { background-color: var(--glass-hover); }
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-carry-move {
+  border-color: rgb(var(--fx-ind-rgb) / 55%);
+  background-image: radial-gradient(ellipse 70% 80% at 70% 0%, rgb(var(--fx-ind-rgb) / 22%), transparent 100%), var(--glass-reflection);
+  box-shadow: var(--fx-lift-pill), 0 0 12px -4px rgb(var(--fx-ind-rgb) / 55%);
+}
+
+/* --- 4. Sheets: actions, move, completed, read ---------------------------------------- */
+html[data-shell="mobile"] .mx-sec-label {
+  display: block;
+  margin: 0 0 8px;
+  font: 700 11px/1.2 'Inter', system-ui, sans-serif; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--muted);
+}
+html[data-shell="mobile"] .mx-actions-head { display: flex; align-items: center; gap: 10px; padding: 4px 2px 0; }
+html[data-shell="mobile"] .mx-actions-head .mx-actions-dot { width: 12px; height: 12px; }
+html[data-shell="mobile"] .mx-actions-title {
+  margin: 0; min-width: 0;
+  font: 700 18px/1.3 'Inter', system-ui, sans-serif; letter-spacing: -0.015em;
+  overflow-wrap: anywhere;
+}
+html[data-shell="mobile"] .mx-actions-meta {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px;
+  margin: 6px 0 16px 24px;
+  font: 500 13px/18px 'Inter', system-ui, sans-serif;
+  color: var(--muted);
+}
+html[data-shell="mobile"] .mx-actions-big { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-bottom: 18px; }
+html[data-shell="mobile"] .mx-big-btn {
+  position: relative;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px;
+  min-height: 60px; padding: 8px 4px;
+  border: 1px solid var(--glass-divider); border-radius: 18px;
+  background: var(--glass-reflection), var(--glass-field);
+  color: var(--text);
+  font: 600 13px/1 'Inter', system-ui, sans-serif;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+html[data-shell="mobile"] .mx-big-btn:active { background-color: var(--glass-hover); }
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-big-btn { box-shadow: var(--fx-lift-pill), var(--glass-rim); }
+html[data-shell="mobile"] .mx-big-done svg { color: rgb(var(--fx-live-deep, 6 122 66)); }
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-big-done {
+  background-image: radial-gradient(ellipse 70% 80% at 70% 0%, rgb(var(--fx-live-rgb) / 18%), transparent 100%), var(--glass-reflection);
+}
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-big-timer.is-running {
+  color: #fff;
+  border-color: rgb(var(--fx-live-rgb) / 55%);
+  background-image:
+    radial-gradient(ellipse 70% 50% at 70% 10%, rgb(255 255 255 / 40%), transparent 100%),
+    linear-gradient(150deg, rgb(var(--fx-live-rgb) / 82%), rgb(var(--fx-live-deep) / 92%));
+  box-shadow: var(--fx-lift-pill), 0 0 16px -4px rgb(var(--fx-live-rgb) / 65%);
+}
+html[data-shell="mobile"] .mx-actions-sec { margin-bottom: 16px; }
+html[data-shell="mobile"] .mx-sub-list { display: grid; gap: 4px; }
+html[data-shell="mobile"] .mx-sub-row { display: flex; align-items: center; gap: 2px; min-height: 44px; padding-right: 4px; }
+html[data-shell="mobile"] .mx-sub-row .mx-check { margin: 0 0 0 -8px; }
+html[data-shell="mobile"] .mx-sub-title { flex: 1 1 auto; min-width: 0; font-size: 15px; line-height: 1.35; overflow-wrap: anywhere; }
+html[data-shell="mobile"] .mx-sub-due { font-size: 12px; color: var(--muted); white-space: nowrap; }
+html[data-shell="mobile"] .mx-sub-row[data-state="completing"] .mx-sub-title { opacity: 0.5; text-decoration: line-through; }
+html[data-shell="mobile"] .mx-link-btn {
+  justify-self: start;
+  min-height: 36px; padding: 0 6px;
+  border: 0; background: transparent;
+  color: rgb(var(--fx-ind-rgb, 22 160 255));
+  font: 600 14px/1 'Inter', system-ui, sans-serif;
+  cursor: pointer;
+}
+html[data-shell="mobile"] .mx-sub-add {
+  display: flex; align-items: center; gap: 8px;
+  min-height: 44px; padding: 0 12px;
+  border: 1px dashed var(--glass-divider); border-radius: 14px;
+  color: var(--muted);
+}
+html[data-shell="mobile"] .mx-sub-add-icon { display: inline-flex; }
+html[data-shell="mobile"] .mx-sub-input {
+  flex: 1 1 auto; min-width: 0;
+  min-height: 42px;
+  border: 0; outline: none;
+  background: transparent;
+  color: var(--text);
+  font: 400 16px/1.3 'Inter', system-ui, sans-serif;     /* 16px: no iOS zoom */
+}
+html[data-shell="mobile"] .mx-sub-add:focus-within { border-style: solid; border-color: rgb(var(--fx-ind-rgb, 22 160 255) / 60%); }
+html[data-shell="mobile"] .mx-chip-row { display: flex; flex-wrap: wrap; gap: 8px; }
+html[data-shell="mobile"] .mx-chip-row .mx-chip { margin: 0; }
+html[data-shell="mobile"] .mx-chip-pick { overflow: hidden; }
+html[data-shell="mobile"] .mx-date-input {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  margin: 0; padding: 0; border: 0;
+  opacity: 0;
+  font-size: 16px;
+  cursor: pointer;
+}
+html[data-shell="mobile"] .mx-chip-quiet { color: var(--muted); }
+html[data-shell="mobile"] .mx-actions-list { display: grid; gap: 2px; padding-top: 8px; border-top: 1px solid var(--glass-divider); }
+html[data-shell="mobile"] .mx-row-btn {
+  display: flex; align-items: center; gap: 14px;
+  min-height: 50px; padding: 0 8px;
+  border: 0; border-radius: 14px;
+  background: transparent;
+  color: var(--text);
+  font: 500 16px/1.2 'Inter', system-ui, sans-serif;
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+html[data-shell="mobile"] .mx-row-btn:active { background-color: var(--glass-hover); }
+html[data-shell="mobile"] .mx-row-btn > svg { flex: 0 0 auto; color: var(--muted); }
+html[data-shell="mobile"] .mx-row-btn-label { flex: 1 1 auto; }
+html[data-shell="mobile"] .mx-row-btn-chev { display: inline-flex; color: var(--muted); }
+html[data-shell="mobile"] .mx-row-btn.mx-danger,
+html[data-shell="mobile"] .mx-row-btn.mx-danger > svg { color: var(--danger); }
+
+/* Move sheet: GROUP, the 2×2 matrix, POSITION */
+html[data-shell="mobile"] .mx-move-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+html[data-shell="mobile"] .mx-move-row .mx-sec-label { margin: 0; }
+html[data-shell="mobile"] .mx-move-seg { flex: 0 1 230px; }
+html[data-shell="mobile"] .mx-move-matrix {
+  display: grid; grid-template-columns: 62px minmax(0, 1fr) minmax(0, 1fr); gap: 8px;
+  align-items: stretch;
+  margin-bottom: 18px;
+}
+html[data-shell="mobile"] .mx-axis {
+  align-self: center;
+  font: 700 10px/1.25 'Inter', system-ui, sans-serif; letter-spacing: 0.07em; text-transform: uppercase;
+  color: var(--muted);
+}
+html[data-shell="mobile"] .mx-axis-col { text-align: center; align-self: end; }
+html[data-shell="mobile"] .mx-move-tile {
+  position: relative;
+  display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto 1fr; align-items: center; column-gap: 8px;
+  min-height: 72px; padding: 10px 12px;
+  border: 1px solid rgb(var(--priority-rgb) / 42%); border-radius: 18px;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+  background: linear-gradient(150deg, rgb(var(--priority-rgb) / 30%), rgb(var(--priority-rgb) / 12%)), var(--glass-reflection), var(--glass-field);
+}
+html[data-shell="mobile"] .mx-tile-label { font: 600 14px/1.2 'Inter', system-ui, sans-serif; }
+html[data-shell="mobile"] .mx-tile-count {
+  grid-column: 1 / -1; justify-self: end; align-self: end;
+  font: 700 20px/1 'Inter', system-ui, sans-serif; font-variant-numeric: tabular-nums; letter-spacing: -0.02em;
+}
+html[data-shell="mobile"] .mx-move-tile:active { background-color: var(--glass-hover); }
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-move-tile { box-shadow: var(--fx-lift-pill), var(--glass-rim); }
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-move-tile[aria-pressed="true"] {
+  box-shadow: var(--fx-lift-pill-hover), 0 0 0 2px rgb(var(--fx-ind-rgb) / 78%), 0 0 20px -4px rgb(var(--fx-ind-rgb) / 60%);
+}
+html[data-shell="mobile"] .mx-move-pos { flex-direction: column; align-items: stretch; }
+html[data-shell="mobile"] .mx-move-steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+html[data-shell="mobile"] .mx-step-btn { flex-direction: column; gap: 3px; padding: 4px; min-height: 52px; font-size: 12.5px; }
+html[data-shell="mobile"] .mx-step-btn:disabled { opacity: 0.4; cursor: default; }
+html[data-shell="mobile"] .mx-move-foot { display: flex; justify-content: flex-end; }
+html[data-shell="mobile"] .mx-move-done { min-width: 112px; }
+
+/* Completed screen (pushed) */
+html[data-shell="mobile"] .mx-completed .mx-day-label { margin: 18px 6px 8px; }
+html[data-shell="mobile"] .mx-completed .mx-day-label:first-child { margin-top: 8px; }
+html[data-shell="mobile"] .mx-completed-group { display: grid; gap: 6px; }
+html[data-shell="mobile"] .mx-done-row {
+  display: flex; align-items: center; gap: 0;
+  min-height: 52px;
+  border: 1px solid var(--glass-divider); border-radius: 16px;
+  background: var(--glass-reflection), var(--glass-field);
+}
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-done-row { box-shadow: var(--fx-lift-pill), var(--glass-rim); }
+html[data-shell="mobile"] .mx-done-disc {
+  flex: 0 0 auto;
+  width: 48px; height: 48px;
+  padding: 0; border: 0; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: transparent;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+html[data-shell="mobile"] .mx-done-lens { width: 26px; height: 26px; }
+html[data-shell="mobile"] .mx-done-lens svg { width: 15px; height: 15px; stroke-width: 2.6; }
+html[data-shell="mobile"] .mx-done-disc:active .mx-done-lens { box-shadow: inset -1px 1px 1px rgb(255 255 255 / 70%), 0 0 16px 1px rgb(var(--fx-live-rgb, 24 211 116) / 70%); }
+html[data-shell="mobile"] .mx-done-main {
+  flex: 1 1 auto; min-width: 0;
+  display: flex; align-items: center; gap: 10px;
+  min-height: 50px; padding: 6px 12px 6px 0;
+  border: 0; background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+html[data-shell="mobile"] .mx-done-title {
+  flex: 1 1 auto; min-width: 0;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden;
+  font: 500 15px/20px 'Inter', system-ui, sans-serif;
+  color: color-mix(in srgb, var(--text) 82%, transparent);
+}
+html[data-shell="mobile"] .mx-done-meta {
+  flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px;
+  font: 500 12px/1 'Inter', system-ui, sans-serif; font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+html[data-shell="mobile"] .mx-done-dot { width: 8px; height: 8px; }
+html[data-shell="mobile"] .mx-completed-more { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 18px 4px 6px; }
+html[data-shell="mobile"] .mx-completed-more .mx-sheet-note { margin: 0; }
+html[data-shell="mobile"] .mx-clear-completed { display: flex; margin: 14px auto 0; }
+html[data-shell="mobile"] .mx-completed-empty { padding: 32px 12px; text-align: center; }
+html[data-shell="mobile"] .mx-read-text {
+  margin: 0 0 18px;
+  max-height: 40vh; overflow-y: auto;
+  font-size: 15px; line-height: 1.5;
+  white-space: pre-wrap; overflow-wrap: anywhere;
+}
+html[data-shell="mobile"] .mx-read-actions { display: flex; gap: 10px; }
+html[data-shell="mobile"] .mx-read-actions .mx-btn { flex: 1 1 0; }
+
+/* --- 5. Dark ------------------------------------------------------------------------------ */
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme="dark"] .mx-tasks-sub {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--glass-dialog) 72%, transparent), color-mix(in srgb, var(--glass-dialog) 44%, transparent));
+}
+html[data-shell="mobile"] body[data-theme="dark"] .mx-ring { box-shadow: 0 0 10px -3px rgb(var(--priority-rgb, 148 163 184) / 70%), inset 0 1px 1px rgb(224 234 250 / 16%); }
+html[data-shell="mobile"] body[data-theme="dark"] .mx-under-done {
+  background-image:
+    radial-gradient(ellipse 140px 50px at 20% 0%, rgb(224 234 250 / 16%), transparent 70%),
+    linear-gradient(90deg, rgb(var(--fx-live-rgb, 24 211 116) / 70%), rgb(var(--fx-live-deep, 6 122 66) / 82%));
+}
+html[data-shell="mobile"] body[data-theme="dark"] .mx-under-btn {
+  background-image:
+    radial-gradient(ellipse 70% 55% at 72% 18%, rgb(224 234 250 / 18%), transparent 100%),
+    linear-gradient(160deg, rgb(var(--fx-ind-rgb, 22 160 255) / 34%), rgb(var(--fx-ind-rgb, 22 160 255) / 18%)),
+    var(--glass-reflection);
+}
+html[data-shell="mobile"] body[data-theme="dark"] .mx-under-more {
+  background-image:
+    radial-gradient(ellipse 70% 55% at 72% 18%, rgb(224 234 250 / 18%), transparent 100%),
+    linear-gradient(160deg, rgb(var(--fx-ind-rgb, 22 160 255) / 22%), rgb(var(--fx-ind-fringe, 132 108 255) / 16%)),
+    var(--glass-reflection);
+}
+html[data-shell="mobile"] body[data-theme="dark"] .mx-big-done svg { color: rgb(var(--fx-live-rgb, 24 211 116)); }
+html[data-shell="mobile"] body[data-theme="dark"] .mx-move-tile {
+  background: linear-gradient(150deg, rgb(var(--priority-rgb) / 26%), rgb(var(--priority-rgb) / 10%)), var(--glass-reflection), var(--glass-field);
+}
+
+/* --- 6. Sunset ---------------------------------------------------------------------------- */
+/* The panes, rows, chips and sheets read the sunset glass tokens already; the
+   sub-bar takes the warmer dialog tint through var(--glass-dialog). The empty
+   colour headers stay a touch brighter so they don't sink into the warm canvas. */
+html[data-shell="mobile"] body[data-glass-theme="sunset"] .mx-pane.eisenhower-priority-card.is-empty { opacity: 0.66; }
+
+/* --- 7. Keyframes (opacity / transform / stroke only) ------------------------------------ */
+@keyframes mxTaskCheck {
+  from { stroke-dashoffset: 24; }
+  to   { stroke-dashoffset: 0; }
+}
+
+/* --- 8. Accessibility guards -------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  html[data-shell="mobile"] .mx-chip-hot,
+  html[data-shell="mobile"] .mx-gap::before { animation: none; }
+  html[data-shell="mobile"] [data-state="completing"] .mx-ring svg { animation: none; stroke-dashoffset: 0; }
+}
+@media (prefers-reduced-transparency: reduce) {
+  html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] :is(.mx-tasks-sub, .mx-pane.eisenhower-priority-card) {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-tasks-sub { background: var(--card); }
+}
+@media (forced-colors: active) {
+  html[data-shell="mobile"] :is(.mx-ring, .mx-gap, .mx-lens-chip, .mx-move-tile, .mx-done-lens, .mx-big-btn, .mx-row-btn) { outline: 1px solid CanvasText; }
+  html[data-shell="mobile"] .mx-gap-beam { background: Highlight; }
+  html[data-shell="mobile"] :is(.mx-lens-chip, .mx-move-tile)[aria-pressed="true"] { outline: 2px solid Highlight; }
+}
+/* Focus rings restated at glass specificity: glass.css's generic
+   `body[data-style="glass"][data-theme] :is(button, a, input, …):focus-visible`
+   (0,4,1) outranks the plain shell rules above. The subtask field lights its own
+   rounded border (:focus-within) and a gap its full beam, so neither gets a
+   square box too; the ring and the "Actions for …" pill keep their azure ring. */
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] :is(.mx-sub-input, .mx-gap):focus-visible { outline: none; }
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-check:focus-visible {
+  outline: 2px solid rgb(var(--fx-ind-rgb, 22 160 255) / 75%);
+  outline-offset: -6px;
+}
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-task .mx-row-actions:focus-visible {
+  outline: 2px solid rgb(var(--fx-ind-rgb, 22 160 255) / 75%);
+  outline-offset: 0;
+}
+
+/* --- 9. Landscape phones ----------------------------------------------------------------- */
+@media (orientation: landscape) and (max-height: 500px) {
+  html[data-shell="mobile"] .mx-tasks-sub { height: 44px; }
+  html[data-shell="mobile"] .mx-lens-chip { min-height: 32px; }
+  html[data-shell="mobile"] .mx-task.eisenhower-task { min-height: 48px; padding-top: 8px; padding-bottom: 8px; }
+}

@@ -353,6 +353,11 @@ import {
   postRestoreAuthSync
 } from './features/auth-ui.js';
 
+// Mobile shell (phones and the desktop "Mobile" preview). The ?v= keeps the
+// shell and its unit modules (all imported with the same version) from mixing
+// builds after a deploy; bump it with MOBILE_BUILD (js/core/mobile-device.js).
+import { syncMobileShell, renderMobileShell, isShellMounted, mobileShellDebug } from './features/mobile/shell.js?v=2026-10-mobile-1';
+
 // Make key functions available globally for the transition period
 // This allows app.js to still work while we gradually migrate
 window.model = model;
@@ -742,3 +747,9 @@ window.wireMoveButtonEvents = wireMoveButtonEvents;
 window.wireFileManagerEvents = wireFileManagerEvents;
 window.updateFileManagerVisibility = updateFileManagerVisibility;
 
+// Mobile shell: existing modules reach it through window (no import cycles;
+// modules loaded by the Node tests stay free of DOM code)
+window.syncMobileShell = syncMobileShell;
+window.renderMobileShell = renderMobileShell;
+window.isMobileShellMounted = isShellMounted;
+window.mobileShell = mobileShellDebug;

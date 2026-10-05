@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180" width="180" height="180">
+  <!-- Home-screen icon: the dashboard's frosted + lens with the azure living
+       light in its lit corner, on the classic silver canvas (square: iOS masks it) -->
+  <defs>
+    <linearGradient id="canvas" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#c8c9cc"/>
+      <stop offset="0.55" stop-color="#d5d6d8"/>
+      <stop offset="1" stop-color="#c5c6c9"/>
+    </linearGradient>
+    <radialGradient id="keylight" cx="0.88" cy="0.08" r="0.7">
+      <stop offset="0" stop-color="#eeeef0"/>
+      <stop offset="1" stop-color="#eeeef0" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="ice" cx="0.9" cy="0.25" r="0.45">
+      <stop offset="0" stop-color="rgb(186,199,224)" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="rgb(186,199,224)" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="blush" cx="0.1" cy="0.9" r="0.5">
+      <stop offset="0" stop-color="rgb(228,210,216)" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="rgb(228,210,216)" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="lens" cx="0.72" cy="0.2" r="0.85">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.92"/>
+      <stop offset="0.45" stop-color="#f1f2f4" stop-opacity="0.82"/>
+      <stop offset="1" stop-color="#dcdde1" stop-opacity="0.9"/>
+    </radialGradient>
+    <linearGradient id="rim" x1="1" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="0.5" stop-color="#8a92a3" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0.9"/>
+    </linearGradient>
+    <radialGradient id="pool" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="rgb(22,160,255)" stop-opacity="0.85"/>
+      <stop offset="0.35" stop-color="rgb(22,160,255)" stop-opacity="0.45"/>
+      <stop offset="0.7" stop-color="rgb(132,108,255)" stop-opacity="0.12"/>
+      <stop offset="1" stop-color="rgb(132,108,255)" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="core" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="0.25" stop-color="rgb(236,250,255)"/>
+      <stop offset="0.55" stop-color="rgb(22,160,255)" stop-opacity="0.75"/>
+      <stop offset="1" stop-color="rgb(22,160,255)" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="halo" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0.6" stop-color="rgb(22,160,255)" stop-opacity="0.32"/>
+      <stop offset="1" stop-color="rgb(22,160,255)" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="lift" x="-30%" y="-30%" width="160%" height="170%">
+      <feDropShadow dx="5" dy="9" stdDeviation="8" flood-color="#222834" flood-opacity="0.32"/>
+    </filter>
+  </defs>
+  <rect width="180" height="180" fill="url(#canvas)"/>
+  <rect width="180" height="180" fill="url(#keylight)"/>
+  <rect width="180" height="180" fill="url(#ice)"/>
+  <rect width="180" height="180" fill="url(#blush)"/>
+  <circle cx="90" cy="90" r="72" fill="url(#halo)"/>
+  <circle cx="90" cy="90" r="56" fill="url(#lens)" filter="url(#lift)"/>
+  <circle cx="90" cy="90" r="55.25" fill="none" stroke="url(#rim)" stroke-width="1.5"/>
+  <circle cx="114" cy="56" r="26" fill="url(#pool)"/>
+  <circle cx="114" cy="56" r="8" fill="url(#core)"/>
+  <g stroke="#27292e" stroke-width="10" stroke-linecap="round">
+    <line x1="90" y1="66" x2="90" y2="114"/>
+    <line x1="66" y1="90" x2="114" y2="90"/>
+  </g>
+</svg>

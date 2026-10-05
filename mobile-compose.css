@@ -1,0 +1,647 @@
+/* ==========================================================================
+   mobile-compose.css (unit F2): the keyboard-docked composer of the mobile
+   shell (js/features/mobile/composer.js). Loaded after mobile.css; every rule
+   keys on html[data-shell="mobile"], so tablet and desktop never see it.
+   Structural rules: html[data-shell="mobile"] …; glass rules:
+   html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] …
+   (0,5,2+). Tokens only, no new hues: azure (--fx-ind-rgb) is the living
+   light, the four matrix colours come from --priority-rgb set per control.
+   Colour on buttons goes in background-image (no glass-glow bloom); motion is
+   opacity / transform, nothing keeps a transform.
+   Sections: 1 composer frame · 2 kinds, field, line · 3 tray and panels ·
+   4 inline confirmation, shake, help sheet · 5 dark · 6 sunset ·
+   7 keyframes mxCompose* · 8 a11y · 9b narrow phones · 9 landscape
+   ========================================================================== */
+
+/* --- 1. The composer frame ----------------------------------------------------
+   Docked on the keyboard (bottom: --mx-kb from viewport.js; it rides up with a
+   180 ms bottom transition), inside the phone column. */
+html[data-shell="mobile"] .mx-compose-scrim {
+  position: fixed; top: 0; bottom: 0; left: var(--mx-inline); right: var(--mx-inline);
+  z-index: var(--mx-z-compose-scrim);
+  background: var(--glass-scrim);
+  touch-action: none;            /* a drag here never scrolls the page under the keyboard */
+  overscroll-behavior: none;
+}
+html[data-shell="mobile"] .mx-compose-scrim[hidden],
+html[data-shell="mobile"] .mx-composer[hidden] { display: none; }
+html[data-shell="mobile"] .mx-composer {
+  position: fixed; z-index: var(--mx-z-compose);
+  left: var(--mx-inline); right: var(--mx-inline);
+  bottom: var(--mx-kb, 0px);
+  box-sizing: border-box;
+  display: flex; flex-direction: column; gap: 6px;
+  max-height: calc(var(--mx-vvh) - var(--mx-safe-t) - 56px);
+  overflow-y: auto; overscroll-behavior: contain;
+  padding: 0 max(var(--mx-gutter), var(--mx-safe-r)) calc(10px + var(--mx-safe-b)) max(var(--mx-gutter), var(--mx-safe-l));
+  border: 1px solid var(--glass-edge); border-bottom: 0;
+  border-radius: var(--mx-radius-sheet) var(--mx-radius-sheet) 0 0;
+  color: var(--text);
+  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  transform-origin: 50% 100%;
+  transition: bottom 180ms cubic-bezier(0.2, 0.8, 0.25, 1);
+  scrollbar-width: none;
+}
+html[data-shell="mobile"] .mx-composer::-webkit-scrollbar { display: none; }
+/* The keyboard covers the home-indicator area: no safe-area padding on top of it */
+html[data-shell="mobile"][data-mx-kb] .mx-composer { padding-bottom: 10px; }
+/* No visualViewport: anchored under the top edge instead of guessing the keyboard */
+html[data-shell="mobile"] .mx-composer.mx-composer--top {
+  top: calc(var(--mx-safe-t) + 12px); bottom: auto;
+  border-radius: var(--mx-radius-sheet); border-bottom: 1px solid var(--glass-edge);
+  padding-bottom: 10px;
+}
+/* The dialog recipe (prism hairline, top-right glint, inner light) on a bottom-docked frame */
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-composer {
+  background:
+    linear-gradient(90deg, transparent 6%, rgb(var(--fx-cyan) / 44%) 30%, rgb(var(--fx-violet) / 44%) 55%, rgb(var(--fx-pink) / 36%) 78%, transparent 96%) top / 100% 1px no-repeat,
+    radial-gradient(ellipse 180px 60px at calc(100% - 40px) 0%, var(--fx-dialog-glint), transparent 100%),
+    var(--glass-reflection), var(--glass-dialog);
+  -webkit-backdrop-filter: blur(36px) saturate(145%);
+  backdrop-filter: blur(36px) saturate(145%);
+  box-shadow: var(--fx-lift-dialog), var(--glass-rim), inset -18px 18px 40px -30px rgb(255 255 255 / 40%);
+}
+html[data-shell="mobile"] .mx-compose-grab {
+  flex: 0 0 auto;
+  display: flex; justify-content: center; align-items: center;
+  height: 16px; margin: 0 -12px;
+  touch-action: none;
+  cursor: grab;
+}
+
+/* --- 2. Kinds, the field, the line ---------------------------------------------- */
+/* Not a scroller: a scroll box would clip the chips' lift shadows and the
+   selected kind's azure halo into a hard-edged band. The five kinds fit at
+   360 (tighter in section 9b); a narrower screen wraps them, never hides one */
+html[data-shell="mobile"] .mx-compose-kinds {
+  flex: 0 0 auto;
+  display: flex; flex-wrap: wrap; gap: 0 6px;
+  overflow: visible;
+}
+html[data-shell="mobile"] .mx-compose-kind {
+  position: relative;
+  flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  box-sizing: border-box;
+  min-height: 36px; padding: 0 13px; margin: 4px 0;      /* 36px look, 44px hit */
+  border: 1px solid var(--glass-divider); border-radius: 999px;
+  background: var(--glass-reflection), var(--glass-field);
+  color: var(--muted);
+  font: 600 13px/1 'Inter', system-ui, sans-serif;
+  white-space: nowrap;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+html[data-shell="mobile"] .mx-compose-kind::before { content: ""; position: absolute; inset: -4px 0; }
+html[data-shell="mobile"] .mx-compose-kind:active { background-color: var(--glass-hover); }
+html[data-shell="mobile"] .mx-compose-kind[aria-selected="true"] { color: var(--text); }
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-compose-kind { box-shadow: var(--fx-lift-pill), var(--glass-rim); }
+/* Selected kind: the neutral azure light (the Write / All chips' recipe) */
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-compose-kind[aria-selected="true"] {
+  border-color: rgb(var(--fx-ind-rgb) / 70%);
+  background: radial-gradient(ellipse 70% 60% at 70% 0%, rgb(var(--fx-ind-rgb) / 18%), transparent 100%),
+    var(--glass-reflection), var(--glass-field);
+  box-shadow: var(--fx-lift-pill-hover), var(--glass-rim), 0 0 0 1px rgb(var(--fx-ind-rgb) / 35%),
+    0 0 18px -4px rgb(var(--fx-ind-rgb) / 55%);
+}
+
+/* Meeting kind: today's recurring meetings */
+html[data-shell="mobile"] .mx-compose-today[hidden] { display: none; }
+html[data-shell="mobile"] .mx-compose-today {
+  display: flex; align-items: center; gap: 8px; min-width: 0;
+}
+html[data-shell="mobile"] .mx-compose-today-label {
+  flex: 0 0 auto;
+  font: 700 11px/1 'Inter', system-ui, sans-serif; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--muted);
+}
+html[data-shell="mobile"] .mx-compose-today-row {
+  flex: 1 1 auto; min-width: 0;
+  display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none;
+}
+html[data-shell="mobile"] .mx-compose-today-chip {
+  position: relative;
+  flex: 0 0 auto; max-width: 100%;
+  display: inline-flex; align-items: center; gap: 6px;
+  min-height: 36px; padding: 0 12px; margin: 4px 0;
+  border: 1px solid rgb(var(--fx-ind-rgb) / 45%); border-radius: 999px;
+  background: radial-gradient(ellipse 70% 70% at 75% 0%, rgb(var(--fx-ind-rgb) / 16%), transparent 100%), var(--glass-reflection), var(--glass-field);
+  color: var(--text);
+  font: 600 13px/1.1 'Inter', system-ui, sans-serif;
+  white-space: nowrap; overflow: hidden;
+  cursor: pointer;
+}
+html[data-shell="mobile"] .mx-compose-today-icon { display: inline-flex; color: rgb(var(--fx-ind-rgb)); }
+html[data-shell="mobile"] .mx-compose-today-title { overflow: hidden; text-overflow: ellipsis; }
+html[data-shell="mobile"] .mx-compose-today-sub { color: var(--muted); font-weight: 500; }
+
+/* The form: field (input 17px, the @ target chip before it), Details, Add */
+html[data-shell="mobile"] .mx-compose-form {
+  flex: 0 0 auto;
+  display: flex; align-items: center; gap: 4px;
+  margin: 0;
+}
+html[data-shell="mobile"] .mx-compose-field {
+  flex: 1 1 auto; min-width: 0;
+  display: flex; align-items: center; gap: 6px;
+  box-sizing: border-box;
+  min-height: 48px; padding: 0 6px 0 14px;
+  border: 1px solid var(--glass-divider); border-radius: 16px;
+  background: var(--glass-reflection), var(--glass-field);
+  cursor: text;
+}
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-compose-field {
+  box-shadow: inset 0 1px 3px rgb(40 46 56 / 6%), var(--glass-rim);
+}
+/* Focus: the search field's azure ring (glass-fx section 10) */
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-compose-field:focus-within {
+  border-color: rgb(var(--fx-ind-rgb) / 55%);
+  box-shadow: inset 0 1px 3px rgb(40 46 56 / 5%), 0 0 0 1px rgb(var(--fx-ind-rgb) / 45%), 0 0 14px -2px rgb(var(--fx-ind-rgb) / 40%);
+}
+html[data-shell="mobile"] .mx-compose-input {
+  flex: 1 1 auto; min-width: 0;
+  height: 46px; margin: 0; padding: 0;
+  border: 0; outline: none; background: transparent;
+  color: var(--text);
+  font: 400 17px/1.3 'Inter', system-ui, -apple-system, sans-serif;   /* 17px: iOS never zooms the page */
+  letter-spacing: -0.005em;
+  caret-color: rgb(var(--fx-ind-rgb, 22 160 255));
+}
+/* The field's azure ring is the focus mark (glass.css:590 would add a second, square outline) */
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] :is(.mx-compose-input, .mx-compose-body):focus-visible { outline: none; }
+html[data-shell="mobile"] .mx-compose-input::placeholder { color: var(--muted); opacity: 0.85; }
+html[data-shell="mobile"] .mx-compose-target[hidden] { display: none; }
+html[data-shell="mobile"] .mx-compose-target {
+  flex: 0 0 auto; min-width: 0; max-width: 66%;
+  display: inline-flex; align-items: center; gap: 5px;
+  box-sizing: border-box;
+  height: 32px; padding: 0 0 0 9px;
+  border: 1px solid rgb(var(--fx-ind-rgb) / 50%); border-radius: 999px;
+  background: radial-gradient(ellipse 70% 80% at 70% 0%, rgb(var(--fx-ind-rgb) / 16%), transparent 100%), var(--glass-reflection), var(--glass-field);
+  color: var(--text);
+  font: 600 13px/1 'Inter', system-ui, sans-serif;
+}
+html[data-shell="mobile"] .mx-compose-target-glyph { display: inline-flex; flex: 0 0 auto; color: rgb(var(--fx-ind-rgb)); }
+html[data-shell="mobile"] .mx-compose-target-dot {
+  flex: 0 0 auto; width: 8px; height: 8px; border-radius: 50%;
+  background: rgb(var(--priority-rgb, 61 151 248));
+  box-shadow: 0 0 6px rgb(var(--priority-rgb, 61 151 248) / 60%);
+}
+html[data-shell="mobile"] .mx-compose-target-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+html[data-shell="mobile"] .mx-compose-target-x {
+  position: relative; flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; padding: 0; margin: 0;
+  border: 0; border-radius: 50%; background: transparent; color: var(--muted);
+  cursor: pointer;
+}
+html[data-shell="mobile"] .mx-compose-target-x::before { content: ""; position: absolute; inset: -7px -4px -7px -2px; }
+html[data-shell="mobile"] .mx-compose-details { flex: 0 0 auto; color: var(--muted); }
+html[data-shell="mobile"] .mx-compose-details svg { width: 20px; height: 20px; }
+html[data-shell="mobile"] .mx-compose-details[hidden],
+html[data-shell="mobile"] .mx-compose-add[hidden] { display: none; }
+/* Add: a 44px azure lens (the .ic-save colour through background-image) */
+html[data-shell="mobile"] .mx-compose-add {
+  position: relative; flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 44px; height: 44px; padding: 0; margin: 0;
+  border: 0; border-radius: 50%;
+  color: #fff;
+  background-color: var(--glass-action);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-compose-add {
+  background-color: transparent;
+  background-image: radial-gradient(circle 22px at 70% 22%, rgb(255 255 255 / 46%), rgb(255 255 255 / 8%) 62%, transparent 100%),
+    linear-gradient(135deg, rgb(var(--fx-ind-rgb) / 92%), var(--glass-action));
+  box-shadow: var(--fx-lift-pill), inset -1px 1px 1px rgb(255 255 255 / 45%), inset 1px -1px 2px rgb(0 0 0 / 14%),
+    0 0 18px -4px rgb(var(--fx-ind-rgb) / 60%);
+}
+html[data-shell="mobile"] .mx-compose-add:active { background-color: var(--glass-hover); }
+html[data-shell="mobile"] .mx-compose-add svg { width: 21px; height: 21px; stroke-width: 2.4; }
+html[data-shell="mobile"] .mx-compose-add:focus-visible,
+html[data-shell="mobile"] .mx-compose-kind:focus-visible { outline: 2px solid rgb(var(--fx-ind-rgb) / 75%); outline-offset: 2px; }
+
+/* Note / Idea body: 1 to 6 lines, Markdown */
+html[data-shell="mobile"] .mx-compose-body[hidden] { display: none; }
+html[data-shell="mobile"] .mx-compose-body {
+  flex: 0 0 auto;
+  display: block; box-sizing: border-box;
+  width: 100%; min-height: 48px; max-height: calc(6 * 1.5em + 22px);
+  margin: 0; padding: 10px 14px;
+  border: 1px solid var(--glass-divider); border-radius: 16px;
+  background: var(--glass-reflection), var(--glass-field);
+  color: var(--text);
+  font: 400 17px/1.5 'Inter', system-ui, -apple-system, sans-serif;
+  resize: none; outline: none;
+  overflow-y: auto;
+  caret-color: rgb(var(--fx-ind-rgb, 22 160 255));
+}
+html[data-shell="mobile"] .mx-compose-body::placeholder { color: var(--muted); opacity: 0.85; }
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-compose-body:focus {
+  border-color: rgb(var(--fx-ind-rgb) / 55%);
+  box-shadow: inset 0 1px 3px rgb(40 46 56 / 5%), 0 0 0 1px rgb(var(--fx-ind-rgb) / 45%), 0 0 14px -2px rgb(var(--fx-ind-rgb) / 40%);
+}
+
+/* The line: preview / first issue / the inline confirmation, and ⓘ */
+html[data-shell="mobile"] .mx-compose-line {
+  flex: 0 0 auto;
+  display: flex; align-items: center; gap: 2px;
+  min-height: 24px; padding: 0 2px 0 4px;
+  font: 500 13px/1.3 'Inter', system-ui, sans-serif;
+  color: var(--muted);
+}
+html[data-shell="mobile"] .mx-compose-line-msg {
+  flex: 1 1 auto; min-width: 0; margin: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+html[data-shell="mobile"] .mx-compose-line[data-level="preview"] .mx-compose-line-msg { color: var(--text); opacity: 0.82; }
+html[data-shell="mobile"] .mx-compose-line[data-level="error"] .mx-compose-line-msg { color: var(--danger); font-weight: 600; }
+/* Issues may take two lines (the parser's messages carry their own way out) */
+html[data-shell="mobile"] .mx-compose-line:is([data-level="error"], [data-level="warning"]) .mx-compose-line-msg {
+  white-space: normal;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2;
+}
+html[data-shell="mobile"] .mx-compose-line[data-level="warning"] .mx-compose-line-msg { color: color-mix(in srgb, var(--warn) 78%, var(--text)); font-weight: 600; }
+html[data-shell="mobile"] .mx-compose-line[data-level="done"] .mx-compose-line-msg { color: var(--text); font-weight: 600; }
+html[data-shell="mobile"] .mx-compose-line-actions[hidden],
+html[data-shell="mobile"] .mx-compose-info[hidden] { display: none; }
+html[data-shell="mobile"] .mx-compose-line-actions { flex: 0 0 auto; display: inline-flex; align-items: center; }
+html[data-shell="mobile"] .mx-compose-line-btn {
+  position: relative;
+  min-height: 28px; padding: 0 10px; margin: 0;
+  border: 0; border-left: 1px solid var(--glass-divider); border-radius: 0;
+  background: transparent;
+  color: rgb(var(--fx-ind-rgb, 22 160 255));
+  font: 700 13px/1 'Inter', system-ui, sans-serif;
+  cursor: pointer;
+}
+html[data-shell="mobile"] body[data-style="glass"][data-theme="light"] .mx-compose-line-btn { color: var(--glass-action); }
+html[data-shell="mobile"] .mx-compose-line-btn::before { content: ""; position: absolute; inset: -8px 0; }
+html[data-shell="mobile"] .mx-compose-info {
+  position: relative; flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 28px; padding: 0; margin: 0;
+  border: 0; border-radius: 50%; background: transparent; color: var(--muted);
+  cursor: pointer;
+}
+html[data-shell="mobile"] .mx-compose-info::before { content: ""; position: absolute; inset: -8px -7px; }
+
+/* --- 3. The tray and its panels ------------------------------------------------------
+   One row of 44px targets; a panel (date row, category list, @ list, card
+   picker) replaces it in place, so the input never loses focus. */
+html[data-shell="mobile"] .mx-compose-trayhost[hidden],
+html[data-shell="mobile"] .mx-compose-panel[hidden] { display: none; }
+html[data-shell="mobile"] .mx-compose-trayhost { flex: 0 0 auto; min-width: 0; }
+/* One row at 390 (360 with section 9b); when a long date and a category name
+   don't fit, the tray takes a second row instead of scrolling: nothing hides
+   off-screen, and no scroll box clips the glows (see .mx-compose-kinds) */
+html[data-shell="mobile"] .mx-compose-tray {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 0 4px;
+  min-height: 44px;
+  overflow: visible;
+}
+html[data-shell="mobile"] .mx-tray-dots { flex: 0 0 auto; display: flex; margin-left: -4px; }
+/* Colour dots: 40x44 targets. Effective colour = the big dot. From the line
+   (set): a solid gem with the azure ring. From the lens (default): an outlined,
+   quieter ring. */
+html[data-shell="mobile"] .mx-tray-dot {
+  position: relative;
+  flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 40px; height: 44px; padding: 0; margin: 0;
+  border: 0; border-radius: 12px; background: transparent;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+html[data-shell="mobile"] .mx-tray-dot-core {
+  width: 14px; height: 14px; border-radius: 50%;
+  box-sizing: border-box;
+  background: rgb(var(--priority-rgb) / 72%);
+  box-shadow: 0 0 6px rgb(var(--priority-rgb) / 38%);
+}
+html[data-shell="mobile"] .mx-tray-dot:active .mx-tray-dot-core { background-color: rgb(var(--priority-rgb)); }
+html[data-shell="mobile"] .mx-tray-dot[aria-pressed="true"] .mx-tray-dot-core { width: 24px; height: 24px; }
+html[data-shell="mobile"] .mx-tray-dot.is-set .mx-tray-dot-core {
+  background: radial-gradient(circle 7px at 66% 30%, rgb(255 255 255 / 70%), transparent 100%), rgb(var(--priority-rgb));
+  box-shadow: 0 0 0 2px var(--glass-dialog), 0 0 0 3.5px rgb(var(--fx-ind-rgb, 22 160 255) / 85%),
+    0 0 14px 1px rgb(var(--fx-ind-rgb, 22 160 255) / 45%), 0 0 10px rgb(var(--priority-rgb) / 55%);
+}
+html[data-shell="mobile"] .mx-tray-dot.is-default .mx-tray-dot-core {
+  background: radial-gradient(circle closest-side, rgb(var(--priority-rgb) / 30%), rgb(var(--priority-rgb) / 14%));
+  border: 2px dashed rgb(var(--priority-rgb) / 85%);
+  box-shadow: 0 0 8px rgb(var(--priority-rgb) / 30%);
+}
+
+html[data-shell="mobile"] .mx-tray-chip {
+  position: relative;
+  flex: 0 0 auto;
+  display: inline-flex; align-items: center; gap: 5px;
+  box-sizing: border-box;
+  min-height: 36px; padding: 0 10px; margin: 4px 0;      /* 36px look, 44px hit */
+  border: 1px solid var(--glass-divider); border-radius: 999px;
+  background: var(--glass-reflection), var(--glass-field);
+  color: var(--muted);
+  font: 600 13px/1 'Inter', system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+html[data-shell="mobile"] .mx-tray-chip::before { content: ""; position: absolute; inset: -4px 0; }
+html[data-shell="mobile"] .mx-tray-chip.mx-tray-icon { justify-content: center; min-width: 36px; padding: 0 9px; }
+html[data-shell="mobile"] .mx-compose-tray .mx-tray-chip[hidden] { display: none; }
+html[data-shell="mobile"] .mx-tray-chip-icon { display: inline-flex; }
+html[data-shell="mobile"] .mx-tray-chip-label { min-width: 0; max-width: 140px; overflow: hidden; text-overflow: ellipsis; }
+html[data-shell="mobile"] .mx-tray-chip-label[hidden] { display: none; }
+html[data-shell="mobile"] .mx-tray-caret { display: inline-flex; margin-left: -1px; opacity: 0.7; }
+html[data-shell="mobile"] .mx-tray-chip:active { background-color: var(--glass-hover); }
+html[data-shell="mobile"] .mx-tray-star[aria-pressed="true"] svg polygon { fill: currentColor; }
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-tray-chip { box-shadow: var(--fx-lift-pill), var(--glass-rim); }
+/* Set (the line says so): an azure rim on a solid chip */
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] :is(.mx-tray-chip.is-set, .mx-tray-chip.is-off-set) {
+  color: var(--text);
+  border-color: rgb(var(--fx-ind-rgb) / 70%);
+  background: radial-gradient(ellipse 70% 60% at 70% 0%, rgb(var(--fx-ind-rgb) / 18%), transparent 100%),
+    var(--glass-reflection), var(--glass-field);
+  box-shadow: var(--fx-lift-pill-hover), var(--glass-rim), 0 0 0 1px rgb(var(--fx-ind-rgb) / 35%),
+    0 0 16px -4px rgb(var(--fx-ind-rgb) / 55%);
+}
+/* Default (from your lens / the task as it is): outlined and quieter */
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-tray-chip.is-default {
+  color: var(--text);
+  border: 1px dashed color-mix(in srgb, var(--text) 34%, transparent);
+  background: transparent;
+  box-shadow: none;
+}
+/* A panel this chip opened is showing */
+html[data-shell="mobile"] .mx-tray-chip[aria-pressed="true"]:not(.mx-tray-star):not(.mx-tray-timer) { color: var(--text); }
+
+html[data-shell="mobile"] .mx-tray-label { flex: 0 0 auto; padding-left: 2px; color: var(--muted); font: 600 13px/1 'Inter', system-ui, sans-serif; }
+html[data-shell="mobile"] .mx-tray-hint {
+  flex: 0 1 auto; min-width: 0; padding-left: 2px;
+  color: var(--muted); font: 500 13px/1.3 'Inter', system-ui, sans-serif;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+html[data-shell="mobile"] .mx-tray-spacer { flex: 1 1 auto; min-width: 4px; }
+html[data-shell="mobile"] .mx-tray-card .mx-tray-chip-label { max-width: 150px; color: var(--text); }
+html[data-shell="mobile"] .mx-tray-when { color: var(--text); }
+html[data-shell="mobile"] .mx-tray-action {
+  position: relative;
+  flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  box-sizing: border-box;
+  min-height: 38px; padding: 0 16px; margin: 3px 0;
+  border: 1px solid var(--glass-divider); border-radius: 999px;
+  background: var(--glass-reflection), var(--glass-field);
+  color: var(--text);
+  font: 600 14px/1 'Inter', system-ui, sans-serif;
+  white-space: nowrap;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+html[data-shell="mobile"] .mx-tray-action::before { content: ""; position: absolute; inset: -3px 0; }
+html[data-shell="mobile"] .mx-tray-action:active { background-color: var(--glass-hover); }
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-tray-action { box-shadow: var(--fx-lift-pill), var(--glass-rim); }
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-tray-action--primary {
+  border-color: transparent;
+  color: #fff;
+  background-color: transparent;
+  background-image: radial-gradient(ellipse 60% 50% at 72% 0%, rgb(255 255 255 / 36%), transparent 100%),
+    linear-gradient(135deg, rgb(var(--fx-ind-rgb) / 92%), var(--glass-action));
+  box-shadow: var(--fx-lift-pill), inset -1px 1px 1px rgb(255 255 255 / 40%), 0 0 16px -4px rgb(var(--fx-ind-rgb) / 55%);
+}
+
+/* Panels */
+html[data-shell="mobile"] .mx-compose-panel { flex: 0 0 auto; min-width: 0; }
+html[data-shell="mobile"] .mx-panel-row {
+  display: flex; align-items: center; gap: 6px;
+  min-height: 44px;
+}
+/* The date row must scroll; its box reaches into the frame's bottom padding,
+   so the chips' lift shadows fade out instead of ending on a straight line */
+html[data-shell="mobile"] .mx-panel-row--scroll {
+  overflow-x: auto; scrollbar-width: none;
+  margin: 0 calc(-1 * var(--mx-gutter)) -10px; padding: 0 var(--mx-gutter) 10px;
+  scroll-padding-inline: var(--mx-gutter);
+}
+html[data-shell="mobile"] .mx-panel-row--scroll::-webkit-scrollbar { display: none; }
+html[data-shell="mobile"] .mx-panel-back {
+  position: relative; flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px; padding: 0; margin: 4px 0;
+  border: 1px solid var(--glass-divider); border-radius: 50%;
+  background: var(--glass-reflection), var(--glass-field);
+  color: var(--muted);
+  cursor: pointer;
+}
+html[data-shell="mobile"] .mx-panel-back::before { content: ""; position: absolute; inset: -4px; }
+html[data-shell="mobile"] .mx-panel-chip {
+  position: relative;
+  flex: 0 0 auto;
+  display: inline-flex; align-items: center; gap: 5px;
+  box-sizing: border-box;
+  min-height: 36px; padding: 0 12px; margin: 4px 0;
+  border: 1px solid var(--glass-divider); border-radius: 999px;
+  background: var(--glass-reflection), var(--glass-field);
+  color: var(--text);
+  font: 600 13px/1 'Inter', system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+html[data-shell="mobile"] .mx-panel-chip::before { content: ""; position: absolute; inset: -4px 0; }
+html[data-shell="mobile"] .mx-panel-chip-sub { color: var(--muted); font-weight: 500; font-size: 12px; }
+html[data-shell="mobile"] .mx-panel-chip--quiet { color: var(--muted); }
+html[data-shell="mobile"] .mx-panel-chip--pick { color: rgb(var(--fx-ind-rgb, 22 160 255)); }
+html[data-shell="mobile"] body[data-theme="light"] .mx-panel-chip--pick { color: var(--glass-action); }
+html[data-shell="mobile"] .mx-panel-chip:active { background-color: var(--glass-hover); }
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] :is(.mx-panel-chip, .mx-panel-back) { box-shadow: var(--fx-lift-pill), var(--glass-rim); }
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-panel-chip[aria-selected="true"] {
+  border-color: rgb(var(--fx-ind-rgb) / 70%);
+  background: radial-gradient(ellipse 70% 60% at 70% 0%, rgb(var(--fx-ind-rgb) / 18%), transparent 100%),
+    var(--glass-reflection), var(--glass-field);
+  box-shadow: var(--fx-lift-pill-hover), var(--glass-rim), 0 0 0 1px rgb(var(--fx-ind-rgb) / 35%),
+    0 0 16px -4px rgb(var(--fx-ind-rgb) / 55%);
+}
+html[data-shell="mobile"] .mx-panel-cat-dot {
+  flex: 0 0 auto; width: 10px; height: 10px; border-radius: 50%;
+  background: var(--chip-color, var(--muted));
+  box-shadow: 0 0 6px color-mix(in srgb, var(--chip-color, transparent) 60%, transparent);
+}
+html[data-shell="mobile"] .mx-panel-hint { margin: 0; padding: 0 4px; color: var(--muted); font: 500 13px/1.35 'Inter', system-ui, sans-serif; white-space: normal; }
+
+/* One-column lists: the @ task list (at most 4 rows of 44px), the note card picker */
+html[data-shell="mobile"] .mx-panel-list {
+  display: grid; gap: 2px;
+  max-height: calc(4 * 44px + 8px);
+  overflow-y: auto; overscroll-behavior: contain;
+  margin: 0 -4px; padding: 2px 4px 4px;
+}
+html[data-shell="mobile"] .mx-panel-list .mx-panel-hint { padding: 12px 6px; }
+html[data-shell="mobile"] .mx-panel-head {
+  display: flex; align-items: center; gap: 8px;
+  position: sticky; top: -2px; z-index: 1;
+}
+html[data-shell="mobile"] .mx-panel-title { font: 700 11px/1 'Inter', system-ui, sans-serif; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+html[data-shell="mobile"] .mx-panel-item {
+  position: relative;
+  display: flex; align-items: center; gap: 10px;
+  box-sizing: border-box;
+  width: 100%; min-height: 44px; padding: 0 12px; margin: 0;
+  border: 1px solid transparent; border-radius: 14px;
+  background: transparent;
+  color: var(--text);
+  font: 500 15px/1.25 'Inter', system-ui, sans-serif;
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+html[data-shell="mobile"] .mx-panel-item:active { background-color: var(--glass-hover); }
+html[data-shell="mobile"] .mx-panel-item-dot {
+  flex: 0 0 auto; width: 10px; height: 10px; border-radius: 50%;
+  background: rgb(var(--priority-rgb));
+  box-shadow: 0 0 8px rgb(var(--priority-rgb) / 60%);
+}
+html[data-shell="mobile"] .mx-panel-item-title { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+html[data-shell="mobile"] .mx-panel-item-meta { flex: 0 0 auto; color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+html[data-shell="mobile"] .mx-panel-item-badge {
+  flex: 0 0 auto;
+  padding: 3px 7px; border-radius: 999px;
+  border: 1px solid var(--glass-divider);
+  color: var(--muted); font: 600 11px/1 'Inter', system-ui, sans-serif;
+}
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] :is(.mx-panel-item.is-active, .mx-panel-item[aria-selected="true"]) {
+  border-color: rgb(var(--fx-ind-rgb) / 55%);
+  background: radial-gradient(ellipse 60% 90% at 85% 0%, rgb(var(--fx-ind-rgb) / 14%), transparent 100%), var(--glass-reflection), var(--glass-field);
+  box-shadow: var(--fx-lift-pill), var(--glass-rim), 0 0 14px -6px rgb(var(--fx-ind-rgb) / 55%);
+}
+
+/* The native date picker's anchor: present but invisible */
+html[data-shell="mobile"] .mx-compose-date-input {
+  position: absolute; left: 50%; bottom: 8px;
+  width: 1px; height: 1px; margin: 0; padding: 0; border: 0;
+  opacity: 0; pointer-events: none;
+}
+
+/* --- 4. Inline confirmation, shake, the command help sheet ---------------------------- */
+html[data-shell="mobile"] .mx-compose-line[data-level="done"] .mx-compose-line-msg::first-letter { color: rgb(var(--fx-live-deep, 6 122 66)); }
+html[data-shell="mobile"] .mx-composer.mx-shake { animation: mxComposeShake 0.32s ease; }
+
+html[data-shell="mobile"] .mx-compose-help { display: grid; gap: 18px; padding-bottom: 6px; }
+html[data-shell="mobile"] .mx-compose-help-title {
+  margin: 0 0 8px;
+  font: 700 11px/1 'Inter', system-ui, sans-serif; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--muted);
+}
+html[data-shell="mobile"] .mx-compose-help-row { padding: 8px 0; border-top: 1px solid var(--glass-divider); }
+html[data-shell="mobile"] .mx-compose-help-group .mx-compose-help-row:first-of-type { border-top: 0; padding-top: 0; }
+html[data-shell="mobile"] .mx-compose-help-examples { display: flex; flex-wrap: wrap; gap: 6px; }
+html[data-shell="mobile"] .mx-compose-help-ex,
+html[data-shell="mobile"] .mx-compose-help-code {
+  position: relative;
+  display: inline-flex; align-items: center;
+  min-height: 32px; padding: 0 11px; margin: 0;
+  border: 1px solid var(--glass-divider); border-radius: 10px;
+  background: var(--glass-reflection), var(--glass-field);
+  color: var(--text);
+  font: 600 13px/1 ui-monospace, 'SF Mono', 'Cascadia Code', Menlo, Consolas, monospace;
+}
+html[data-shell="mobile"] .mx-compose-help-ex { cursor: pointer; }
+html[data-shell="mobile"] .mx-compose-help-ex::before { content: ""; position: absolute; inset: -6px 0; }
+html[data-shell="mobile"] .mx-compose-help-ex[style*="--priority-rgb"] { border-color: rgb(var(--priority-rgb) / 55%); }
+html[data-shell="mobile"] .mx-compose-help-ex:active { background-color: var(--glass-hover); }
+html[data-shell="mobile"] .mx-compose-help-code { border-style: dashed; color: var(--muted); }
+html[data-shell="mobile"] .mx-compose-help-meaning { margin: 6px 0 0; font-size: 14px; line-height: 1.4; color: var(--muted); }
+
+/* --- 5. Dark ------------------------------------------------------------------------------ */
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme="dark"] .mx-composer {
+  box-shadow: var(--fx-lift-dialog), var(--glass-rim), inset -18px 18px 40px -30px rgb(190 214 255 / 14%);
+}
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme="dark"] .mx-compose-field {
+  box-shadow: inset 0 1px 3px rgb(0 0 0 / 22%), var(--glass-rim);
+}
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme="dark"] .mx-compose-add {
+  background-image: radial-gradient(circle 22px at 70% 22%, rgb(224 240 255 / 34%), rgb(224 240 255 / 6%) 62%, transparent 100%),
+    linear-gradient(135deg, rgb(var(--fx-ind-rgb) / 78%), var(--glass-action));
+}
+html[data-shell="mobile"] body[data-theme="dark"] .mx-tray-dot.is-set .mx-tray-dot-core {
+  background: radial-gradient(circle 7px at 66% 30%, rgb(255 255 255 / 50%), transparent 100%), rgb(var(--priority-rgb));
+}
+html[data-shell="mobile"] body[data-theme="dark"] .mx-compose-line[data-level="done"] .mx-compose-line-msg::first-letter { color: rgb(var(--fx-live-rgb, 52 224 140)); }
+html[data-shell="mobile"] body[data-theme="dark"] .mx-compose-line[data-level="warning"] .mx-compose-line-msg { color: var(--warn); }
+
+/* --- 6. Sunset ----------------------------------------------------------------------------- */
+/* The glass, lift and glint tokens already carry the sunset tint; the warm
+   canvas reads through the frame. The field sits a little warmer and the
+   default ring follows the warm text colour. */
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-glass-theme="sunset"][data-theme] .mx-compose-field {
+  background: var(--glass-reflection), color-mix(in srgb, var(--glass-field) 86%, rgb(255 214 170 / 40%));
+}
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-glass-theme="sunset"][data-theme="dark"] .mx-compose-field {
+  background: var(--glass-reflection), var(--glass-field);
+}
+
+/* --- 7. Keyframes (transform only) ---------------------------------------------------------- */
+@keyframes mxComposeShake {
+  0%, 100% { transform: none; }
+  20% { transform: translateX(-6px); }
+  40% { transform: translateX(5px); }
+  60% { transform: translateX(-3px); }
+  80% { transform: translateX(2px); }
+}
+
+/* --- 8. Accessibility guards ------------------------------------------------------------------ */
+@media (prefers-reduced-motion: reduce) {
+  html[data-shell="mobile"] .mx-composer { transition: none; }
+  html[data-shell="mobile"] .mx-composer.mx-shake { animation: none; }
+}
+@media (prefers-reduced-transparency: reduce) {
+  html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-composer {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    background: var(--card);
+  }
+}
+@media (forced-colors: active) {
+  html[data-shell="mobile"] :is(.mx-compose-kind, .mx-tray-dot, .mx-tray-chip, .mx-panel-chip, .mx-panel-item, .mx-compose-add, .mx-tray-action, .mx-compose-field) {
+    outline: 1px solid CanvasText;
+  }
+  html[data-shell="mobile"] :is(.mx-compose-kind[aria-selected="true"], .mx-tray-dot[aria-pressed="true"], .mx-tray-chip.is-set, .mx-panel-item.is-active) {
+    outline: 2px solid Highlight;
+  }
+  html[data-shell="mobile"] .mx-tray-dot-core { forced-color-adjust: none; }
+}
+
+/* --- 9b. Narrow phones (360 and under 375) -------------------------------------------------------
+   The kinds and the task tray stay on one row: tighter chips, 33px dots, and
+   a date chip that shows only its label once a date is set. */
+@media (max-width: 374px) {
+  html[data-shell="mobile"] .mx-compose-kinds { column-gap: 5px; }
+  html[data-shell="mobile"] .mx-compose-kind { padding: 0 10px; }
+  html[data-shell="mobile"] .mx-compose-tray { column-gap: 2px; }
+  html[data-shell="mobile"] .mx-tray-dot { width: 33px; }
+  html[data-shell="mobile"] .mx-tray-chip { padding: 0 8px; }
+  html[data-shell="mobile"] .mx-tray-chip.mx-tray-icon { min-width: 34px; padding: 0 8px; }
+  html[data-shell="mobile"] .mx-tray-date.has-date .mx-tray-chip-icon { display: none; }
+  html[data-shell="mobile"] .mx-tray-chip-label { max-width: 110px; }
+}
+@media (max-width: 330px) {
+  html[data-shell="mobile"] .mx-compose-kind { padding: 0 8px; font-size: 12px; }
+}
+
+/* --- 9. Landscape phones ---------------------------------------------------------------------- */
+@media (orientation: landscape) and (max-height: 500px) {
+  html[data-shell="mobile"] .mx-composer {
+    left: max(var(--mx-inline), calc(50% - 320px)); right: max(var(--mx-inline), calc(50% - 320px));
+    gap: 4px;
+    max-height: calc(var(--mx-vvh) - 8px);
+  }
+  html[data-shell="mobile"] .mx-compose-grab { height: 10px; }
+  html[data-shell="mobile"] .mx-compose-kind { min-height: 32px; margin: 2px 0; }
+  html[data-shell="mobile"] .mx-compose-field { min-height: 44px; }
+  html[data-shell="mobile"] .mx-compose-input { height: 42px; }
+  html[data-shell="mobile"] .mx-compose-body { max-height: calc(3 * 1.5em + 22px); }
+}

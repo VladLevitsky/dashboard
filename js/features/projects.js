@@ -394,7 +394,7 @@ function onMentionKeydown(e) {
 // PROJECTS CRUD
 // ============================================================
 
-function getAllProjects() {
+export function getAllProjects() {
   const data = currentData();
   return data.projects || [];
 }
@@ -403,7 +403,7 @@ function getProjectById(id) {
   return getAllProjects().find(p => p.id === id);
 }
 
-function createProject(title) {
+export function createProject(title) {
   const data = currentData();
   data.projects = data.projects || [];
   const project = {
@@ -416,7 +416,7 @@ function createProject(title) {
   return project;
 }
 
-function updateProject(projectId, updates) {
+export function updateProject(projectId, updates) {
   const project = getProjectById(projectId);
   if (!project) return null;
   Object.assign(project, updates);
@@ -424,7 +424,7 @@ function updateProject(projectId, updates) {
   return project;
 }
 
-function deleteProject(projectId) {
+export function deleteProject(projectId) {
   const data = currentData();
   data.projects = data.projects || [];
   const idx = data.projects.findIndex(p => p.id === projectId);
