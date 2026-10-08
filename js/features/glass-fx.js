@@ -15,7 +15,7 @@
 //  - each frame reads both boxes before writing either light
 //  - gated by the fx flag, a fine hover-capable pointer and reduced motion
 //  - held still while <html data-fx-hush> is set (typing / selecting, see
-//    "Calm lights" below); the next pointer move after it lifts catches up
+//    "Typing hush" below); the next pointer move after it lifts catches up
 //  - the paint itself lives in glass-fx.css section 12 (:hover::after only)
 (() => {
   if (window.__glassFx) return;              // one listener, even if imported twice
@@ -96,84 +96,23 @@
   document.addEventListener('pointermove', onMove, { passive: true });
 })();
 
-// Calm lights. The endless decorative lights (icon indicator pools and cores,
-// reminder embers, Quick Access halos and rims, pinned-task blooms, the badge
-// glow, the running-timer crystal) hold still, lit, while
-//  - covered: a dialog with a scrim is open. <html data-fx-covered> names
-//    what lies beneath it: "dash" (header, grid, matrix, Time Tracking), plus
-//    "today" / "card" while another dialog sits above Today / the Card Edit
-//    Modal. Lights in the top dialog keep running.
-//  - hushed: <html data-fx-hush> for 1.5 s after the last keystroke into a
-//    text field (its input events too: paste, IME) or a selection change that
-//    leaves a non-empty text selection. Every light holds except the running
-//    timer's, so a timer never looks stopped. A plain click never hushes.
-// Why: each frame of a light made the GPU redraw the whole blurred glass
-// stack (behind a dialog, its scrim and pane too), and typing and selection
-// frames queued behind those redraws. glass-fx.css 11d pauses play-state
-// only, so every light resumes from the same phase. The flags live on <html>,
-// which glass-glow.js's body observers never see. Never in the mobile shell.
-// Open / close is watched on each window's own root (hidden, class, style)
-// plus body's children (windows built or appended later), and checked once
-// per frame, so typing inside a window never runs the check. A new dialog
-// with a scrim: add it to WINDOWS; one holding real lights: also to HOSTS.
+// Typing hush: <html data-fx-hush> for 1.5 s after the last keystroke into a
+// text field (its input events too: paste, IME) or a selection change that
+// leaves a non-empty text selection. While it is set the pointer light above
+// holds still, so typing and drag-selecting frames don't also repaint a card's
+// rim light. A plain click never hushes. (The endless lights no longer move at
+// all: glass-fx.css 11d.) The flag lives on <html>, which glass-glow.js's body
+// observers never see. Never in the mobile shell.
 (() => {
-  if (window.__glassFxCalm) return;
-  window.__glassFxCalm = true;
+  if (window.__glassFxHush) return;
+  window.__glassFxHush = true;
 
   const html = document.documentElement;
-  const WINDOWS = [
-    '#projects-modal', '#task-editor-modal', '#subtask-desc-modal', '#meetings-modal', '#ideas-modal',
-    '#calendar-view-modal', '#today-modal', '#completed-tasks-modal', '#auth-modal', '#appearance-modal',
-    '#task-settings-modal', '#file-manager-modal', '#media-library', '#wr-help', '.wr-focus', '.qc-overlay',
-    '.ic-overlay', '#card-edit-modal', '#note-viewer-modal', '#breakdown-modal', '#copy-text-modal',
-    '#image-editor-modal', '.item-tasks-modal', '.item-selector-modal', '.item-task-picker-modal',
-    '.subtask-template-name-modal', '.reminder-links-modal', '.reminder-tasks-modal', '.quick-link-modal',
-    '.reorder-subtitles-modal', '.color-picker-modal', '.tasks-summary-modal'
-  ].join(', ');
-  const HOSTS = { 'today-modal': 'today', 'card-edit-modal': 'card' };
   const inShell = () => html.dataset.shell === 'mobile';
   const flag = (name, value) => {
     if (html.getAttribute(name) === value) return;
     if (value === null) html.removeAttribute(name); else html.setAttribute(name, value);
   };
-
-  // --- Covered ---------------------------------------------------------------
-  let frame = 0;
-  function check() {
-    frame = 0;
-    const open = [];
-    if (!inShell()) {
-      // Open = rendered. One test for [hidden], .active (the file manager
-      // keeps [hidden] while shown), inline display and append / remove.
-      for (const el of document.body.children) {
-        if (!el.matches(WINDOWS)) continue;
-        const cs = getComputedStyle(el);
-        if (cs.display !== 'none') open.push({ id: el.id, z: parseInt(cs.zIndex, 10) || 0 });
-      }
-    }
-    const under = open.length ? ['dash'] : [];
-    // A host is beneath any window with a higher z (equal z: later in body, as painted).
-    open.forEach((w, i) => {
-      if (HOSTS[w.id] && open.some((o, j) => o.z > w.z || (o.z === w.z && j > i))) under.push(HOSTS[w.id]);
-    });
-    flag('data-fx-covered', under.length ? under.join(' ') : null);
-  }
-  const schedule = () => { if (!frame) frame = requestAnimationFrame(check); };
-  const roots = new MutationObserver(schedule);
-  const watched = new WeakSet();
-  const watch = (el) => {
-    if (watched.has(el)) return;
-    watched.add(el);
-    roots.observe(el, { attributes: true, attributeFilter: ['hidden', 'class', 'style'] });
-  };
-  new MutationObserver((records) => {
-    for (const r of records) {
-      for (const n of r.addedNodes) if (n.nodeType === 1 && n.matches(WINDOWS)) { watch(n); schedule(); }
-      for (const n of r.removedNodes) if (n.nodeType === 1 && n.matches(WINDOWS)) schedule();
-    }
-  }).observe(document.body, { childList: true });
-  for (const el of document.body.children) if (el.matches(WINDOWS)) watch(el);
-  schedule();
 
   // --- Hush ------------------------------------------------------------------
   const QUIET = 1500;
@@ -216,9 +155,8 @@
     if (selected) hush();
   }, true);
 
-  // The mobile shell mounting (a computer's Mobile preview) clears both flags.
+  // The mobile shell mounting (a computer's Mobile preview) clears the flag.
   new MutationObserver(() => {
     if (inShell() && timer) { clearTimeout(timer); timer = 0; field = null; flag('data-fx-hush', null); }
-    schedule();
   }).observe(html, { attributes: true, attributeFilter: ['data-shell'] });
 })();

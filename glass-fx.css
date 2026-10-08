@@ -887,32 +887,43 @@ html[data-fx="v2"] body[data-style="glass"][data-theme] .today-icon-btn:hover {
   box-shadow: var(--glass-rim);
 }
 
-/* --- 11d. Calm lights (js/features/glass-fx.js) ----------------------------
-   The endless lights hold still, lit, where no one is watching them move;
-   each of their frames made the GPU redraw the whole blurred glass stack,
-   and typing / selection frames queued behind it. Play-state only, so every
-   light resumes from the same phase; drag, drop, toast and menu motion is
-   never listed here.
-   html[data-fx-covered]: a dialog with a scrim is open. Every light beneath
-   it holds, the running timer's included: the dashboard ("dash", always),
-   Today ("today") and the Card Edit Modal ("card") while another dialog sits
-   above them. Lights in the top dialog keep running.
-   html[data-fx-hush]: 1.5 s after a keystroke into a text field or a text
-   selection. Every light holds except the running timer's crystal and the
-   header's live dot, so a timer never looks stopped. */
-html[data-fx="v2"][data-fx-covered]:not([data-shell="mobile"]) body[data-style="glass"][data-theme] > :is(.app-main, #top-header, #time-tracking-card, #eisenhower-card) :is(.icon-indicator, .eisenhower-task-pinned, .task-timer-btn)::before,
-html[data-fx="v2"][data-fx-covered]:not([data-shell="mobile"]) body[data-style="glass"][data-theme] > :is(.app-main, #top-header, #time-tracking-card, #eisenhower-card) :is(.icon-indicator, .icon-link-indicator, .icon-task-indicator, .icon-in-quick-access, .quick-access-lit, .unified-reminder-item, .task-timer-btn, .time-tracking-toggle, .notification-badge)::after,
-html[data-fx="v2"][data-fx-covered]:not([data-shell="mobile"]) body[data-style="glass"][data-theme] > :is(.app-main, #top-header, #time-tracking-card, #eisenhower-card) .animated-border-light,
-html[data-fx="v2"][data-fx-covered~="today"]:not([data-shell="mobile"]) body[data-style="glass"][data-theme] > #today-modal :is(.icon-indicator, .eisenhower-task-pinned, .task-timer-btn)::before,
-html[data-fx="v2"][data-fx-covered~="today"]:not([data-shell="mobile"]) body[data-style="glass"][data-theme] > #today-modal :is(.icon-indicator, .icon-link-indicator, .icon-task-indicator, .icon-in-quick-access, .quick-access-lit, .unified-reminder-item, .task-timer-btn, .notification-badge)::after,
-html[data-fx="v2"][data-fx-covered~="today"]:not([data-shell="mobile"]) body[data-style="glass"][data-theme] > #today-modal .animated-border-light,
-html[data-fx="v2"][data-fx-covered~="card"]:not([data-shell="mobile"]) body[data-style="glass"][data-theme] > #card-edit-modal :is(.icon-indicator, .eisenhower-task-pinned, .task-timer-btn)::before,
-html[data-fx="v2"][data-fx-covered~="card"]:not([data-shell="mobile"]) body[data-style="glass"][data-theme] > #card-edit-modal :is(.icon-indicator, .icon-link-indicator, .icon-task-indicator, .icon-in-quick-access, .quick-access-lit, .unified-reminder-item, .task-timer-btn)::after,
-html[data-fx="v2"][data-fx-covered~="card"]:not([data-shell="mobile"]) body[data-style="glass"][data-theme] > #card-edit-modal .animated-border-light,
-html[data-fx="v2"][data-fx-hush]:not([data-shell="mobile"]) body[data-style="glass"][data-theme] :is(.icon-indicator, .eisenhower-task-pinned)::before,
-html[data-fx="v2"][data-fx-hush]:not([data-shell="mobile"]) body[data-style="glass"][data-theme] :is(.icon-indicator, .icon-link-indicator, .icon-task-indicator, .icon-in-quick-access, .quick-access-lit, .unified-reminder-item, .notification-badge)::after,
-html[data-fx="v2"][data-fx-hush]:not([data-shell="mobile"]) body[data-style="glass"][data-theme] .animated-border-light {
-  animation-play-state: paused !important;
+/* --- 11d. Static lights ----------------------------------------------------
+   The endless lights (indicator pool and core, Quick Access halos and rims,
+   red-reminder ember, pinned-task bloom, running-timer crystal and header
+   dot, the badge glow) shine steady, each held at a lit moment of its old
+   breath (user decision). Any one of them moving made the GPU redraw the
+   whole blurred glass stack on every frame, all the time. Same selectors as
+   the rules above, later in the file, so these win. Drag / drop motion is
+   untouched (it only runs during a drag). */
+html[data-fx="v2"] body[data-style="glass"][data-theme] .icon-button > .icon-indicator::before {
+  animation: none; opacity: 0.84; transform: rotate(47deg) scale(1);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .icon-button > .icon-indicator::after,
+html[data-fx="v2"] body[data-style="glass"][data-theme] .time-tracking-toggle.is-running::after {
+  animation: none; opacity: 1; transform: scale(1);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .icon-button.icon-in-quick-access::after,
+html[data-fx="v2"] body[data-style="glass"][data-theme] :is(.unified-subtask-item, .unified-copypaste-item).quick-access-lit::after {
+  animation: none; opacity: 0.8;
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .unified-reminder-item[data-progress-state="red"]::after {
+  animation: none; opacity: 0.72; transform: translateX(-3px);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .eisenhower-task.eisenhower-task-pinned::before {
+  animation: none; opacity: 0.86;
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] :is(.task-timer.is-running .task-timer-btn, .task-timer-btn.is-running)::before,
+html[data-fx="v2"] body[data-style="glass"][data-theme] .notification-badge::after {
+  animation: none; opacity: 0.9;
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] :is(.task-timer.is-running .task-timer-btn, .task-timer-btn.is-running)::after {
+  animation: none;
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .icon-button > :is(.icon-link-indicator, .icon-task-indicator)::after {
+  animation: none; opacity: 0.95;
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .animated-border-light {
+  animation: none; opacity: 0.7;
 }
 
 /* --- 12. Pointer light (js/features/glass-fx.js) ---------------------------
