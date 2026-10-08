@@ -374,8 +374,10 @@ function renderSearchResults(results) {
         <p>No results found for "<strong>${escapeHtml(currentSearchQuery)}</strong>"</p>
       </div>
     `;
-    searchResultsContainer.hidden = false;
-    appMain.hidden = true;
+    // Only real changes: re-hiding an already hidden main still fires a mutation record,
+    // and glass light then re-samples every control on the grid, once per search
+    if (searchResultsContainer.hidden) searchResultsContainer.hidden = false;
+    if (!appMain.hidden) appMain.hidden = true;
     return;
   }
 
@@ -473,8 +475,8 @@ function renderSearchResults(results) {
   }
 
   searchResultsContainer.innerHTML = html;
-  searchResultsContainer.hidden = false;
-  appMain.hidden = true;
+  if (searchResultsContainer.hidden) searchResultsContainer.hidden = false;
+  if (!appMain.hidden) appMain.hidden = true;
 
   // Attach click handlers
   attachSearchResultHandlers();

@@ -961,7 +961,9 @@ let projectDirty = false;
 function markProjectDirty() {
   projectDirty = true;
   const btn = $('#project-save-btn');
-  if (btn) btn.classList.add('dirty');
+  // Only when it changes: re-adding a class still records a mutation, and glass-glow
+  // re-samples the button and re-maps every card's reflected light for it
+  if (btn && !btn.classList.contains('dirty')) btn.classList.add('dirty');
   // Auto-save after 2 seconds of inactivity
   if (autoSaveTimer) clearTimeout(autoSaveTimer);
   autoSaveTimer = setTimeout(() => {
@@ -1009,16 +1011,21 @@ function updateProjectsToolbarState() {
 // CONVERT BUTTON STATE (toolbar button, not floating)
 // ============================================================
 
+// Writing an unchanged `disabled` still records a mutation (glass-glow re-samples the button)
+function setDisabled(el, value) {
+  if (el && el.disabled !== value) el.disabled = value;
+}
+
 function updateConvertButtonState() {
   const btn = $('#project-convert-btn');
   if (!btn) return;
 
   const editor = $('#project-editor');
-  if (!editor) { btn.disabled = true; return; }
+  if (!editor) { setDisabled(btn, true); return; }
 
   const selection = window.getSelection();
   if (!selection || selection.isCollapsed || selection.rangeCount === 0) {
-    btn.disabled = true;
+    setDisabled(btn, true);
     return;
   }
 
@@ -1026,7 +1033,7 @@ function updateConvertButtonState() {
 
   // Selection must be inside the project editor
   if (!editor.contains(range.commonAncestorContainer)) {
-    btn.disabled = true;
+    setDisabled(btn, true);
     return;
   }
 
@@ -1034,16 +1041,16 @@ function updateConvertButtonState() {
   const startHighlight = range.startContainer.parentElement?.closest('.project-task-highlight');
   const endHighlight = range.endContainer.parentElement?.closest('.project-task-highlight');
   if (startHighlight || endHighlight) {
-    btn.disabled = true;
+    setDisabled(btn, true);
     return;
   }
 
   const selectedText = selection.toString().trim();
-  btn.disabled = !selectedText;
+  setDisabled(btn, !selectedText);
 
   // Also update hyperlink button
   const hlBtn = $('#project-hyperlink-btn');
-  if (hlBtn) hlBtn.disabled = !selectedText;
+  setDisabled(hlBtn, !selectedText);
 }
 
 // ============================================================

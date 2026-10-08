@@ -157,8 +157,8 @@ Images inside rich text (descriptions, projects, meetings, ideas, notes) are sto
 │   │   ├── meetings.js      # Meetings with dates and recurrence
 │   │   ├── calendar.js      # Calendar (opened from the badge) + Due Today/Overdue list, notification badge
 │   │   ├── auth-ui.js       # Auth modal UI, cloud sync triggers
-│   │   ├── glass-glow.js    # Samples rendered colors into glow vars; reflected item light on card rims
-│   │   ├── glass-fx.js      # FX v2 pointer-caught rim light (constructed stylesheet, no DOM writes)
+│   │   ├── glass-glow.js    # Samples rendered colors into glow vars; reflected item light on card rims (skips same-value writes)
+│   │   ├── glass-fx.js      # FX v2 pointer-caught rim light (paused Web Animations, no element writes) + Calm lights (<html data-fx-covered / data-fx-hush>)
 │   │   ├── mobile/          # The mobile shell (see Mobile Shell below); intra-folder imports carry ?v=<MOBILE_BUILD>
 │   │   │   ├── shell.js     # Mount/unmount, render scheduler + loop guard, screen/service registries, unit loader, chrome, lifecycle, the api
 │   │   │   ├── layers.js    # Layer registry, built-in layers, history depth model (phones), Escape (preview)
@@ -275,7 +275,7 @@ Central task store in `model.tasks[]` with 4-color priority system:
 
 ### Task Time Tracking (`js/features/time-tracking.js` + `js/core/time-log.js`)
 - Pill stopwatch toggles that task's timer; ONE timer runs at a time (starting another stops and records the first, with a toast). While running, the task's total (`0:45` → `12:05` → `1:02:33`) sits to the LEFT of the icon, and the pill never changes height
-- Running look = an emerald glass crystal (glass-fx.css 9b): gradient body + specular, shared rim, breathing halo (`::before`) and a rim light that sweeps like a second hand (`::after`, `fxSweep`). No transform/filter/backdrop-filter on the button (that would make it a stacking context and pull the halo in front); body is background-image only so glass-glow.js doesn't add its generic glow. `--fx-live-rgb` / `--fx-live-deep` tokens (dark overrides in section 13)
+- Running look = an emerald glass crystal (glass-fx.css 9b): gradient body + specular, shared rim, breathing halo (`::before`) and a rim light that sweeps like a second hand (`::after`, `fxSweep`). No transform/filter/backdrop-filter on the button (that would make it a stacking context and pull the halo in front); body is background-image only so glass-glow.js doesn't add its generic glow. `--fx-live-rgb` / `--fx-live-deep` tokens (dark overrides in section 13). It holds still behind a dialog (Calm lights) but keeps moving while typing
 - Every start/stop stores exact epoch-ms `[start, end]` sessions per task in `model.timeTracking` (saved with the profile). Sessions under 1s are dropped. A running timer survives reloads (timestamp-based) and keeps running while the tab is closed
 - The 1-second tick only rewrites existing text nodes (`Text.data`), never replaces elements, so glass-glow.js's MutationObservers (childList/attributes) don't re-measure the page every second; it pauses while the tab is hidden and catches up on return
 - Completing or deleting a task stops its timer first; its history stays in the log (title/category kept in `timeTracking.tasks[id]`), so deleted tasks still count and show as "Deleted"
@@ -294,6 +294,7 @@ Central task store in `model.tasks[]` with 4-color priority system:
 - Errors block Enter and shake the bar (unknown command with a "Did you mean" suggestion, impossible date like 31/02, bad link, unknown/ambiguous category, nothing to change); warnings don't (two colors/dates: the last one wins; past date; already linked). A `\` before a word keeps it as text (`\fri`, `\!red`, `\@marc`); clicking the date chip in the preview inserts it
 - While a list is open, Enter/Tab picks (Enter never saves by accident) and Esc closes just the list, leaving the text as typed. Enter saves; Shift+Enter saves and opens the task editor; Esc / backdrop closes
 - Saving uses the task editor's own calls (`createTask` then `updateTask`; links via `taskLinks` + legacy `link`; subtasks via `generateSubtaskId`), then `refreshTaskViews()`. Toast `#qc-toast` offers Open / Undo for 7s (hover pauses). Undo only applies if the task is unchanged since: it deletes a new task (and all of its time) or restores the old copy exactly, and `undoTimerStart()` drops the session quick capture started and restarts a timer it switched off
+- The live preview is rebuilt only when its chips change shape (`chipShape`); a usual keystroke rewrites chip text in place. `renderPreview` must stay the only writer of `#qc-preview`, and a new `previewChip` option belongs in `chipShape`
 - No new model fields. The ⓘ button and "See all commands" (left end of the bar's bottom row; the key hints on its right are hidden on phones) open the command list, which renders `QUICK_CAPTURE_HELP` from the parser module (click an example to insert it), so the reference can't drift from the rules
 
 ### Task Categories (`js/features/task-categories.js`)
@@ -514,6 +515,12 @@ Accessible via gear icon in edit mode. Contains:
 - New visual work goes in `glass-fx.css`, in its matching section (tokens → canvas → shells → tiles → indicator → quick access → reminders → pills → swatches → matrix → timers → controls → dialogs → pointer light → dark → sunset → keyframes → a11y guards)
 - Decoration only: never changes geometry (the grid engine measures content), never touches icon images, and color-swatch copy pills keep their exact `--copy-base` core
 - Animations are opacity/transform only on small pseudo layers, with staggered phases; reduced-motion and reduced-transparency guards live at the end of the file
+- **Why frames are expensive**: ~90 stacked backdrop-filter layers (header + cards blur 24px saturate 150%, items blur 8/12px, dialogs blur 36px over a full-screen blur 4px scrim). Chrome expands any change inside a blurred layer to that layer's whole area, so one pulsing light redraws most of the screen; on an integrated GPU that is 25-70 ms per frame. Keep endless animations few, and never animate anything (or rewrite styles per frame) inside the glass without a reason
+- **Calm lights** (glass-fx.js + glass-fx.css 11d, user-approved): the endless decorative lights (indicator pools / cores, reminder embers, Quick Access halos and rims, pinned-task blooms, the badge glow, the running-timer crystal) hold still, lit, play-state only (they resume from the same phase):
+  - `<html data-fx-covered="dash[ today][ card]">` while a dialog with a scrim (listed in `WINDOWS`) is rendered (computed display != none): "dash" = header, grid, matrix, Time Tracking beneath it; "today" / "card" while another dialog sits above Today / the Card Edit Modal (`HOSTS`). Lights in the top dialog keep running. Checked in one rAF from per-window root observers + body childList, never per keystroke
+  - `<html data-fx-hush>` for 1.5 s after a keystroke / input in a text field or a selection change that leaves a non-empty text selection (not under reduced motion; a plain click never hushes). Every light holds except the running-timer crystal and the header live dot. The pointer rim light holds still too and catches up on the next move
+  - A new scrimmed dialog goes in `WINDOWS` (one holding real lights also in `HOSTS` + a token line in 11d); a new endless light goes in 11d. Targeted selectors only (no `*`, no `:has()`). Never in the mobile shell
+- **glass-glow.js** skips attribute records whose value did not change (`attributeOldValue`) and only re-maps reflected light for changes inside / around a card (`movesLight`); phones keep the original rules. So per-keystroke / per-selectionchange code must not rewrite an unchanged class or attribute (each one used to re-measure every card), and must not rely on a same-value write to refresh a glow
 
 ### Dark Mode
 - Toggle in Settings modal
@@ -673,6 +680,8 @@ Each editor needs: toolbar HTML buttons, click handlers, `attachHighlighterConte
 
 Shared logic lives in `edit-mode.js`: `handleEditorKeydown`, `handleEditorInput`, `toggleChecklist`, `isInChecklist`, `attachChecklistHandler`, `attachHighlighterContextMenu`, `createHighlighterButton`. **New writing features belong in the writing engine, not per editor**: add the command to `WRITING_COMMANDS` (keys / markdown / slash / tiers), implement it with `api.registerCommand` in the matching `js/features/writing/` module, style it in that module's `writing.css` section, and it appears in every editor, the slash menu, tooltips and the help window at once.
 
+Legacy toolbar updaters run on every `selectionchange`, so keep them cheap: the task / subtask / ideas updaters share one `queryCommandState` per command per event (`commandStateReader` / `updateToolbarFor` in tasks.js); the task toolbar is refreshed only while the description is being edited (a place that un-hides `#task-desc-editor-wrap` calls `updateTaskToolbarState()`); disabled / dirty states are written only when they change. Subtask row menus attach their outside-click / scroll closers only while open (aborted on re-render), and one document listener closes every highlighter swatch dropdown.
+
 On phones the modals holding these editors (and the note viewer) are the mobile writer frames: `mobile-write.css` restyles them and `writer.js` wraps their close (Back = keep). A new control in an editor's header, toolbar or actions row needs a look at the frame at 390px.
 
 ### Adding Features Checklist
@@ -687,12 +696,20 @@ On phones the modals holding these editors (and the note viewer) are the mobile 
 9. For rich-text editor features: go through the writing engine (registry + module), never hand-wire 6 editors
 10. Keyboard shortcuts: never Ctrl+Alt (AltGr on Windows); add them to the registry so the help window lists them
 11. Phones run the mobile shell: a feature reached from the header or the grid needs a way in there (a screen, sheet or More row) or a line in More → Not on mobile; a reused modal needs its phone rules under `html[data-shell="mobile"]` and a layer so Back closes it; the shell never writes layout or collapse fields
+12. Performance: code on per-keystroke / per-selectionchange paths writes a class or attribute only when it changes, adds no document listeners per render, and never forces layout in a loop; a new endless animation needs a line in glass-fx.css 11d (Calm lights). Measure with `Reference/perf/profile.cjs` (attribution) and `Reference/perf/compare.cjs` (before / after, `PERF_HEADED=1` for real GPU timing)
 
 ---
 
 ## Version History
 
-### v5.4 (Current)
+### v5.4.1 (Current)
+- **Performance pass (typing and selecting)**: measured on an integrated GPU, a keystroke in an editor took ~450 ms to paint because the endless glow animations kept the GPU redrawing the whole blurred glass stack. Calm lights (above) hold those glows still behind dialogs and briefly while typing / selecting (the one visible change, user-approved)
+- glass-glow.js no longer re-measures every card on same-value attribute writes or on changes far from any card; every hot path stopped rewriting unchanged classes / attributes (projects save button, convert / link buttons, meetings buttons, quick-capture preview and picker, item creator, search)
+- Leaks fixed: subtask row menus added a document click + scroll listener per row on every render; each meetings edit open added a document click listener
+- Projects save button switches clean / dirty / saved instantly (its 0.2 s fade redrew the whole screen under the dialog's glass for every frame, starting on the first keystroke; user decision)
+- Fewer forced layouts / style passes: shared `queryCommandState` per selectionchange in the task / subtask / ideas toolbars, sticky-note font fit fast path, pointer light reads before it writes, `:has()` rules no longer climb the whole document (glass.css html background, mobile toast lane, help footer)
+
+### v5.4
 - **Mobile redesign**: phones get the mobile shell, a tabbed app instead of a shrunken grid: top bar (avatar → More, Search, due lens → calendar), frosted dock Tasks · Today · + · Write · Links, emerald now-playing lane while a timer runs. Phones always load it; on a computer, Mobile shows it as a 390px preview with a Mobile / Tablet / Desktop switch
 - **Tasks**: one bucket at a time (Primary | Secondary × colour chips with counts and an overdue dot); tap opens read-first, the ring or a swipe → completes (batched Undo), swipe ← reveals Secondary / ⋯, hold lifts a task to drag onto a gap, a colour chip or the other segment, or let go and tap a glowing gap (Lift & place); 2×2 Move sheet, actions sheet, Completed screen with Restore. Every move has Undo and renumbers the colour cleanly
 - **Composer**: the + opens a keyboard-docked line in one tap (Task · Note · Idea · Project · Meeting) with the full quick-capture grammar, a tray that rewrites the line, defaults from the Tasks lens, rapid entry with inline Undo / Show and a kept draft

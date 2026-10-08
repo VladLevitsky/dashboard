@@ -718,7 +718,12 @@ function renderFooter() {
   }
   const esc = h('span', 'wr-help-foot-esc wr-help-keyhint');
   esc.append(kbdGroup([['Esc']]), ' close');
-  f.append(left, touch, keys, esc);
+  // The touch hint is only added when it has text: the CSS tests its presence
+  // (:has(> .wr-help-touchhint)). :empty inside :has() made every :empty change on
+  // the page (each keystroke in an editor) re-check :has() up to <body>.
+  f.append(left);
+  if (touch.textContent) f.append(touch);
+  f.append(keys, esc);
 }
 
 function selectTab(tab, { clearQuery = false, focus = false } = {}) {

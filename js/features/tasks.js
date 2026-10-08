@@ -2522,12 +2522,15 @@ function openTaskEditorModal(taskData, titleText) {
       addSubtask: (text) => addSubtaskFromText(text)
     });
 
-    // Update toolbar on selection change
-    document.addEventListener('selectionchange', () => {
+    // Update toolbar on selection change, while it is on screen: the description is being
+    // edited (or its toolbar sits in the focus-mode sheet). The two places that show the
+    // editor again (an empty description on open, enterDescriptionEditMode) refresh it
+    document.addEventListener('selectionchange', (e) => {
       const modal = $('#task-editor-modal');
-      if (modal && !modal.hidden) {
-        updateTaskToolbarState();
-      }
+      if (!modal || modal.hidden) return;
+      const wrap = $('#task-desc-editor-wrap');
+      if (wrap && wrap.hidden && (!taskDescToolbar || wrap.contains(taskDescToolbar))) return;
+      updateToolbarFor(e, updateTaskToolbarState);
     });
 
     // Description edit button
@@ -2922,6 +2925,7 @@ function openTaskEditorModal(taskData, titleText) {
     descView.hidden = true;
     descEditBtn.hidden = true;
     descEditorWrap.hidden = false;
+    updateTaskToolbarState();
     descriptionEditing = true;
     const editor = $('#task-desc-editor');
     editor.innerHTML = '';
@@ -3398,6 +3402,7 @@ function enterDescriptionEditMode() {
   descView.hidden = true;
   descEditBtn.hidden = true;
   descEditorWrap.hidden = false;
+  updateTaskToolbarState();
   editor.focus();
 }
 
@@ -3507,10 +3512,18 @@ function sortEditorSubtasks() {
   });
 }
 
+// AbortController: the outside-click / scroll closers of the rendered subtask rows' open menu
+let subtaskMenuClosers = null;
+
 function renderEditorSubtasks() {
   const list = $('#task-subtasks-list');
   if (!list) return;
   list.innerHTML = '';
+
+  // The rows just removed take their menu's closers with them
+  if (subtaskMenuClosers) subtaskMenuClosers.abort();
+  subtaskMenuClosers = new AbortController();
+  const { signal } = subtaskMenuClosers;
 
   // Update completion percentage
   let pctEl = $('#task-subtasks-pct');
@@ -3631,9 +3644,15 @@ function renderEditorSubtasks() {
     const hasDesc = normalizeDescHtml(subtask.description || '');
     if (hasDesc) menuBtn.classList.add('has-desc');
 
+    // Outside-click and scroll closers live only while this row's menu is open: one
+    // pair per row per render used to pile up on document (and each click re-wrote
+    // every row's class, which glass-glow re-samples)
+    const scrollParent = document.querySelector('.task-editor-content');
     const closeDropdown = () => {
       menuDropdown.style.display = 'none';
-      row.classList.remove('menu-open');
+      if (row.classList.contains('menu-open')) row.classList.remove('menu-open');
+      document.removeEventListener('click', closeMenu);
+      if (scrollParent) scrollParent.removeEventListener('scroll', closeDropdown);
     };
 
     const descOption = document.createElement('button');
@@ -3693,6 +3712,8 @@ function renderEditorSubtasks() {
         const btnRect = menuBtn.getBoundingClientRect();
         menuDropdown.style.display = '';
         row.classList.add('menu-open');
+        document.addEventListener('click', closeMenu, { signal });
+        if (scrollParent) scrollParent.addEventListener('scroll', closeDropdown, { passive: true, signal });
         menuDropdown.style.position = 'fixed';
         menuDropdown.style.top = (btnRect.bottom + 4) + 'px';
         menuDropdown.style.right = (window.innerWidth - btnRect.right) + 'px';
@@ -3705,19 +3726,12 @@ function renderEditorSubtasks() {
       }
     });
 
-    // Close menu on outside click or scroll
+    // Close menu on outside click (or scroll, above)
     const closeMenu = (e) => {
       if (!menuBtn.contains(e.target) && !menuDropdown.contains(e.target)) {
         closeDropdown();
       }
     };
-    document.addEventListener('click', closeMenu);
-    const scrollParent = document.querySelector('.task-editor-content');
-    if (scrollParent) {
-      scrollParent.addEventListener('scroll', () => {
-        closeDropdown();
-      }, { passive: true });
-    }
 
     const menuWrap = document.createElement('div');
     menuWrap.className = 'task-subtask-menu-wrap';
@@ -3909,10 +3923,10 @@ function openSubtaskDescriptionModal(subtask) {
       onSave: () => { const btn = $('#subtask-desc-save'); if (btn) btn.click(); }
     });
 
-    document.addEventListener('selectionchange', () => {
+    document.addEventListener('selectionchange', (e) => {
       const m = $('#subtask-desc-modal');
       if (m && !m.hidden) {
-        updateSubtaskToolbarState();
+        updateToolbarFor(e, updateSubtaskToolbarState);
       }
     });
   }
@@ -3970,6 +3984,7 @@ function updateSubtaskToolbarState() {
   const modal = $('#subtask-desc-modal');
   if (!modal) return;
   const inChecklist = isInChecklist();
+  const commandState = commandStateReader();
   modal.querySelectorAll('.subtask-toolbar-btn').forEach(btn => {
     if (btn.classList.contains('checklist-toolbar-btn')) {
       btn.classList.toggle('active', inChecklist);
@@ -3977,14 +3992,44 @@ function updateSubtaskToolbarState() {
     }
     const cmd = btn.dataset.cmd;
     if (cmd) {
-      btn.classList.toggle('active', document.queryCommandState(cmd) && !(cmd === 'insertUnorderedList' && inChecklist));
+      btn.classList.toggle('active', commandState(cmd) && !(cmd === 'insertUnorderedList' && inChecklist));
     }
   });
+}
+
+// One queryCommandState per command for every legacy toolbar updated by the same
+// selectionchange: '.task-desc-toolbar-btn' also matches the projects and meetings toolbars,
+// and with the subtask window open the task and subtask toolbars both update.
+// Still synchronous: the states change exactly when they did before. A direct call
+// (after a toolbar click or Ctrl+B) asks afresh.
+const toolbarStatesByEvent = new WeakMap();
+let toolbarEvent = null;
+
+function commandStateReader() {
+  let memo = toolbarEvent && toolbarStatesByEvent.get(toolbarEvent);
+  if (!memo) {
+    memo = new Map();
+    if (toolbarEvent) toolbarStatesByEvent.set(toolbarEvent, memo);
+  }
+  return (cmd) => {
+    let state = memo.get(cmd);
+    if (state === undefined) {
+      state = document.queryCommandState(cmd);
+      memo.set(cmd, state);
+    }
+    return state;
+  };
+}
+
+function updateToolbarFor(event, update) {
+  toolbarEvent = event;
+  try { update(); } finally { toolbarEvent = null; }
 }
 
 // --- Close task editor modal
 function updateTaskToolbarState() {
   const inChecklist = isInChecklist();
+  const commandState = commandStateReader();
   const btns = document.querySelectorAll('.task-desc-toolbar-btn');
   btns.forEach(btn => {
     if (btn.classList.contains('checklist-toolbar-btn')) {
@@ -3993,7 +4038,7 @@ function updateTaskToolbarState() {
     }
     const cmd = btn.dataset.cmd;
     if (cmd) {
-      btn.classList.toggle('active', document.queryCommandState(cmd) && !(cmd === 'insertUnorderedList' && inChecklist));
+      btn.classList.toggle('active', commandState(cmd) && !(cmd === 'insertUnorderedList' && inChecklist));
     }
   });
 }
@@ -4285,6 +4330,7 @@ function updateIdeasToolbarState() {
   const modal = $('#ideas-modal');
   if (!modal || modal.hidden) return;
   const inChecklist = isInChecklist();
+  const commandState = commandStateReader();
   modal.querySelectorAll('.ideas-toolbar-btn').forEach(btn => {
     if (btn.classList.contains('checklist-toolbar-btn')) {
       btn.classList.toggle('active', inChecklist);
@@ -4292,7 +4338,7 @@ function updateIdeasToolbarState() {
     }
     const cmd = btn.dataset.cmd;
     if (cmd) {
-      btn.classList.toggle('active', document.queryCommandState(cmd) && !(cmd === 'insertUnorderedList' && inChecklist));
+      btn.classList.toggle('active', commandState(cmd) && !(cmd === 'insertUnorderedList' && inChecklist));
     }
   });
 }
@@ -4436,7 +4482,7 @@ export function openIdeasModal(ideaId) {
     });
 
     // Update toolbar on selection change
-    document.addEventListener('selectionchange', updateIdeasToolbarState);
+    document.addEventListener('selectionchange', (e) => updateToolbarFor(e, updateIdeasToolbarState));
 
     $('#ideas-save-btn').addEventListener('click', saveCurrentIdea);
 

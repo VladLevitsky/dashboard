@@ -7,6 +7,7 @@ const controls = 'button, [role="button"], .timer-circle, .notification-badge, .
 const pending = new Set();
 const ownStyles = new WeakMap();
 let frame = 0;
+let relight = () => {};   // the reflection block below replaces it
 const copyColorStyle = document.createElement('span').style;
 
 function copyMaterialColor(value) {
@@ -52,39 +53,50 @@ function luminousColor(value) {
 }
 
 function updateControl(element) {
-  if (!element.isConnected || !element.getClientRects().length) return;
+  // Reads only; returns the writes, so a batch reads every control first.
+  if (!element.isConnected || !element.getClientRects().length) return null;
   const style = getComputedStyle(element);
   if (element.matches('.unified-copypaste-item:not(.add-tile), .copy-paste-item:not(.add-tile)')) {
     // Read the renderer's inline source, not our layered CSS output. This
     // avoids feedback and keeps color changes / return-to-neutral reliable.
     const source = element.dataset.originalColor || element.style.backgroundColor || style.backgroundColor;
     const color = copyMaterialColor(source);
-    if (color && (element.classList.contains('color-swatch') || luminousColor(color.css))) {
-      element.style.setProperty('--copy-base', color.css);
-      element.style.setProperty('--copy-ink', color.ink);
-      element.style.setProperty('--copy-alpha', String(color.alpha));
-      element.style.setProperty('--control-glow-rgb', color.edge);
-      element.setAttribute('data-glass-glow', 'material');
-    } else {
-      ['--control-glow-rgb', '--copy-base', '--copy-ink', '--copy-alpha'].forEach(property => element.style.removeProperty(property));
-      element.removeAttribute('data-glass-glow');
-    }
-    ownStyles.set(element, element.getAttribute('style'));
-    return;
+    const material = color && (element.classList.contains('color-swatch') || luminousColor(color.css));
+    return () => {
+      if (material) {
+        const before = element.getAttribute('style');
+        element.style.setProperty('--copy-base', color.css);
+        element.style.setProperty('--copy-ink', color.ink);
+        element.style.setProperty('--copy-alpha', String(color.alpha));
+        element.style.setProperty('--control-glow-rgb', color.edge);
+        if (!filtering() || element.getAttribute('data-glass-glow') !== 'material') element.setAttribute('data-glass-glow', 'material');
+        // glass.css derives a material item's --light-rgb from --control-glow-rgb,
+        // and the reflection observer skips our own style writes: relight here.
+        else if (element.getAttribute('style') !== before) relight();
+      } else {
+        ['--control-glow-rgb', '--copy-base', '--copy-ink', '--copy-alpha'].forEach(property => element.style.removeProperty(property));
+        element.removeAttribute('data-glass-glow');
+      }
+      ownStyles.set(element, element.getAttribute('style'));
+    };
   }
   // Background first, then colored icons/text on otherwise neutral buttons.
   // The sticky-note launcher expresses its chosen color through an SVG fill.
   const stickyFill = element.matches('.sticky-note-btn') ? style.getPropertyValue('--sticky-icon-body').trim() : '';
   const surfaceColor = luminousColor(stickyFill) || luminousColor(style.backgroundColor);
   const color = surfaceColor || luminousColor(style.color);
-  if (color) {
-    if (element.style.getPropertyValue('--control-glow-rgb') !== color) element.style.setProperty('--control-glow-rgb', color);
-    element.setAttribute('data-glass-glow', surfaceColor ? 'surface' : 'ink');
-  } else {
-    element.style.removeProperty('--control-glow-rgb');
-    element.removeAttribute('data-glass-glow');
-  }
-  ownStyles.set(element, element.getAttribute('style'));
+  return () => {
+    if (color) {
+      if (element.style.getPropertyValue('--control-glow-rgb') !== color) element.style.setProperty('--control-glow-rgb', color);
+      // Rewriting the same value would still wake the reflection observer.
+      const glow = surfaceColor ? 'surface' : 'ink';
+      if (!filtering() || element.getAttribute('data-glass-glow') !== glow) element.setAttribute('data-glass-glow', glow);
+    } else {
+      element.style.removeProperty('--control-glow-rgb');
+      element.removeAttribute('data-glass-glow');
+    }
+    ownStyles.set(element, element.getAttribute('style'));
+  };
 }
 
 function queue(root) {
@@ -96,15 +108,23 @@ function queue(root) {
     frame = 0;
     const batch = [...pending];
     pending.clear();
-    batch.forEach(updateControl);
+    batch.map(updateControl).forEach(write => write && write());
   });
 }
 
+// Writing an attribute's current value again (classList.add of a class it
+// already has, disabled = true on a disabled button) still queues a record.
+// It cannot change a color or a position, so both observers skip it. Not in
+// the phone shell: it moves cards with Web Animations that fire no event, and
+// there every write keeps refreshing glows and lights as before.
+const filtering = () => document.documentElement.dataset.shell !== 'mobile';
+const unchanged = record => filtering() && record.oldValue === record.target.getAttribute(record.attributeName);
 const observer = new MutationObserver(records => {
   for (const record of records) {
     if (record.type === 'childList') {
       record.addedNodes.forEach(queue);
     } else {
+      if (unchanged(record)) continue;
       // Ignore our own CSS variable writes; all other changes are batched.
       if (record.attributeName === 'style' && ownStyles.has(record.target) && ownStyles.get(record.target) === record.target.getAttribute('style')) continue;
       queue(record.target);
@@ -112,7 +132,7 @@ const observer = new MutationObserver(records => {
   }
 });
 observer.observe(document.body, {
-  subtree: true, childList: true, attributes: true,
+  subtree: true, childList: true, attributes: true, attributeOldValue: true,
   attributeFilter: ['class', 'style', 'hidden', 'data-theme', 'data-style', 'data-color', 'data-original-color', 'disabled', 'aria-disabled']
 });
 // A class/style mutation can start a color transition; sample its final hue too.
@@ -134,6 +154,7 @@ queue(document.body);
     if (!lightFrame) lightFrame = requestAnimationFrame(updateReflections);
   };
   const sizes = new ResizeObserver(scheduleLight);
+  relight = scheduleLight;
 
   function updateReflections() {
     lightFrame = 0;
@@ -200,12 +221,28 @@ queue(document.body);
     }
   }
 
+  // Only a change inside a receiver, on one of its ancestors, or one that adds
+  // or removes a receiver can move a light. Toolbars, previews and popovers in
+  // dialogs without cards are skipped (typing there toggles them constantly).
+  const holdsLight = node => node.nodeType === 1 && (node.matches(receivers) || node.querySelector(receivers) !== null);
+  const reachesLight = element => element.closest(receivers) !== null || element.querySelector(receivers) !== null;
+  const movesLight = record => {
+    if (!filtering()) return record.type !== 'attributes' || record.attributeName !== 'style' ||
+      ownStyles.get(record.target) !== record.target.getAttribute('style');
+    if (record.type === 'childList') {
+      return record.target.closest(receivers) !== null ||
+        [...record.addedNodes].some(holdsLight) || [...record.removedNodes].some(holdsLight);
+    }
+    if (unchanged(record)) return false;
+    if (record.attributeName === 'style' && ownStyles.get(record.target) === record.target.getAttribute('style')) return false;
+    return reachesLight(record.target);
+  };
   new MutationObserver(records => {
-    if (records.some(record => record.type !== 'attributes' || record.attributeName !== 'style' ||
-      ownStyles.get(record.target) !== record.target.getAttribute('style'))) scheduleLight();
-  }).observe(document.body, {subtree: true, childList: true, attributes: true, attributeFilter: ['class', 'style', 'hidden', 'data-theme', 'data-progress-state', 'data-glass-glow']});
+    if (records.some(movesLight)) scheduleLight();
+  }).observe(document.body, {subtree: true, childList: true, attributes: true, attributeOldValue: true, attributeFilter: ['class', 'style', 'hidden', 'data-theme', 'data-progress-state', 'data-glass-glow']});
   document.body.addEventListener('transitionend', event => {
-    if (['transform', 'width', 'opacity', 'background-color'].includes(event.propertyName)) scheduleLight();
+    if (['transform', 'width', 'opacity', 'background-color'].includes(event.propertyName) &&
+        (!filtering() || (event.target instanceof Element && reachesLight(event.target)))) scheduleLight();
   });
   scheduleLight();
 }

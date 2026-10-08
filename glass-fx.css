@@ -882,6 +882,34 @@ html[data-fx="v2"] body[data-style="glass"][data-theme] .today-icon-btn:hover {
   box-shadow: var(--glass-rim);
 }
 
+/* --- 11d. Calm lights (js/features/glass-fx.js) ----------------------------
+   The endless lights hold still, lit, where no one is watching them move;
+   each of their frames made the GPU redraw the whole blurred glass stack,
+   and typing / selection frames queued behind it. Play-state only, so every
+   light resumes from the same phase; drag, drop, toast and menu motion is
+   never listed here.
+   html[data-fx-covered]: a dialog with a scrim is open. Every light beneath
+   it holds, the running timer's included: the dashboard ("dash", always),
+   Today ("today") and the Card Edit Modal ("card") while another dialog sits
+   above them. Lights in the top dialog keep running.
+   html[data-fx-hush]: 1.5 s after a keystroke into a text field or a text
+   selection. Every light holds except the running timer's crystal and the
+   header's live dot, so a timer never looks stopped. */
+html[data-fx="v2"][data-fx-covered]:not([data-shell="mobile"]) body[data-style="glass"][data-theme] > :is(.app-main, #top-header, #time-tracking-card, #eisenhower-card) :is(.icon-indicator, .eisenhower-task-pinned, .task-timer-btn)::before,
+html[data-fx="v2"][data-fx-covered]:not([data-shell="mobile"]) body[data-style="glass"][data-theme] > :is(.app-main, #top-header, #time-tracking-card, #eisenhower-card) :is(.icon-indicator, .icon-link-indicator, .icon-task-indicator, .icon-in-quick-access, .quick-access-lit, .unified-reminder-item, .task-timer-btn, .time-tracking-toggle, .notification-badge)::after,
+html[data-fx="v2"][data-fx-covered]:not([data-shell="mobile"]) body[data-style="glass"][data-theme] > :is(.app-main, #top-header, #time-tracking-card, #eisenhower-card) .animated-border-light,
+html[data-fx="v2"][data-fx-covered~="today"]:not([data-shell="mobile"]) body[data-style="glass"][data-theme] > #today-modal :is(.icon-indicator, .eisenhower-task-pinned, .task-timer-btn)::before,
+html[data-fx="v2"][data-fx-covered~="today"]:not([data-shell="mobile"]) body[data-style="glass"][data-theme] > #today-modal :is(.icon-indicator, .icon-link-indicator, .icon-task-indicator, .icon-in-quick-access, .quick-access-lit, .unified-reminder-item, .task-timer-btn, .notification-badge)::after,
+html[data-fx="v2"][data-fx-covered~="today"]:not([data-shell="mobile"]) body[data-style="glass"][data-theme] > #today-modal .animated-border-light,
+html[data-fx="v2"][data-fx-covered~="card"]:not([data-shell="mobile"]) body[data-style="glass"][data-theme] > #card-edit-modal :is(.icon-indicator, .eisenhower-task-pinned, .task-timer-btn)::before,
+html[data-fx="v2"][data-fx-covered~="card"]:not([data-shell="mobile"]) body[data-style="glass"][data-theme] > #card-edit-modal :is(.icon-indicator, .icon-link-indicator, .icon-task-indicator, .icon-in-quick-access, .quick-access-lit, .unified-reminder-item, .task-timer-btn)::after,
+html[data-fx="v2"][data-fx-covered~="card"]:not([data-shell="mobile"]) body[data-style="glass"][data-theme] > #card-edit-modal .animated-border-light,
+html[data-fx="v2"][data-fx-hush]:not([data-shell="mobile"]) body[data-style="glass"][data-theme] :is(.icon-indicator, .eisenhower-task-pinned)::before,
+html[data-fx="v2"][data-fx-hush]:not([data-shell="mobile"]) body[data-style="glass"][data-theme] :is(.icon-indicator, .icon-link-indicator, .icon-task-indicator, .icon-in-quick-access, .quick-access-lit, .unified-reminder-item, .notification-badge)::after,
+html[data-fx="v2"][data-fx-hush]:not([data-shell="mobile"]) body[data-style="glass"][data-theme] .animated-border-light {
+  animation-play-state: paused !important;
+}
+
 /* --- 12. Pointer light (js/features/glass-fx.js) ---------------------------
    glass-fx.js registers --fx-px/--fx-py/--fx-ix/--fx-iy (<length>,
    inherits: false, initial -999px) and writes them onto the hovered card's

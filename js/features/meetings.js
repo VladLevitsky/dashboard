@@ -643,8 +643,9 @@ function showMeetingsEditMode(meeting) {
     const editor = $('#meetings-inline-desc-editor');
     if (!editor) return;
     const hasSelection = canHyperlink(editor);
-    if (hyperlinkBtn) hyperlinkBtn.disabled = !hasSelection;
-    if (convertBtn) convertBtn.disabled = !hasSelection;
+    // Only on a change: an unchanged `disabled` write still records a mutation
+    if (hyperlinkBtn && hyperlinkBtn.disabled !== !hasSelection) hyperlinkBtn.disabled = !hasSelection;
+    if (convertBtn && convertBtn.disabled !== !hasSelection) convertBtn.disabled = !hasSelection;
   };
   document.addEventListener('selectionchange', currentMeetingSelHandler);
 

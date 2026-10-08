@@ -1,9 +1,10 @@
 /* Silver glass visual system. Loaded after structural styles so layout, drag
    geometry and user-selected item colors remain owned by the dashboard. */
 /* Give the root canvas a matching base, including below the viewport when
-   the browser composites fixed backgrounds behind backdrop-filter panes. */
-html:has(body[data-style="glass"]) { background: #cfd0d2; }
-html:has(body[data-style="glass"][data-theme="dark"]) { background: #181d25; }
+   the browser composites fixed backgrounds behind backdrop-filter panes.
+   `> body`, not `body`: a descendant :has() on <html> walks the whole page on every restyle. */
+html:has(> body[data-style="glass"]) { background: #cfd0d2; }
+html:has(> body[data-style="glass"][data-theme="dark"]) { background: #181d25; }
 body[data-style="glass"][data-theme] {
   min-height: 100vh;
   height: auto;

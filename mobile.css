@@ -728,7 +728,10 @@ html[data-shell="mobile"] :is(#toast, #qc-toast) {
 html[data-shell="mobile"] #toast { width: max-content; text-align: center; }
 html[data-shell="mobile"][data-mx-kb] :is(#toast, #qc-toast) { bottom: calc(var(--mx-kb) + 12px); }
 html[data-shell="mobile"][data-mx-compose] :is(#toast, #qc-toast) { bottom: calc(var(--mx-kb) + var(--mx-compose-h, 190px) + 8px); }
-html[data-shell="mobile"]:has(#qc-toast.show) #toast { bottom: calc(var(--mx-dock-b) + var(--mx-dock-h) + var(--mx-live-space) + 66px); }
+/* Child combinators keep this :has() to two levels (a descendant :has() on <html> walks the
+   whole page on every restyle), so #qc-toast must stay a direct child of <body>
+   (quick-capture.js showActionToast) or this raise silently stops */
+html[data-shell="mobile"]:has(> body > #qc-toast.show) #toast { bottom: calc(var(--mx-dock-b) + var(--mx-dock-h) + var(--mx-live-space) + 66px); }
 
 /* --- 9. Landscape phones ----------------------------------------------------------- */
 @media (orientation: landscape) and (max-height: 500px) {

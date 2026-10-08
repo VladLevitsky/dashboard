@@ -311,7 +311,8 @@ function ensureDom() {
   els.date.addEventListener('change', () => { updateMonthlyLabels(); update(); });
 
   root.addEventListener('input', () => {
-    els.dialog.classList.remove('ic-shake');
+    // Only a real change: removing an absent class still fires a mutation record (glass light re-samples the dialog)
+    if (els.dialog.classList.contains('ic-shake')) els.dialog.classList.remove('ic-shake');
     update();
   });
   root.addEventListener('change', update);
@@ -649,7 +650,10 @@ function update() {
     return;
   }
   const { ok, problems } = validate();
-  els.save.setAttribute('aria-disabled', ok ? 'false' : 'true');
+  // Runs on every keystroke: re-setting the same value would still wake the glass light observers
+  const ariaDisabled = ok ? 'false' : 'true';
+  if (els.save.getAttribute('aria-disabled') !== ariaDisabled) els.save.setAttribute('aria-disabled', ariaDisabled);
+  // Left as is: .ic-missing is aria-live, and re-inserting the same text can re-announce it
   els.missing.textContent = ok ? '' : problems[0].text;
   els.missing.classList.toggle('is-error', attempted && !ok);
 }

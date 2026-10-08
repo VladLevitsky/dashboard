@@ -190,7 +190,8 @@ function ensureDom() {
 
   els.input.addEventListener('input', () => {
     attempted = false;
-    els.dialog.classList.remove('qc-shake');
+    // Only a real change: removing an absent class still fires a mutation record (glass light re-samples the dialog)
+    if (els.dialog.classList.contains('qc-shake')) els.dialog.classList.remove('qc-shake');
     update();
   });
   els.input.addEventListener('keydown', onInputKeyDown);
@@ -417,8 +418,9 @@ function renderPicker() {
   const box = els.picker;
   box.textContent = '';
   if (!picker) {
-    box.hidden = true;
-    els.input.setAttribute('aria-expanded', 'false');
+    // Same-value writes still fire mutation records, and this runs on every keystroke
+    if (!box.hidden) box.hidden = true;
+    if (els.input.getAttribute('aria-expanded') !== 'false') els.input.setAttribute('aria-expanded', 'false');
     els.input.removeAttribute('aria-activedescendant');
     return;
   }
@@ -695,12 +697,26 @@ function previewChip({ icon, label, text, kind = '', title = '', dotColor = null
 
 const MATRIX_DOT = { red: '#ef4444', orange: '#f97316', yellow: '#eab308', blue: '#3b82f6' };
 
+// What the preview shows: 'hint', or the shape of its chips (everything but their text).
+// renderPreview must stay the only writer of #qc-preview
+let previewShape = null;
+
+// Everything previewChip() turns into markup or behaviour, except the plain text.
+// A new chip option that changes either belongs here too. A clickable chip is
+// rebuilt whenever its text or what it acts on changes
+function chipShape(o) {
+  return [o.icon || '', o.label || '', o.kind || '', o.title || '', o.dotColor || '', o.text ? 1 : 0,
+    o.onClick ? `click:${o.text}:${o.clickKey || ''}` : ''].join('\u0001');
+}
+
 function renderPreview(plan) {
   const box = els.preview;
-  box.textContent = '';
   const typed = els.input.value.trim() !== '' || tokens.length > 0;
 
   if (!typed) {
+    if (previewShape === 'hint') return;
+    previewShape = 'hint';
+    box.textContent = '';
     const hint = document.createElement('p');
     hint.className = 'qc-hint';
     const code = (text) => {
@@ -716,7 +732,8 @@ function renderPreview(plan) {
   }
 
   const p = plan.parsed;
-  const add = (opts) => box.appendChild(previewChip(opts));
+  const chips = [];
+  const add = (opts) => chips.push(opts);
 
   if (plan.mode === 'create') {
     add({ icon: PLUS_SVG, label: 'New task', text: p.title || '', kind: 'task' });
@@ -729,6 +746,7 @@ function renderPreview(plan) {
     add({
       icon: CALENDAR_SVG, label: 'Due', text: describeDue(p.dueDate), kind: 'date',
       title: 'Not a date? Click to keep it as text',
+      clickKey: p.dateSpan ? `${p.dateSpan.start}:${p.dateSpan.end}` : '',
       onClick: () => keepDateAsText(p.dateSpan),
     });
   } else if (p.clearDate) {
@@ -753,6 +771,21 @@ function renderPreview(plan) {
     const kind = issue.quiet && !attempted ? 'hint' : issue.level;
     add({ icon: ALERT_SVG, text: issue.message, kind });
   });
+
+  // Same chips, new words (the usual keystroke): rewrite their text in place. No nodes
+  // added or removed, so the page's MutationObservers (glass light, images) stay asleep
+  const shape = chips.map(chipShape).join('\u0002');
+  if (shape === previewShape && box.children.length === chips.length) {
+    chips.forEach((o, i) => {
+      if (!o.text) return;
+      const t = box.children[i].querySelector('.qc-pv-text');
+      if (t && t.firstChild && t.firstChild.data !== o.text) t.firstChild.data = o.text;
+    });
+    return;
+  }
+  previewShape = shape;
+  box.textContent = '';
+  chips.forEach(o => box.appendChild(previewChip(o)));
 }
 
 function update() {

@@ -4141,6 +4141,8 @@ export function wrapRangeWithTaskPill(range, task) {
   return span;
 }
 
+let highlighterOutsideClickInstalled = false;
+
 /**
  * Create a highlighter button with color picker dropdown for a toolbar.
  */
@@ -4206,7 +4208,15 @@ export function createHighlighterButton() {
     dropdown.style.display = dropdown.style.display === 'none' ? 'flex' : 'none';
   });
 
-  document.addEventListener('click', () => { dropdown.style.display = 'none'; });
+  // One document listener for every pen (meetings rebuilds its toolbar on each edit open)
+  if (!highlighterOutsideClickInstalled) {
+    highlighterOutsideClickInstalled = true;
+    document.addEventListener('click', () => {
+      document.querySelectorAll('.highlighter-color-dropdown').forEach(d => {
+        if (d.style.display !== 'none') d.style.display = 'none';
+      });
+    });
+  }
 
   wrapper.appendChild(btn);
   wrapper.appendChild(dropdown);

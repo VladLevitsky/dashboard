@@ -399,6 +399,21 @@ function adjustFontSize(body) {
   const container = body.parentElement;
   const maxHeight = container.offsetHeight - body.offsetTop;
 
+  // Fast path: the size the note already has still fits, nothing overflows the body (so its
+  // scroll offset is 0 whichever sizes are tried) and the next size up no longer fits: the
+  // scan below would end on this same size, after one forced layout per size tried from 16
+  const current = parseFloat(body.style.fontSize);
+  if (current >= 10 && current <= 16 && Number.isInteger(current * 2)) {
+    const height = body.scrollHeight;
+    if (height <= maxHeight && height <= body.clientHeight) {
+      if (current === 16) return 16;
+      body.style.fontSize = (current + 0.5) + 'px';
+      const nextFits = body.scrollHeight <= maxHeight;
+      body.style.fontSize = current + 'px';
+      if (!nextFits) return current;
+    }
+  }
+
   // Start with base font size
   let fontSize = 16;
   body.style.fontSize = fontSize + 'px';

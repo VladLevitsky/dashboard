@@ -3628,12 +3628,13 @@ mark.wr-help-hit {
 .wr-help-touchhint { display: none; }
 body[data-device="mobile"] .wr-help-keyhint { display: none; }
 body[data-device="mobile"] .wr-help-touchhint:not(:empty) { display: inline; }
-/* Nothing left to say there: no empty strip under the list */
-body[data-device="mobile"] .wr-help-footer:not(:has(.wr-help-touchhint:not(:empty))) { display: none; }
+/* Nothing left to say there: no empty strip under the list. renderFooter (help.js) adds the
+   touch hint only when it has text, so presence is tested, never :empty inside :has() */
+body[data-device="mobile"] .wr-help-footer:not(:has(> .wr-help-touchhint)) { display: none; }
 @media (hover: none) and (pointer: coarse) {
   .wr-help-keyhint { display: none; }
   .wr-help-touchhint:not(:empty) { display: inline; }
-  .wr-help-footer:not(:has(.wr-help-touchhint:not(:empty))) { display: none; }
+  .wr-help-footer:not(:has(> .wr-help-touchhint)) { display: none; }
 }
 
 /* Dark (base) */
