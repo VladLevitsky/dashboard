@@ -620,7 +620,7 @@ export async function restoreModel() {
     // Reconcile device layout profiles with the flat working layout:
     // the flat props were saved from lastActiveMode — only seed the profile
     // if it doesn't exist yet (don't overwrite designed values with flat
-    // props that may include transient reconcileRowSpans growth).
+    // props from an older build that saved content growth).
     // Then hydrate whichever mode THIS browser wants to display.
     if (Array.isArray(model.sections) && model.sections.length > 0) {
       const savedMode = model.lastActiveMode || 'tablet';

@@ -8,7 +8,7 @@ import { markDirtyAndSave, openEditPopover, openSubtitleColorPicker } from '../f
 import { saveModel } from '../core/storage.js';
 import { initializeDragHandlers, initializeItemDragHandlers, initializeContainerDragHandlers, initializeReminderDragHandlers, initializeCardDropZone } from '../features/drag-drop.js';
 import { createCardDeleteButton, createCardReorderButtons } from '../features/cards.js';
-import { applyCellSize, applyGridPlacement, computeDisplayLayout, reconcileRowSpans, autoAssignGridPositions as gridAutoAssign, getActiveMode } from '../features/grid-engine.js';
+import { applyCellSize, applyGridPlacement, computeDisplayLayout, computeGrownLayout, autoAssignGridPositions as gridAutoAssign, getActiveMode } from '../features/grid-engine.js';
 import { persistImageFromLibraryEntry } from '../features/media-library.js';
 import { setImageFromRef, classifyImageRef, uploadFile, dataURLtoBlob, filenameFromDataUrl, deleteR2File } from '../core/file-service.js';
 import { isLoggedIn } from '../core/auth.js';
@@ -129,25 +129,21 @@ export function renderAllSections() {
     addCardButtons();
   }
 
-  // Grow any card whose content is taller than its grid area, push neighbors
-  // down. Cards can never clip their content. In edit mode the growth is part
-  // of the working copy (persisted on confirm); in view mode the growth is
-  // TRANSIENT — recalculated every render based on content at the current
-  // screen width — so the designed profile (set via the grid editor) is the
-  // permanent source of truth and never gets overwritten by runtime overflow.
-  if (reconcileRowSpans(sections)) {
-    if (editState.enabled) {
-      markDirtyAndSave();
-    }
-    // Reconcile re-applied STORED placement — restore collapsed-card
-    // compaction on top of the grown layout (view mode only)
-    if (!isTileMode) {
-      const dm = computeDisplayLayout(sections, data.collapsedCards || {});
-      sections.forEach(section => {
-        const el = document.getElementById(section.id);
-        if (el) applyGridPlacement(el, section, dm.get(section.id));
-      });
-    }
+  // Show any card whose content is taller than its grid area at its content
+  // height, with the cards below moved down, so nothing is clipped. Display
+  // only, in view AND edit mode: the saved layout is what was designed in
+  // edit mode, so a narrower screen shows it taller without saving that
+  // (refresh on the wide screen and it is exactly as designed again).
+  const grown = computeGrownLayout(sections);
+  if (grown) {
+    const byId = new Map(grown.map(g => [g.id, g]));
+    // Collapsed-card compaction (view mode) applies on top of the grown layout
+    const dm = isTileMode ? null : computeDisplayLayout(grown, data.collapsedCards || {});
+    sections.forEach(section => {
+      const el = document.getElementById(section.id);
+      const g = byId.get(section.id);
+      if (el && g) applyGridPlacement(el, section, dm ? dm.get(section.id) : { row: g.gridRow, rowSpan: g.gridRowSpan });
+    });
   }
 
   // Restore scroll position after re-rendering

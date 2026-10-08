@@ -465,8 +465,8 @@ Accessible via gear icon in edit mode. Contains:
 - **Header** pinned to grid row 1 (auto height via `grid-template-rows: auto`); data cards live in rows 2+; all row math offsets by real header height (`getGridOriginY`)
 - Each card stores `gridCol`, `gridRow`, `gridColSpan`, `gridRowSpan` — explicit placement, no CSS auto-flow, cards positioned relative to the grid only
 - Cards fill their grid area (`align-items: stretch`); white space lives inside the card
-- Key functions: `getCellSize()`, `applyCellSize()`, `applyGridPlacement()`, `mouseToGridCell()`, `computeDropPosition()`, `resolveCollisions()`, `reconcileRowSpans()`, `autoAssignGridPositions()` (2D bin-packing)
-- `reconcileRowSpans()` runs after every render: grows any card whose content outgrew its area, pushes neighbors down, persists — cards can never clip content (collapsed cards are excluded from measurement)
+- Key functions: `getCellSize()`, `applyCellSize()`, `applyGridPlacement()`, `mouseToGridCell()`, `computeDropPosition()`, `resolveCollisions()`, `computeGrownLayout()`, `autoAssignGridPositions()` (2D bin-packing)
+- `computeGrownLayout()` runs after every render (view AND edit mode): a card whose content outgrew its area at this screen width is SHOWN taller and the cards below move down, so nothing clips (collapsed cards are excluded from measurement). Display only, on copies: it never writes the flat props or `section.layouts`, so the saved layout changes only through explicit edits (drag, resize, add card). A layout designed on a wide screen therefore survives refreshes on a narrower one (where it just shows taller) — the old `reconcileRowSpans()` saved that growth and squished the wide layout (user report 2026-10-08)
 - `ResizeObserver` recomputes cell sizes on container resize (also observes the header for async image loads)
 
 ### Card Collapse (view mode)
@@ -701,6 +701,7 @@ On phones the modals holding these editors (and the note viewer) are the mobile 
 ## Version History
 
 ### v5.4.2 (Current)
+- **Layouts no longer get squished**: content growth at a narrower screen width is display-only (`computeGrownLayout`), so the desktop / tablet layout saved in edit mode is exactly what a wide screen shows after any refresh elsewhere
 - **Static lights**: the indicator, Quick Access, reminder, pinned-task, timer and badge glows no longer pulse; they shine steady at a lit value, so an idle dashboard stops redrawing the glass stack every frame (GPU idle instead of saturated on an integrated GPU). The covered-dialog pause is gone (nothing left to pause); the typing hush stays for the pointer light
 - Time Tracking: Categories beside Tasks on wide panels; the red badge has no glow in light mode
 

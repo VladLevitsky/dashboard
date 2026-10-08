@@ -11,8 +11,9 @@
 // 3. Every card has explicit placement: gridCol / gridColSpan / gridRow /
 //    gridRowSpan. No CSS auto-flow. Cards are positioned relative to the
 //    grid only — never relative to each other.
-// 4. Cards can never be smaller than their content: reconcileRowSpans() grows
-//    a card's row span when its content outgrows it.
+// 4. Cards never clip their content: computeGrownLayout() shows a card taller
+//    when its content outgrows it at this screen width. Display only: the
+//    saved layout changes only through explicit edits (drag, resize, add).
 // 5. Per-device layout profiles (mobile/tablet/desktop) live in
 //    section.layouts; the flat props are the active mode's working copy.
 
@@ -483,44 +484,37 @@ export function getMinRowSpan(cardEl, cellSize) {
 }
 
 /**
- * After rendering, grow any card whose content is taller than its grid area,
- * then push affected neighbors down and re-apply placement styles in place.
- * Returns true if anything changed (caller should persist).
+ * After rendering, the layout as it must be SHOWN at this screen width: any
+ * card whose content is taller than its grid area grows to fit, and cards it
+ * would then overlap move down. Pure: works on copies, never touches the
+ * sections. The saved layout (the flat props and section.layouts) changes
+ * only through explicit edits (drag, resize, add card), so a layout designed
+ * on a wide screen stays exactly as saved; a narrower screen just shows it
+ * taller. Returns copies ({ id, type, gridCol, gridRow, gridColSpan,
+ * gridRowSpan }) when anything grew, else null (show the saved layout).
  */
-export function reconcileRowSpans(sections) {
+export function computeGrownLayout(sections) {
   const { cellSize } = getCellSize();
-  if (cellSize <= 0) return false;
+  if (cellSize <= 0) return null;
 
   const collapsedMap = (editState.working || model).collapsedCards || {};
 
-  let changed = false;
-  sections.forEach(section => {
-    if (!section.gridCol || !section.gridRow || section.type === 'header') return;
-    if (collapsedMap[section.id]) return; // collapsed: hidden content must not resize stored span
-    delete section._viewRow; // strip legacy transient property
-
-    const el = document.getElementById(section.id);
-    if (!el) return;
-
-    const minRows = getMinRowSpan(el, cellSize);
-    if ((section.gridRowSpan || DEFAULT_ROW_SPAN) < minRows) {
-      section.gridRowSpan = minRows;
-      changed = true;
-    }
-  });
-
-  if (changed) {
-    resolveAllCollisions(sections);
-    // Re-apply placement in place (no full re-render needed)
-    sections.forEach(section => {
-      const el = document.getElementById(section.id);
-      if (el && section.gridCol && section.gridRow) {
-        applyGridPlacement(el, section);
-      }
+  let grew = false;
+  const cards = sections
+    .filter(s => s.gridCol && s.gridRow && s.type !== 'header')
+    .map(s => {
+      const copy = { id: s.id, type: s.type, gridCol: s.gridCol, gridRow: s.gridRow, gridColSpan: s.gridColSpan, gridRowSpan: s.gridRowSpan || DEFAULT_ROW_SPAN };
+      if (collapsedMap[s.id]) return copy; // collapsed: hidden content must not grow it
+      const el = document.getElementById(s.id);
+      if (!el) return copy;
+      const minRows = getMinRowSpan(el, cellSize);
+      if (copy.gridRowSpan < minRows) { copy.gridRowSpan = minRows; grew = true; }
+      return copy;
     });
-  }
 
-  return changed;
+  if (!grew) return null;
+  resolveAllCollisions(cards);
+  return cards;
 }
 
 // ============================================================
@@ -627,8 +621,9 @@ export function migrateToGrid24(data) {
  * mutation, and before every mode switch, so profiles are always fresh.
  *
  * In VIEW mode, existing profiles are never overwritten — the designed layout
- * (set via the grid editor in edit mode) is the source of truth.  Runtime
- * growth from reconcileRowSpans is transient and must not contaminate it.
+ * (set via the grid editor in edit mode) is the source of truth. Content
+ * growth (computeGrownLayout) is display-only and never reaches the flat
+ * props, so it can't contaminate a profile in either mode.
  */
 export function persistActiveLayout(sections) {
   if (!Array.isArray(sections)) return;
@@ -651,9 +646,9 @@ export function persistActiveLayout(sections) {
 
 /**
  * Seed a missing profile: cards stack full-width in the order of their
- * tablet arrangement (row, then col), at MIN_ROW_SPAN height — the existing
- * reconcileRowSpans() grows each card to its exact content height on the
- * first render in that mode. Desktop keeps each card's tablet colSpan.
+ * tablet arrangement (row, then col), at MIN_ROW_SPAN height — the render
+ * shows each card at its content height (computeGrownLayout) until the
+ * layout is edited in that mode. Desktop keeps each card's tablet colSpan.
  */
 function seedProfile(sections, mode) {
   const cfg = DEVICE_MODES[mode];
