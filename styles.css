@@ -647,11 +647,28 @@ body {
   font-size: 24px;
 }
 
-/* Tasks on top, Categories below */
+/* Narrow panel (phone Time sheet, small windows): Tasks on top, Categories below */
 .tt-body {
   display: flex;
   flex-direction: column;
   gap: 28px;
+}
+/* Wide panel: Categories on the left at the chart's natural width, Tasks fill the rest */
+@container (min-width: 960px) {
+  .tt-body {
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 40px;
+  }
+  .tt-section-categories {
+    order: -1;
+    flex: 0 0 auto;
+    max-width: 600px;
+  }
+  .tt-section-tasks {
+    flex: 1 1 0;
+    min-width: 0;
+  }
 }
 
 .tt-empty {

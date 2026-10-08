@@ -672,6 +672,11 @@ html[data-fx="v2"] body[data-style="glass"][data-theme] .notification-badge::aft
   opacity: 0.8;
   animation: fxBreath 4.9s var(--fx-breathe) -1.2s infinite;
 }
+/* Light theme: no glow around the red badge (user decision); dark keeps it */
+html[data-fx="v2"] body[data-style="glass"][data-theme]:not([data-theme="dark"]) .notification-badge::after {
+  content: none;
+  animation: none;
+}
 /* Nothing due: a quiet glass lens with a calendar glyph (it still opens the
    calendar). No red body, no breathing glow. */
 html[data-fx="v2"] body[data-style="glass"][data-theme] .notification-badge.is-clear {
