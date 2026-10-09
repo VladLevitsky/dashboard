@@ -166,12 +166,16 @@
       </div>
       <div class="tt-body">
         <section class="tt-section tt-section-tasks" aria-labelledby="tt-tasks-heading">
-          <h4 class="eisenhower-section-heading tt-section-heading" id="tt-tasks-heading">Tasks</h4>
+          <div class="tt-section-head">
+            <h4 class="eisenhower-section-heading tt-section-heading" id="tt-tasks-heading">Tasks</h4>
+            <!-- Sort (most time / most recent); icon and label filled in by time-tracking.js -->
+            <button type="button" id="tt-sort-btn" class="tt-range-btn tt-sort-btn" aria-haspopup="dialog" aria-expanded="false" aria-controls="tt-sort-pop"></button>
+          </div>
           <div id="tt-task-list" class="tt-task-list"></div>
         </section>
         <section class="tt-section tt-section-categories" aria-labelledby="tt-categories-heading">
           <h4 class="eisenhower-section-heading tt-section-heading" id="tt-categories-heading">Categories</h4>
-          <!-- The period filter button (#tt-range-btn) is placed above the legend by time-tracking.js -->
+          <!-- The period filter button (#tt-range-btn, filters Tasks too) is placed above the legend by time-tracking.js -->
           <div id="tt-category-chart" class="tt-category-chart"></div>
         </section>
       </div>

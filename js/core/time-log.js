@@ -264,19 +264,53 @@ function overlapMs(start, end, range) {
   return Math.max(0, to - from);
 }
 
+// Does a session [start, end) touch the range? (null = all time)
+export function sessionInRange(start, end, range) {
+  return !range || overlapMs(start, end, range) > 0;
+}
+
+// One task's time inside the range (null = all time), running session included
+export function getTaskTotalInRange(log, taskId, now, range) {
+  if (!range) return getTaskTotalMs(log, taskId, now);
+  let total = 0;
+  const entry = log.tasks[taskId];
+  if (entry) {
+    for (const [start, end] of entry.sessions) total += overlapMs(start, end, range);
+  }
+  if (log.active && log.active.taskId === taskId && now > log.active.start) {
+    total += overlapMs(log.active.start, now, range);
+  }
+  return total;
+}
+
 // Like getTaskTotals, limited to a range (null = all time)
 export function getTaskTotalsInRange(log, now, range) {
   if (!range) return getTaskTotals(log, now);
   const totals = {};
-  for (const [taskId, entry] of Object.entries(log.tasks)) {
-    let total = 0;
-    for (const [start, end] of entry.sessions) total += overlapMs(start, end, range);
-    if (log.active && log.active.taskId === taskId && now > log.active.start) {
-      total += overlapMs(log.active.start, now, range);
-    }
+  for (const taskId of Object.keys(log.tasks)) {
+    const total = getTaskTotalInRange(log, taskId, now, range);
     if (total > 0) totals[taskId] = total;
   }
   return totals;
+}
+
+// When the task was last timed (epoch ms; `now` while it runs), counting only
+// sessions that touch the range and clamped to its end, so "Last month" sorts
+// by activity inside last month. 0 = never in the range.
+export function getTaskLastActive(log, taskId, now, range) {
+  const end = range && range.end !== null ? range.end : Infinity;
+  if (log.active && log.active.taskId === taskId && now > log.active.start &&
+      sessionInRange(log.active.start, now, range)) {
+    return Math.min(now, end);
+  }
+  let last = 0;
+  const entry = log.tasks[taskId];
+  if (entry) {
+    for (const [start, stop] of entry.sessions) {
+      if (sessionInRange(start, stop, range)) last = Math.max(last, Math.min(stop, end));
+    }
+  }
+  return last;
 }
 
 // Merge two copies of the log (this device's and the cloud's) so neither

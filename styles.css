@@ -671,6 +671,17 @@ body {
   }
 }
 
+/* Tasks heading + its sort button (right end of the heading row) */
+.tt-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 14px 4px;
+}
+.tt-section-head .tt-section-heading { margin: 0; min-width: 0; }
+.tt-sort-btn { flex-shrink: 0; }
+
 .tt-empty {
   font-size: 13px;
   color: var(--muted);
@@ -855,6 +866,13 @@ body {
   cursor: pointer;
 }
 .tt-clear-btn:hover { text-decoration: underline; }
+/* Period filter on: how many of the task's sessions it hides */
+.tt-sessions-outside {
+  display: block;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
 
 /* Completed / deleted tasks (collapsed by default) */
 .tt-past-toggle {
@@ -1100,6 +1118,12 @@ body {
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--muted);
+}
+.tt-sort-pop { width: 240px; }
+.tt-sort-options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 .tt-range-presets {
   display: grid;

@@ -17,7 +17,8 @@ import { saveModel } from '../core/storage.js';
 import {
   normalizeTimeLog, startTaskTimer, stopActiveTimer, rememberTaskMeta, removeSession,
   clearTaskTime, getTaskTotalMs, getTaskTotals, MIN_SESSION_MS,
-  TIME_RANGE_PRESETS, normalizeRangeFilter, resolveTimeRange, getTaskTotalsInRange, dayKeyToDate
+  TIME_RANGE_PRESETS, normalizeRangeFilter, resolveTimeRange, getTaskTotalsInRange, dayKeyToDate,
+  getTaskTotalInRange, getTaskLastActive, sessionInRange
 } from '../core/time-log.js';
 import { getTaskCategories, categoryColor } from './task-categories.js';
 // tasks.js imports this module too; the cycle is safe because neither uses
@@ -302,6 +303,11 @@ function tick() {
   const now = Date.now();
   const text = formatClock(getTaskTotalMs(log, log.active.taskId, now));
   document.querySelectorAll('[data-live-timer]').forEach(el => setText(el, text));
+  // The panel's row counts only the time inside the period filter
+  const panelClock = isPanelOpen() && document.querySelector('[data-tt-live]');
+  if (panelClock) {
+    setText(panelClock, formatClock(getTaskTotalInRange(log, log.active.taskId, now, resolveTimeRange(rangeFilter, now))));
+  }
 
   // Minute-level figures (category totals, chart) only change once a minute
   const minute = Math.floor(now / 60000);
@@ -361,7 +367,7 @@ export function toggleTimeTracking() {
   } else {
     card.classList.remove('active');
     hideChartTooltip();
-    closeRangePopover(false);
+    closePopover(false);
     setTimeout(() => { if (!card.classList.contains('active')) card.hidden = true; }, CARD_HIDE_DELAY_MS);
   }
 
@@ -378,13 +384,20 @@ export function renderTimeTrackingPanel() {
   const now = Date.now();
   renderTaskList(now);
   updateRangeButton();
+  updateSortButton();
   renderCategoryChart(now);
 }
 
-// --- Rows model: every task with tracked time, open ones first
+// --- Rows model: every task with time inside the period filter (all time by
+// default), with its total and last activity in that period
 function collectTrackedRows(now) {
   const log = getLog();
-  const totals = getTaskTotals(log, now);
+  const range = resolveTimeRange(rangeFilter, now);
+  const totals = getTaskTotalsInRange(log, now, range);
+  // A timer started this instant has no time yet but still belongs on the list
+  if (log.active && !(log.active.taskId in totals) && getTaskLastActive(log, log.active.taskId, now + 1, range)) {
+    totals[log.active.taskId] = 0;
+  }
   return Object.keys(totals).map(taskId => {
     const { task, state } = findTask(taskId);
     const saved = log.tasks[taskId] || {};
@@ -394,9 +407,32 @@ function collectTrackedRows(now) {
       title: (task ? task.title : saved.title) || 'Untitled Task',
       categoryId: task ? (task.categoryId || null) : (saved.categoryId || null),
       total: totals[taskId],
+      lastActive: getTaskLastActive(log, taskId, now, range),
       running: !!log.active && log.active.taskId === taskId
     };
   });
+}
+
+// Most time first, or most recently timed first; a running timer always leads
+function compareRows(a, b) {
+  if (a.running !== b.running) return b.running - a.running;
+  return taskSort === 'recent'
+    ? (b.lastActive - a.lastActive) || (b.total - a.total)
+    : (b.total - a.total) || (b.lastActive - a.lastActive);
+}
+
+// "No tracked time in this period (Oct 9). Show all time"
+function buildNoTimeInPeriod(now) {
+  const empty = document.createElement('div');
+  empty.className = 'tt-empty';
+  empty.textContent = `No tracked time in this period (${formatRangeSpan(resolveTimeRange(rangeFilter, now))}). `;
+  const reset = document.createElement('button');
+  reset.type = 'button';
+  reset.className = 'tt-range-reset';
+  reset.textContent = 'Show all time';
+  reset.addEventListener('click', () => setRangeFilter(null));
+  empty.appendChild(reset);
+  return empty;
 }
 
 function renderTaskList(now) {
@@ -406,6 +442,10 @@ function renderTaskList(now) {
 
   const rows = collectTrackedRows(now);
   if (rows.length === 0) {
+    if (rangeFilter && Object.keys(getTaskTotals(getLog(), now)).length > 0) {
+      list.appendChild(buildNoTimeInPeriod(now));
+      return;
+    }
     const empty = document.createElement('div');
     empty.className = 'tt-empty';
     empty.textContent = 'No tracked time yet. Start the stopwatch on any task in the Tasks panel.';
@@ -413,14 +453,13 @@ function renderTaskList(now) {
     return;
   }
 
-  const open = rows.filter(r => r.state === 'active')
-    .sort((a, b) => (b.running - a.running) || (b.total - a.total));
-  const past = rows.filter(r => r.state !== 'active').sort((a, b) => b.total - a.total);
+  const open = rows.filter(r => r.state === 'active').sort(compareRows);
+  const past = rows.filter(r => r.state !== 'active').sort(compareRows);
 
   if (open.length === 0) {
     const note = document.createElement('div');
     note.className = 'tt-empty';
-    note.textContent = 'No open tasks with tracked time.';
+    note.textContent = rangeFilter ? 'No open tasks with time in this period.' : 'No open tasks with tracked time.';
     list.appendChild(note);
   }
   open.forEach(row => list.appendChild(buildTaskRow(row, now)));
@@ -480,7 +519,13 @@ function buildTaskRow(row, now) {
   const time = document.createElement('span');
   time.className = 'tt-task-time';
   time.appendChild(document.createTextNode(formatClock(row.total)));
-  if (row.running) time.dataset.liveTimer = row.taskId;
+  if (row.running) {
+    time.dataset.ttLive = row.taskId;
+    time.title = 'Running now';
+  } else if (row.lastActive) {
+    const last = new Date(row.lastActive);
+    time.title = `Last tracked ${last.toLocaleDateString([], dayFmt)}, ${last.toLocaleTimeString([], timeFmt)}`;
+  }
 
   line.append(main, buildCategoryChip(row.categoryId), time);
 
@@ -529,8 +574,10 @@ function renderSessions(container, row, now) {
   const entry = log.tasks[row.taskId];
   const list = document.createElement('div');
   list.className = 'tt-session-list';
+  // With a period filter, only the sessions that touch it (a note counts the rest)
+  const range = resolveTimeRange(rangeFilter, now);
 
-  if (log.active && log.active.taskId === row.taskId) {
+  if (log.active && log.active.taskId === row.taskId && sessionInRange(log.active.start, Math.max(now, log.active.start + 1), range)) {
     const running = document.createElement('div');
     running.className = 'tt-session is-running';
     const start = new Date(log.active.start);
@@ -543,7 +590,8 @@ function renderSessions(container, row, now) {
     list.appendChild(running);
   }
 
-  const sessions = entry ? [...entry.sessions].reverse() : [];
+  const allSessions = entry ? [...entry.sessions].reverse() : [];
+  const sessions = allSessions.filter(([startMs, endMs]) => sessionInRange(startMs, endMs, range));
   sessions.forEach(([startMs, endMs]) => {
     const start = new Date(startMs);
     const end = new Date(endMs);
@@ -576,12 +624,20 @@ function renderSessions(container, row, now) {
   });
   container.appendChild(list);
 
+  const outside = allSessions.length - sessions.length;
+  if (outside > 0) {
+    container.appendChild(textSpan('tt-sessions-outside',
+      `${outside} more session${outside === 1 ? '' : 's'} outside “${filterLabel(rangeFilter, now)}”`));
+  }
+
   const clear = document.createElement('button');
   clear.type = 'button';
   clear.className = 'tt-clear-btn';
   clear.textContent = 'Clear all time';
   clear.addEventListener('click', () => {
-    if (!confirm(`Delete all ${formatDuration(row.total)} of tracked time for “${row.title}”?`)) return;
+    // All of the task's time, not just the filtered period's
+    const allTime = getTaskTotalMs(getLog(), row.taskId, Date.now());
+    if (!confirm(`Delete all ${formatDuration(allTime)} of tracked time for “${row.title}”?`)) return;
     clearTaskTime(getLog(), row.taskId, Date.now());
     expandedTasks.delete(row.taskId);
     saveModel();
@@ -592,19 +648,20 @@ function renderSessions(container, row, now) {
 }
 
 // ============================================================
-// CATEGORIES PERIOD FILTER
+// PERIOD FILTER (Tasks list + category donut)
 // The funnel button above the category legend opens a popover: presets
 // (applied on click), a custom From / To range (either side may stay empty)
-// and Clear. The donut then counts only time inside the period; a session
-// that crosses its edge counts in part (time-log.js). The choice is per
-// browser (localStorage, not synced) and a preset is stored by name, so
-// "This week" always means the current week. Default: all time.
+// and Clear. The Tasks list then shows only tasks timed in the period, with
+// their time in it, and the donut counts only that time; a session that
+// crosses its edge counts in part (time-log.js). The choice is per browser
+// (localStorage, not synced) and a preset is stored by name, so "This week"
+// always means the current week. Default: all time.
 // ============================================================
 
 const RANGE_FILTER_KEY = 'dashboard_tt_range_filter';
 const FILTER_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>`;
 let rangeFilter = loadRangeFilter();
-let rangePop = null; // { el, btn, cleanup } while the popover is open
+let openPop = null; // { el, btn, cleanup } while the period or sort popover is open
 let rangeBtn = null;  // one button, moved into the chart on every render
 
 // The chart re-renders (and empties its host) often, so the button is made
@@ -643,7 +700,7 @@ function setRangeFilter(filter) {
     else localStorage.removeItem(RANGE_FILTER_KEY);
   } catch (e) { /* storage blocked: the filter still applies until the page reloads */ }
   updateRangeButton();
-  if (isPanelOpen()) renderCategoryChart(Date.now());
+  if (isPanelOpen()) renderTimeTrackingPanel();
 }
 
 const rangeDayFmt = { month: 'short', day: 'numeric' };
@@ -680,7 +737,7 @@ function updateRangeButton() {
   btn.classList.toggle('is-active', !!rangeFilter);
   btn.title = !rangeFilter ? 'Filter by period'
     : rangeFilter.preset ? `${label}: ${formatRangeSpan(resolveTimeRange(rangeFilter, now), now)}` : label;
-  btn.setAttribute('aria-label', `Filter categories by period, showing ${label}`);
+  btn.setAttribute('aria-label', `Filter tasks and categories by period, showing ${label}`);
 }
 
 function dateField(parent, labelText, value) {
@@ -698,9 +755,10 @@ function dateField(parent, labelText, value) {
 function openRangePopover() {
   const btn = getRangeButton();
   if (!btn.isConnected) return;
-  if (rangePop) {
-    closeRangePopover(true);
-    return;
+  if (openPop) {
+    const wasThis = openPop.btn === btn;
+    closePopover(wasThis);
+    if (wasThis) return;
   }
   hideChartTooltip();
   const now = Date.now();
@@ -710,7 +768,7 @@ function openRangePopover() {
   pop.className = 'tt-range-pop';
   pop.id = 'tt-range-pop';
   pop.setAttribute('role', 'dialog');
-  pop.setAttribute('aria-label', 'Filter categories by period');
+  pop.setAttribute('aria-label', 'Filter tasks and categories by period');
 
   // Presets apply straight away
   const presets = document.createElement('div');
@@ -726,7 +784,7 @@ function openRangePopover() {
     );
     option.addEventListener('click', () => {
       setRangeFilter({ preset: preset.id });
-      closeRangePopover(true);
+      closePopover(true);
     });
     presets.appendChild(option);
   });
@@ -760,7 +818,7 @@ function openRangePopover() {
     const filter = normalizeRangeFilter({ from: fromInput.value, to: toInput.value });
     if (!filter) return;
     setRangeFilter(filter);
-    closeRangePopover(true);
+    closePopover(true);
   });
 
   const clear = document.createElement('button');
@@ -771,7 +829,7 @@ function openRangePopover() {
   clear.disabled = !rangeFilter;
   clear.addEventListener('click', () => {
     setRangeFilter(null);
-    closeRangePopover(true);
+    closePopover(true);
   });
 
   const footer = document.createElement('div');
@@ -779,30 +837,35 @@ function openRangePopover() {
   footer.append(clear, apply);
 
   pop.append(textSpan('tt-range-label', 'Period'), presets, textSpan('tt-range-label', 'Custom range'), fields, footer);
+  mountPopover(pop, btn);
+}
+
+// Shows a popover under its button and wires closing: a click outside, Esc,
+// or focus moving away. One popover at a time (period or sort).
+function mountPopover(pop, btn) {
   document.body.appendChild(pop);
 
-  // Close on a click outside, Esc, or focus moving away
   const onPointerDown = (e) => {
-    if (!pop.contains(e.target) && !btn.contains(e.target)) closeRangePopover(false);
+    if (!pop.contains(e.target) && !btn.contains(e.target)) closePopover(false);
   };
   const onKeyDown = (e) => {
     if (e.key !== 'Escape') return;
     e.preventDefault();
     e.stopPropagation();
-    closeRangePopover(true);
+    closePopover(true);
   };
   const onFocusOut = (e) => {
     const next = e.relatedTarget;
-    if (next && !pop.contains(next) && next !== btn) closeRangePopover(false);
+    if (next && !pop.contains(next) && next !== btn) closePopover(false);
   };
-  const onReflow = () => positionRangePopover();
+  const onReflow = () => positionPopover();
   document.addEventListener('pointerdown', onPointerDown, true);
   document.addEventListener('keydown', onKeyDown, true);
   pop.addEventListener('focusout', onFocusOut);
   window.addEventListener('resize', onReflow);
   window.addEventListener('scroll', onReflow, { capture: true, passive: true });
 
-  rangePop = {
+  openPop = {
     el: pop,
     btn,
     cleanup: () => {
@@ -813,16 +876,16 @@ function openRangePopover() {
     }
   };
   btn.setAttribute('aria-expanded', 'true');
-  positionRangePopover();
+  positionPopover();
   pop.classList.add('open');
   const focusTarget = pop.querySelector('.tt-range-option[aria-pressed="true"]') || pop.querySelector('.tt-range-option');
   if (focusTarget) focusTarget.focus({ preventScroll: true });
 }
 
 // Under the button, kept inside the viewport; flips above when there's no room below
-function positionRangePopover() {
-  if (!rangePop) return;
-  const { el, btn } = rangePop;
+function positionPopover() {
+  if (!openPop) return;
+  const { el, btn } = openPop;
   const margin = 8;
   const box = btn.getBoundingClientRect();
   const width = el.offsetWidth;
@@ -838,14 +901,107 @@ function positionRangePopover() {
   el.style.top = `${top}px`;
 }
 
-function closeRangePopover(returnFocus) {
-  if (!rangePop) return;
-  const { el, btn, cleanup } = rangePop;
-  rangePop = null;
+function closePopover(returnFocus) {
+  if (!openPop) return;
+  const { el, btn, cleanup } = openPop;
+  openPop = null;
   cleanup();
   el.remove();
   btn.setAttribute('aria-expanded', 'false');
   if (returnFocus) btn.focus({ preventScroll: true });
+}
+
+// ============================================================
+// TASK SORT (button on the Tasks heading)
+// Most time first (the default) or most recently timed first. Both follow
+// the period filter: "recent" means the last session inside the period. A
+// running timer always leads. Per browser, like the period.
+// ============================================================
+
+const TASK_SORT_KEY = 'dashboard_tt_task_sort';
+const SORT_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><line x1="3" y1="6" x2="13" y2="6"></line><line x1="3" y1="12" x2="10" y2="12"></line><line x1="3" y1="18" x2="7" y2="18"></line><line x1="18" y1="5" x2="18" y2="19"></line><polyline points="15 16 18 19 21 16"></polyline></svg>`;
+const TASK_SORTS = [
+  { id: 'total', label: 'Most time', detail: 'Longest total first' },
+  { id: 'recent', label: 'Most recent', detail: 'Last timed first' }
+];
+let taskSort = loadTaskSort();
+
+function loadTaskSort() {
+  try {
+    return localStorage.getItem(TASK_SORT_KEY) === 'recent' ? 'recent' : 'total';
+  } catch (e) {
+    return 'total';
+  }
+}
+
+function setTaskSort(id) {
+  taskSort = id === 'recent' ? 'recent' : 'total';
+  try {
+    if (taskSort === 'total') localStorage.removeItem(TASK_SORT_KEY);
+    else localStorage.setItem(TASK_SORT_KEY, taskSort);
+  } catch (e) { /* storage blocked: the sort still applies until the page reloads */ }
+  updateSortButton();
+  if (isPanelOpen()) renderTaskList(Date.now());
+}
+
+// The button is static in index.html; its icon and label are filled in here once
+function getSortButton() {
+  const btn = $('#tt-sort-btn');
+  if (btn && !btn.dataset.ready) {
+    btn.dataset.ready = '1';
+    btn.innerHTML = SORT_SVG;
+    btn.appendChild(textSpan('tt-range-btn-label', ''));
+    btn.addEventListener('click', openSortPopover);
+  }
+  return btn;
+}
+
+function updateSortButton() {
+  const btn = getSortButton();
+  if (!btn) return;
+  const sort = TASK_SORTS.find(s => s.id === taskSort);
+  setText(btn.querySelector('.tt-range-btn-label'), sort.label);
+  const title = `Sort tasks: ${sort.label.toLowerCase()} first`;
+  if (btn.title !== title) {
+    btn.title = title;
+    btn.setAttribute('aria-label', `Sort tasks, currently ${sort.label.toLowerCase()} first`);
+  }
+}
+
+function openSortPopover() {
+  const btn = getSortButton();
+  if (!btn || !btn.isConnected) return;
+  if (openPop) {
+    const wasThis = openPop.btn === btn;
+    closePopover(wasThis);
+    if (wasThis) return;
+  }
+  hideChartTooltip();
+
+  // Shares the period popover's look (and its mobile Back layer, which finds .tt-range-pop)
+  const pop = document.createElement('div');
+  pop.className = 'tt-range-pop tt-sort-pop';
+  pop.id = 'tt-sort-pop';
+  pop.setAttribute('role', 'dialog');
+  pop.setAttribute('aria-label', 'Sort tasks');
+
+  const options = document.createElement('div');
+  options.className = 'tt-sort-options';
+  TASK_SORTS.forEach(sort => {
+    const option = document.createElement('button');
+    option.type = 'button';
+    option.className = 'tt-range-option';
+    option.setAttribute('aria-pressed', String(taskSort === sort.id));
+    option.append(textSpan('tt-range-option-name', sort.label), textSpan('tt-range-option-span', sort.detail));
+    option.addEventListener('click', () => {
+      setTaskSort(sort.id);
+      closePopover(true);
+    });
+    options.appendChild(option);
+  });
+
+  pop.append(textSpan('tt-range-label', 'Sort tasks by'), options);
+  mountPopover(pop, btn);
 }
 
 // ============================================================
@@ -929,26 +1085,19 @@ function renderCategoryChart(now) {
     // The filter stays reachable while one is set, even with nothing to show
     const hasAnyTime = Object.keys(getTaskTotals(getLog(), now)).length > 0;
     if (rangeFilter || hasAnyTime) host.appendChild(filterBtn);
-    else if (rangePop) closeRangePopover(false);
-    const empty = document.createElement('div');
-    empty.className = 'tt-empty';
+    else if (openPop) closePopover(false);
     if (rangeFilter && hasAnyTime) {
       // There is time, just none in this period
-      const span = formatRangeSpan(resolveTimeRange(rangeFilter, now));
-      empty.textContent = `No tracked time in this period (${span}). `;
-      const reset = document.createElement('button');
-      reset.type = 'button';
-      reset.className = 'tt-range-reset';
-      reset.textContent = 'Show all time';
-      reset.addEventListener('click', () => setRangeFilter(null));
-      empty.appendChild(reset);
+      host.appendChild(buildNoTimeInPeriod(now));
     } else {
+      const empty = document.createElement('div');
+      empty.className = 'tt-empty';
       empty.textContent = getTaskCategories().length > 0
         ? 'Your tracked time will be split by task category here.'
         : 'Add categories in Settings → Tasks (edit mode) to see how your time splits.';
+      host.appendChild(empty);
     }
-    host.appendChild(empty);
-    positionRangePopover();
+    positionPopover();
     return;
   }
 
@@ -1034,7 +1183,7 @@ function renderCategoryChart(now) {
   wrap.append(figure, legendCol);
   host.appendChild(wrap);
   chartState = { key: slices.map(s => s.key).join('|'), slices: sliceEls, centerValue, data: slices, total };
-  positionRangePopover();
+  positionPopover();
 }
 
 // Once a minute while a timer runs: move arcs and numbers in place, or rebuild

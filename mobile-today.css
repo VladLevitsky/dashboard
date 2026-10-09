@@ -356,6 +356,7 @@ html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] #ti
 html[data-shell="mobile"] #time-tracking-card.mx-hosted .tt-header { display: none; }
 html[data-shell="mobile"] #time-tracking-card.mx-hosted .tt-body { gap: 22px; }
 html[data-shell="mobile"] #time-tracking-card.mx-hosted .tt-section-heading { margin-left: 4px; }
+html[data-shell="mobile"] #time-tracking-card.mx-hosted .tt-section-head .tt-section-heading { margin-left: 0; }
 /* Title · category chip · time · actions. The card is its own inline-size
    container: at phone width (≤ 480px, portrait) styles.css hides the chip, so
    the row drops to 3 columns; wider (landscape) the chip stays and gets its
