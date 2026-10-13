@@ -381,6 +381,19 @@ function onMentionKeydown(e) {
     consume();
     mentionSelectedIndex = mentionSelectedIndex <= 0 ? count - 1 : mentionSelectedIndex - 1;
     highlightSelectedItem(mentionSelectedIndex);
+  } else if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && !e.shiftKey && !e.altKey && !e.ctrlKey && !e.metaKey) {
+    // Jump to the next color column (same row, or its last task). On a date
+    // row, or with one column, the key moves the caret as usual
+    const current = items[mentionSelectedIndex];
+    const col = current && current.closest('.task-mention-col');
+    const cols = [...dropdown.querySelectorAll('.task-mention-col')];
+    if (!col || cols.length < 2) return;
+    consume();
+    const row = [...col.querySelectorAll('.task-mention-item')].indexOf(current);
+    const step = e.key === 'ArrowRight' ? 1 : -1;
+    const targetRows = cols[(cols.indexOf(col) + step + cols.length) % cols.length].querySelectorAll('.task-mention-item');
+    mentionSelectedIndex = Array.prototype.indexOf.call(items, targetRows[Math.min(row, targetRows.length - 1)]);
+    highlightSelectedItem(mentionSelectedIndex);
   } else if ((e.key === 'Enter' || e.key === 'Tab') && mentionSelectedIndex >= 0 && mentionSelectedIndex < count) {
     consume();
     const item = items[mentionSelectedIndex];

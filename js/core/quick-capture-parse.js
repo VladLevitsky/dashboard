@@ -530,7 +530,7 @@ export const QUICK_CAPTURE_HELP = [
     title: 'Task',
     rows: [
       { examples: [{ text: 'Send deck to Marc', insert: null }], meaning: 'Plain text is the task name' },
-      { examples: [{ text: '@', insert: '@' }], meaning: 'Pick an existing task to change it. Any other text becomes a new subtask on it' },
+      { examples: [{ text: '@', insert: '@' }], meaning: 'Pick an existing task to change it (↑ ↓ to move, ← → to jump between colors). Any other text becomes a new subtask on it' },
       { examples: [{ text: '!task', insert: '!task ' }], meaning: 'Optional: a new task is the default' },
     ],
   },

@@ -197,6 +197,11 @@ function ensureDom() {
   els.input.addEventListener('keydown', onInputKeyDown);
   els.input.addEventListener('click', update);
   els.input.addEventListener('keyup', (e) => {
+    // An arrow that moved through the list left the caret where it was
+    if (sideKeyHandled) {
+      sideKeyHandled = false;
+      return;
+    }
     if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) update();
   });
 
@@ -260,6 +265,18 @@ function onInputKeyDown(e) {
         highlightPicker();
       }
       return;
+    }
+    // ← / → jump to the next color column (same row, or its last task). With
+    // a single column they move the caret as usual
+    if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && !e.shiftKey && !e.altKey && !e.ctrlKey && !e.metaKey) {
+      const next = sideStep(e.key === 'ArrowRight' ? 1 : -1);
+      if (next !== null) {
+        e.preventDefault();
+        sideKeyHandled = true;
+        picker.index = next;
+        highlightPicker();
+        return;
+      }
     }
     if (e.key === 'Enter' || (e.key === 'Tab' && count && !e.shiftKey)) {
       // While a list is open, Enter picks from it; it never saves by accident
@@ -484,6 +501,23 @@ function renderPicker() {
   box.hidden = false;
   els.input.setAttribute('aria-expanded', 'true');
   highlightPicker();
+}
+
+// The option index ← / → lands on in the task list, or null to leave the key
+// to the caret: the neighbouring color column (wrapping), same row or its
+// last task. The category list keeps ← / → for the caret.
+let sideKeyHandled = false;
+
+function sideStep(dir) {
+  if (picker.kind !== 'task' || picker.items.length < 2) return null;
+  const columns = [...els.picker.querySelectorAll('.task-mention-col')]
+    .map(col => [...col.querySelectorAll('[data-qc-index]')].map(o => Number(o.dataset.qcIndex)));
+  if (columns.length < 2) return null;
+  let col = columns.findIndex(ids => ids.includes(picker.index));
+  let row = col < 0 ? 0 : columns[col].indexOf(picker.index);
+  if (col < 0) col = dir > 0 ? -1 : columns.length;
+  const target = columns[(col + dir + columns.length) % columns.length];
+  return target[Math.min(row, target.length - 1)];
 }
 
 function highlightPicker() {

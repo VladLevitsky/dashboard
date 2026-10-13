@@ -13217,7 +13217,7 @@ body.glass-mode[data-theme="dark"] .auth-user-popover {
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: filter 0.12s ease, transform 0.1s ease;
+  transition: filter 0.12s ease, transform 0.1s ease, box-shadow 0.12s ease;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -13226,11 +13226,17 @@ body.glass-mode[data-theme="dark"] .auth-user-popover {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.task-mention-item:hover,
+/* Hover is a light touch; the keyboard pick (.selected) carries a ring so it
+   reads in both themes (darkening alone made the pick look "off" in dark mode,
+   and a resting pointer looked like a second pick) */
+.task-mention-item:hover { filter: brightness(0.95); }
 .task-mention-item.selected {
-  filter: brightness(0.88);
+  filter: none;
   transform: scale(1.03);
+  box-shadow: 0 0 0 2px var(--brand);
 }
+[data-theme="dark"] .task-mention-item:hover { filter: brightness(1.12); }
+[data-theme="dark"] .task-mention-item.selected { filter: brightness(1.25); }
 .task-mention-item-title {
   overflow: hidden;
   text-overflow: ellipsis;

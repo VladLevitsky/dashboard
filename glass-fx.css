@@ -736,6 +736,10 @@ html[data-fx="v2"] body[data-style="glass"][data-theme] :is(.task-mention-dropdo
 html[data-fx="v2"] body[data-style="glass"][data-theme] .qc-picker.task-mention-dropdown {
   background: var(--glass-reflection), var(--card);
 }
+/* The picked task in an @ list carries the azure selection light (static) */
+html[data-fx="v2"] body[data-style="glass"][data-theme] .task-mention-item.selected {
+  box-shadow: 0 0 0 2px rgb(var(--fx-ind-rgb) / 90%), 0 0 14px -2px rgb(var(--fx-ind-rgb) / 65%);
+}
 html[data-fx="v2"] body[data-style="glass"][data-theme] :is(.ideas-item, .appearance-option:not(.active),
   .appearance-backup-btn, .appearance-btn.secondary) {
   background: var(--glass-reflection), var(--glass-field);
