@@ -4014,7 +4014,46 @@ section.card[id^="new-card-"].card-size-full {
 /* Task Settings modal (Settings → Tasks). Reuses the appearance modal
    classes; sits above Settings, like the File Manager. */
 .task-settings-modal { z-index: 2100; }
-.task-settings-dialog { width: 380px; max-width: calc(100vw - 32px); }
+.task-settings-dialog {
+  width: 820px;
+  max-width: calc(100vw - 32px);
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 32px);
+  max-height: calc(100dvh - 32px);
+}
+.task-settings-dialog .appearance-body {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  container-type: inline-size;
+}
+/* Two columns side by side (templates left, categories right); one column,
+   categories first, when the dialog is narrow (phones, the mobile preview) */
+.task-settings-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  grid-template-areas: "tpl cats";
+}
+.task-settings-col { margin: 0; min-width: 0; }
+.task-settings-col-tpl { grid-area: tpl; padding-right: 24px; }
+.task-settings-col-cats {
+  grid-area: cats;
+  padding-left: 24px;
+  border-left: 1px solid var(--glass-divider, #e5e7eb);
+}
+@container (max-width: 600px) {
+  .task-settings-columns {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "cats" "tpl";
+  }
+  .task-settings-col-tpl {
+    padding: 20px 0 0;
+    margin-top: 20px;
+    border-top: 1px solid var(--glass-divider, #e5e7eb);
+  }
+  .task-settings-col-cats { padding-left: 0; border-left: 0; }
+}
 .task-settings-cat-list {
   display: flex;
   flex-direction: column;
@@ -4086,6 +4125,138 @@ section.card[id^="new-card-"].card-size-full {
   color: var(--muted);
 }
 [data-theme="dark"] .task-settings-input { border-color: #475569; }
+
+/* Subtask templates: one row per template; the open one shows its editor */
+.task-settings-tpl-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.task-settings-tpl-hint { margin-left: 0; }
+.task-settings-tpl {
+  border: 1px solid transparent;
+  border-radius: 10px;
+  transition: border-color 0.15s, background-color 0.15s;
+}
+.task-settings-tpl.is-open {
+  border-color: var(--glass-divider, #e5e7eb);
+  background: color-mix(in srgb, var(--brand) 4%, transparent);
+}
+.task-settings-tpl-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.task-settings-tpl-toggle {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 6px;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+.task-settings-tpl-toggle:hover { background: color-mix(in srgb, var(--text) 6%, transparent); }
+.task-settings-tpl-toggle:focus-visible { outline: 2px solid var(--brand); outline-offset: -2px; }
+.task-settings-tpl-chevron {
+  flex-shrink: 0;
+  color: var(--muted);
+  transition: transform 0.15s ease;
+}
+.task-settings-tpl.is-open .task-settings-tpl-chevron { transform: rotate(90deg); }
+.task-settings-tpl-name {
+  min-width: 0;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.task-settings-tpl-name.is-untitled { color: var(--muted); font-style: italic; }
+.task-settings-tpl-count {
+  flex-shrink: 0;
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--muted);
+}
+.task-settings-tpl-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 2px 10px 12px 28px;
+}
+.task-settings-tpl-body[hidden] { display: none; }
+.task-settings-tpl-items {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.task-settings-tpl-items:empty { display: none; }
+.task-settings-tpl-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: -18px;
+}
+.task-settings-tpl-item .task-settings-input { padding: 6px 10px; font-size: 13px; }
+.task-settings-tpl-items.is-sorting { user-select: none; cursor: grabbing; }
+.task-settings-tpl-item.is-dragging { opacity: 0.6; }
+.task-settings-tpl-grip {
+  width: 14px;
+  height: 28px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  opacity: 0.6;
+  cursor: grab;
+  touch-action: none;
+}
+.task-settings-tpl-grip:hover { opacity: 1; }
+.task-settings-tpl-item.is-dragging .task-settings-tpl-grip { cursor: grabbing; opacity: 1; }
+.task-settings-tpl-item-remove {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: color 0.15s, background-color 0.15s;
+}
+.task-settings-tpl-item-remove:hover {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+}
+.task-settings-tpl-add {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border: none;
+  border-radius: 999px;
+  background: none;
+  color: var(--brand);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.task-settings-tpl-add:hover { background: color-mix(in srgb, var(--brand) 10%, transparent); }
+[data-theme="dark"] .task-settings-tpl.is-open { border-color: #475569; }
 
 /* Copy-paste card styles */
 .copy-paste-list {

@@ -54,6 +54,9 @@ const model = {
 
   // Task categories (Settings → Tasks). A setting: always read/written on `model`
   taskCategories: [{ id, name, slot }],  // slot 1-8 = fixed chart color (--task-cat-N), max 8
+  // Subtask templates (task editor save icon; edited in Settings → Tasks). A setting like
+  // taskCategories: always read/written on `model`, deliberately not merged by deepMergeModel
+  subtaskTemplates: [{ id, name, items: [{ title }] }],
 
   // Task time log (js/core/time-log.js). Always read/written on `model`, NEVER the
   // edit-mode working copy, and deliberately not merged by deepMergeModel
@@ -137,7 +140,7 @@ Images inside rich text (descriptions, projects, meetings, ideas, notes) are sto
 │   │   ├── edit-mode.js     # Toggle, popovers, color pickers, notepad, highlighter, context menu
 │   │   ├── drag-drop.js     # Card and item reordering
 │   │   ├── time-tracking.js # Pill stopwatches, 1s tick, Time Tracking panel (task list + category donut)
-│   │   ├── task-categories.js # Category helpers + Task Settings modal
+│   │   ├── task-categories.js # Category helpers + Task Settings modal (categories, subtask templates)
 │   │   ├── quick-capture.js # N-key bar: @ task / !category: pickers, live preview, ⓘ command list, Open/Undo toast
 │   │   ├── item-creator.js  # "Add item" window (card "+" in view mode, "+" tiles in edit mode) + separator placement mode
 │   │   ├── drop-light.js    # The glowing drop line: item reorder in edit mode + separator placement
@@ -270,6 +273,7 @@ Central task store in `model.tasks[]` with 4-color priority system:
 - Item "Add Task" button (in the item tasks modal) opens a task PICKER (`#item-task-picker-modal`, styled like the @ mention dropdown: per-color columns red/orange/yellow/blue, pinned first, search filter) to link an EXISTING task to the item — it no longer creates a new task
 - Primary (pinned) tasks float to top within their color group
 - **Category**: chips below "Link to Item" in the task editor (click the selected chip again to clear) → `task.categoryId`
+- **Subtask templates**: the save icon beside the Subtasks `+` stores the editor's subtask titles as a named template (`model.subtaskTemplates`); press and hold the `+` (750ms) for the picker, which appends a template's subtasks. Edited in Settings → Tasks (see Task Categories)
 - **Stopwatch**: rightmost control on every pill (`createTaskTimerControl`); see Task Time Tracking
 - **Complete**: circle-check button just left of the stopwatch on every pill (matrix and Today view) and on the open-task rows of the Time Tracking panel (`createTaskCompleteButton(task)`, exported from tasks.js; time-tracking.js imports it, a safe import cycle since neither module uses the other at load time). The Time Tracking rows hold both buttons in `.tt-task-actions` (64px; empty on finished rows so columns line up), and completing refreshes the panel (`refreshTimeTrackingUI`), which moves the row to Completed. Click asks "Mark “…” as complete?" (native confirm, `confirmCompleteTask`), then completes it. Dropping a pill on the header checkmark (`#delete-task-drop`) asks the same question. Excluded from the pill's click-to-edit and long-press-to-pin; 20px with negative block margin so the pill height doesn't change; emerald glyph + lens on hover (glass-fx.css 9b)
 
@@ -300,8 +304,10 @@ Central task store in `model.tasks[]` with 4-color priority system:
 
 ### Task Categories (`js/features/task-categories.js`)
 - Edit mode → Settings → **Tasks** opens the Task Settings modal (reuses the appearance-modal classes, z-index 2100 above Settings): add / rename / delete categories, max 8, colors auto-assigned by the lowest free slot
-- Draft + Save/Cancel; saved straight to `model.taskCategories` (like the theme, outside the edit-mode confirm/cancel). Deleting a category that tasks use asks first; those tasks read as Uncategorized
+- Draft + Save/Cancel; saved straight to `model.taskCategories` and `model.subtaskTemplates` (like the theme, outside the edit-mode confirm/cancel). Deleting a category that tasks use asks first; those tasks read as Uncategorized. Cancel / × / Esc ask before dropping a changed draft
 - Defaults (fixed ids so devices agree): Content, Campaigns, Analytics, Operational, Strategy
+- Two columns (820px dialog): Subtask templates left, Categories right; a container query on the body stacks them (Categories first) under 600px, so phones and the preview get one column
+- **Subtask templates** section: one row per template (chevron, name, `N subtasks`, trash); clicking a row opens it (one at a time) to rename it and edit its subtasks: Enter = new subtask below, Backspace on an empty one removes it, Alt+Shift+↑/↓ or the grip (pointer drag, window listeners because moving the row drops a pointer capture) reorders, × removes, "Add subtask" appends. Deleting a template needs no confirm (Cancel undoes it). Save drops blank subtask lines and refuses an empty name or a template with no subtasks (toast + opens it). The body scrolls on short screens; phone rules in mobile-today.css
 
 ### Task Highlight System
 Tasks can be linked to text in Projects, Meetings, and Card Notes:
@@ -424,7 +430,7 @@ Per-card (and per-subtask) note system, LITE writing tier, color coding, and tas
 Accessible via gear icon in edit mode. Contains:
 - Theme: Light / Dark toggle
 - Theme: Classic (Grey) / Sunset dropdown
-- Tasks: opens Task Settings (categories)
+- Tasks: opens Task Settings (categories, subtask templates)
 - Writing & shortcuts: opens the Shortcuts & commands window (writing preferences live in its Preferences tab)
 - JSON File Backup: Download and Upload with overwrite warning (includes `taskCategories` and `timeTracking`; importing a log resets history older than the import)
 - The dialog body scrolls on short screens
@@ -702,6 +708,7 @@ On phones the modals holding these editors (and the note viewer) are the mobile 
 ## Version History
 
 ### v5.4.2 (Current)
+- **Edit subtask templates**: Settings → Tasks lists the saved templates; open one to rename it, edit / add / remove / reorder its subtasks, or delete it (draft, saved with Save). Confirming edit mode no longer reverts a template change made meanwhile (`subtaskTemplates` left out of `deepMergeModel`, like `taskCategories`)
 - **Layouts no longer get squished**: content growth at a narrower screen width is display-only (`computeGrownLayout`), so the desktop / tablet layout saved in edit mode is exactly what a wide screen shows after any refresh elsewhere
 - **Static lights**: the indicator, Quick Access, reminder, pinned-task, timer and badge glows no longer pulse; they shine steady at a lit value, so an idle dashboard stops redrawing the glass stack every frame (GPU idle instead of saturated on an integrated GPU). The covered-dialog pause is gone (nothing left to pause); the typing hush stays for the pointer light
 - Time Tracking: Categories beside Tasks on wide panels; the red badge has no glow in light mode

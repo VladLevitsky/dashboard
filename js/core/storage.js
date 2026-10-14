@@ -800,10 +800,10 @@ export function exportBackupFile() {
 }
 
 // --- Deep merge function to properly merge working copy back to main model
-// Deliberately NOT merged: timeTracking and taskCategories. Both are written
-// straight to `model` (timers tick and Task Settings save outside the
-// edit-mode confirm/cancel cycle), so the working copy's snapshot of them is
-// stale and must never overwrite the model.
+// Deliberately NOT merged: timeTracking, taskCategories and subtaskTemplates.
+// All are written straight to `model` (timers tick, Task Settings and the task
+// editor's template save run outside the edit-mode confirm/cancel cycle), so
+// the working copy's snapshot of them is stale and must never overwrite the model.
 export function deepMergeModel(target, source) {
   // Handle arrays - replace them completely
   if (Array.isArray(source.sections)) {
@@ -952,9 +952,6 @@ export function deepMergeModel(target, source) {
   }
   if (source.projects && Array.isArray(source.projects)) {
     target.projects = JSON.parse(JSON.stringify(source.projects));
-  }
-  if (source.subtaskTemplates && Array.isArray(source.subtaskTemplates)) {
-    target.subtaskTemplates = JSON.parse(JSON.stringify(source.subtaskTemplates));
   }
 
   // Handle ALL section data (unified format - objects keyed by section ID)
