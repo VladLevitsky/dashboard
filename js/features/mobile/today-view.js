@@ -27,8 +27,11 @@ import { createTaskTimerControl, refreshTimeTrackingUI } from '../time-tracking.
 import { createCardItemElement } from '../../components/sections.js';
 import { getTaskCategories } from '../task-categories.js';
 import * as mobileTasks from '../../core/mobile-tasks.js';
-import { createTimeSheet } from './time-sheet.js?v=2026-10-mobile-3';
-import { createMoreSheet } from './more-sheet.js?v=2026-10-mobile-3';
+import { toDateKey } from '../../core/quick-capture-parse.js';
+import { renderBusyStrip, ensureBusyDay } from '../busy-strip.js';
+import { gcalStateKey, onGcalChange } from '../google-calendar.js';
+import { createTimeSheet } from './time-sheet.js?v=2026-10-mobile-4';
+import { createMoreSheet } from './more-sheet.js?v=2026-10-mobile-4';
 
 const SHORT_LABELS = { red: 'Urgent & important', orange: 'Urgent', yellow: 'Important', blue: 'Later' };
 const COMING_DAYS = 7;
@@ -241,6 +244,7 @@ function signature(ctx) {
     t.meetings.map(m => `${m.meeting.id}:${m.meeting.title}:${m.recurring}`).join(';'),
     t.reminders.map(r => `${r.sectionId}|${r.subtitle}|${r.reminder.key}~${reminderSig(r, view)}`).join(';'),
     view.coming.map(i => `${comingKey(i)}~${comingSig(i)}`).join(';'),
+    gcalStateKey(),
   ].join('#');
   cache = { ctx, sig, view };
   return sig;
@@ -260,6 +264,10 @@ function section(className, title) {
 
 function mount(host) {
   const root = el('div', 'mx-today');
+
+  // Busy times from Google Calendar (busy-strip.js; hidden when not connected)
+  const busy = el('section', 'mx-today-busy');
+  busy.hidden = true;
 
   const due = section('mx-today-due', 'Due & overdue');
   const lanes = el('div', 'mx-today-lanes');
@@ -306,9 +314,18 @@ function mount(host) {
   });
   foot.appendChild(cal);
 
-  root.append(empty, due.s, meetings.s, reminders.s, coming.s, foot);
+  root.append(busy, empty, due.s, meetings.s, reminders.s, coming.s, foot);
   host.appendChild(root);
-  els = { root, empty, due, lanes, meetings, meetingList, reminders, remHost, remGroup, coming, comingList, comingEmpty };
+  els = { root, busy, empty, due, lanes, meetings, meetingList, reminders, remHost, remGroup, coming, comingList, comingEmpty };
+  askBusy();
+}
+
+// Fetch outside render: on show, on return, at midnight and when the Google
+// status changes (cached 5 min; the screen repaints only when the data changes)
+function askBusy() {
+  if (!api || api.getTab() !== 'today') return;
+  if (window.isMobileShellMounted && !window.isMobileShellMounted()) return;
+  ensureBusyDay(toDateKey(new Date()));
 }
 
 // --- DOM: panes and rows ------------------------------------------------------------------------
@@ -614,6 +631,7 @@ function render(ctx) {
   const { today } = view;
   const nothing = today.count === 0;
 
+  renderBusyStrip(els.busy, view.todayKey);
   setHidden(els.empty, !nothing);
   setHidden(els.due.s, today.lanes.length === 0);
   setText(els.due.extra, dueSummary(today));
@@ -678,5 +696,10 @@ export default {
     ['tasks', 'write', 'links'].forEach(unit => {
       api.use(unit).then(() => { if (api.getTab() === 'today') api.render('today-services'); }).catch(() => {});
     });
+    api.on('tab', (e) => { if (e && e.tab === 'today') askBusy(); });
+    api.on('mount', askBusy);   // a re-mount can open straight on Today
+    api.on('visible', askBusy);
+    api.on('day', askBusy);
+    onGcalChange(askBusy);
   },
 };

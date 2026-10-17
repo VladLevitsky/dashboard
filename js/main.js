@@ -353,10 +353,12 @@ import {
   postRestoreAuthSync
 } from './features/auth-ui.js';
 
+import { getGcalStatus, refreshGcalStatus, syncGoogleCalendar, requestBusyDay, getBusyDay } from './features/google-calendar.js';
+
 // Mobile shell (phones and the desktop "Mobile" preview). The ?v= keeps the
 // shell and its unit modules (all imported with the same version) from mixing
 // builds after a deploy; bump it with MOBILE_BUILD (js/core/mobile-device.js).
-import { syncMobileShell, renderMobileShell, isShellMounted, mobileShellDebug } from './features/mobile/shell.js?v=2026-10-mobile-3';
+import { syncMobileShell, renderMobileShell, isShellMounted, mobileShellDebug } from './features/mobile/shell.js?v=2026-10-mobile-4';
 
 // Make key functions available globally for the transition period
 // This allows app.js to still work while we gradually migrate
@@ -746,6 +748,9 @@ window.wireMoveButtonEvents = wireMoveButtonEvents;
 // File Manager
 window.wireFileManagerEvents = wireFileManagerEvents;
 window.updateFileManagerVisibility = updateFileManagerVisibility;
+
+// Google Calendar (tests and the console)
+window.googleCalendar = { getGcalStatus, refreshGcalStatus, syncGoogleCalendar, requestBusyDay, getBusyDay };
 
 // Mobile shell: existing modules reach it through window (no import cycles;
 // modules loaded by the Node tests stay free of DOM code)

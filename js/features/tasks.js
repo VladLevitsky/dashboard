@@ -13,6 +13,7 @@ import { createTaskTimerControl, isTaskTimerRunning, stopTimerForTask, syncTaskT
 import { getTaskCategories, categoryColor } from './task-categories.js';
 import { attachImageUpload } from './rich-text-images.js';
 import { attachWritingFeatures, attachWritingView } from './writing/editor.js';
+import { isGcalTasksReady, getGcalDefault, setGcalDefault } from './google-calendar.js';
 
 // Module state
 let currentTasksReminder = null;
@@ -2334,6 +2335,12 @@ function openTaskEditorModal(taskData, titleText) {
             <div class="task-editor-field">
               <label for="task-editor-date">Due Date (Optional)</label>
               <input type="date" id="task-editor-date" />
+              <label class="task-editor-primary-label task-editor-gcal-label" id="task-editor-gcal-label" hidden>
+                <input type="checkbox" id="task-editor-gcal-checkbox" />
+                <span class="task-editor-primary-box"></span>
+                <span>Add to Google Calendar</span>
+                <span class="task-editor-gcal-hint">needs a due date</span>
+              </label>
             </div>
             <div class="task-editor-field">
               <label>Links &amp; Files</label>
@@ -2600,6 +2607,19 @@ function openTaskEditorModal(taskData, titleText) {
   // Populate date field
   const dateInput = $('#task-editor-date');
   dateInput.value = taskData.dueDate || '';
+
+  // "Add to Google Calendar": only when this device knows the calendar is
+  // connected (a hidden box never writes the flag, so a device that thinks it
+  // is disconnected can't clear it). New tasks start from the last choice
+  const gcalLabel = $('#task-editor-gcal-label');
+  const gcalCheckbox = $('#task-editor-gcal-checkbox');
+  const gcalShown = isGcalTasksReady();
+  gcalLabel.hidden = !gcalShown;
+  gcalCheckbox.checked = gcalShown && (currentEditingTaskId ? taskData.gcal === true : getGcalDefault());
+  const paintGcalDate = () => gcalLabel.classList.toggle('is-nodate', !dateInput.value);
+  paintGcalDate();
+  dateInput.oninput = paintGcalDate;
+  dateInput.onchange = paintGcalDate;
 
   // Populate links & files list
   let editorLinks = [];
@@ -3126,6 +3146,7 @@ function openTaskEditorModal(taskData, titleText) {
         pinned: primaryCheckbox.checked,
         categoryId: selectedCategoryId
       };
+      if (gcalShown) taskUpdate.gcal = gcalCheckbox.checked;
       updateTask(currentEditingTaskId, taskUpdate);
       showToast('Task updated');
     } else {
@@ -3138,6 +3159,10 @@ function openTaskEditorModal(taskData, titleText) {
       if (description) updates.description = description;
       if (subtasks.length > 0) updates.subtasks = subtasks;
       if (taskLinks.length > 0) updates.taskLinks = taskLinks;
+      if (gcalShown) {
+        if (gcalCheckbox.checked) updates.gcal = true;
+        setGcalDefault(gcalCheckbox.checked);
+      }
       updateTask(task.id, updates);
       showToast('Task created');
 
@@ -3206,7 +3231,9 @@ function openTaskEditorModal(taskData, titleText) {
     pinned: !!taskData.pinned,
     description: currentTaskDescHtml(),
     subtasks: JSON.stringify(taskData.subtasks || []),
-    categoryId: selectedCategoryId
+    categoryId: selectedCategoryId,
+    dueDate: dateInput.value || '',
+    gcal: gcalCheckbox.checked
   };
 }
 
@@ -3237,6 +3264,8 @@ export function taskEditorHasChanges() {
   if (JSON.stringify(editorSubtasks.filter(s => s.title && s.title.trim())) !== taskEditorInitialState.subtasks) return true;
   const activeCategory = $('#task-editor-categories .task-category-chip.active');
   if ((activeCategory?.dataset.categoryId || null) !== taskEditorInitialState.categoryId) return true;
+  if (($('#task-editor-date')?.value || '') !== taskEditorInitialState.dueDate) return true;
+  if (($('#task-editor-gcal-checkbox')?.checked || false) !== taskEditorInitialState.gcal) return true;
   return false;
 }
 
@@ -3446,6 +3475,9 @@ function taskDocMeta() {
   if ($('#task-editor-primary-checkbox')?.checked) fields.push({ label: 'Primary', value: 'Yes' });
   const due = $('#task-editor-date')?.value;
   if (due) fields.push({ label: 'Due', value: due });
+  if (due && !$('#task-editor-gcal-label')?.hidden && $('#task-editor-gcal-checkbox')?.checked) {
+    fields.push({ label: 'Google Calendar', value: 'Yes' });
+  }
   const categoryId = $('#task-editor-categories .task-category-chip.active')?.dataset.categoryId;
   const category = categoryId ? getTaskCategories().find(c => c.id === categoryId) : null;
   if (category) fields.push({ label: 'Category', value: category.name });

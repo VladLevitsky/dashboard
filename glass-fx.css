@@ -890,6 +890,12 @@ html[data-fx="v2"] body[data-style="glass"][data-theme] .today-icon-btn:hover {
   background: var(--glass-field);
   box-shadow: var(--glass-rim);
 }
+/* Busy-time strip: a glass well (no blur of its own: the dialog already has one) */
+html[data-fx="v2"] body[data-style="glass"][data-theme] .today-daystrip.busy-strip {
+  background: var(--glass-reflection), var(--glass-field);
+  border-color: var(--glass-divider);
+  box-shadow: var(--glass-rim);
+}
 
 /* --- 11d. Static lights ----------------------------------------------------
    The endless lights (indicator pool and core, Quick Access halos and rims,

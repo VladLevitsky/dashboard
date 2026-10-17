@@ -35,6 +35,22 @@ html[data-shell="mobile"] .mx-today-head-extra {
 }
 html[data-shell="mobile"] .mx-today-head-extra::before { content: "· "; }
 html[data-shell="mobile"] .mx-today-lanes { display: flex; flex-direction: column; gap: 12px; }
+/* Busy times (busy-strip.js): the desktop strip at phone size */
+html[data-shell="mobile"] .mx-today-busy[hidden] { display: none; }
+html[data-shell="mobile"] .mx-today-busy.busy-strip { margin: 0; padding: 12px 14px 14px; border-radius: 18px; gap: 8px; }
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-today-busy.busy-strip {
+  background: var(--glass-reflection), var(--glass-field);
+  border: 1px solid var(--glass-edge);
+  box-shadow: var(--fx-lift-pill), var(--glass-rim);
+}
+html[data-shell="mobile"] .mx-today-busy .busy-strip-title { font-size: 11.5px; letter-spacing: 0.08em; }
+html[data-shell="mobile"] .mx-today-busy .busy-strip-summary { font-size: 12.5px; font-weight: 600; }
+html[data-shell="mobile"] .mx-today-busy .busy-strip-track { height: 26px; border-radius: 8px; }
+html[data-shell="mobile"] .mx-today-busy .busy-strip-hour { font-size: 11px; }
+html[data-shell="mobile"] .mx-today-busy :is(.busy-strip-list, .busy-strip-allday) { font-size: 14px; }
+html[data-shell="mobile"] .mx-today-busy :is(.busy-strip-next, .busy-strip-note) { font-size: 13px; }
+html[data-shell="mobile"] .mx-today-busy .busy-strip-action { min-height: var(--mx-hit); padding: 0 16px; border-radius: 14px; font-size: 15px; font-weight: 600; }
+html[data-shell="mobile"] .mx-today-busy .busy-strip-link { min-height: var(--mx-hit); padding: 0 4px; }
 
 /* Panes: the desktop Today group (styles.css .today-color-group) at phone size.
    The pane carries the blur; rows on it don't */
@@ -467,6 +483,29 @@ html[data-shell="mobile"] .mx-more-signout { align-self: center; min-width: 160p
 html[data-shell="mobile"] .mx-more-nom { margin: 0; display: flex; flex-direction: column; gap: 4px; }
 html[data-shell="mobile"] .mx-more-nom dt { margin: 10px 0 0; font-size: 15px; font-weight: 700; }
 html[data-shell="mobile"] .mx-more-nom dd { margin: 0; font-size: 14px; line-height: 1.45; color: var(--muted); }
+/* Google Calendar sheet (More → Google Calendar; the panel from google-calendar.js) */
+html[data-shell="mobile"] .mx-sheet .gcal-panel { gap: 12px; padding-bottom: 18px; font-size: 15px; }
+html[data-shell="mobile"] .mx-sheet .gcal-note { font-size: 14px; }
+html[data-shell="mobile"] .mx-sheet .gcal-email { font-size: 13.5px; }
+html[data-shell="mobile"] .mx-sheet :is(.gcal-perms, .gcal-cal, .gcal-sub, .gcal-check) { font-size: 14px; }
+html[data-shell="mobile"] .mx-sheet .gcal-hint { font-size: 12.5px; }
+html[data-shell="mobile"] .mx-sheet .gcal-btn {
+  min-height: var(--mx-hit); padding: 0 16px;
+  border: 1px solid var(--glass-divider); border-radius: 14px;
+  background: var(--glass-reflection), var(--glass-field);
+  font: 600 15px/1.2 'Inter', system-ui, sans-serif;
+  touch-action: manipulation;
+}
+html[data-shell="mobile"] .mx-sheet .gcal-btn:active { background-color: var(--glass-hover); }
+html[data-shell="mobile"] .mx-sheet .gcal-btn-primary { align-self: stretch; border-color: transparent; color: #fff; background: var(--glass-action, var(--brand)); }
+html[data-shell="mobile"] .mx-sheet .gcal-btn-danger { color: var(--danger); }
+html[data-shell="mobile"] .mx-sheet .gcal-btn-quiet { border-color: transparent; background: transparent; color: var(--muted); }
+html[data-shell="mobile"] .mx-sheet .gcal-cal-remove { min-width: var(--mx-hit); padding: 0; }
+html[data-shell="mobile"] .mx-sheet .gcal-cal-add input {
+  min-height: var(--mx-hit); padding: 0 12px; border-radius: 12px;
+  border-color: var(--glass-divider); font-size: 16px;
+}
+html[data-shell="mobile"] .mx-sheet .gcal-check input { width: 20px; height: 20px; }
 
 /* --- 5. Reused dialogs opened from Today, Time and More -----------------------
    The phone @media rules of styles.css are restated under the shell prefix,

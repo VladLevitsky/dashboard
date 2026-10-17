@@ -14,6 +14,7 @@ import {
 } from '../core/sync.js';
 import { restoreModel, saveModel } from '../core/storage.js';
 import { model, editState, resetModel } from '../state.js';
+import { buildGcalPanel, afterSignIn as gcalAfterSignIn, resetGcalState } from './google-calendar.js';
 
 // --- Module state ---
 let _isRegisterMode = false;
@@ -250,6 +251,7 @@ async function handleAuthSubmit(e) {
     closeAuthModal();
     renderAuthUI();
     showToast(`Signed in as ${result.username}`);
+    gcalAfterSignIn();
   } catch (err) {
     console.error('[Auth] Post-login flow failed:', err);
     showAuthError('Sign-in succeeded but loading data failed. Please refresh.');
@@ -270,6 +272,7 @@ async function handleLogout() {
   }
 
   await logout();
+  resetGcalState();
 
   // Reset model to prevent data leaking between accounts
   resetModel();
@@ -309,6 +312,8 @@ function toggleUserPopover() {
   popover.style.top = `${rect.bottom + 8}px`;
   popover.style.right = `${window.innerWidth - rect.right}px`;
   popover.style.left = 'auto';
+  // The Google Calendar panel can make it tall: it scrolls instead of leaving the screen
+  popover.style.maxHeight = `${Math.max(200, window.innerHeight - rect.bottom - 20)}px`;
 
   // Set username
   const label = $('#auth-user-label');
@@ -319,6 +324,8 @@ function toggleUserPopover() {
   if (syncStatus) {
     syncStatus.textContent = isCloudDirty() ? 'Changes pending sync' : 'Synced';
   }
+
+  buildGcalPanel($('#auth-gcal'));
 
   popover.hidden = false;
 }
@@ -367,8 +374,11 @@ export function wireAuthEvents() {
   if (logoutBtn) logoutBtn.addEventListener('click', handleLogout);
 
   // Close user popover on outside click
+  // (the path is fixed at dispatch: a button the Google Calendar panel just
+  // replaced is detached by now, yet it was inside the popover)
   document.addEventListener('click', (e) => {
-    if (!e.target.closest('#auth-user-popover') && !e.target.closest('#auth-toggle')) {
+    const inside = e.composedPath().some((n) => n.id === 'auth-user-popover' || n.id === 'auth-toggle');
+    if (!inside) {
       closeUserPopover();
     }
   });

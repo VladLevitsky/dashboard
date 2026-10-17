@@ -23,6 +23,7 @@ import {
 } from './tasks.js';
 import { getTaskCategories, getTaskCategory, categoryColor } from './task-categories.js';
 import { startTimerForTask, undoTimerStart, isTaskTimerRunning, syncTaskTimeMeta } from './time-tracking.js';
+import { isGcalTasksReady, getGcalDefault, setGcalDefault } from './google-calendar.js';
 
 const COLOR_ORDER = ['red', 'orange', 'yellow', 'blue'];
 const TOAST_MS = 7000;
@@ -38,6 +39,7 @@ const CALENDAR_SVG = svg('<rect x="3" y="4" width="18" height="18" rx="2"/><line
 const STAR_SVG = svg('<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>');
 const WATCH_SVG = svg('<circle cx="12" cy="14" r="8"/><line x1="12" y1="6" x2="12" y2="2"/><line x1="9" y1="2" x2="15" y2="2"/><line x1="12" y1="14" x2="12" y2="10"/><line x1="12" y1="14" x2="15" y2="17"/>');
 const LINK_SVG = svg('<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>');
+const GCAL_SVG = svg('<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><polyline points="8.5 15.5 11 18 15.5 13.5"/>');
 const ALERT_SVG = svg('<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><line x1="12" y1="9" x2="12" y2="13"/><path d="M12 17h.01"/>');
 
 // Module state
@@ -655,9 +657,10 @@ function buildPlan() {
         || urls.length
         || (category && category.id !== target.categoryId)
         || (parsed.dueDate && parsed.dueDate !== target.dueDate)
-        || (parsed.clearDate && !!target.dueDate);
+        || (parsed.clearDate && !!target.dueDate)
+        || (parsed.gcal !== null && parsed.gcal !== (target.gcal === true));
       const asked = parsed.color || parsed.pinned !== null || parsed.timer || parsed.urls.length ||
-        category || parsed.dueDate || parsed.clearDate;
+        category || parsed.dueDate || parsed.clearDate || parsed.gcal !== null;
       if (!changes) {
         issues.push(asked
           ? { level: 'error', message: 'The task already looks like that: nothing would change' }
@@ -668,8 +671,16 @@ function buildPlan() {
     issues.push({ level: 'error', quiet: true, message: 'Type a name for the task' });
   }
 
+  // Google Calendar: what the line says, else (a new task) the last choice
+  const gcal = mode === 'create' && parsed.gcal === null ? (isGcalTasksReady() && getGcalDefault()) : parsed.gcal;
+  if (parsed.gcal === true) {
+    const dated = parsed.dueDate || (mode === 'update' && target && target.dueDate && !parsed.clearDate);
+    if (!dated) issues.push({ level: 'warning', message: 'Google Calendar shows tasks that have a due date: add one' });
+    else if (!isGcalTasksReady()) issues.push({ level: 'warning', message: 'Google Calendar isn’t connected here: it shows once it is' });
+  }
+
   issues.sort((a, b) => (a.level === b.level ? 0 : a.level === 'error' ? -1 : 1));
-  return { mode, target, parsed, category, urls, issues, hasErrors: issues.some(i => i.level === 'error') };
+  return { mode, target, parsed, category, urls, gcal, issues, hasErrors: issues.some(i => i.level === 'error') };
 }
 
 function shortUrl(url) {
@@ -800,6 +811,11 @@ function renderPreview(plan) {
   }
   plan.urls.forEach(url => add({ icon: LINK_SVG, text: shortUrl(url), title: url }));
   if (plan.category) add({ dotColor: categoryColor(plan.category), label: 'Category', text: plan.category.name });
+  if (plan.gcal === true && (p.dueDate || p.gcal !== null)) {
+    add({ icon: GCAL_SVG, text: 'Google Calendar', kind: p.gcal === null ? 'default' : '', title: p.gcal === null ? 'Your last choice (!nogcal leaves it off)' : '' });
+  } else if (p.gcal === false) {
+    add({ icon: GCAL_SVG, text: 'Not on Google Calendar' });
+  }
 
   plan.issues.forEach(issue => {
     const kind = issue.quiet && !attempted ? 'hint' : issue.level;
@@ -881,6 +897,11 @@ export function createFromPlan(plan) {
   if (plan.category) updates.categoryId = plan.category.id;
   if (p.dueDate) updates.dueDate = p.dueDate;
   if (plan.urls.length) updates.taskLinks = plan.urls.map(value => ({ type: 'url', value }));
+  // plan.gcal: the line's !gcal / !nogcal, else the remembered choice (the bar's
+  // and the composer's plans both carry it); an explicit one is remembered
+  const gcal = typeof plan.gcal === 'boolean' ? plan.gcal : p.gcal === true;
+  if (gcal) updates.gcal = true;
+  if (p.gcal !== null && p.gcal !== undefined) setGcalDefault(p.gcal);
   updateTask(task.id, updates);
   return { taskId: task.id, created: true, before: null };
 }
@@ -895,6 +916,7 @@ export function updateFromPlan(plan) {
   if (plan.category) updates.categoryId = plan.category.id;
   if (p.dueDate) updates.dueDate = p.dueDate;
   else if (p.clearDate) updates.dueDate = null;
+  if (typeof p.gcal === 'boolean' && p.gcal !== (task.gcal === true)) updates.gcal = p.gcal;
   if (plan.urls.length) {
     const links = [...linkListOf(task), ...plan.urls.map(value => ({ type: 'url', value }))];
     updates.taskLinks = links;

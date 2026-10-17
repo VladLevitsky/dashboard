@@ -34,6 +34,10 @@ const COMMANDS = table({
   nopriority: { kind: 'pin', value: false },
   noprimary: { kind: 'pin', value: false },
   timer: { kind: 'timer' },
+  gcal: { kind: 'gcal', value: true },
+  nogcal: { kind: 'gcal', value: false },
+  calendar: { kind: 'gcal', value: true },
+  nocalendar: { kind: 'gcal', value: false },
   nodate: { kind: 'nodate' },
   url: { kind: 'url', needsValue: true },
   category: { kind: 'category', needsValue: true },
@@ -321,7 +325,7 @@ function suggestCommand(name) {
  * @param {{ now?: Date, categories?: Array<{id, name, slot}> }} options
  * @returns {{
  *   title: string, explicitTask: boolean, color: string|null, pinned: boolean|null,
- *   timer: boolean, urls: string[], category: object|null, dueDate: string|null,
+ *   timer: boolean, gcal: boolean|null, urls: string[], category: object|null, dueDate: string|null,
  *   clearDate: boolean, past: boolean, dateSpan: {start, end}|null,
  *   issues: Array<{ level: 'error'|'warning', message: string, start: number, end: number }>,
  *   hasErrors: boolean
@@ -339,6 +343,7 @@ export function parseQuickCapture(text, options = {}) {
     color: null,
     pinned: null,
     timer: false,
+    gcal: null,
     urls: [],
     category: null,
     dueDate: null,
@@ -349,7 +354,7 @@ export function parseQuickCapture(text, options = {}) {
     hasErrors: false,
   };
   const parts = [];                  // words that stay as text: { text, index }
-  const seen = { date: false, color: false, pin: false, category: false };
+  const seen = { date: false, color: false, pin: false, category: false, gcal: false };
   const issue = (level, message, start, end) => result.issues.push({ level, message, start, end });
 
   const setDate = (dueDate, span, past) => {
@@ -404,6 +409,11 @@ export function parseQuickCapture(text, options = {}) {
         break;
       case 'timer':
         result.timer = true;
+        break;
+      case 'gcal':
+        if (seen.gcal && result.gcal !== def.value) issue('warning', '!gcal and !nogcal: using the last one', t.start, t.end);
+        seen.gcal = true;
+        result.gcal = def.value;
         break;
       case 'nodate':
         setDate(null, spanTo(i), false);
@@ -557,6 +567,7 @@ export const QUICK_CAPTURE_HELP = [
     title: 'More',
     rows: [
       { examples: [{ text: '!timer', insert: '!timer ' }], meaning: 'Start its timer (any other timer stops and is saved)' },
+      { examples: [{ text: '!gcal', insert: '!gcal ' }, { text: '!nogcal', insert: '!nogcal ' }], meaning: 'Put the task on Google Calendar (it needs a due date), or take it off' },
       { examples: [{ text: '!url:telcobridges.com', insert: '!url:' }], meaning: 'Add a link (https:// is added for you)' },
       { examples: [{ text: '!category:', insert: '!category:' }, { text: '!cat:', insert: '!cat:' }], meaning: 'Pick a category from the list' },
       { examples: [{ text: '\\fri', insert: null }], meaning: 'A \\ keeps a word as text. Clicking the date chip does it for you' },

@@ -14,7 +14,8 @@ import { model, editState } from '../state.js';
 import { showToast, colorToGlassRgba, glassCompensateColor, isColorCode } from '../utils.js';
 import { TASK_COLOR_LABELS } from '../constants.js';
 import { TASK_COLOR_ORDER, countDueItems } from '../core/agenda.js';
-import { fromDateKey } from '../core/quick-capture-parse.js';
+import { fromDateKey, toDateKey } from '../core/quick-capture-parse.js';
+import { renderBusyStrip, ensureBusyDay } from './busy-strip.js';
 import { getDueItems, openCalendarView, ownsEscape } from './calendar.js';
 import { createTaskPillElement, getTaskById, updateTask, refreshTaskViews } from './tasks.js';
 import { createCardItemElement } from '../components/sections.js';
@@ -122,6 +123,7 @@ function ensureDom() {
             <h5 class="eisenhower-section-heading today-heading" id="today-due-heading">Due today &amp; overdue</h5>
             <span class="today-count" id="today-due-count" hidden></span>
           </div>
+          <div class="today-daystrip" id="today-daystrip" hidden></div>
           <div class="today-column-content" id="today-due-content"></div>
         </section>
         <section class="today-column today-qa" aria-labelledby="today-qa-heading">
@@ -143,6 +145,7 @@ function ensureDom() {
     date: root.querySelector('#today-date'),
     dueCount: root.querySelector('#today-due-count'),
     dueContent: root.querySelector('#today-due-content'),
+    strip: root.querySelector('#today-daystrip'),
     qaCount: root.querySelector('#today-qa-count'),
     qaContent: root.querySelector('#today-qa-content'),
   };
@@ -162,6 +165,10 @@ function render() {
   const scrollTop = els.body.scrollTop;
   const now = new Date();
   els.date.textContent = now.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
+  // Busy times from Google Calendar (its own host: renderDue clears only its own)
+  const dayKey = toDateKey(now);
+  ensureBusyDay(dayKey);
+  renderBusyStrip(els.strip, dayKey, { now: now.getTime() });
   renderDue();
   renderQuickAccess();
   els.body.scrollTop = scrollTop;

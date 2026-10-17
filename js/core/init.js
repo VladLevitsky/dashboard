@@ -32,6 +32,7 @@ import {
 } from '../features/drag-drop.js';
 import { initTimeTracking } from '../features/time-tracking.js';
 import { initQuickCapture } from '../features/quick-capture.js';
+import { readGcalReturn, initGoogleCalendar } from '../features/google-calendar.js';
 import { openTaskSettingsModal } from '../features/task-categories.js';
 import { startRichTextImages } from '../features/rich-text-images.js';
 import { toggleTodayView } from '../features/today.js';
@@ -733,6 +734,10 @@ export { clearSearch };
 // ===== INITIALIZATION =====
 
 export async function init() {
+  // Back from Google's consent page: read and drop ?gcal=… before anything
+  // (the phone shell) starts using history
+  readGcalReturn();
+
   // Initialize auth state BEFORE restoreModel so scoped storage key is set correctly
   const wasLoggedIn = await initAuthOnStartup();
 
@@ -772,6 +777,9 @@ export async function init() {
   if (wasLoggedIn) {
     postRestoreAuthSync();
   }
+
+  // Google Calendar: status, one catch-up sync, and syncs after every upload
+  initGoogleCalendar();
 }
 
 // ===== DEVICE LAYOUT MODE PICKER =====

@@ -632,6 +632,20 @@ html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-glass-them
   html[data-shell="mobile"] .mx-compose-kind { padding: 0 8px; font-size: 12px; }
 }
 
+/* --- 9c. With the Google Calendar chip (connected; composer.js sets .has-gcal) ----------------
+   One more chip on the task tray: tighter dots, gaps and icon chips, and the date
+   chip shows only its label once a date is set, so the tray stays one row at 390
+   and 360 (a long date or a category name may still take a second row) */
+html[data-shell="mobile"] .mx-compose-tray.has-gcal { column-gap: 2px; }
+html[data-shell="mobile"] .mx-compose-tray.has-gcal .mx-tray-dot { width: 34px; }
+html[data-shell="mobile"] .mx-compose-tray.has-gcal .mx-tray-chip.mx-tray-icon { min-width: 34px; padding: 0 7px; }
+html[data-shell="mobile"] .mx-compose-tray.has-gcal .mx-tray-date.has-date .mx-tray-chip-icon { display: none; }
+@media (max-width: 374px) {
+  html[data-shell="mobile"] .mx-compose-tray.has-gcal .mx-tray-dot { width: 30px; }
+  html[data-shell="mobile"] .mx-compose-tray.has-gcal .mx-tray-chip { padding: 0 7px; }
+  html[data-shell="mobile"] .mx-compose-tray.has-gcal .mx-tray-chip.mx-tray-icon { min-width: 32px; padding: 0 6px; }
+}
+
 /* --- 9. Landscape phones ---------------------------------------------------------------------- */
 @media (orientation: landscape) and (max-height: 500px) {
   html[data-shell="mobile"] .mx-composer {

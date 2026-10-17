@@ -147,6 +147,12 @@ export async function cloudSave(prefetchedProfile = null) {
         }
       }
 
+      // The cloud copy changed: Google Calendar mirrors it (google-calendar.js).
+      // detail.payload is what was uploaded (the model may have moved on since)
+      if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+        try { window.dispatchEvent(new CustomEvent('cloud:saved', { detail: { payload } })); } catch (e) { /* no listeners to tell */ }
+      }
+
       return { ok: true };
     }
 

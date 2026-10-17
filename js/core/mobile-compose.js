@@ -39,6 +39,7 @@ const TRAIL = '[,.;:!?)"\'\\]]*';
 const COLOR_TOKEN = new RegExp(`^!(r|red|o|orange|y|yellow|b|blue)${TRAIL}$`, 'i');
 const PIN_TOKEN = new RegExp(`^!(priority|primary|nopriority|noprimary)${TRAIL}$`, 'i');
 const TIMER_TOKEN = new RegExp(`^!timer${TRAIL}$`, 'i');
+const GCAL_TOKEN = new RegExp(`^!(gcal|nogcal|calendar|nocalendar)${TRAIL}$`, 'i');
 const NODATE_TOKEN = new RegExp(`^!nodate${TRAIL}$`, 'i');
 const CATEGORY_TOKEN = /^!(category|cat):/i;
 const QUOTE_CLOSE = /"[,.;!?)]*$/;
@@ -173,7 +174,9 @@ const append = (text, token) => (token ? tidy(text ? `${text} ${token}` : token)
  *        'date' ('today'|'tomorrow'|'tue'…|'next mon'|'YYYY-MM-DD'|null = No date)
  *        'timer' (toggles; value ignored)
  *        'category' (a category { id, name }, or a name; null removes)
- * opts: { now, categories, mode: 'create'|'update', defaults: { color, pinned } }
+ *        'gcal' (true|false|null: Google Calendar; defaults.gcal is the last
+ *               choice, or in update mode what the task has now)
+ * opts: { now, categories, mode: 'create'|'update', defaults: { color, pinned, gcal } }
  * → { text, caret }
  */
 export function setTokenField(text, field, value, opts = {}) {
@@ -213,6 +216,14 @@ export function setTokenField(text, field, value, opts = {}) {
     }
     case 'timer': {
       out = parsed.timer ? cut(src, rangesOf(src, TIMER_TOKEN)) : append(src, '!timer');
+      break;
+    }
+    case 'gcal': {
+      out = cut(src, rangesOf(src, GCAL_TOKEN));
+      const v = value == null ? null : !!value;
+      const same = v !== null && parsed.gcal === v;
+      const def = defaults.gcal == null ? null : !!defaults.gcal;
+      if (v !== null && !same && v !== def) out = append(out, v ? '!gcal' : '!nogcal');
       break;
     }
     case 'category': {
@@ -281,6 +292,7 @@ export function effectivePlan(parsed, defaults = {}, { mode = 'create' } = {}) {
   const color = pick(p.color || null, d.color || null);
   const pinned = pick(p.pinned == null ? null : p.pinned, d.pinned == null ? null : !!d.pinned);
   const category = pick(p.category || null, d.category || null);
+  const gcal = pick(p.gcal == null ? null : p.gcal, d.gcal == null ? null : !!d.gcal);
   const dueDate = p.dueDate ? { value: p.dueDate, source: 'line' } : { value: null, source: p.clearDate ? 'line' : null };
   return {
     mode,
@@ -290,7 +302,8 @@ export function effectivePlan(parsed, defaults = {}, { mode = 'create' } = {}) {
     dueDate: dueDate.value,
     clearDate: !!p.clearDate,
     timer: !!p.timer,
-    sources: { color: color.source, pinned: pinned.source, category: category.source, date: dueDate.source, timer: p.timer ? 'line' : null },
+    gcal: gcal.value,
+    sources: { color: color.source, pinned: pinned.source, category: category.source, date: dueDate.source, timer: p.timer ? 'line' : null, gcal: gcal.source },
   };
 }
 
@@ -311,12 +324,13 @@ const shortUrl = (url) => String(url).replace(/^https?:\/\//i, '').replace(/\/$/
  * context defaults folded in (create mode only).
  * args: { text, targetId?, target? (the live task or null), defaults?, now?,
  *         categories?, blank?: { start, end } (an open @ / !category: list),
- *         runningTaskId? }
- * → { mode, target, parsed, category, urls, issues, hasErrors, effective }
- *   parsed.color / parsed.pinned carry the effective values in create mode, so
+ *         runningTaskId?, gcalReady? (Google Calendar connected here) }
+ * → { mode, target, parsed, category, urls, gcal, issues, hasErrors, effective }
+ *   parsed.color / parsed.pinned carry the effective values in create mode, and
+ *   gcal the effective Google Calendar choice (update: the line's), so
  *   createFromPlan(plan) (quick-capture.js) commits exactly what the tray shows.
  */
-export function buildComposerPlan({ text = '', targetId = null, target = null, defaults = {}, now, categories = [], blank = null, runningTaskId = null } = {}) {
+export function buildComposerPlan({ text = '', targetId = null, target = null, defaults = {}, now, categories = [], blank = null, runningTaskId = null, gcalReady = false } = {}) {
   const src = String(text || '');
   const parseText = blank && blank.end > blank.start
     ? src.slice(0, blank.start) + ' '.repeat(blank.end - blank.start) + src.slice(blank.end)
@@ -346,9 +360,10 @@ export function buildComposerPlan({ text = '', targetId = null, target = null, d
         || urls.length
         || (category && category.id !== task.categoryId)
         || (parsed.dueDate && parsed.dueDate !== task.dueDate)
-        || (parsed.clearDate && !!task.dueDate);
+        || (parsed.clearDate && !!task.dueDate)
+        || (parsed.gcal !== null && parsed.gcal !== (task.gcal === true));
       const asked = parsed.color || parsed.pinned !== null || parsed.timer || parsed.urls.length ||
-        category || parsed.dueDate || parsed.clearDate;
+        category || parsed.dueDate || parsed.clearDate || parsed.gcal !== null;
       if (!changes) {
         issues.push(asked
           ? { level: 'error', message: 'The task already looks like that: nothing would change' }
@@ -359,13 +374,21 @@ export function buildComposerPlan({ text = '', targetId = null, target = null, d
     issues.push({ level: 'error', quiet: true, message: 'Type a name for the task' });
   }
 
-  const effective = effectivePlan(parsed, defaults, { mode });
+  // Same messages as quick-capture.js buildPlan()
+  if (parsed.gcal === true) {
+    const dated = parsed.dueDate || (mode === 'update' && task && task.dueDate && !parsed.clearDate);
+    if (!dated) issues.push({ level: 'warning', message: 'Google Calendar shows tasks that have a due date: add one' });
+    else if (!gcalReady) issues.push({ level: 'warning', message: 'Google Calendar isn’t connected here: it shows once it is' });
+  }
+
+  const effective = effectivePlan(parsed, gcalReady ? defaults : { ...defaults, gcal: null }, { mode });
   if (mode === 'create') category = effective.category;
   const planParsed = mode === 'create'
     ? { ...parsed, color: effective.color || 'blue', pinned: effective.pinned === true }
     : { ...parsed };
+  const gcal = mode === 'create' ? effective.gcal === true : parsed.gcal;
   issues.sort((a, b) => (a.level === b.level ? 0 : a.level === 'error' ? -1 : 1));
-  return { mode, target: task, parsed: planParsed, category, urls, issues, hasErrors: issues.some(i => i.level === 'error'), effective };
+  return { mode, target: task, parsed: planParsed, category, urls, gcal, issues, hasErrors: issues.some(i => i.level === 'error'), effective };
 }
 
 // ============================================================
@@ -435,6 +458,8 @@ export function lineFor(plan, { now, attempted = false, typed = true, runningTit
   if (p.timer) parts.push(runningTitle ? `starts timer, stops “${clip(runningTitle, 18)}”` : 'starts timer');
   if (plan.urls && plan.urls.length) parts.push(plan.urls.length === 1 ? shortUrl(plan.urls[0]) : `${plan.urls.length} links`);
   if (plan.category) parts.push(`# ${plan.category.name}`);
+  if (plan.mode === 'update' ? p.gcal === true : plan.gcal === true && p.dueDate) parts.push('on Google Calendar');
+  else if (plan.mode === 'update' && p.gcal === false) parts.push('off Google Calendar');
   return { level: 'preview', text: parts.join(' · ') };
 }
 

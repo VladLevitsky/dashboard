@@ -40,6 +40,7 @@ import * as timeApi from '../time-tracking.js';
 import * as categoriesApi from '../task-categories.js';
 import * as notesApi from '../edit-mode.js';
 import { getUsername } from '../../core/auth.js';
+import { isGcalTasksReady, getGcalDefault } from '../google-calendar.js';
 
 const CONFIRM_MS = 7000;
 const DRAFT_DEBOUNCE = 300;
@@ -56,6 +57,7 @@ const ICON = {
   calendar: svg('<rect x="3" y="4.5" width="18" height="16.5" rx="3"/><line x1="16" y1="2.5" x2="16" y2="6.5"/><line x1="8" y1="2.5" x2="8" y2="6.5"/><line x1="3" y1="10" x2="21" y2="10"/>', 16),
   watch: svg('<circle cx="12" cy="13.5" r="7.5"/><line x1="12" y1="6" x2="12" y2="2.5"/><line x1="9.5" y1="2.5" x2="14.5" y2="2.5"/><polyline points="12 10 12 13.5 14.5 15.5"/>', 18),
   hash: svg('<line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/>', 17),
+  gcal: svg('<rect x="3" y="4.5" width="18" height="16.5" rx="3"/><line x1="16" y1="2.5" x2="16" y2="6.5"/><line x1="8" y1="2.5" x2="8" y2="6.5"/><line x1="3" y1="10" x2="21" y2="10"/><polyline points="8.5 15.2 11 17.6 15.5 13.2"/>', 17),
   info: svg('<circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16.5"/><path d="M12 7.5h.01"/>', 18),
   close: svg('<line x1="17" y1="7" x2="7" y2="17"/><line x1="7" y1="7" x2="17" y2="17"/>', 14),
   back: svg('<polyline points="15 18 9 12 15 6"/>', 18),
@@ -567,8 +569,9 @@ function buildTray(kind) {
     refs.star = trayChip('mx-tray-star mx-tray-icon', ICON.star, '', trayPinned, 'Primary');
     refs.date = trayChip('mx-tray-date', ICON.calendar, 'Date', () => togglePanel('date'));
     refs.timer = trayChip('mx-tray-timer mx-tray-icon', ICON.watch, '', trayTimer, 'Start its timer');
+    refs.gcal = trayChip('mx-tray-gcal mx-tray-icon', ICON.gcal, '', trayGcal, 'Add to Google Calendar');
     refs.category = trayChip('mx-tray-cat mx-tray-icon', ICON.hash, '', () => togglePanel('category'), 'Category');
-    tray.append(dots, refs.star, refs.date, refs.timer, refs.category);
+    tray.append(dots, refs.star, refs.date, refs.timer, refs.gcal, refs.category);
   } else if (kind === 'note') {
     const lab = el('span', 'mx-tray-label', { text: 'in:' });
     refs.card = trayChip('mx-tray-card', ICON.doc, 'Card', () => togglePanel('card'));
@@ -629,8 +632,8 @@ function rewrite(field, value) {
   const mode = state.targetId ? 'update' : 'create';
   const target = getTask(state.targetId);
   const defaults = mode === 'update' && target
-    ? { color: target.color, pinned: !!target.pinned }
-    : { color: state.defaults.color, pinned: state.defaults.pinned };
+    ? { color: target.color, pinned: !!target.pinned, gcal: target.gcal === true }
+    : { color: state.defaults.color, pinned: state.defaults.pinned, gcal: gcalDefault() };
   const r = C.setTokenField(els.input.value, field, value, { now: new Date(), categories: categories(), mode, defaults });
   // End on a space, so the next typed word never glues onto the token ("!orangeCall")
   const text = r.text ? `${r.text} ` : '';
@@ -660,6 +663,19 @@ function trayPinned() {
 function trayTimer() {
   api.haptic('tick');
   rewrite('timer', true);
+}
+
+// Google Calendar: the last choice (google-calendar.js), only while connected
+function gcalDefault() {
+  return isGcalTasksReady() && getGcalDefault();
+}
+
+function trayGcal() {
+  const eff = state.plan ? state.plan.effective : null;
+  const target = getTask(state.targetId);
+  const current = eff && eff.gcal != null ? eff.gcal : (target ? target.gcal === true : gcalDefault());
+  api.haptic('tick');
+  rewrite('gcal', !current);
 }
 
 function paintTray(plan) {
@@ -700,6 +716,20 @@ function paintTray(plan) {
     setAttr(r.date, 'aria-label', due ? `Due ${C.describeDate(due, new Date())}. Change the date` : 'Pick a due date');
     setAttr(r.timer, 'aria-pressed', String(!!eff.timer));
     setClass(r.timer, 'is-set', !!eff.timer);
+    const gcalReady = isGcalTasksReady();
+    setHidden(r.gcal, !gcalReady && src.gcal !== 'line');
+    setClass(t.el, 'has-gcal', !r.gcal.hidden);   // one more chip: the tray tightens to stay one row
+    const onGcal = eff.gcal != null ? eff.gcal : (target ? target.gcal === true : false);
+    const gcalSrc = src.gcal || (target ? 'current' : null);
+    setAttr(r.gcal, 'aria-pressed', String(!!onGcal));
+    setClass(r.gcal, 'is-set', onGcal && gcalSrc === 'line');
+    setClass(r.gcal, 'is-default', onGcal && gcalSrc !== 'line');
+    setClass(r.gcal, 'is-off-set', !onGcal && gcalSrc === 'line');
+    const gcalTitle = onGcal
+      ? (gcalSrc === 'line' ? 'On Google Calendar' : `On Google Calendar · ${gcalSrc === 'current' ? 'as it is now' : 'your last choice'}`)
+      : 'Not on Google Calendar. Tap to add it';
+    setAttr(r.gcal, 'title', gcalTitle);
+    setAttr(r.gcal, 'aria-label', gcalTitle);
     const cats = categories();
     setHidden(r.category, cats.length === 0);
     const cat = eff.category;
@@ -1081,11 +1111,12 @@ function currentPlan() {
     text: els.input.value,
     targetId: state.targetId,
     target,
-    defaults: state.defaults,
+    defaults: { ...state.defaults, gcal: gcalDefault() },
     now: new Date(),
     categories: categories(),
     blank: p ? { start: p.start, end: p.end } : null,
     runningTaskId: runningTaskId(),
+    gcalReady: isGcalTasksReady(),
   });
 }
 

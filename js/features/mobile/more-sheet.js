@@ -3,7 +3,7 @@
 // keeps in the header and Settings, reachable without edit mode:
 //   account + sync status (Sync now / Sign in / Resolve), Light / Dark,
 //   Classic / Sunset, Time tracking, Completed tasks, Task categories,
-//   Writing & shortcuts, Cloud files, Backup (Download / Restore…),
+//   Writing & shortcuts, Cloud files, Google Calendar, Backup (Download / Restore…),
 //   Not on mobile, Layout (desktop preview only), Sign out.
 // It calls the existing entry points (setDarkMode, setGlassTheme + saveModel,
 // openTaskSettingsModal, openWritingHelp, openFileManager, the Settings backup
@@ -18,6 +18,7 @@ import { setImageFromRef } from '../../core/file-service.js';
 import { relativeTime } from '../../core/mobile-common.js';
 import { setDarkMode, setGlassTheme } from '../edit-mode.js';
 import { openFileManager } from '../file-manager.js';
+import { buildGcalPanel, getGcalStatus } from '../google-calendar.js';
 
 const svg = (body, size = 20, width = 2) =>
   `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="${width}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${body}</svg>`;
@@ -27,6 +28,7 @@ const ICONS = {
   categories: svg('<line x1="5" y1="9" x2="20" y2="9"></line><line x1="4" y1="15" x2="19" y2="15"></line><line x1="10" y1="3" x2="8" y2="21"></line><line x1="16" y1="3" x2="14" y2="21"></line>'),
   help: svg('<circle cx="12" cy="12" r="9"></circle><path d="M9.6 9.2a2.5 2.5 0 0 1 4.8.9c0 1.7-2.4 2.2-2.4 3.6"></path><line x1="12" y1="17" x2="12" y2="17.01"></line>'),
   files: svg('<path d="M18 10h-1.3A7 7 0 1 0 9 19h9a4.5 4.5 0 0 0 0-9z"></path>'),
+  calendar: svg('<rect x="3.5" y="5" width="17" height="15.5" rx="2.5"></rect><line x1="3.5" y1="10" x2="20.5" y2="10"></line><line x1="8" y1="3" x2="8" y2="7"></line><line x1="16" y1="3" x2="16" y2="7"></line>'),
   info: svg('<circle cx="12" cy="12" r="9"></circle><line x1="12" y1="11" x2="12" y2="16.5"></line><line x1="12" y1="7.6" x2="12" y2="7.61"></line>'),
   download: svg('<path d="M12 3v12"></path><polyline points="7 10 12 15 17 10"></polyline><path d="M4 20h16"></path>', 18),
   upload: svg('<path d="M12 15V3"></path><polyline points="7 8 12 3 17 8"></polyline><path d="M4 20h16"></path>', 18),
@@ -77,6 +79,7 @@ export function createMoreSheet(api, { openTime } = {}) {
   let signedIn = null;
   let status = null;         // { dot, text, action }
   let syncing = false;
+  let gcalRow = null;
 
   function row({ icon, label, value = '', onClick, cls = '' }) {
     const b = el('button', `mx-more-row ${cls}`.trim());
@@ -216,6 +219,8 @@ export function createMoreSheet(api, { openTime } = {}) {
       onClick: () => { if (window.openWritingHelp) window.openWritingHelp('writing'); },
     }));
     list.appendChild(row({ icon: ICONS.files, label: 'Cloud files', onClick: () => openFileManager() }));
+    gcalRow = row({ icon: ICONS.calendar, label: 'Google Calendar', value: gcalValue(), onClick: openGoogleCalendar });
+    list.appendChild(gcalRow);
     return group(null, list);
   }
 
@@ -234,6 +239,24 @@ export function createMoreSheet(api, { openTime } = {}) {
     const g = group('Backup', wrap);
     g.appendChild(el('p', 'mx-more-note', 'A JSON file of everything on this dashboard. Restoring replaces it (you are asked first).'));
     return g;
+  }
+
+  function gcalValue() {
+    const gcal = getGcalStatus();
+    return gcal && gcal.connected ? (gcal.needsReconnect ? 'Reconnect' : 'On') : '';
+  }
+
+  // The same panel as the account popover on a computer (google-calendar.js)
+  function openGoogleCalendar() {
+    api.openSheet({
+      id: 'gcal',
+      title: 'Google Calendar',
+      size: 'auto',
+      keyboardAware: true,
+      build(body) { buildGcalPanel(body, { title: false }); },
+      // Back on More: its row says what the sheet changed (text only, focus stays)
+      onClose() { if (gcalRow && gcalRow.isConnected) setText(gcalRow.querySelector('.mx-more-row-value'), gcalValue()); },
+    });
   }
 
   function openNotOnMobile() {
