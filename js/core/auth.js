@@ -31,7 +31,9 @@ export function getAuthToken() {
 
 // --- Centralized API call helper
 // Returns { ok, data?, error?, status? }
-export async function apiCall(method, path, body = null) {
+// keepSession: a 401 is just an answer (the Google sign-in routes: a Worker
+// without them yet, or a link step, must never end the session)
+export async function apiCall(method, path, body = null, { keepSession = false } = {}) {
   const headers = { 'Content-Type': 'application/json' };
   if (_auth.token) {
     headers['Authorization'] = `Bearer ${_auth.token}`;
@@ -46,7 +48,7 @@ export async function apiCall(method, path, body = null) {
     const res = await fetch(`${API_BASE}${path}`, opts);
 
     // Session expired / invalid token
-    if (res.status === 401) {
+    if (res.status === 401 && !keepSession) {
       clearAuthState();
       return { ok: false, error: 'Session expired. Please sign in again.', status: 401 };
     }
@@ -118,6 +120,115 @@ export async function login(username, password, turnstileToken = null) {
     error: result.error || 'Login failed.',
     turnstileRequired: !!(result.data && result.data.turnstile_required === true)
   };
+}
+
+// --- Google sign-in ("Continue with Google", linking from the account menu)
+// The Worker sends Google back to the dashboard with a single-use code in the
+// URL FRAGMENT (#google-signin=ok&code=… or =error&reason=…), never a session
+// token. The code only works with a secret this tab made before leaving
+// (sessionStorage), so a code that reaches another browser is useless there.
+
+const GOOGLE_SIGNIN_KEY = 'dashboard_google_signin';
+let _googleReturn = null; // { ok, code, reason, secret, mode } after coming back
+
+function randomKey() {
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  return btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+async function sha256Key(text) {
+  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)));
+  return btoa(String.fromCharCode(...digest)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+// First thing in init(): read and drop the fragment before anything (the
+// phone shell's history) uses the URL
+export function readGoogleSigninReturn() {
+  let params;
+  try { params = new URLSearchParams((location.hash || '').replace(/^#/, '')); } catch (e) { return; }
+  const value = params.get('google-signin');
+  if (!value) return;
+  try {
+    history.replaceState(history.state, '', location.pathname + location.search);
+  } catch (e) { /* the fragment just stays visible */ }
+  let saved = null;
+  try {
+    saved = JSON.parse(sessionStorage.getItem(GOOGLE_SIGNIN_KEY) || 'null');
+    sessionStorage.removeItem(GOOGLE_SIGNIN_KEY);
+  } catch (e) { saved = null; }
+  _googleReturn = {
+    ok: value === 'ok',
+    code: params.get('code') || '',
+    reason: params.get('reason') || '',
+    secret: (saved && typeof saved.secret === 'string') ? saved.secret : '',
+    mode: (saved && saved.mode === 'link') ? 'link' : 'signin'
+  };
+}
+
+export function takeGoogleSigninReturn() {
+  const r = _googleReturn;
+  _googleReturn = null;
+  return r;
+}
+
+// mode 'signin' (signed out) | 'link' (signed in: add Google to this account)
+// Returns { ok, url? , error?, status? }; the caller goes to url
+export async function startGoogleSignin(mode = 'signin') {
+  const secret = randomKey();
+  const r = await apiCall('POST', '/auth/google/start', { mode, proof: await sha256Key(secret) }, { keepSession: true });
+  const url = r.ok && r.data && typeof r.data.url === 'string' ? r.data.url : '';
+  if (!url.startsWith('https://accounts.google.com/')) {
+    const error = r.status === 404 ? 'Google sign-in isn’t available yet.' : (r.error || 'Couldn’t reach the server. Try again.');
+    return { ok: false, error, status: r.status };
+  }
+  try {
+    sessionStorage.setItem(GOOGLE_SIGNIN_KEY, JSON.stringify({ secret, mode, at: Date.now() }));
+  } catch (e) {
+    return { ok: false, error: 'This browser blocks the storage Google sign-in needs.' };
+  }
+  return { ok: true, url };
+}
+
+// Back from Google. Returns one of:
+//   { ok, kind: 'session', username }               signed in (same session as /login)
+//   { ok, kind: 'signup', email, suggestion }       a new Google account: pick a username
+//   { ok, kind: 'link', email }                     linked to the signed-in account
+//   { ok: false, error, reason }
+export async function finishGoogleSignin(code, secret) {
+  const r = await apiCall('POST', '/auth/google/finish', { code, secret }, { keepSession: true });
+  const d = r.data || {};
+  if (r.ok && d.token && d.username) {
+    setAuthState(d.token, d.username);
+    return { ok: true, kind: 'session', username: d.username };
+  }
+  if (r.ok && d.needsUsername) return { ok: true, kind: 'signup', email: d.email || '', suggestion: d.suggestion || '' };
+  if (r.ok && d.linked) return { ok: true, kind: 'link', email: d.email || '' };
+  return { ok: false, error: r.status === 401 ? 'Sign in again, then link Google from the account menu.' : (r.error || 'Google sign-in failed. Try again.'), reason: d.reason || '' };
+}
+
+// A new account for a Google login (after the security check)
+// Returns { ok, username?, error?, reason? }
+export async function registerWithGoogle(code, secret, username, turnstileToken) {
+  const r = await apiCall('POST', '/auth/google/register', { code, secret, username, turnstileToken }, { keepSession: true });
+  const d = r.data || {};
+  if (r.ok && d.token && d.username) {
+    setAuthState(d.token, d.username);
+    return { ok: true, username: d.username };
+  }
+  return { ok: false, error: r.error || 'Couldn’t create the account. Try again.', reason: d.reason || '' };
+}
+
+// { ok, linked, email, hasPassword } | { ok: false, status }
+export async function getGoogleSigninStatus() {
+  const r = await apiCall('GET', '/auth/google/status', null, { keepSession: true });
+  if (r.ok && r.data && typeof r.data.linked === 'boolean') return { ok: true, ...r.data };
+  return { ok: false, status: r.status, error: r.error };
+}
+
+export async function unlinkGoogleSignin() {
+  const r = await apiCall('POST', '/auth/google/unlink', null, { keepSession: true });
+  if (r.ok && r.data) return { ok: true, ...r.data };
+  return { ok: false, error: r.error || 'Couldn’t unlink. Try again.' };
 }
 
 // --- Log out (fire-and-forget the API call, always clear local state)

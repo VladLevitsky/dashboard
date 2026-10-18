@@ -6,7 +6,7 @@ import { $, $$, showToast, generateKey, escapeAttr } from '../utils.js';
 import { PLACEHOLDER_URL, ANIMATION_DELAY_MS, CARD_HIDE_DELAY_MS } from '../constants.js';
 import { saveModel, restoreModel, exportBackupFile, deepMergeModel, cleanupOldBackups } from './storage.js';
 import { setImageFromRef, getDisplaySrc, classifyImageRef, uploadFile, dataURLtoBlob, filenameFromDataUrl } from './file-service.js';
-import { isLoggedIn } from './auth.js';
+import { isLoggedIn, readGoogleSigninReturn } from './auth.js';
 import { htmlToPlainText } from './markdown.js';
 import { isPhoneDevice } from './mobile-device.js';
 import {
@@ -75,7 +75,7 @@ import {
 } from '../features/reminders.js';
 import { ensureSectionPlusButtons } from '../features/cards.js';
 import { initStickyNotes } from '../features/sticky-notes.js';
-import { initAuthOnStartup, postRestoreAuthSync } from '../features/auth-ui.js';
+import { initAuthOnStartup, postRestoreAuthSync, resumeGoogleSignin } from '../features/auth-ui.js';
 import { immediateCloudSave } from '../core/sync.js';
 
 // Module state
@@ -734,9 +734,10 @@ export { clearSearch };
 // ===== INITIALIZATION =====
 
 export async function init() {
-  // Back from Google's consent page: read and drop ?gcal=… before anything
-  // (the phone shell) starts using history
+  // Back from Google's consent page: read and drop ?gcal=… (Calendar) and
+  // #google-signin=… (sign-in) before anything (the phone shell) uses history
   readGcalReturn();
+  readGoogleSigninReturn();
 
   // Initialize auth state BEFORE restoreModel so scoped storage key is set correctly
   const wasLoggedIn = await initAuthOnStartup();
@@ -774,12 +775,15 @@ export async function init() {
   initQuickCapture();
 
   // Cloud sync: reconcile with server after local render (async, non-blocking)
-  if (wasLoggedIn) {
-    postRestoreAuthSync();
-  }
+  const startupSync = wasLoggedIn ? postRestoreAuthSync() : null;
 
   // Google Calendar: status, one catch-up sync, and syncs after every upload
   initGoogleCalendar();
+
+  // Back from Google sign-in: sign in, ask a new account for its username, or
+  // finish linking (not awaited: the dashboard is already usable). A link's
+  // toast waits for the startup sync, whose own toast would cover it
+  resumeGoogleSignin(startupSync);
 }
 
 // ===== DEVICE LAYOUT MODE PICKER =====

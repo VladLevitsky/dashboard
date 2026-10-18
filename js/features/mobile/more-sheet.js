@@ -19,6 +19,7 @@ import { relativeTime } from '../../core/mobile-common.js';
 import { setDarkMode, setGlassTheme } from '../edit-mode.js';
 import { openFileManager } from '../file-manager.js';
 import { buildGcalPanel, getGcalStatus } from '../google-calendar.js';
+import { buildGoogleSigninPanel } from '../auth-ui.js';
 
 const svg = (body, size = 20, width = 2) =>
   `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="${width}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${body}</svg>`;
@@ -29,6 +30,7 @@ const ICONS = {
   help: svg('<circle cx="12" cy="12" r="9"></circle><path d="M9.6 9.2a2.5 2.5 0 0 1 4.8.9c0 1.7-2.4 2.2-2.4 3.6"></path><line x1="12" y1="17" x2="12" y2="17.01"></line>'),
   files: svg('<path d="M18 10h-1.3A7 7 0 1 0 9 19h9a4.5 4.5 0 0 0 0-9z"></path>'),
   calendar: svg('<rect x="3.5" y="5" width="17" height="15.5" rx="2.5"></rect><line x1="3.5" y1="10" x2="20.5" y2="10"></line><line x1="8" y1="3" x2="8" y2="7"></line><line x1="16" y1="3" x2="16" y2="7"></line>'),
+  key: svg('<circle cx="8" cy="15" r="4"></circle><line x1="10.85" y1="12.15" x2="20" y2="3"></line><line x1="16.5" y1="6.5" x2="19" y2="9"></line><line x1="14" y1="9" x2="16" y2="11"></line>'),
   info: svg('<circle cx="12" cy="12" r="9"></circle><line x1="12" y1="11" x2="12" y2="16.5"></line><line x1="12" y1="7.6" x2="12" y2="7.61"></line>'),
   download: svg('<path d="M12 3v12"></path><polyline points="7 10 12 15 17 10"></polyline><path d="M4 20h16"></path>', 18),
   upload: svg('<path d="M12 15V3"></path><polyline points="7 8 12 3 17 8"></polyline><path d="M4 20h16"></path>', 18),
@@ -221,6 +223,7 @@ export function createMoreSheet(api, { openTime } = {}) {
     list.appendChild(row({ icon: ICONS.files, label: 'Cloud files', onClick: () => openFileManager() }));
     gcalRow = row({ icon: ICONS.calendar, label: 'Google Calendar', value: gcalValue(), onClick: openGoogleCalendar });
     list.appendChild(gcalRow);
+    if (isLoggedIn()) list.appendChild(row({ icon: ICONS.key, label: 'Google sign-in', onClick: openGoogleSignin }));
     return group(null, list);
   }
 
@@ -256,6 +259,16 @@ export function createMoreSheet(api, { openTime } = {}) {
       build(body) { buildGcalPanel(body, { title: false }); },
       // Back on More: its row says what the sheet changed (text only, focus stays)
       onClose() { if (gcalRow && gcalRow.isConnected) setText(gcalRow.querySelector('.mx-more-row-value'), gcalValue()); },
+    });
+  }
+
+  // Link / unlink Google sign-in: the account popover's panel (auth-ui.js)
+  function openGoogleSignin() {
+    api.openSheet({
+      id: 'google-signin',
+      title: 'Google sign-in',
+      size: 'auto',
+      build(body) { buildGoogleSigninPanel(body, { title: false, fallback: true }); },
     });
   }
 

@@ -560,6 +560,7 @@ html[data-shell="mobile"] #auth-modal .auth-close-btn {
   display: inline-flex; align-items: center; justify-content: center; font-size: 26px;
 }
 html[data-shell="mobile"] #auth-modal button[type="submit"] { min-height: var(--mx-hit); }
+html[data-shell="mobile"] #auth-modal .auth-google-btn { min-height: var(--mx-hit); font-size: 15px; touch-action: manipulation; }
 
 /* Task settings (categories, subtask templates) */
 html[data-shell="mobile"] #task-settings-modal .task-settings-dialog {

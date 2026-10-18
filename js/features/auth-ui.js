@@ -3,7 +3,20 @@
 
 import { TURNSTILE_SITE_KEY } from '../constants.js';
 import { $, showToast } from '../utils.js';
-import { isLoggedIn, getUsername, login, register, logout, initAuth } from '../core/auth.js';
+import {
+  isLoggedIn,
+  getUsername,
+  login,
+  register,
+  logout,
+  initAuth,
+  startGoogleSignin,
+  finishGoogleSignin,
+  registerWithGoogle,
+  getGoogleSigninStatus,
+  unlinkGoogleSignin,
+  takeGoogleSigninReturn
+} from '../core/auth.js';
 import {
   migrateToScopedStorage,
   syncOnLogin,
@@ -21,6 +34,7 @@ let _isRegisterMode = false;
 let _turnstileWidgetId = null;
 let _loginChallenge = false; // the server asked sign-in for the security check
 let _isSubmitting = false;
+let _googleSignup = null; // { code, secret, email }: a new Google account picking its username
 
 // --- Public: render auth button state (logged in vs out) ---
 export function renderAuthUI() {
@@ -64,6 +78,8 @@ function closeAuthModal() {
 function setAuthMode(isRegister) {
   _isRegisterMode = isRegister;
   _loginChallenge = false;
+  _googleSignup = null;
+  showGoogleSignupLook(false);
   const title = $('#auth-modal-title');
   const submitBtn = $('#auth-submit');
   const footerText = $('#auth-footer-text');
@@ -171,6 +187,7 @@ function setSubmitEnabled(enabled) {
 async function handleAuthSubmit(e) {
   e.preventDefault();
   if (_isSubmitting) return;
+  if (_googleSignup) { await handleGoogleSignupSubmit(); return; }
 
   const username = $('#auth-username').value.trim();
   const password = $('#auth-password').value;
@@ -233,9 +250,14 @@ async function handleAuthSubmit(e) {
     }
   }
 
-  // Success — migrate localStorage, restore model, sync with cloud
+  await completeSignIn(result.username);
+}
+
+// --- After any successful sign-in (password, Google, a new account) ---
+// Migrate localStorage, restore the account's model, sync with the cloud
+async function completeSignIn(username) {
   try {
-    migrateToScopedStorage(result.username);
+    migrateToScopedStorage(username);
 
     // Reset model to prevent data leaking between accounts
     resetModel();
@@ -270,11 +292,13 @@ async function handleAuthSubmit(e) {
 
     closeAuthModal();
     renderAuthUI();
-    showToast(`Signed in as ${result.username}`);
+    showToast(`Signed in as ${username}`);
     gcalAfterSignIn();
   } catch (err) {
     console.error('[Auth] Post-login flow failed:', err);
     showAuthError('Sign-in succeeded but loading data failed. Please refresh.');
+    // Back from Google the dialog may be closed: say it where it shows
+    if ($('#auth-modal').hidden) showToast('Signed in, but loading data failed. Please refresh.');
   } finally {
     _isSubmitting = false;
     setSubmitEnabled(true);
@@ -314,6 +338,224 @@ async function handleLogout() {
   showToast('Signed out');
 }
 
+// --- Google sign-in ---
+const GOOGLE_RETURN_MESSAGES = {
+  denied: 'Google sign-in was cancelled.',
+  expired: 'Google sign-in took too long. Try again.',
+  invalid: 'That Google sign-in was already used. Try again.',
+  identity: 'Google didn’t confirm a verified email for that account.',
+  exchange_failed: 'Google didn’t finish the sign-in. Try again.',
+  not_configured: 'Google sign-in isn’t set up on the server yet.'
+};
+
+function setGoogleButtonEnabled(enabled) {
+  const btn = $('#auth-google-btn');
+  if (btn) btn.disabled = !enabled;
+}
+
+// "Continue with Google": signs in, or creates an account (username step after)
+async function handleGoogleButton() {
+  if (_isSubmitting) return;
+  // Leaving for Google's page would drop unsaved edits
+  if (editState.enabled) { showAuthError('Save or cancel your edits first.'); return; }
+  clearAuthError();
+  _isSubmitting = true;
+  setSubmitEnabled(false);
+  setGoogleButtonEnabled(false);
+  const r = await startGoogleSignin('signin');
+  if (r.ok) { location.assign(r.url); return; }
+  showAuthError(r.error);
+  _isSubmitting = false;
+  setSubmitEnabled(true);
+  setGoogleButtonEnabled(true);
+}
+
+// The username step for a new Google account: the Create account form
+// without the password, with the security check
+function showGoogleSignupLook(on, email = '') {
+  const area = $('#auth-google-area');
+  if (area) area.hidden = on;
+  const note = $('#auth-google-note');
+  if (note) {
+    note.hidden = !on;
+    note.textContent = on ? `Signed in to Google as ${email}. Choose a username for your dashboard.` : '';
+  }
+  const pw = $('#auth-password-field');
+  if (pw) pw.hidden = on;
+  const pwInput = $('#auth-password');
+  if (pwInput) pwInput.required = !on;
+  const footer = document.querySelector('#auth-modal .auth-footer');
+  if (footer) footer.hidden = on;
+  if (on) {
+    const disclaimer = $('#auth-disclaimer');
+    if (disclaimer) disclaimer.hidden = true;
+  }
+}
+
+function openGoogleSignup({ code, secret, email, suggestion }) {
+  const modal = $('#auth-modal');
+  if (!modal) return;
+  setAuthMode(true);
+  _googleSignup = { code, secret, email };
+  showGoogleSignupLook(true, email);
+  $('#auth-username').value = suggestion || '';
+  $('#auth-password').value = '';
+  modal.hidden = false;
+  setTimeout(() => { const u = $('#auth-username'); u.focus(); u.select(); }, 100);
+}
+
+async function handleGoogleSignupSubmit() {
+  const username = $('#auth-username').value.trim();
+  if (!username) { showAuthError('Choose a username.'); return; }
+  const turnstileToken = getTurnstileToken();
+  if (!turnstileToken) { showAuthError('Please complete the security check.'); return; }
+  clearAuthError();
+  _isSubmitting = true;
+  setSubmitEnabled(false);
+  const g = _googleSignup;
+  const result = await registerWithGoogle(g.code, g.secret, username, turnstileToken);
+  if (!result.ok) {
+    // Used up, or from another tab: back to the start, where Google can be tried again
+    if (result.reason === 'invalid_code' || result.reason === 'wrong_browser') setAuthMode(false);
+    else resetTurnstile();
+    showAuthError(result.error);
+    _isSubmitting = false;
+    setSubmitEnabled(true);
+    return;
+  }
+  await completeSignIn(result.username);
+}
+
+// Called at the end of init(): finishes a sign-in / link that came back from
+// Google (readGoogleSigninReturn() took the fragment off the URL first).
+// startupSync: the signed-in startup sync, if any (a link waits for it)
+export async function resumeGoogleSignin(startupSync = null) {
+  const back = takeGoogleSigninReturn();
+  if (!back) return;
+  const linking = back.mode === 'link';
+  // A link's toasts wait for the startup sync, whose own toast would cover them
+  const afterStartupSync = async () => {
+    if (startupSync) { try { await startupSync; } catch (e) { /* its own problem */ } }
+  };
+  const fail = async (msg) => {
+    if (linking) { await afterStartupSync(); showToast(msg); return; }
+    openAuthModal();
+    showAuthError(msg);
+  };
+  if (!back.ok) { await fail(GOOGLE_RETURN_MESSAGES[back.reason] || 'Google sign-in failed. Try again.'); return; }
+  if (!back.secret) { await fail('Finish the Google sign-in in the tab that started it.'); return; }
+  const r = await finishGoogleSignin(back.code, back.secret);
+  if (!r.ok) { await fail(r.error); return; }
+  if (r.kind === 'session') { _isSubmitting = true; await completeSignIn(r.username); return; }
+  if (r.kind === 'signup') { openGoogleSignup({ code: back.code, secret: back.secret, email: r.email, suggestion: r.suggestion }); return; }
+  _googleStatus = { user: null, data: null };
+  await afterStartupSync();
+  showToast(r.email ? `Google sign-in linked (${r.email})` : 'Google sign-in linked');
+}
+
+// --- Google sign-in panel: the account popover (computer), More → Google sign-in (phone)
+let _googleStatus = { user: null, data: null }; // the last answer, per account
+
+function el(tag, cls, text) {
+  const n = document.createElement(tag);
+  if (cls) n.className = cls;
+  if (text != null) n.textContent = text;
+  return n;
+}
+
+// fallback: say so when the status can't be read (the phone sheet); the
+// popover just leaves its slot empty (hidden)
+export function buildGoogleSigninPanel(host, { title = true, fallback = false } = {}) {
+  if (!host) return;
+  const user = getUsername();
+  let confirming = false;
+  let busy = false;
+
+  const btn = (label, cls, onClick, action) => {
+    const b = el('button', `gcal-btn ${cls || ''}`.trim(), label);
+    b.type = 'button';
+    b.dataset.gsiAction = action;
+    b.addEventListener('click', onClick);
+    return b;
+  };
+
+  const paint = (loaded) => {
+    const active = document.activeElement;
+    const focused = active && host.contains(active) ? active.dataset.gsiAction || null : null;
+    host.textContent = '';
+    if (!isLoggedIn()) return;
+    const s = _googleStatus.user === user ? _googleStatus.data : null;
+    if (!s) {
+      if (loaded && fallback) {
+        host.classList.add('gcal-panel');
+        host.append(el('p', 'gcal-note', 'Google sign-in isn’t available right now.'));
+      }
+      return;
+    }
+    host.classList.add('gcal-panel');
+    if (title) host.append(el('div', 'gcal-panel-title', 'Google sign-in'));
+    if (s.linked) {
+      const who = el('p', 'gcal-who', 'Linked');
+      if (s.email) who.append(el('span', 'gcal-email', s.email));
+      host.append(who, el('p', 'gcal-note', s.hasPassword
+        ? 'Google opens this account. Your password still works too.'
+        : 'This account signs in with Google only.'));
+      if (s.hasPassword) {
+        const row = el('div', 'gcal-actions');
+        if (confirming) {
+          row.append(
+            el('p', 'gcal-note', 'Stop opening this account with Google?'),
+            btn('Unlink', 'gcal-btn-danger', unlink, 'unlink-yes'),
+            btn('Cancel', 'gcal-btn-quiet', () => { confirming = false; paint(true); }, 'unlink-no')
+          );
+        } else {
+          row.append(btn('Unlink', '', () => { confirming = true; paint(true); }, 'unlink'));
+        }
+        host.append(row);
+      }
+    } else {
+      host.append(
+        el('p', 'gcal-note', 'Also open this account with your Google account. Your password keeps working.'),
+        btn('Link Google account', 'gcal-btn-primary', link, 'link')
+      );
+    }
+    // Keyboard users stay in place: Unlink → Cancel, Cancel → Unlink
+    const next = { unlink: 'unlink-no', 'unlink-no': 'unlink' }[focused] || focused;
+    const target = next && [...host.querySelectorAll('[data-gsi-action]')].find((n) => n.dataset.gsiAction === next);
+    if (target) target.focus({ preventScroll: true });
+  };
+
+  async function link() {
+    if (busy) return;
+    if (editState.enabled) { showToast('Save or cancel your edits first'); return; }
+    busy = true;
+    const r = await startGoogleSignin('link');
+    if (r.ok) { location.assign(r.url); return; }
+    busy = false;
+    showToast(r.error);
+  }
+
+  async function unlink() {
+    if (busy) return;
+    busy = true;
+    const r = await unlinkGoogleSignin();
+    busy = false;
+    confirming = false;
+    if (getUsername() !== user) return;
+    if (!r.ok) { showToast(r.error); paint(true); return; }
+    _googleStatus = { user, data: { linked: false, email: null, hasPassword: r.hasPassword !== false } };
+    showToast('Google sign-in unlinked');
+    paint(true);
+  }
+
+  paint(false);
+  getGoogleSigninStatus().then((r) => {
+    if (getUsername() !== user || !host.isConnected) return;
+    _googleStatus = { user, data: r.ok ? { linked: r.linked, email: r.email || null, hasPassword: r.hasPassword !== false } : null };
+    paint(true);
+  });
+}
+
 // --- User popover ---
 function toggleUserPopover() {
   const popover = $('#auth-user-popover');
@@ -345,6 +587,7 @@ function toggleUserPopover() {
     syncStatus.textContent = isCloudDirty() ? 'Changes pending sync' : 'Synced';
   }
 
+  buildGoogleSigninPanel($('#auth-google'));
   buildGcalPanel($('#auth-gcal'));
 
   popover.hidden = false;
@@ -388,6 +631,18 @@ export function wireAuthEvents() {
   // Form submission
   const form = $('#auth-form');
   if (form) form.addEventListener('submit', handleAuthSubmit);
+
+  // Continue with Google
+  const googleBtn = $('#auth-google-btn');
+  if (googleBtn) googleBtn.addEventListener('click', handleGoogleButton);
+  // Back from Google's page with the browser's Back button (the page comes
+  // back from the back/forward cache): the form is usable again
+  window.addEventListener('pageshow', (e) => {
+    if (!e.persisted) return;
+    _isSubmitting = false;
+    setSubmitEnabled(true);
+    setGoogleButtonEnabled(true);
+  });
 
   // Logout button
   const logoutBtn = $('#auth-logout-btn');

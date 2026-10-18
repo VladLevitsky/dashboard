@@ -26,8 +26,8 @@ import {
   planPlacement, applyPlacement, snapshotColors, colorsSignature, restoreSnapshot, bucket, normColor,
   completeSubtaskUpdates, MOBILE_COLOR_LABELS, SEGMENT_LABELS,
 } from '../../core/mobile-tasks.js';
-import { buildMeta, ICONS } from './task-row.js?v=2026-10-mobile-4';
-import { shieldTaps } from './task-gestures.js?v=2026-10-mobile-4';
+import { buildMeta, ICONS } from './task-row.js?v=2026-10-mobile-5';
+import { shieldTaps } from './task-gestures.js?v=2026-10-mobile-5';
 
 const BATCH_MS = 7000;
 const SUBTASKS_SHOWN = 6;
