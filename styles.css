@@ -1432,6 +1432,12 @@ body {
      making view mode pixel-identical to the edit-mode preview */
   align-items: stretch;
   --grid-gap: 16px;
+  /* The grid engine measures the container right after changing its zoom and
+     columns (edit-mode toggle, applyCellSize). The reduced-motion rule in
+     glass.css gives every property a 0.01ms transition, which kept the old
+     zoom for one frame: leaving edit mode then sized the cards for the
+     zoomed-out grid and they clipped. Its geometry never transitions */
+  transition-property: none;
 }
 /* Header: pinned to grid row 1, which is auto-height (grid-template-rows: auto).
    Data cards live in rows 2+ which are uniform square cells. */

@@ -121,10 +121,11 @@ export function getGridOriginY(main) {
 /**
  * Apply computed cell sizes to the grid container as explicit pixel values.
  * Row 1 (header) is auto-height; all other rows are square cells — in BOTH modes.
+ * Returns true when the cell size changed.
  */
 export function applyCellSize() {
   const main0 = document.querySelector('.app-main');
-  if (!main0) return;
+  if (!main0) return false;
 
   // Device mode drives container width and column count.
   // Set max-width FIRST so getCellSize() measures the correct width.
@@ -134,9 +135,10 @@ export function applyCellSize() {
   document.body.dataset.device = mode;
 
   const { cellSize, main } = getCellSize();
-  if (!main || cellSize <= 0) return;
+  if (!main || cellSize <= 0) return false;
 
   const colSize = Math.floor(cellSize * 100) / 100; // avoid sub-pixel drift
+  const changed = main.style.gridAutoRows !== `${colSize}px`;
 
   main.style.gridTemplateColumns = `repeat(${getGridCols()}, ${colSize}px)`;
   main.style.gridTemplateRows = 'auto'; // row 1 = header, sized by content
@@ -149,6 +151,7 @@ export function applyCellSize() {
   main.style.setProperty('--grid-gap', `${GRID_GAP}px`);
   main.style.setProperty('--grid-pad-left', `${padL}px`);
   main.style.setProperty('--grid-origin-y', `${getGridOriginY(main)}px`);
+  return changed;
 }
 
 // ============================================================
@@ -187,6 +190,7 @@ export function mouseToGridCell(clientX, clientY) {
  * Apply explicit grid placement to a card element.
  * Optional `display` override ({row, rowSpan}) is used in view mode when
  * collapsed cards free up space — the STORED layout is never modified.
+ * Writes only what changes (re-fits run on an already placed card).
  */
 export function applyGridPlacement(el, section, display) {
   const colSpan = section.gridColSpan || getGridCols();
@@ -194,8 +198,10 @@ export function applyGridPlacement(el, section, display) {
   const row = (display && display.row) || section.gridRow;
 
   if (section.gridCol && row) {
-    el.style.gridColumn = `${section.gridCol} / span ${colSpan}`;
-    el.style.gridRow = `${row} / span ${rowSpan}`;
+    const gridColumn = `${section.gridCol} / span ${colSpan}`;
+    const gridRow = `${row} / span ${rowSpan}`;
+    if (el.style.gridColumn !== gridColumn) el.style.gridColumn = gridColumn;
+    if (el.style.gridRow !== gridRow) el.style.gridRow = gridRow;
   } else {
     // Not yet positioned (autoAssign will fix on next pass)
     el.style.gridColumn = `span ${colSpan}`;
@@ -517,6 +523,34 @@ export function computeGrownLayout(sections) {
   return cards;
 }
 
+/**
+ * Place the rendered cards where they are SHOWN: grown to fit their content
+ * (computeGrownLayout), then in view mode collapsed cards compacted on top
+ * (computeDisplayLayout). Display only: the sections are never touched.
+ * Runs after every grid render, and again in view mode when the cell size
+ * changes (window resize, the edit-mode zoom settling), because a card's
+ * content height in rows depends on it.
+ */
+export function applyShownLayout(sections) {
+  const main = document.querySelector('.app-main');
+  if (!main) return;
+  const isTileMode = main.classList.contains('edit-mode-tiles');
+  const collapsedMap = (editState.working || model).collapsedCards || {};
+
+  const grown = computeGrownLayout(sections);
+  const byId = grown ? new Map(grown.map(g => [g.id, g])) : null;
+  // Edit mode always shows the full designed layout (no collapse compaction)
+  const dm = isTileMode ? null : computeDisplayLayout(grown || sections, collapsedMap);
+
+  sections.forEach(section => {
+    if (section.type === 'header' || !section.gridCol || !section.gridRow) return;
+    const el = document.getElementById(section.id);
+    if (!el) return;
+    const g = byId && byId.get(section.id);
+    applyGridPlacement(el, section, dm ? dm.get(section.id) : (g ? { row: g.gridRow, rowSpan: g.gridRowSpan } : null));
+  });
+}
+
 // ============================================================
 // AUTO-ASSIGN POSITIONS (migration / new cards)
 // ============================================================
@@ -784,7 +818,11 @@ export function initResizeObserver() {
   _resizeObserver = new ResizeObserver(() => {
     clearTimeout(_resizeDebounce);
     _resizeDebounce = setTimeout(() => {
-      applyCellSize();
+      // New cell size = new content heights in rows: re-fit the shown layout
+      // (view mode; edit mode re-renders after every change it makes)
+      if (applyCellSize() && !editState.enabled && getActiveMode() !== 'mobile') {
+        applyShownLayout(currentSections());
+      }
     }, 100);
   });
 

@@ -492,9 +492,10 @@ Accessible via gear icon in edit mode. Contains:
 - **Header** pinned to grid row 1 (auto height via `grid-template-rows: auto`); data cards live in rows 2+; all row math offsets by real header height (`getGridOriginY`)
 - Each card stores `gridCol`, `gridRow`, `gridColSpan`, `gridRowSpan` — explicit placement, no CSS auto-flow, cards positioned relative to the grid only
 - Cards fill their grid area (`align-items: stretch`); white space lives inside the card
-- Key functions: `getCellSize()`, `applyCellSize()`, `applyGridPlacement()`, `mouseToGridCell()`, `computeDropPosition()`, `resolveCollisions()`, `computeGrownLayout()`, `autoAssignGridPositions()` (2D bin-packing)
-- `computeGrownLayout()` runs after every render (view AND edit mode): a card whose content outgrew its area at this screen width is SHOWN taller and the cards below move down, so nothing clips (collapsed cards are excluded from measurement). Display only, on copies: it never writes the flat props or `section.layouts`, so the saved layout changes only through explicit edits (drag, resize, add card). A layout designed on a wide screen therefore survives refreshes on a narrower one (where it just shows taller) — the old `reconcileRowSpans()` saved that growth and squished the wide layout (user report 2026-10-08)
-- `ResizeObserver` recomputes cell sizes on container resize (also observes the header for async image loads)
+- Key functions: `getCellSize()`, `applyCellSize()`, `applyGridPlacement()`, `mouseToGridCell()`, `computeDropPosition()`, `resolveCollisions()`, `computeGrownLayout()`, `applyShownLayout()`, `autoAssignGridPositions()` (2D bin-packing)
+- `computeGrownLayout()` runs after every render (view AND edit mode, through `applyShownLayout()`, which also lays collapse compaction on top in view mode): a card whose content outgrew its area at this screen width is SHOWN taller and the cards below move down, so nothing clips (collapsed cards are excluded from measurement). Display only, on copies: it never writes the flat props or `section.layouts`, so the saved layout changes only through explicit edits (drag, resize, add card). A layout designed on a wide screen therefore survives refreshes on a narrower one (where it just shows taller) — the old `reconcileRowSpans()` saved that growth and squished the wide layout (user report 2026-10-08)
+- `ResizeObserver` recomputes cell sizes on container resize (also observes the header for async image loads); in view mode a changed cell size re-runs `applyShownLayout()`, so narrowing the window never clips a card
+- The grid container never transitions (`.app-main { transition-property: none }`): glass.css's reduced-motion rule gives every property a 0.01ms transition, which kept the edit-mode zoom (0.7) for one frame, so the exit render measured the zoomed-out grid and clipped cards
 
 ### Card Collapse (view mode)
 - Chevron collapses a card to title-bar height; `computeDisplayLayout()` derives a DISPLAY layout where cards below rise by exactly the freed rows — per column, so intentional white space elsewhere is preserved
@@ -739,6 +740,7 @@ On phones the modals holding these editors (and the note viewer) are the mobile 
 - **Security**: narrowest Google permissions (no event reads, no Gmail), the refresh token encrypted at rest in the Worker, single-use hashed OAuth state + PKCE, an allowlist, Google errors never sign the dashboard out. Worker block, schema and tests in `Reference/Backend/`
 - Task editor: a date-only edit is no longer dropped on close / Back (the change snapshot includes the due date)
 - `cloudSave()` raises `cloud:saved` after each successful upload
+- Grid: leaving edit mode no longer clips cards when the system asks for reduced motion (the grid container no longer transitions), and narrowing the window re-fits cards to their content instead of clipping them (display only, as before)
 
 ### v5.4.2
 - **Edit subtask templates**: Settings → Tasks lists the saved templates; open one to rename it, edit / add / remove / reorder its subtasks, or delete it (draft, saved with Save). Confirming edit mode no longer reverts a template change made meanwhile (`subtaskTemplates` left out of `deepMergeModel`, like `taskCategories`)
