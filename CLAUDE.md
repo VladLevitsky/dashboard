@@ -485,6 +485,7 @@ Accessible via gear icon in edit mode. Contains:
 - Session token stored in localStorage (30-day expiry)
 - Profile syncs to D1 on: confirm edits, import, every 20 min while dirty; phones also 2.5 s after every save, on hide and on resume (Mobile Shell → Sync on phones)
 - 401 invalidates session but preserves local dashboard data
+- Sign-in security check: after many attempts on one account from different networks the Worker answers `403 { turnstile_required: true }`; the sign-in form then shows the Turnstile widget (same container as registration) and the next attempt sends `turnstileToken` (`login(username, password, turnstileToken)`). Too many from one network: `429` with a wait. Worker side: Reference/Backend (`api-worker.phase1.js`)
 
 ### Grid Engine (`js/features/grid-engine.js`) — single source of truth for layout
 - **24-column graph-paper grid**: uniform square cells (~36px at 1260px width), computed in JS as px values (never CSS %)

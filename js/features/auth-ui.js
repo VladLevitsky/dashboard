@@ -19,6 +19,7 @@ import { buildGcalPanel, afterSignIn as gcalAfterSignIn, resetGcalState } from '
 // --- Module state ---
 let _isRegisterMode = false;
 let _turnstileWidgetId = null;
+let _loginChallenge = false; // the server asked sign-in for the security check
 let _isSubmitting = false;
 
 // --- Public: render auth button state (logged in vs out) ---
@@ -54,6 +55,7 @@ function closeAuthModal() {
   const modal = $('#auth-modal');
   if (modal) modal.hidden = true;
   destroyTurnstile();
+  _loginChallenge = false;
   _isSubmitting = false;
   setSubmitEnabled(true);
 }
@@ -61,6 +63,7 @@ function closeAuthModal() {
 // --- Toggle between login and register modes ---
 function setAuthMode(isRegister) {
   _isRegisterMode = isRegister;
+  _loginChallenge = false;
   const title = $('#auth-modal-title');
   const submitBtn = $('#auth-submit');
   const footerText = $('#auth-footer-text');
@@ -203,9 +206,26 @@ async function handleAuthSubmit(e) {
       return;
     }
   } else {
-    result = await login(username, password);
+    // After many attempts on this account the server asks for the same
+    // security check as registration (it never locks the owner out)
+    const turnstileToken = _loginChallenge ? getTurnstileToken() : null;
+    if (_loginChallenge && !turnstileToken) {
+      showAuthError('Please complete the security check.');
+      _isSubmitting = false;
+      setSubmitEnabled(true);
+      return;
+    }
+
+    result = await login(username, password, turnstileToken);
 
     if (!result.ok) {
+      if (result.turnstileRequired && !_loginChallenge) {
+        _loginChallenge = true;
+        $('#auth-turnstile-container').hidden = false;
+        renderTurnstile();
+      } else if (_loginChallenge) {
+        resetTurnstile();
+      }
       showAuthError(result.error);
       _isSubmitting = false;
       setSubmitEnabled(true);

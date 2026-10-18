@@ -64,7 +64,7 @@ export async function apiCall(method, path, body = null) {
 
     if (!res.ok) {
       const msg = data?.error || data?.message || `Request failed (${res.status})`;
-      return { ok: false, error: msg, status: res.status };
+      return { ok: false, error: msg, status: res.status, data };
     }
 
     return { ok: true, data };
@@ -102,14 +102,22 @@ export async function register(username, password, turnstileToken) {
 }
 
 // --- Log in to an existing account
-// Returns { ok, username?, error? }
-export async function login(username, password) {
-  const result = await apiCall('POST', '/login', { username, password });
+// turnstileToken: only when the server asked for the security check (after
+// many attempts on this account from different places)
+// Returns { ok, username?, error?, turnstileRequired? }
+export async function login(username, password, turnstileToken = null) {
+  const body = { username, password };
+  if (turnstileToken) body.turnstileToken = turnstileToken;
+  const result = await apiCall('POST', '/login', body);
   if (result.ok && result.data) {
     setAuthState(result.data.token, result.data.username);
     return { ok: true, username: result.data.username };
   }
-  return { ok: false, error: result.error || 'Login failed.' };
+  return {
+    ok: false,
+    error: result.error || 'Login failed.',
+    turnstileRequired: !!(result.data && result.data.turnstile_required === true)
+  };
 }
 
 // --- Log out (fire-and-forget the API call, always clear local state)
