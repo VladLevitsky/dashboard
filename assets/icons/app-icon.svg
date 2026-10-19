@@ -1,65 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180" width="180" height="180">
-  <!-- Home-screen icon: the dashboard's frosted + lens with the azure living
-       light in its lit corner, on the classic silver canvas (square: iOS masks it) -->
-  <defs>
-    <linearGradient id="canvas" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#c8c9cc"/>
-      <stop offset="0.55" stop-color="#d5d6d8"/>
-      <stop offset="1" stop-color="#c5c6c9"/>
-    </linearGradient>
-    <radialGradient id="keylight" cx="0.88" cy="0.08" r="0.7">
-      <stop offset="0" stop-color="#eeeef0"/>
-      <stop offset="1" stop-color="#eeeef0" stop-opacity="0"/>
-    </radialGradient>
-    <radialGradient id="ice" cx="0.9" cy="0.25" r="0.45">
-      <stop offset="0" stop-color="rgb(186,199,224)" stop-opacity="0.55"/>
-      <stop offset="1" stop-color="rgb(186,199,224)" stop-opacity="0"/>
-    </radialGradient>
-    <radialGradient id="blush" cx="0.1" cy="0.9" r="0.5">
-      <stop offset="0" stop-color="rgb(228,210,216)" stop-opacity="0.55"/>
-      <stop offset="1" stop-color="rgb(228,210,216)" stop-opacity="0"/>
-    </radialGradient>
-    <radialGradient id="lens" cx="0.72" cy="0.2" r="0.85">
-      <stop offset="0" stop-color="#ffffff" stop-opacity="0.92"/>
-      <stop offset="0.45" stop-color="#f1f2f4" stop-opacity="0.82"/>
-      <stop offset="1" stop-color="#dcdde1" stop-opacity="0.9"/>
-    </radialGradient>
-    <linearGradient id="rim" x1="1" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#ffffff"/>
-      <stop offset="0.5" stop-color="#8a92a3" stop-opacity="0.35"/>
-      <stop offset="1" stop-color="#ffffff" stop-opacity="0.9"/>
-    </linearGradient>
-    <radialGradient id="pool" cx="0.5" cy="0.5" r="0.5">
-      <stop offset="0" stop-color="rgb(22,160,255)" stop-opacity="0.85"/>
-      <stop offset="0.35" stop-color="rgb(22,160,255)" stop-opacity="0.45"/>
-      <stop offset="0.7" stop-color="rgb(132,108,255)" stop-opacity="0.12"/>
-      <stop offset="1" stop-color="rgb(132,108,255)" stop-opacity="0"/>
-    </radialGradient>
-    <radialGradient id="core" cx="0.5" cy="0.5" r="0.5">
-      <stop offset="0" stop-color="#ffffff"/>
-      <stop offset="0.25" stop-color="rgb(236,250,255)"/>
-      <stop offset="0.55" stop-color="rgb(22,160,255)" stop-opacity="0.75"/>
-      <stop offset="1" stop-color="rgb(22,160,255)" stop-opacity="0"/>
-    </radialGradient>
-    <radialGradient id="halo" cx="0.5" cy="0.5" r="0.5">
-      <stop offset="0.6" stop-color="rgb(22,160,255)" stop-opacity="0.32"/>
-      <stop offset="1" stop-color="rgb(22,160,255)" stop-opacity="0"/>
-    </radialGradient>
-    <filter id="lift" x="-30%" y="-30%" width="160%" height="170%">
-      <feDropShadow dx="5" dy="9" stdDeviation="8" flood-color="#222834" flood-opacity="0.32"/>
-    </filter>
-  </defs>
-  <rect width="180" height="180" fill="url(#canvas)"/>
-  <rect width="180" height="180" fill="url(#keylight)"/>
-  <rect width="180" height="180" fill="url(#ice)"/>
-  <rect width="180" height="180" fill="url(#blush)"/>
-  <circle cx="90" cy="90" r="72" fill="url(#halo)"/>
-  <circle cx="90" cy="90" r="56" fill="url(#lens)" filter="url(#lift)"/>
-  <circle cx="90" cy="90" r="55.25" fill="none" stroke="url(#rim)" stroke-width="1.5"/>
-  <circle cx="114" cy="56" r="26" fill="url(#pool)"/>
-  <circle cx="114" cy="56" r="8" fill="url(#core)"/>
-  <g stroke="#27292e" stroke-width="10" stroke-linecap="round">
-    <line x1="90" y1="66" x2="90" y2="114"/>
-    <line x1="66" y1="90" x2="114" y2="90"/>
-  </g>
+  <!-- Home-screen icon: the "tsks." wordmark (Inter Black, outlined) on paper, with a navy dot.
+       Square and full bleed: iOS masks it, render-app-icon.cjs rounds or crops the rest.
+       Everything sits inside the maskable safe circle (radius 40%). -->
+  <rect width="180" height="180" fill="#f5f3ee"/>
+  <path fill="#0b0b0c" d="M45.71 80.80L50.32 80.80L50.32 87.81L45.71 87.81L45.71 99.03Q45.71 99.87 46.14 100.29Q46.57 100.71 47.53 100.71L47.53 100.71Q47.97 100.71 48.79 100.61Q49.62 100.50 49.89 100.40L49.89 100.40L51.04 107.30Q49.38 107.75 47.92 107.91Q46.45 108.06 45.16 108.06L45.16 108.06Q40.64 108.06 38.35 106.00Q36.05 103.93 36.05 99.92L36.05 99.92L36.05 87.81L32.64 87.81L32.64 80.80L36.05 80.80L36.05 74.41L45.71 74.41L45.71 80.80ZM64.52 108.14L64.52 108.14Q60.87 108.14 58.07 107.10Q55.28 106.07 53.53 104.16Q51.79 102.25 51.34 99.61L51.34 99.61L60.27 98.31Q60.75 99.90 61.83 100.75Q62.92 101.60 64.96 101.60L64.96 101.60Q66.37 101.60 67.17 101.17Q67.96 100.74 67.96 99.92L67.96 99.92Q67.96 99.15 67.22 98.70Q66.47 98.24 64.88 97.95L64.88 97.95L60.13 97.09Q56.04 96.34 54.00 94.36Q51.96 92.38 51.96 89.21L51.96 89.21Q51.96 86.40 53.46 84.45Q54.96 82.51 57.74 81.48Q60.51 80.46 64.36 80.46L64.36 80.46Q67.91 80.46 70.58 81.39Q73.24 82.31 74.87 84.04Q76.49 85.77 76.90 88.22L76.90 88.22L68.39 89.45Q68.08 88.13 67.02 87.51Q65.97 86.90 64.55 86.90L64.55 86.90Q63.30 86.90 62.43 87.35Q61.57 87.79 61.57 88.63L61.57 88.63Q61.57 89.23 62.09 89.76Q62.60 90.29 64.12 90.55L64.12 90.55L69.59 91.51Q73.70 92.23 75.73 94.01Q77.76 95.79 77.76 98.77L77.76 98.77Q77.76 101.65 76.04 103.75Q74.33 105.85 71.35 107.00Q68.37 108.14 64.52 108.14ZM89.39 107.66L79.74 107.66L79.74 71.86L89.39 71.86L89.39 89.83L89.73 89.83L96.22 80.80L107.07 80.80L97.95 92.57L107.31 107.66L96.31 107.66L90.84 98.19L89.39 100.02L89.39 107.66ZM119.84 108.14L119.84 108.14Q116.19 108.14 113.39 107.10Q110.59 106.07 108.85 104.16Q107.11 102.25 106.65 99.61L106.65 99.61L115.59 98.31Q116.07 99.90 117.15 100.75Q118.23 101.60 120.27 101.60L120.27 101.60Q121.69 101.60 122.48 101.17Q123.27 100.74 123.27 99.92L123.27 99.92Q123.27 99.15 122.53 98.70Q121.78 98.24 120.20 97.95L120.20 97.95L115.44 97.09Q111.36 96.34 109.32 94.36Q107.27 92.38 107.27 89.21L107.27 89.21Q107.27 86.40 108.78 84.45Q110.28 82.51 113.05 81.48Q115.83 80.46 119.67 80.46L119.67 80.46Q123.22 80.46 125.89 81.39Q128.56 82.31 130.18 84.04Q131.80 85.77 132.21 88.22L132.21 88.22L123.71 89.45Q123.39 88.13 122.34 87.51Q121.28 86.90 119.86 86.90L119.86 86.90Q118.61 86.90 117.75 87.35Q116.88 87.79 116.88 88.63L116.88 88.63Q116.88 89.23 117.40 89.76Q117.92 90.29 119.43 90.55L119.43 90.55L124.91 91.51Q129.01 92.23 131.04 94.01Q133.07 95.79 133.07 98.77L133.07 98.77Q133.07 101.65 131.36 103.75Q129.64 105.85 126.66 107.00Q123.68 108.14 119.84 108.14Z"/>
+  <circle cx="141.21" cy="101.51" r="6.15" fill="#1f3d63"/>
 </svg>
