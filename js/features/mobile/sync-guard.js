@@ -26,8 +26,8 @@ import { resetModel } from '../../state.js';
 import { restoreModel } from '../../core/storage.js';
 import { isLoggedIn, getDataOwner } from '../../core/auth.js';
 import { getActiveStorageKey, hasUnsyncedChanges, addApplyBlocker, isSyncDeferred, sameStoredContent, waitForCloudSave, refreshStoredMeta, noteAdoptedCopy } from '../../core/sync.js';
-import { store } from './ui.js?v=2026-10-mobile-9';
-import { anyLayerOpen } from './layers.js?v=2026-10-mobile-9';
+import { store } from './ui.js?v=2026-10-mobile-10';
+import { anyLayerOpen } from './layers.js?v=2026-10-mobile-10';
 
 const PUSH_DEBOUNCE_MS = 2500;
 const RETRY_MS = [4000, 8000, 16000];

@@ -21,13 +21,13 @@
 import { model } from '../../state.js';
 import { isLoggedIn } from '../../core/auth.js';
 import { orderCardsForMobile, cardTitle } from '../../core/mobile-common.js';
-import { cardSummary, labelForIcon, fitThumbs, fitParts, linkedRefsSig, localDayKey } from '../../core/mobile-links.js';
+import { cardSummary, labelForIcon, fitParts, linkedRefsSig, localDayKey } from '../../core/mobile-links.js';
 import { getQuickAccessItems, reconcileQuickAccessItems, openQuickLinkModal } from '../quick-access.js';
 import { openItemCreator } from '../item-creator.js';
-import { initCardItems, enhance, openItemSheet, buildCardBody, buildQuickAccess, iconThumb, buildMoveItemsButton } from './card-items.js?v=2026-10-mobile-9';
-import { initSearch, openSearch } from './search-view.js?v=2026-10-mobile-9';
-import { initFileSheet, installFileOpener, uninstallFileOpener } from './file-sheet.js?v=2026-10-mobile-9';
-import { enhanceDateInput, removeDateField } from './date-field.js?v=2026-10-mobile-9';
+import { initCardItems, enhance, openItemSheet, buildCardBody, buildQuickAccess, buildMoveItemsButton } from './card-items.js?v=2026-10-mobile-10';
+import { initSearch, openSearch } from './search-view.js?v=2026-10-mobile-10';
+import { initFileSheet, installFileOpener, uninstallFileOpener } from './file-sheet.js?v=2026-10-mobile-10';
+import { enhanceDateInput, removeDateField } from './date-field.js?v=2026-10-mobile-10';
 
 const PLUS_SVG = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true" focusable="false"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>';
 const CHEVRON_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="6 9 12 15 18 9"/></svg>';
@@ -134,7 +134,7 @@ function paintCard(section) {
   const title = cardTitle(model, section);
   const sum = cardSummary(model[id]);
   const notes = notesCount(id);
-  const headSig = JSON.stringify([title, sum.label, sum.thumbs.map(i => [i.icon, i.invertDark || false]), notes, open, themeKey()]);
+  const headSig = JSON.stringify([title, sum.label, sum.parts, notes, open]);
   if (headSig !== entry.headSig) {
     entry.headSig = headSig;
     paintHead(entry, section, { title, sum, notes, open });
@@ -186,26 +186,15 @@ function paintHead(entry, section, { title, sum, notes, open }) {
   const summary = document.createElement('span');
   summary.className = 'mx-card-sum';
   summary.setAttribute('aria-hidden', 'true');
-  if (sum.thumbs.length) {
-    sum.thumbs.forEach(icon => {
-      const thumb = iconThumb(icon, 20);
-      const img = thumb.querySelector('img');
-      if (img) img.addEventListener('load', () => fitSummary(summary, summary.getBoundingClientRect().width));
-      summary.appendChild(thumb);
-    });
-    const more = document.createElement('span');
-    more.className = 'mx-card-more';
-    summary.appendChild(more);
-  } else {
-    // One span per count, so a narrow header drops whole counts
-    sum.parts.forEach((part, i) => {
-      const text = document.createElement('span');
-      text.className = 'mx-card-count';
-      text.textContent = i ? `· ${part}` : part;
-      summary.appendChild(text);
-    });
-  }
-  summary._mxSum = { thumbs: sum.thumbs.length, more: sum.more };
+  // Counts only: icons show as themselves in the open card, never beside the title
+  // (one span per count, so a narrow header drops whole counts)
+  sum.parts.forEach((part, i) => {
+    const text = document.createElement('span');
+    text.className = 'mx-card-count';
+    text.textContent = i ? `· ${part}` : part;
+    summary.appendChild(text);
+  });
+  summary._mxSum = {};
   toggle.append(t, summary);
   toggle.addEventListener('click', () => toggleCard(id));
   head.appendChild(toggle);
@@ -248,9 +237,9 @@ function paintHead(entry, section, { title, sum, notes, open }) {
 }
 
 // --- Collapsed header summary: whole pieces only ---------------------------------------
-// The summary gets whatever width the title leaves. A thumb, a "+N" or a count
-// is shown whole or not at all: folded thumbs go into the "+N", counts that
-// don't fit drop out, and a summary too narrow for one piece is left empty.
+// The summary gets whatever width the title leaves. A count is shown whole or
+// not at all: counts that don't fit drop out, and a summary too narrow for one
+// is left empty.
 // Re-fitted when its width changes (rotation, a new title); writes only when
 // the fit changes.
 const GAP = 4;
@@ -272,36 +261,11 @@ function fitSummary(summary, avail) {
   // Not on screen (another tab): fitted when it shows, as its width changes then
   if (!info || !summary.getClientRects().length) return;
   const kids = [...summary.children];
-  let fit;
-  if (info.thumbs) {
-    const more = kids[kids.length - 1];
-    if (info.moreW == null) {
-      // Widest "+N" it can need (every thumb folded), measured once
-      more.textContent = `+${info.thumbs + info.more}`;
-      info.moreW = more.getBoundingClientRect().width;
-    }
-    // A picture that has nothing to show yet (an R2 image while signed out
-    // or still loading) folds into the "+N" too; its load re-fits
-    const thumbs = kids.slice(0, info.thumbs);
-    const ready = thumbs.filter(el => {
-      const img = el.querySelector('img');
-      return !img || !!img.getAttribute('src');
-    });
-    const k = fitThumbs({ count: ready.length, more: info.more + (info.thumbs - ready.length), thumbW: 20, moreW: info.moreW, gap: GAP, avail });
-    const n = info.thumbs - k + info.more;
-    fit = `${k}|${n}|${ready.length}`;
-    if (fit === info.fit) return;
-    const shown = new Set(ready.slice(0, k));
-    thumbs.forEach(el => { el.hidden = !shown.has(el); });
-    more.hidden = k === 0 || n === 0;
-    more.textContent = n > 0 ? `+${n}` : '';
-  } else {
-    if (!info.widths) info.widths = kids.map(el => el.getBoundingClientRect().width);
-    const j = fitParts(info.widths, { gap: GAP, avail });
-    fit = String(j);
-    if (fit === info.fit) return;
-    kids.forEach((el, i) => { el.hidden = i >= j; });
-  }
+  if (!info.widths) info.widths = kids.map(el => el.getBoundingClientRect().width);
+  const j = fitParts(info.widths, { gap: GAP, avail });
+  const fit = String(j);
+  if (fit === info.fit) return;
+  kids.forEach((el, i) => { el.hidden = i >= j; });
   info.fit = fit;
 }
 

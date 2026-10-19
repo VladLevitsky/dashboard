@@ -41,9 +41,9 @@
 //     opener (returnFocus: an element, or a function giving one when the
 //     opener may have been rebuilt meanwhile).
 
-import { registerLayer, syncHistory } from './layers.js?v=2026-10-mobile-9';
-import { animate, haptic, reduceMotion } from './ui.js?v=2026-10-mobile-9';
-import { closeTimePicker } from './time-picker.js?v=2026-10-mobile-9';
+import { registerLayer, syncHistory } from './layers.js?v=2026-10-mobile-10';
+import { animate, haptic, reduceMotion } from './ui.js?v=2026-10-mobile-10';
+import { closeTimePicker } from './time-picker.js?v=2026-10-mobile-10';
 import { parseTypedDate, dateWords, dateWordsLong, typedDateText, dateHint, isDateKey } from '../../core/due-date.js';
 import { dateChips } from '../../core/mobile-compose.js';
 
