@@ -437,11 +437,17 @@ export async function resumeGoogleSignin(startupSync = null) {
   const afterStartupSync = async () => {
     if (startupSync) { try { await startupSync; } catch (e) { /* its own problem */ } }
   };
+  // Signed in (a link, or a return that landed in another signed-in window):
+  // a toast, never the Sign In dialog over the account
   const fail = async (msg) => {
-    if (linking) { await afterStartupSync(); showToast(msg); return; }
+    if (linking || isLoggedIn()) { await afterStartupSync(); showToast(msg); return; }
     openAuthModal();
     showAuthError(msg);
   };
+  // The used state, no secret, signed in: a Back into Google's page after a
+  // finished trip (an installed app keeps Google's pages in its history) came
+  // back again. Nothing to say
+  if (!back.ok && back.reason === 'invalid' && !back.secret && isLoggedIn()) return;
   if (!back.ok) { await fail(GOOGLE_RETURN_MESSAGES[back.reason] || 'Google sign-in failed. Try again.'); return; }
   if (!back.secret) { await fail('Finish the Google sign-in in the tab that started it.'); return; }
   const r = await finishGoogleSignin(back.code, back.secret);
@@ -548,12 +554,21 @@ export function buildGoogleSigninPanel(host, { title = true, fallback = false } 
     paint(true);
   }
 
-  paint(false);
-  getGoogleSigninStatus().then((r) => {
+  const load = () => getGoogleSigninStatus().then((r) => {
     if (getUsername() !== user || !host.isConnected) return;
     _googleStatus = { user, data: r.ok ? { linked: r.linked, email: r.email || null, hasPassword: r.hasPassword !== false } : null };
     paint(true);
   });
+  // Back from Google's page (the page comes back from the back/forward cache):
+  // Link works again, and the status is read again (a finished link shows)
+  host.dataset.gsiPanel = '';
+  host._gsiRestore = () => {
+    busy = false;
+    confirming = false;
+    if (host.isConnected && getUsername() === user) load();
+  };
+  paint(false);
+  load();
 }
 
 // --- User popover ---
@@ -642,6 +657,9 @@ export function wireAuthEvents() {
     _isSubmitting = false;
     setSubmitEnabled(true);
     setGoogleButtonEnabled(true);
+    // …and so do the Google sign-in panels (account popover, phone sheet)
+    _googleStatus = { user: null, data: null };
+    document.querySelectorAll('[data-gsi-panel]').forEach((h) => { if (typeof h._gsiRestore === 'function') h._gsiRestore(); });
   });
 
   // Logout button

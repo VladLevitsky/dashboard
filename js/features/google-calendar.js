@@ -653,7 +653,10 @@ export async function afterSignIn() {
   await refreshGcalStatus();
   if (back) {
     if (back.ok && status && status.connected) showToast('Google Calendar connected');
-    else if (!back.ok) showToast(RETURN_MESSAGES[back.reason] || 'Couldn’t connect Google Calendar. Try again');
+    // 'invalid' while the connection is healthy = a Back into Google's page
+    // after the trip came back again with the used state: say nothing (a
+    // Reconnect that fails while needsReconnect still says so)
+    else if (!back.ok && !(back.reason === 'invalid' && status && status.connected && !status.needsReconnect)) showToast(RETURN_MESSAGES[back.reason] || 'Couldn’t connect Google Calendar. Try again');
   }
   seenSig = gcalSignature(model);
   if (isGcalTasksReady()) syncGoogleCalendar();

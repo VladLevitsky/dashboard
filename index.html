@@ -31,6 +31,22 @@
     }
   } catch (e) {} })();
   </script>
+  <!-- Installable app (Chrome on Android: ⋮ → Install and create shortcut, older
+       Chrome: Add to home screen → Install; no service worker needed). Not on
+       iPhone / iPad: iOS would turn a home-screen bookmark into a standalone app
+       with its own storage (a fresh sign-in, no Back button), so iOS keeps
+       today's behaviour. Reference/mobile/notes/pwa.md; Reference/pwa-test.mjs
+       runs this script in a vm per user agent. -->
+  <script data-pwa-manifest>
+  (function () { try {
+    var n = navigator, ua = n.userAgent || '';
+    if (/iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && n.maxTouchPoints > 1)) return;
+    var l = document.createElement('link');
+    l.rel = 'manifest';
+    l.href = 'manifest.webmanifest';
+    document.head.appendChild(l);
+  } catch (e) {} })();
+  </script>
   <title>Personal Dashboard</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📊</text></svg>">
   <link rel="preconnect" href="https://fonts.googleapis.com" />

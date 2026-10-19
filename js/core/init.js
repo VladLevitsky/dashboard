@@ -3,10 +3,10 @@
 
 import { model, editState, currentData, currentSections } from '../state.js';
 import { $, $$, showToast, generateKey, escapeAttr } from '../utils.js';
-import { PLACEHOLDER_URL, ANIMATION_DELAY_MS, CARD_HIDE_DELAY_MS } from '../constants.js';
+import { PLACEHOLDER_URL, ANIMATION_DELAY_MS, CARD_HIDE_DELAY_MS, AUTH_TOKEN_KEY, AUTH_USERNAME_KEY } from '../constants.js';
 import { saveModel, restoreModel, exportBackupFile, deepMergeModel, cleanupOldBackups } from './storage.js';
 import { setImageFromRef, getDisplaySrc, classifyImageRef, uploadFile, dataURLtoBlob, filenameFromDataUrl } from './file-service.js';
-import { isLoggedIn, readGoogleSigninReturn } from './auth.js';
+import { isLoggedIn, readGoogleSigninReturn, getAuthToken, getUsername } from './auth.js';
 import { htmlToPlainText } from './markdown.js';
 import { isPhoneDevice } from './mobile-device.js';
 import {
@@ -24,15 +24,16 @@ import {
   wireNotepadEvents,
   wireMoveButtonEvents,
   openNotepad,
-  openNoteViewer
+  openNoteViewer,
+  isNotepadDirty
 } from '../features/edit-mode.js';
 import {
   handleDragOver,
   handleDrop
 } from '../features/drag-drop.js';
 import { initTimeTracking } from '../features/time-tracking.js';
-import { initQuickCapture } from '../features/quick-capture.js';
-import { readGcalReturn, initGoogleCalendar } from '../features/google-calendar.js';
+import { initQuickCapture, showActionToast } from '../features/quick-capture.js';
+import { readGcalReturn, initGoogleCalendar, refreshGcalStatus } from '../features/google-calendar.js';
 import { openTaskSettingsModal } from '../features/task-categories.js';
 import { startRichTextImages } from '../features/rich-text-images.js';
 import { toggleTodayView } from '../features/today.js';
@@ -57,7 +58,8 @@ import {
   toggleTasksSummary,
   closeTasksSummaryModal,
   openAddTaskModal,
-  openIdeasModal
+  openIdeasModal,
+  taskEditorHasChanges
 } from '../features/tasks.js';
 import {
   openMeetingsModal
@@ -733,7 +735,37 @@ export { clearSearch };
 
 // ===== INITIALIZATION =====
 
+// Back onto this page from the back/forward cache (e.g. the second Back after a
+// trip to Google lands on the page that started it). Signed in, out or as
+// someone else meanwhile (the page that came back from Google did it): this
+// copy is stale, so it reloads, or offers to while it holds unsaved edits.
+// Same account: Calendar's status is read again (the Google sign-in panel
+// refreshes itself, auth-ui.js); a changed saved dashboard is picked up by the
+// phone's storage listener. Every load re-stamps the saved copy (_sync), so
+// the saved copy itself is no signal
+function refreshAfterRestore() {
+  window.addEventListener('pageshow', (e) => {
+    if (!e.persisted) return;
+    let token = null;
+    let user = null;
+    try {
+      token = localStorage.getItem(AUTH_TOKEN_KEY) || null;
+      user = localStorage.getItem(AUTH_USERNAME_KEY) || null;
+    } catch (err) { return; }
+    if (token !== (getAuthToken() || null) || user !== (getUsername() || null)) {
+      if (editState.enabled || taskEditorHasChanges() || isNotepadDirty()) {
+        showActionToast('Signed in or out in another window', [{ label: 'Reload', run: () => location.reload() }]);
+      } else {
+        location.reload();
+      }
+      return;
+    }
+    if (isLoggedIn()) refreshGcalStatus();
+  });
+}
+
 export async function init() {
+  refreshAfterRestore();
   // Back from Google's consent page: read and drop ?gcal=… (Calendar) and
   // #google-signin=… (sign-in) before anything (the phone shell) uses history
   readGcalReturn();
