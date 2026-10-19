@@ -896,6 +896,16 @@ html[data-fx="v2"] body[data-style="glass"][data-theme] .today-daystrip.busy-str
   border-color: var(--glass-divider);
   box-shadow: var(--glass-rim);
 }
+/* Its ‹ Now › buttons: small glass keys (desktop Today and the phone tab) */
+html[data-fx="v2"] body[data-style="glass"][data-theme] .busy-strip .busy-strip-navbtn {
+  background: var(--glass-reflection), var(--glass-field);
+  border-color: var(--glass-divider);
+  box-shadow: var(--glass-rim);
+}
+html[data-fx="v2"] body[data-style="glass"][data-theme] .busy-strip .busy-strip-navbtn:hover:not(:disabled) {
+  background: var(--glass-reflection), var(--glass-hover), var(--glass-field);
+  color: var(--text);
+}
 
 /* --- 11d. Static lights ----------------------------------------------------
    The endless lights (indicator pool and core, Quick Access halos and rims,

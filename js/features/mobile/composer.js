@@ -4,8 +4,8 @@
 // focuses the input synchronously, so iOS raises the keyboard.
 //
 //   kinds    Task · Note · Idea · Project · Meeting (the text carries over)
-//   line     one input read by the desktop quick-capture parser: dates,
-//            !red !priority !timer !url: !category: !nodate, \ escapes, and
+//   line     one input read by the desktop quick-capture parser: dates, times,
+//            !red !p !timer !cal !url: !category: !nodate, \ escapes, and
 //            "@task" change mode (a pick becomes the ↳ target chip; leftover
 //            text becomes a subtask, commands change that task)
 //   tray     the effective colour, Primary, date, timer and category. A tray
@@ -41,6 +41,7 @@ import * as categoriesApi from '../task-categories.js';
 import * as notesApi from '../edit-mode.js';
 import { getUsername } from '../../core/auth.js';
 import { isGcalTasksReady, getGcalDefault } from '../google-calendar.js';
+import { dueTimeOf, formatTimeKey, prefersHour12, timeKeyFromInput } from '../../core/due-time.js';
 
 const CONFIRM_MS = 7000;
 const DRAFT_DEBOUNCE = 300;
@@ -268,8 +269,10 @@ function ensureDom() {
 
   els.dateInput = el('input', 'mx-compose-date-input', { type: 'date', tabindex: '-1', 'aria-hidden': 'true' });
   els.dateInput.addEventListener('change', onDatePicked);
+  els.timeInput = el('input', 'mx-compose-date-input mx-compose-time-input', { type: 'time', tabindex: '-1', 'aria-hidden': 'true' });
+  els.timeInput.addEventListener('change', onTimePicked);
 
-  els.root.append(els.grab, els.kinds, els.today, els.form, els.body, els.line, els.trayHost, els.panel, els.dateInput);
+  els.root.append(els.grab, els.kinds, els.today, els.form, els.body, els.line, els.trayHost, els.panel, els.dateInput, els.timeInput);
   host.append(els.scrim, els.root);
 
   wireDom();
@@ -281,7 +284,7 @@ function wireDom() {
   // the text fields takes focus on press; actions run on click
   const keep = (e) => {
     const t = e.target;
-    if (t === els.input || t === els.body || t === els.dateInput) return;
+    if (t === els.input || t === els.body || t === els.dateInput || t === els.timeInput) return;
     e.preventDefault();
   };
   els.root.addEventListener('pointerdown', keep);
@@ -568,6 +571,10 @@ function buildTray(kind) {
     });
     refs.star = trayChip('mx-tray-star mx-tray-icon', ICON.star, '', trayPinned, 'Primary');
     refs.date = trayChip('mx-tray-date', ICON.calendar, 'Date', () => togglePanel('date'));
+    // A due time sits under the date (the chip keeps its width, the tray its one row)
+    refs.dateTime = el('span', 'mx-tray-chip-time');
+    refs.dateTime.hidden = true;
+    refs.date.appendChild(refs.dateTime);
     refs.timer = trayChip('mx-tray-timer mx-tray-icon', ICON.watch, '', trayTimer, 'Start its timer');
     refs.gcal = trayChip('mx-tray-gcal mx-tray-icon', ICON.gcal, '', trayGcal, 'Add to Google Calendar');
     refs.category = trayChip('mx-tray-cat mx-tray-icon', ICON.hash, '', () => togglePanel('category'), 'Category');
@@ -632,9 +639,9 @@ function rewrite(field, value) {
   const mode = state.targetId ? 'update' : 'create';
   const target = getTask(state.targetId);
   const defaults = mode === 'update' && target
-    ? { color: target.color, pinned: !!target.pinned, gcal: target.gcal === true }
+    ? { color: target.color, pinned: !!target.pinned, gcal: target.gcal === true, time: dueTimeOf(target) }
     : { color: state.defaults.color, pinned: state.defaults.pinned, gcal: gcalDefault() };
-  const r = C.setTokenField(els.input.value, field, value, { now: new Date(), categories: categories(), mode, defaults });
+  const r = C.setTokenField(els.input.value, field, value, { now: new Date(), categories: categories(), mode, defaults, hour12: prefersHour12() });
   // End on a space, so the next typed word never glues onto the token ("!orangeCall")
   const text = r.text ? `${r.text} ` : '';
   setLine(text, text.length);
@@ -706,14 +713,21 @@ function paintTray(plan) {
     const starTitle = pinned ? (pinSrc === 'line' ? 'Primary' : `Primary · ${sourceTitle(pinSrc === 'default' ? state.defaults.source : pinSrc)}`) : 'Not Primary. Tap to make it Primary';
     setAttr(r.star, 'title', starTitle);
     setAttr(r.star, 'aria-label', starTitle);
-    const due = eff.dueDate || (target && !eff.clearDate ? target.dueDate || null : null);
-    const dueSrc = eff.dueDate ? 'line' : (due ? 'current' : null);
+    // The date (the line's, a time alone's day, else the task's own) and its time
+    const ownDate = target && !eff.clearDate ? target.dueDate || null : null;
+    const lineDate = eff.dueDate || (eff.dueTime && !ownDate ? eff.impliedDate : null);
+    const due = lineDate || ownDate;
+    const time = due ? (eff.dueTime || (target && !eff.clearTime && !eff.clearDate ? dueTimeOf(target) : null)) : null;
+    const lineSets = !!lineDate || src.time === 'line';
     setText(r.date.querySelector('.mx-tray-chip-label'), eff.clearDate && plan.mode === 'update' ? 'No date' : (due ? C.trayDateLabel(due, new Date()) : 'Date'));
-    setClass(r.date, 'is-set', dueSrc === 'line' || (eff.clearDate && plan.mode === 'update'));
-    setClass(r.date, 'is-default', dueSrc === 'current');
+    setText(r.dateTime, time ? formatTimeKey(time, { compact: true }) : '');
+    setHidden(r.dateTime, !time);
+    setClass(r.date, 'has-time', !!time);
+    setClass(r.date, 'is-set', lineSets || (eff.clearDate && plan.mode === 'update'));
+    setClass(r.date, 'is-default', !lineSets && !!due);
     setClass(r.date, 'has-date', !!due);          // narrow phones drop the icon then
     setAttr(r.date, 'aria-pressed', String(state.panel === 'date'));
-    setAttr(r.date, 'aria-label', due ? `Due ${C.describeDate(due, new Date())}. Change the date` : 'Pick a due date');
+    setAttr(r.date, 'aria-label', due ? `Due ${C.describeDate(due, new Date())}${time ? ` at ${formatTimeKey(time)}` : ''}. Change the date or time` : 'Pick a due date');
     setAttr(r.timer, 'aria-pressed', String(!!eff.timer));
     setClass(r.timer, 'is-set', !!eff.timer);
     const gcalReady = isGcalTasksReady();
@@ -816,12 +830,20 @@ function panelSignature(name) {
     return `picker|${state.picker.kind}|${state.picker.items.map(i => i.id).join(',')}`;
   }
   const eff = state.plan ? state.plan.effective : {};
-  return `${name}|${eff.dueDate || ''}|${eff.clearDate ? 1 : 0}|${eff.category ? eff.category.id : ''}|${state.noteCard || ''}|${todayKey()}`;
+  return `${name}|${eff.dueDate || ''}|${eff.clearDate ? 1 : 0}|${eff.dueTime || ''}|${eff.clearTime ? 1 : 0}|${state.targetId || ''}|${eff.category ? eff.category.id : ''}|${state.noteCard || ''}|${todayKey()}`;
+}
+
+// The time in effect: the line's, else (changing a task) the task's own
+function effectiveTime() {
+  const eff = state.plan ? state.plan.effective : {};
+  if (eff.dueTime) return eff.dueTime;
+  const target = getTask(state.targetId);
+  return target && !eff.clearTime && !eff.clearDate ? dueTimeOf(target) : null;
 }
 
 function datePanel() {
   const eff = state.plan ? state.plan.effective : {};
-  const row = el('div', 'mx-panel-row mx-panel-row--scroll', { role: 'group', 'aria-label': 'Due date' });
+  const row = el('div', 'mx-panel-row mx-panel-row--scroll', { role: 'group', 'aria-label': 'Due date and time' });
   row.appendChild(panelBack());
   C.dateChips(new Date()).forEach(chip => {
     row.appendChild(panelChip(chip.label, {
@@ -831,6 +853,20 @@ function datePanel() {
     }));
   });
   row.appendChild(panelChip('Pick…', { cls: 'mx-panel-chip--pick', onClick: pickTaskDate }));
+  // A time on the due date (Google Calendar shows the task then)
+  const time = effectiveTime();
+  row.appendChild(panelChip(time ? formatTimeKey(time, { compact: true }) : 'Time…', {
+    cls: 'mx-panel-chip--pick',
+    sub: time ? 'time' : '',
+    title: time ? 'Change the time' : 'Add a time',
+    onClick: pickTaskTime,
+  }));
+  if (time) {
+    row.appendChild(panelChip('No time', {
+      cls: 'mx-panel-chip--quiet',
+      onClick: () => { state.panel = null; rewrite('time', null); },
+    }));
+  }
   row.appendChild(panelChip('No date', {
     cls: 'mx-panel-chip--quiet',
     selected: !!eff.clearDate,
@@ -996,9 +1032,22 @@ function pickMeetingDate() {
   showNativePicker();
 }
 
+// The time picker opens on the time in effect, else on the next whole hour
+function pickTaskTime() {
+  const next = new Date(Date.now() + 3600000);
+  els.timeInput.value = effectiveTime() || `${String(next.getHours()).padStart(2, '0')}:00`;
+  showNativePicker(els.timeInput);
+}
+
+function onTimePicked() {
+  const v = timeKeyFromInput(els.timeInput.value);
+  if (!v) return;
+  state.panel = null;
+  rewrite('time', v);
+}
+
 // Inside the tap (showPicker needs the user activation)
-function showNativePicker() {
-  const input = els.dateInput;
+function showNativePicker(input = els.dateInput) {
   try {
     if (typeof input.showPicker === 'function') { input.showPicker(); return; }
   } catch { /* not allowed here: fall through */ }

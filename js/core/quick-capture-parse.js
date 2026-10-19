@@ -1,18 +1,20 @@
 // Personal Dashboard - Quick Capture parser (pure rules, no DOM)
 // Reads the one line typed into the quick capture bar, e.g.
-//   "Send deck to Marc fri !red !timer"
+//   "Send deck to Marc fri 3pm !red !timer"
 // and says what it means: the leftover text (the task name, or a new subtask
-// when an existing task is picked), a due date, a matrix color, Primary on/off,
-// the timer, links and a category, plus any problems. Errors block saving
-// (an unknown command, an impossible date); warnings don't (two colors: the
-// last one wins). No imports, so Reference/quick-capture-test.mjs runs it in Node.
+// when an existing task is picked), a due date and time, a matrix color,
+// Primary on/off, the timer, links and a category, plus any problems. Errors
+// block saving (an unknown command, an impossible date); warnings don't (two
+// colors: the last one wins). No imports, so Reference/quick-capture-test.mjs
+// runs it in Node.
 //
 // Every recognized piece keeps its position in the text, so the bar can turn a
 // false match back into plain text: a "\" before a word keeps it as text
-// ("\fri", "\!red", "\@marc").
+// ("\fri", "\3pm", "\!red", "\@marc").
 //
 // Dates are day-first (21/12/26 is 21 December) and are built from the local
-// calendar day, never through UTC.
+// calendar day, never through UTC. Times are 'HH:MM' on the local wall clock
+// (3pm, 3:30 pm, 15:30, noon); a time alone means its next occurrence.
 
 // --- Commands: !name or !name:value (case-insensitive)
 // Lookup tables have no prototype, so words like "constructor" or "toString"
@@ -29,23 +31,29 @@ const COMMANDS = table({
   y: { kind: 'color', color: 'yellow' },
   blue: { kind: 'color', color: 'blue' },
   b: { kind: 'color', color: 'blue' },
+  p: { kind: 'pin', value: true },
+  nop: { kind: 'pin', value: false },
   priority: { kind: 'pin', value: true },
   primary: { kind: 'pin', value: true },
   nopriority: { kind: 'pin', value: false },
   noprimary: { kind: 'pin', value: false },
   timer: { kind: 'timer' },
-  gcal: { kind: 'gcal', value: true },
-  nogcal: { kind: 'gcal', value: false },
+  cal: { kind: 'gcal', value: true },
+  nocal: { kind: 'gcal', value: false },
   calendar: { kind: 'gcal', value: true },
   nocalendar: { kind: 'gcal', value: false },
+  gcal: { kind: 'gcal', value: true },      // the old names still work
+  nogcal: { kind: 'gcal', value: false },
   nodate: { kind: 'nodate' },
+  notime: { kind: 'notime' },
   url: { kind: 'url', needsValue: true },
   category: { kind: 'category', needsValue: true },
   cat: { kind: 'category', needsValue: true },
 });
 
-// Names offered in "Did you mean …?" (the one-letter colors would match anything)
-const SUGGESTABLE = Object.keys(COMMANDS).filter(name => name.length >= 3);
+// Names offered in "Did you mean …?" (the one-letter colors would match
+// anything; the old !gcal names aren't offered any more)
+const SUGGESTABLE = Object.keys(COMMANDS).filter(name => name.length >= 3 && name !== 'gcal' && name !== 'nogcal');
 
 // --- Date vocabulary
 const WEEKDAYS = table({
@@ -255,6 +263,53 @@ function matchDate(tokens, i, today) {
 }
 
 // ============================================================
+// TIME PHRASES
+// ============================================================
+
+const MERIDIEM = /^([ap])\.?m\.?$/;   // am · pm · a.m. · p.m. (a word's last dot is already gone)
+
+function timeKey(h, m) {
+  if (!Number.isInteger(h) || !Number.isInteger(m) || h < 0 || h > 23 || m < 0 || m > 59) return null;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+// 12-hour clock: 12am is midnight, 12pm is noon
+function clock12(h, m, meridiem) {
+  if (h < 1 || h > 12 || m > 59) return null;
+  return timeKey((h % 12) + (meridiem === 'p' ? 12 : 0), m);
+}
+
+// Match a time starting at token i: 3pm · 3:30pm · 3 pm · 3:30 p.m. · 15:30 · 9:30 · noon.
+// Returns null (not a time, so it stays text: 13pm, 25:00) or { length, time }.
+// A bare number ("at 3") is never a time: too easy to mean something else.
+function matchTime(tokens, i) {
+  const t = tokens[i];
+  const w = t && t.word;
+  if (!w) return null;
+  if (w === 'noon') return { length: 1, time: '12:00' };
+  let m;
+  if ((m = /^(\d{1,2})(?::(\d{2}))?([ap])\.?m\.?$/.exec(w))) {
+    const time = clock12(+m[1], m[2] ? +m[2] : 0, m[3]);
+    return time ? { length: 1, time } : null;
+  }
+  if ((m = /^(\d{1,2})(?::(\d{2}))?$/.exec(w)) && !t.trail) {
+    const next = tokens[i + 1];
+    const meridiem = next && !next.escaped ? MERIDIEM.exec(next.word) : null;
+    if (meridiem) {
+      const time = clock12(+m[1], m[2] ? +m[2] : 0, meridiem[1]);
+      return time ? { length: 2, time } : null;
+    }
+  }
+  if ((m = /^(\d{1,2}):(\d{2})$/.exec(w))) {
+    const time = timeKey(+m[1], +m[2]);
+    return time ? { length: 1, time } : null;
+  }
+  return null;
+}
+
+const minutesOf = (key) => Number(key.slice(0, 2)) * 60 + Number(key.slice(3, 5));
+
+// ============================================================
 // VALUES: links, categories, typo suggestions
 // ============================================================
 
@@ -327,6 +382,9 @@ function suggestCommand(name) {
  *   title: string, explicitTask: boolean, color: string|null, pinned: boolean|null,
  *   timer: boolean, gcal: boolean|null, urls: string[], category: object|null, dueDate: string|null,
  *   clearDate: boolean, past: boolean, dateSpan: {start, end}|null,
+ *   dueTime: string|null ('HH:MM'), clearTime: boolean (!notime), timeSpan: {start, end}|null,
+ *   impliedDate: string|null (a time without a date: today, or tomorrow once it has passed;
+ *     resolveDue decides whether it is used),
  *   issues: Array<{ level: 'error'|'warning', message: string, start: number, end: number }>,
  *   hasErrors: boolean
  * }}
@@ -350,11 +408,15 @@ export function parseQuickCapture(text, options = {}) {
     clearDate: false,
     past: false,
     dateSpan: null,
+    dueTime: null,
+    clearTime: false,
+    timeSpan: null,
+    impliedDate: null,
     issues: [],
     hasErrors: false,
   };
   const parts = [];                  // words that stay as text: { text, index }
-  const seen = { date: false, color: false, pin: false, category: false, gcal: false };
+  const seen = { date: false, time: false, color: false, pin: false, category: false, gcal: false };
   const issue = (level, message, start, end) => result.issues.push({ level, message, start, end });
 
   const setDate = (dueDate, span, past) => {
@@ -364,6 +426,20 @@ export function parseQuickCapture(text, options = {}) {
     result.clearDate = !dueDate;
     result.past = !!past;
     result.dateSpan = dueDate ? span : null;
+  };
+
+  const setTime = (dueTime, span) => {
+    if (seen.time) issue('warning', 'Two times: using the last one', span.start, span.end);
+    seen.time = true;
+    result.dueTime = dueTime;
+    result.clearTime = !dueTime;
+    result.timeSpan = dueTime ? span : null;
+  };
+
+  // "by fri" / "due tomorrow" / "at 3pm": the lead word goes with the date or time
+  const dropLeadWord = (i, words) => {
+    const prev = parts[parts.length - 1];
+    if (prev && prev.index === i - 1 && !tokens[i - 1].escaped && words.test(prev.text)) parts.pop();
   };
 
   const handleCommand = (i) => {
@@ -403,7 +479,7 @@ export function parseQuickCapture(text, options = {}) {
         result.color = def.color;
         break;
       case 'pin':
-        if (seen.pin && result.pinned !== def.value) issue('warning', '!priority and !nopriority: using the last one', t.start, t.end);
+        if (seen.pin && result.pinned !== def.value) issue('warning', '!p and !nop: using the last one', t.start, t.end);
         seen.pin = true;
         result.pinned = def.value;
         break;
@@ -411,12 +487,15 @@ export function parseQuickCapture(text, options = {}) {
         result.timer = true;
         break;
       case 'gcal':
-        if (seen.gcal && result.gcal !== def.value) issue('warning', '!gcal and !nogcal: using the last one', t.start, t.end);
+        if (seen.gcal && result.gcal !== def.value) issue('warning', '!cal and !nocal: using the last one', t.start, t.end);
         seen.gcal = true;
         result.gcal = def.value;
         break;
       case 'nodate':
         setDate(null, spanTo(i), false);
+        break;
+      case 'notime':
+        setTime(null, spanTo(i));
         break;
       case 'url': {
         const v = value.replace(/[,;!?)\]]+$/, '').replace(/\.+$/, '');
@@ -481,9 +560,9 @@ export function parseQuickCapture(text, options = {}) {
   while (i < tokens.length) {
     const t = tokens[i];
 
-    // \word: keep as text. A whole date phrase stays text when its first word is escaped.
+    // \word: keep as text. A whole date or time phrase stays text when its first word is escaped.
     if (t.escaped) {
-      const m = matchDate(tokens, i, today);
+      const m = matchDate(tokens, i, today) || matchTime(tokens, i);
       const n = m ? m.length : 1;
       for (let k = 0; k < n; k++) parts.push({ text: k === 0 ? t.text : tokens[i + k].raw, index: i + k });
       i += n;
@@ -504,16 +583,40 @@ export function parseQuickCapture(text, options = {}) {
         for (let k = 0; k < m.length; k++) parts.push({ text: tokens[i + k].raw, index: i + k });
       } else {
         // "due tomorrow" / "by fri": the deadline word goes with the date
-        const prev = parts[parts.length - 1];
-        if (prev && prev.index === i - 1 && !tokens[i - 1].escaped && /^(by|due)$/i.test(prev.text)) parts.pop();
+        dropLeadWord(i, /^(by|due)$/i);
         setDate(toDateKey(m.date), span, m.past);
       }
       i += m.length;
       continue;
     }
 
+    const at = matchTime(tokens, i);
+    if (at) {
+      // "at 3pm" / "by 5pm" / "due 9:30"
+      dropLeadWord(i, /^(at|by|due)$/i);
+      setTime(at.time, { start: t.start, end: tokens[i + at.length - 1].end });
+      i += at.length;
+      continue;
+    }
+
     parts.push({ text: t.raw, index: i });
     i++;
+  }
+
+  // A time needs a day: the line's date, else the next time it comes round
+  // (today while it's still ahead, else tomorrow)
+  if (result.dueTime) {
+    const span = result.timeSpan;
+    const nowMinutes = now.getHours() * 60 + now.getMinutes();
+    if (result.clearDate) {
+      issue('warning', 'A time needs a due date: !nodate drops it', span.start, span.end);
+      result.dueTime = null;
+      result.timeSpan = null;
+    } else if (!result.dueDate) {
+      result.impliedDate = toDateKey(minutesOf(result.dueTime) >= nowMinutes ? today : addDays(today, 1));
+    } else if (result.dueDate === toDateKey(today) && minutesOf(result.dueTime) < nowMinutes) {
+      issue('warning', 'That time has already passed today', span.start, span.end);
+    }
   }
 
   result.title = parts.map(p => p.text).join(' ')
@@ -528,6 +631,29 @@ export function parseQuickCapture(text, options = {}) {
   result.issues.sort((a, b) => (a.level === b.level ? a.start - b.start : a.level === 'error' ? -1 : 1));
   result.hasErrors = result.issues.some(x => x.level === 'error');
   return result;
+}
+
+/**
+ * The due date and time a parsed line gives a task: target is the task an
+ * "@ pick" changes (null for a new one). A time alone keeps the task's own
+ * date, else lands on its next occurrence (parsed.impliedDate).
+ * → { dueDate, dueTime }: a value to set, null to clear, undefined = leave as is
+ */
+export function resolveDue(parsed, target = null) {
+  const p = parsed || {};
+  let dueDate;
+  let dueTime;
+  if (p.dueDate) dueDate = p.dueDate;
+  else if (p.clearDate) dueDate = null;
+  if (p.dueTime) {
+    dueTime = p.dueTime;
+    const own = target && typeof target.dueDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(target.dueDate);
+    if (dueDate === undefined && !own) dueDate = p.impliedDate || null;
+    if (!dueDate && !own) dueTime = undefined;
+  } else if (p.clearTime) {
+    dueTime = null;
+  }
+  return { dueDate, dueTime };
 }
 
 // ============================================================
@@ -553,24 +679,32 @@ export const QUICK_CAPTURE_HELP = [
       { examples: [{ text: 'eow', insert: 'eow ' }, { text: 'eom', insert: 'eom ' }], meaning: 'End of this week (Friday) or of this month' },
       { examples: [{ text: 'Dec 21', insert: 'Dec 21 ' }, { text: 'Dec 21st', insert: 'Dec 21st ' }, { text: '21 Dec', insert: '21 Dec ' }, { text: '21st of December 2026', insert: '21st of December 2026 ' }], meaning: 'Month names, any case' },
       { examples: [{ text: '21/12', insert: '21/12 ' }, { text: '21/12/26', insert: '21/12/26 ' }, { text: '21/12/2026', insert: '21/12/2026 ' }, { text: '21-12-2026', insert: '21-12-2026 ' }, { text: '21.12.2026', insert: '21.12.2026 ' }, { text: '2026-12-21', insert: '2026-12-21 ' }], meaning: 'Day first. Without a year it means the next 21 Dec' },
-      { examples: [{ text: '!nodate', insert: '!nodate ' }], meaning: 'Remove the due date' },
+      { examples: [{ text: '!nodate', insert: '!nodate ' }], meaning: 'Remove the due date (and its time)' },
+    ],
+  },
+  {
+    title: 'Time',
+    rows: [
+      { examples: [{ text: '3pm', insert: '3pm ' }, { text: '3:30 pm', insert: '3:30 pm ' }, { text: '15:30', insert: '15:30 ' }, { text: 'noon', insert: 'noon ' }], meaning: 'A time on the due date. Alone it means today, or tomorrow once that time has passed' },
+      { examples: [{ text: 'fri 9am', insert: 'fri 9am ' }, { text: 'tomorrow at 2pm', insert: 'tomorrow at 2pm ' }], meaning: 'With a date. Google Calendar shows the task at that time' },
+      { examples: [{ text: '!notime', insert: '!notime ' }], meaning: 'Remove the time (the date stays)' },
     ],
   },
   {
     title: 'Priority',
     rows: [
       { examples: [{ text: '!red', insert: '!red ', color: 'red' }, { text: '!orange', insert: '!orange ', color: 'orange' }, { text: '!yellow', insert: '!yellow ', color: 'yellow' }, { text: '!blue', insert: '!blue ', color: 'blue' }], meaning: 'Matrix color. Short: !r !o !y !b' },
-      { examples: [{ text: '!priority', insert: '!priority ' }, { text: '!nopriority', insert: '!nopriority ' }], meaning: 'Primary on or off' },
+      { examples: [{ text: '!p', insert: '!p ' }, { text: '!nop', insert: '!nop ' }], meaning: 'Primary on or off. Long: !priority !nopriority' },
     ],
   },
   {
     title: 'More',
     rows: [
       { examples: [{ text: '!timer', insert: '!timer ' }], meaning: 'Start its timer (any other timer stops and is saved)' },
-      { examples: [{ text: '!gcal', insert: '!gcal ' }, { text: '!nogcal', insert: '!nogcal ' }], meaning: 'Put the task on Google Calendar (it needs a due date), or take it off' },
+      { examples: [{ text: '!cal', insert: '!cal ' }, { text: '!nocal', insert: '!nocal ' }], meaning: 'Put the task on Google Calendar (it needs a due date), or take it off' },
       { examples: [{ text: '!url:telcobridges.com', insert: '!url:' }], meaning: 'Add a link (https:// is added for you)' },
       { examples: [{ text: '!category:', insert: '!category:' }, { text: '!cat:', insert: '!cat:' }], meaning: 'Pick a category from the list' },
-      { examples: [{ text: '\\fri', insert: null }], meaning: 'A \\ keeps a word as text. Clicking the date chip does it for you' },
+      { examples: [{ text: '\\fri', insert: null }, { text: '\\3pm', insert: null }], meaning: 'A \\ keeps a word as text. Clicking the date or time chip does it for you' },
     ],
   },
 ];

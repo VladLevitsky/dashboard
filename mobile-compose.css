@@ -355,6 +355,12 @@ html[data-shell="mobile"] .mx-compose-tray .mx-tray-chip[hidden] { display: none
 html[data-shell="mobile"] .mx-tray-chip-icon { display: inline-flex; }
 html[data-shell="mobile"] .mx-tray-chip-label { min-width: 0; max-width: 140px; overflow: hidden; text-overflow: ellipsis; }
 html[data-shell="mobile"] .mx-tray-chip-label[hidden] { display: none; }
+/* A due time: under the date, both a little smaller, no icon (the chip stays as wide as a date alone) */
+html[data-shell="mobile"] .mx-tray-chip-time { display: none; }
+html[data-shell="mobile"] .mx-tray-date.has-time { flex-direction: column; justify-content: center; gap: 1px; padding: 0 10px; }
+html[data-shell="mobile"] .mx-tray-date.has-time .mx-tray-chip-icon { display: none; }
+html[data-shell="mobile"] .mx-tray-date.has-time .mx-tray-chip-label { font-size: 11.5px; line-height: 1.1; }
+html[data-shell="mobile"] .mx-tray-date.has-time .mx-tray-chip-time { display: block; font-size: 11px; line-height: 1.1; font-weight: 600; opacity: 0.8; }
 html[data-shell="mobile"] .mx-tray-caret { display: inline-flex; margin-left: -1px; opacity: 0.7; }
 html[data-shell="mobile"] .mx-tray-chip:active { background-color: var(--glass-hover); }
 html[data-shell="mobile"] .mx-tray-star[aria-pressed="true"] svg polygon { fill: currentColor; }

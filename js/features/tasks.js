@@ -14,6 +14,8 @@ import { getTaskCategories, categoryColor } from './task-categories.js';
 import { attachImageUpload } from './rich-text-images.js';
 import { attachWritingFeatures, attachWritingView } from './writing/editor.js';
 import { isGcalTasksReady, getGcalDefault, setGcalDefault } from './google-calendar.js';
+import { dueTimeOf, settleDueTime, localTimeZone, timeKeyFromInput } from '../core/due-time.js';
+import { toDateKey } from '../core/quick-capture-parse.js';
 
 // Module state
 let currentTasksReminder = null;
@@ -194,7 +196,14 @@ export function updateTask(taskId, updates) {
     updates.order = getTasksByColor(updates.color).length;
   }
 
+  const previousTime = task.dueTime || null;
   Object.assign(task, updates);
+  // A due time goes with its date, in the time zone it was set in
+  settleDueTime(task, {
+    timeTouched: updates.dueTime !== undefined && updates.dueTz === undefined,
+    previousTime,
+    tz: localTimeZone()
+  });
   // Keep the time log's copy of the title/category current
   syncTaskTimeMeta(task);
   saveModel();
@@ -2333,8 +2342,16 @@ function openTaskEditorModal(taskData, titleText) {
               </label>
             </div>
             <div class="task-editor-field">
-              <label for="task-editor-date">Due Date (Optional)</label>
-              <input type="date" id="task-editor-date" />
+              <label for="task-editor-date">Due Date &amp; Time (Optional)</label>
+              <div class="task-editor-due-row">
+                <input type="date" id="task-editor-date" />
+                <span class="task-editor-time-wrap">
+                  <input type="time" id="task-editor-time" aria-label="Due time (optional)" title="A time on the due date (Google Calendar shows the task then)" />
+                  <button type="button" class="task-editor-time-clear" id="task-editor-time-clear" title="Remove the time" aria-label="Remove the time" hidden>
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true" focusable="false"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                  </button>
+                </span>
+              </div>
               <label class="task-editor-primary-label task-editor-gcal-label" id="task-editor-gcal-label" hidden>
                 <input type="checkbox" id="task-editor-gcal-checkbox" />
                 <span class="task-editor-primary-box"></span>
@@ -2604,9 +2621,12 @@ function openTaskEditorModal(taskData, titleText) {
   const nameInput = $('#task-editor-name');
   nameInput.value = taskData.title || '';
 
-  // Populate date field
+  // Populate date and time fields (a time without a date is dropped on save)
   const dateInput = $('#task-editor-date');
   dateInput.value = taskData.dueDate || '';
+  const timeInput = $('#task-editor-time');
+  const timeClear = $('#task-editor-time-clear');
+  timeInput.value = dueTimeOf(taskData) || '';
 
   // "Add to Google Calendar": only when this device knows the calendar is
   // connected (a hidden box never writes the flag, so a device that thinks it
@@ -2616,10 +2636,29 @@ function openTaskEditorModal(taskData, titleText) {
   const gcalShown = isGcalTasksReady();
   gcalLabel.hidden = !gcalShown;
   gcalCheckbox.checked = gcalShown && (currentEditingTaskId ? taskData.gcal === true : getGcalDefault());
-  const paintGcalDate = () => gcalLabel.classList.toggle('is-nodate', !dateInput.value);
-  paintGcalDate();
-  dateInput.oninput = paintGcalDate;
-  dateInput.onchange = paintGcalDate;
+  const paintDue = () => {
+    const nodate = !dateInput.value;
+    const notime = !timeInput.value;
+    if (gcalLabel.classList.contains('is-nodate') !== nodate) gcalLabel.classList.toggle('is-nodate', nodate);
+    if (timeInput.classList.contains('is-empty') !== notime) timeInput.classList.toggle('is-empty', notime);
+    if (timeClear.hidden !== notime) timeClear.hidden = notime;
+  };
+  paintDue();
+  dateInput.oninput = paintDue;
+  dateInput.onchange = paintDue;
+  // A time picked without a date means today
+  const onTime = () => {
+    if (timeInput.value && !dateInput.value) dateInput.value = toDateKey(new Date());
+    paintDue();
+  };
+  timeInput.oninput = onTime;
+  timeInput.onchange = onTime;
+  timeClear.onclick = (e) => {
+    timeInput.value = '';
+    paintDue();
+    // Keyboard users land back in the field (a tap must not raise a picker)
+    if (e.detail === 0) timeInput.focus({ preventScroll: true });
+  };
 
   // Populate links & files list
   let editorLinks = [];
@@ -3117,6 +3156,7 @@ function openTaskEditorModal(taskData, titleText) {
     const link = firstUrl ? firstUrl.value : null;
 
     const dueDate = dateInput.value || null;
+    const dueTime = dueDate ? timeKeyFromInput(timeInput.value) : null;
 
     // Get description - from editor if editing, from view if not
     const rawDesc = descriptionEditing
@@ -3141,6 +3181,7 @@ function openTaskEditorModal(taskData, titleText) {
         link: link,
         taskLinks: taskLinks.length > 0 ? taskLinks : null,
         dueDate: dueDate,
+        dueTime: dueTime,
         description: description,
         subtasks: subtasks.length > 0 ? subtasks : null,
         pinned: primaryCheckbox.checked,
@@ -3156,6 +3197,7 @@ function openTaskEditorModal(taskData, titleText) {
       if (selectedCategoryId) updates.categoryId = selectedCategoryId;
       if (linkedItems.length > 0) updates.linkedItems = linkedItems;
       if (dueDate) updates.dueDate = dueDate;
+      if (dueTime) updates.dueTime = dueTime;
       if (description) updates.description = description;
       if (subtasks.length > 0) updates.subtasks = subtasks;
       if (taskLinks.length > 0) updates.taskLinks = taskLinks;
@@ -3233,6 +3275,7 @@ function openTaskEditorModal(taskData, titleText) {
     subtasks: JSON.stringify(taskData.subtasks || []),
     categoryId: selectedCategoryId,
     dueDate: dateInput.value || '',
+    dueTime: timeInput.value || '',
     gcal: gcalCheckbox.checked
   };
 }
@@ -3265,6 +3308,7 @@ export function taskEditorHasChanges() {
   const activeCategory = $('#task-editor-categories .task-category-chip.active');
   if ((activeCategory?.dataset.categoryId || null) !== taskEditorInitialState.categoryId) return true;
   if (($('#task-editor-date')?.value || '') !== taskEditorInitialState.dueDate) return true;
+  if (($('#task-editor-time')?.value || '') !== taskEditorInitialState.dueTime) return true;
   if (($('#task-editor-gcal-checkbox')?.checked || false) !== taskEditorInitialState.gcal) return true;
   return false;
 }
@@ -3474,7 +3518,8 @@ function taskDocMeta() {
   const fields = [{ label: 'Priority', value: TASK_COLOR_LABELS[color] || color }];
   if ($('#task-editor-primary-checkbox')?.checked) fields.push({ label: 'Primary', value: 'Yes' });
   const due = $('#task-editor-date')?.value;
-  if (due) fields.push({ label: 'Due', value: due });
+  const dueAt = due ? timeKeyFromInput($('#task-editor-time')?.value) : null;
+  if (due) fields.push({ label: 'Due', value: dueAt ? `${due} ${dueAt}` : due });
   if (due && !$('#task-editor-gcal-label')?.hidden && $('#task-editor-gcal-checkbox')?.checked) {
     fields.push({ label: 'Google Calendar', value: 'Yes' });
   }

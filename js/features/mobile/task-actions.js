@@ -22,12 +22,13 @@ import { saveModel } from '../../core/storage.js';
 import { toDateKey, fromDateKey } from '../../core/quick-capture-parse.js';
 import { addDays } from '../../core/agenda.js';
 import { shortDay } from '../../core/mobile-common.js';
+import { dueTimeOf, formatTimeKey } from '../../core/due-time.js';
 import {
   planPlacement, applyPlacement, snapshotColors, colorsSignature, restoreSnapshot, bucket, normColor,
   completeSubtaskUpdates, MOBILE_COLOR_LABELS, SEGMENT_LABELS,
 } from '../../core/mobile-tasks.js';
-import { buildMeta, ICONS } from './task-row.js?v=2026-10-mobile-5';
-import { shieldTaps } from './task-gestures.js?v=2026-10-mobile-5';
+import { buildMeta, ICONS } from './task-row.js?v=2026-10-mobile-6';
+import { shieldTaps } from './task-gestures.js?v=2026-10-mobile-6';
 
 const BATCH_MS = 7000;
 const SUBTASKS_SHOWN = 6;
@@ -228,6 +229,8 @@ export function createTaskActions(api, view) {
     const task = getTaskById(taskId);
     if (!task) return;
     const before = task.dueDate || null;
+    // A new date keeps the time; clearing the date drops it (Undo brings both back)
+    const beforeTime = { dueTime: task.dueTime || null, dueTz: task.dueTz || null };
     const nextKey = key || null;
     if (before === nextKey) return;
     updateTask(taskId, { dueDate: nextKey });
@@ -236,7 +239,7 @@ export function createTaskActions(api, view) {
     }
     api.toast(nextKey ? `Due ${shortDay(nextKey)}` : 'Due date cleared', [{
       label: 'Undo',
-      run: () => { if (getTaskById(taskId)) updateTask(taskId, { dueDate: before }); },
+      run: () => { if (getTaskById(taskId)) updateTask(taskId, { dueDate: before, ...beforeTime }); },
     }]);
   }
 
@@ -369,7 +372,8 @@ export function createTaskActions(api, view) {
 
         // Due date chips
         const dueSec = el('section', 'mx-actions-sec');
-        dueSec.append(el('h3', 'mx-sec-label', task.dueDate ? `Due · ${shortDay(task.dueDate)}` : 'Due'));
+        const dueAt = dueTimeOf(task);
+        dueSec.append(el('h3', 'mx-sec-label', task.dueDate ? `Due · ${shortDay(task.dueDate)}${dueAt ? ` · ${formatTimeKey(dueAt, { compact: true })}` : ''}` : 'Due'));
         const chips = el('div', 'mx-chip-row');
         dueChoices().forEach(c => {
           const b = el('button', 'mx-chip', c.label);

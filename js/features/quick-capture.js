@@ -1,7 +1,7 @@
 // Personal Dashboard - Quick Capture
 // Press N anywhere (or the bolt button in the header, shown in the Mobile
 // layout only) to open a one-line bar above everything, type, press Enter:
-//   Send deck to Marc fri !red !priority !timer !url:telcobridges.com
+//   Send deck to Marc fri 3pm !red !p !timer !url:telcobridges.com
 //   @<pick a task> tomorrow !orange fix the numbers   → changes that task
 // The line is read by js/core/quick-capture-parse.js (pure rules). This module
 // owns the bar: the @ task and !category: pickers (a pick becomes a chip in the
@@ -16,7 +16,8 @@ import { editState } from '../state.js';
 import { showToast } from '../utils.js';
 import { saveModel } from '../core/storage.js';
 import { TASK_COLOR_LABELS } from '../constants.js';
-import { parseQuickCapture, fromDateKey, normalizeUrl, QUICK_CAPTURE_HELP } from '../core/quick-capture-parse.js';
+import { parseQuickCapture, resolveDue, fromDateKey, normalizeUrl, QUICK_CAPTURE_HELP } from '../core/quick-capture-parse.js';
+import { dueTimeOf, formatTimeKey } from '../core/due-time.js';
 import {
   getAllTasks, getTaskById, createTask, updateTask, deleteTask, openEditTaskModal,
   refreshTaskViews, generateSubtaskId
@@ -36,6 +37,7 @@ const PLUS_SVG = svg('<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12"
 const EDIT_SVG = svg('<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>');
 const SUBTASK_SVG = svg('<polyline points="15 10 20 15 15 20"/><path d="M4 4v7a4 4 0 0 0 4 4h12"/>');
 const CALENDAR_SVG = svg('<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>');
+const CLOCK_SVG = svg('<circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15.5 14"/>');
 const STAR_SVG = svg('<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>');
 const WATCH_SVG = svg('<circle cx="12" cy="14" r="8"/><line x1="12" y1="6" x2="12" y2="2"/><line x1="9" y1="2" x2="15" y2="2"/><line x1="12" y1="14" x2="12" y2="10"/><line x1="12" y1="14" x2="15" y2="17"/>');
 const LINK_SVG = svg('<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>');
@@ -638,6 +640,8 @@ function buildPlan() {
   }
 
   let urls = parsed.urls;
+  // The date and time this line gives the task (a time alone keeps the task's own date)
+  const due = resolveDue(parsed, mode === 'update' ? target : null);
   if (mode === 'update') {
     if (!target) {
       issues.push({ level: 'error', message: 'That task was completed or deleted. Remove its chip and pick another' });
@@ -656,11 +660,11 @@ function buildPlan() {
         || (parsed.timer && !timerRunning)
         || urls.length
         || (category && category.id !== target.categoryId)
-        || (parsed.dueDate && parsed.dueDate !== target.dueDate)
-        || (parsed.clearDate && !!target.dueDate)
+        || (due.dueDate !== undefined && due.dueDate !== (target.dueDate || null))
+        || (due.dueTime !== undefined && due.dueTime !== dueTimeOf(target))
         || (parsed.gcal !== null && parsed.gcal !== (target.gcal === true));
       const asked = parsed.color || parsed.pinned !== null || parsed.timer || parsed.urls.length ||
-        category || parsed.dueDate || parsed.clearDate || parsed.gcal !== null;
+        category || parsed.dueDate || parsed.clearDate || parsed.dueTime || parsed.clearTime || parsed.gcal !== null;
       if (!changes) {
         issues.push(asked
           ? { level: 'error', message: 'The task already looks like that: nothing would change' }
@@ -674,13 +678,13 @@ function buildPlan() {
   // Google Calendar: what the line says, else (a new task) the last choice
   const gcal = mode === 'create' && parsed.gcal === null ? (isGcalTasksReady() && getGcalDefault()) : parsed.gcal;
   if (parsed.gcal === true) {
-    const dated = parsed.dueDate || (mode === 'update' && target && target.dueDate && !parsed.clearDate);
+    const dated = due.dueDate !== undefined ? !!due.dueDate : !!(mode === 'update' && target && target.dueDate);
     if (!dated) issues.push({ level: 'warning', message: 'Google Calendar shows tasks that have a due date: add one' });
     else if (!isGcalTasksReady()) issues.push({ level: 'warning', message: 'Google Calendar isn’t connected here: it shows once it is' });
   }
 
   issues.sort((a, b) => (a.level === b.level ? 0 : a.level === 'error' ? -1 : 1));
-  return { mode, target, parsed, category, urls, gcal, issues, hasErrors: issues.some(i => i.level === 'error') };
+  return { mode, target, parsed, category, urls, gcal, due, issues, hasErrors: issues.some(i => i.level === 'error') };
 }
 
 function shortUrl(url) {
@@ -770,7 +774,7 @@ function renderPreview(plan) {
       c.textContent = text;
       return c;
     };
-    hint.append('Add commands like ', code('fri'), ' ', code('!red'), ' ', code('!timer'),
+    hint.append('Add commands like ', code('fri'), ' ', code('3pm'), ' ', code('!red'), ' ', code('!timer'),
       ', or type ', code('@'), ' to change a task you already have.');
     box.appendChild(hint);
     return;
@@ -797,6 +801,18 @@ function renderPreview(plan) {
   } else if (p.clearDate) {
     add({ icon: CALENDAR_SVG, text: 'No due date' });
   }
+  if (p.dueTime && plan.due.dueTime) {
+    // A time alone says which day it lands on
+    const day = !p.dueDate && plan.due.dueDate ? describeDue(plan.due.dueDate).split(' · ')[1] : '';
+    add({
+      icon: CLOCK_SVG, label: 'At', text: day ? `${formatTimeKey(p.dueTime)} · ${day}` : formatTimeKey(p.dueTime), kind: 'time',
+      title: 'Not a time? Click to keep it as text',
+      clickKey: p.timeSpan ? `${p.timeSpan.start}:${p.timeSpan.end}` : '',
+      onClick: () => keepDateAsText(p.timeSpan),
+    });
+  } else if (p.clearTime) {
+    add({ icon: CLOCK_SVG, text: 'No time' });
+  }
 
   const color = p.color || (plan.mode === 'create' ? 'blue' : null);
   if (color) {
@@ -811,8 +827,8 @@ function renderPreview(plan) {
   }
   plan.urls.forEach(url => add({ icon: LINK_SVG, text: shortUrl(url), title: url }));
   if (plan.category) add({ dotColor: categoryColor(plan.category), label: 'Category', text: plan.category.name });
-  if (plan.gcal === true && (p.dueDate || p.gcal !== null)) {
-    add({ icon: GCAL_SVG, text: 'Google Calendar', kind: p.gcal === null ? 'default' : '', title: p.gcal === null ? 'Your last choice (!nogcal leaves it off)' : '' });
+  if (plan.gcal === true && (plan.due.dueDate || p.gcal !== null)) {
+    add({ icon: GCAL_SVG, text: 'Google Calendar', kind: p.gcal === null ? 'default' : '', title: p.gcal === null ? 'Your last choice (!nocal leaves it off)' : '' });
   } else if (p.gcal === false) {
     add({ icon: GCAL_SVG, text: 'Not on Google Calendar' });
   }
@@ -895,9 +911,11 @@ export function createFromPlan(plan) {
   const task = createTask(p.title, p.color || 'blue', null, plan.urls[0] || null);
   const updates = { pinned: p.pinned === true };
   if (plan.category) updates.categoryId = plan.category.id;
-  if (p.dueDate) updates.dueDate = p.dueDate;
+  const due = resolveDue(p, null);
+  if (due.dueDate) updates.dueDate = due.dueDate;
+  if (due.dueDate && due.dueTime) updates.dueTime = due.dueTime;
   if (plan.urls.length) updates.taskLinks = plan.urls.map(value => ({ type: 'url', value }));
-  // plan.gcal: the line's !gcal / !nogcal, else the remembered choice (the bar's
+  // plan.gcal: the line's !cal / !nocal, else the remembered choice (the bar's
   // and the composer's plans both carry it); an explicit one is remembered
   const gcal = typeof plan.gcal === 'boolean' ? plan.gcal : p.gcal === true;
   if (gcal) updates.gcal = true;
@@ -914,8 +932,9 @@ export function updateFromPlan(plan) {
   if (p.color && p.color !== task.color) updates.color = p.color;
   if (p.pinned !== null) updates.pinned = p.pinned;
   if (plan.category) updates.categoryId = plan.category.id;
-  if (p.dueDate) updates.dueDate = p.dueDate;
-  else if (p.clearDate) updates.dueDate = null;
+  const due = resolveDue(p, task);
+  if (due.dueDate !== undefined) updates.dueDate = due.dueDate;
+  if (due.dueTime !== undefined) updates.dueTime = due.dueTime;
   if (typeof p.gcal === 'boolean' && p.gcal !== (task.gcal === true)) updates.gcal = p.gcal;
   if (plan.urls.length) {
     const links = [...linkListOf(task), ...plan.urls.map(value => ({ type: 'url', value }))];

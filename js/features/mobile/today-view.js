@@ -29,9 +29,10 @@ import { getTaskCategories } from '../task-categories.js';
 import * as mobileTasks from '../../core/mobile-tasks.js';
 import { toDateKey } from '../../core/quick-capture-parse.js';
 import { renderBusyStrip, ensureBusyDay } from '../busy-strip.js';
+import { formatTimeKey } from '../../core/due-time.js';
 import { gcalStateKey, onGcalChange } from '../google-calendar.js';
-import { createTimeSheet } from './time-sheet.js?v=2026-10-mobile-5';
-import { createMoreSheet } from './more-sheet.js?v=2026-10-mobile-5';
+import { createTimeSheet } from './time-sheet.js?v=2026-10-mobile-6';
+import { createMoreSheet } from './more-sheet.js?v=2026-10-mobile-6';
 
 const SHORT_LABELS = { red: 'Urgent & important', orange: 'Urgent', yellow: 'Important', blue: 'Later' };
 const COMING_DAYS = 7;
@@ -231,7 +232,7 @@ function reminderSig(r, view) {
 }
 
 function comingSig(item) {
-  return [item.date, item.title, item.color || '', item.detail || ''].join('|');
+  return [item.date, item.title, item.color || '', item.detail || '', item.time || ''].join('|');
 }
 
 function signature(ctx) {
@@ -612,9 +613,10 @@ function createComingRow(item) {
   const text = el('span', 'mx-today-coming-text');
   text.appendChild(el('span', 'mx-today-coming-title', item.title));
   if (item.kind === 'subtask' && item.detail) text.appendChild(el('span', 'mx-today-coming-detail', `in ${item.detail}`));
+  if (item.time) text.appendChild(el('span', 'mx-today-coming-detail', formatTimeKey(item.time, { compact: true })));
   row.append(day, mark, text);
   const kindLabel = { task: 'Task', subtask: 'Subtask', meeting: 'Meeting', reminder: 'Reminder' }[item.kind];
-  row.setAttribute('aria-label', `${item.label}: ${kindLabel} ${item.title}`);
+  row.setAttribute('aria-label', `${item.label}${item.time ? ` at ${formatTimeKey(item.time)}` : ''}: ${kindLabel} ${item.title}`);
   row.addEventListener('click', () => {
     if (item.kind === 'task' || item.kind === 'subtask') openTask(item.taskId);
     else if (item.kind === 'meeting') openMeeting(item.meetingId);

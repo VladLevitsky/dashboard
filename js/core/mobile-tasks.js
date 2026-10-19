@@ -15,6 +15,7 @@
 
 import { dueState, daysBetween, addDays, TASK_COLOR_ORDER } from './agenda.js';
 import { shortDay } from './mobile-common.js';
+import { dueTimeOf, formatTimeKey } from './due-time.js';
 
 export const MOBILE_COLOR_ORDER = ['red', 'orange', 'yellow', 'blue'];
 export const MOBILE_COLOR_LABELS = { red: 'Urgent & important', orange: 'Urgent', yellow: 'Important', blue: 'Later' };
@@ -233,21 +234,25 @@ function linkCount(task) {
 }
 
 // The quiet line under a row title:
-// { due: { kind: 'today'|'overdue'|'tomorrow'|'date', text, days?, date } | null,
+// { due: { kind: 'today'|'overdue'|'tomorrow'|'date', text, days?, date, time? } | null,
 //   subs: { done, total } | null, desc, links, categoryId }
-export function rowMeta(task, todayKey) {
+// A due time joins the text ('Today 3 PM', 'Fri, Oct 23 · 9:30 AM'); overdue stays 'Overdue · 2d'
+export function rowMeta(task, todayKey, { locale } = {}) {
   const t = task || {};
   let due = null;
+  const time = dueTimeOf(t);
+  const at = time ? formatTimeKey(time, { compact: true, locale }) : '';
+  const withTime = time ? { time } : {};
   const state = dueState(t.dueDate, todayKey);
   if (state) {
     due = state.when === 'today'
-      ? { kind: 'today', text: 'Today', days: 0, date: state.date }
-      : { kind: 'overdue', text: `Overdue · ${state.days}d`, days: state.days, date: state.date };
+      ? { kind: 'today', text: at ? `Today ${at}` : 'Today', days: 0, date: state.date, ...withTime }
+      : { kind: 'overdue', text: `Overdue · ${state.days}d`, days: state.days, date: state.date, ...withTime };
   } else if (typeof t.dueDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(t.dueDate) && todayKey) {
     const days = daysBetween(todayKey, t.dueDate);
     due = days === 1
-      ? { kind: 'tomorrow', text: 'Tomorrow', days: -1, date: t.dueDate }
-      : { kind: 'date', text: shortDay(t.dueDate) || t.dueDate, days: -days, date: t.dueDate };
+      ? { kind: 'tomorrow', text: at ? `Tomorrow ${at}` : 'Tomorrow', days: -1, date: t.dueDate, ...withTime }
+      : { kind: 'date', text: at ? `${shortDay(t.dueDate) || t.dueDate} · ${at}` : (shortDay(t.dueDate) || t.dueDate), days: -days, date: t.dueDate, ...withTime };
   }
   const subtasks = (Array.isArray(t.subtasks) ? t.subtasks : []).filter(s => s && String(s.title || '').trim());
   const subs = subtasks.length ? { done: subtasks.filter(s => s.completed).length, total: subtasks.length } : null;
@@ -258,21 +263,24 @@ export function rowMeta(task, todayKey) {
 export function rowSignature(task, todayKey) {
   const t = task || {};
   const m = rowMeta(t, todayKey);
-  return [t.title || '', normColor(t.color), t.pinned ? 1 : 0, t.dueDate || '',
+  return [t.title || '', normColor(t.color), t.pinned ? 1 : 0, t.dueDate || '', dueTimeOf(t) || '',
     m.subs ? `${m.subs.done}/${m.subs.total}` : '', m.desc ? 1 : 0, m.links, m.categoryId || '', todayKey || ''].join('|');
 }
 
-// Tasks due in (today, today + days], soonest first (then colour, then display order)
+// Tasks due in (today, today + days], soonest first (a day's timed tasks by
+// time, ahead of the rest; then colour, then display order)
 export function upcomingTasks(tasks, todayKey, days = 7) {
   if (!todayKey) return [];
   const end = addDays(todayKey, days);
   const rank = (c) => TASK_COLOR_ORDER.indexOf(normColor(c));
+  const at = (t) => dueTimeOf(t) || '~';
   return list(tasks)
     .map((task, i) => ({ task, i }))
     .filter(({ task }) => !task.completed && typeof task.dueDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(task.dueDate) &&
       task.dueDate > todayKey && task.dueDate <= end)
     .sort((a, b) =>
       (a.task.dueDate < b.task.dueDate ? -1 : a.task.dueDate > b.task.dueDate ? 1 : 0) ||
+      (at(a.task) < at(b.task) ? -1 : at(a.task) > at(b.task) ? 1 : 0) ||
       rank(a.task.color) - rank(b.task.color) ||
       (b.task.pinned ? 1 : 0) - (a.task.pinned ? 1 : 0) ||
       (a.task.order || 0) - (b.task.order || 0) || a.i - b.i)

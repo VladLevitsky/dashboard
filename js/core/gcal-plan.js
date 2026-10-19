@@ -9,6 +9,7 @@
 // here depends on the machine's time zone.
 
 const DATE_KEY_RE = /^\d{4}-\d{2}-\d{2}$/;
+const TIME_KEY_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 const HOUR = 3600000;
 const DAY = 24 * HOUR;
 
@@ -17,14 +18,17 @@ export function isCalendarTask(task) {
   return !!task && task.gcal === true && typeof task.dueDate === 'string' && DATE_KEY_RE.test(task.dueDate);
 }
 
-// Everything the calendar shows for the flagged tasks (active and completed).
+// Everything the calendar shows for the flagged tasks (active and completed):
+// a due time (and the zone it was set in) makes a timed event.
 // Two models with the same signature need no calendar sync.
 export function gcalSignature(data) {
   const parts = [];
   const add = (list, done) => {
     if (!Array.isArray(list)) return;
     for (const t of list) {
-      if (isCalendarTask(t)) parts.push([t.id, t.title || '', t.dueDate, t.color || '', done ? 1 : 0].join('\u0001'));
+      if (!isCalendarTask(t)) continue;
+      const time = typeof t.dueTime === 'string' && TIME_KEY_RE.test(t.dueTime) ? t.dueTime : '';
+      parts.push([t.id, t.title || '', t.dueDate, t.color || '', done ? 1 : 0, time, time ? t.dueTz || '' : ''].join('\u0001'));
     }
   };
   add(data && data.tasks, false);

@@ -569,7 +569,7 @@ body[data-style="glass"][data-theme] :is(.tasks-summary-header, .task-editor-hea
 }
 body[data-style="glass"][data-theme] :is(.search-input, .edit-popover input,
   .edit-popover select, .edit-popover textarea, .task-editor-field input[type="text"],
-  .task-editor-field input[type="date"], .meeting-editor-field input,
+  .task-editor-field input[type="date"], .task-editor-field input[type="time"], .meeting-editor-field input,
   .meeting-editor-field select, .auth-field input,
   .task-desc-editor, .ideas-editor, .notepad-editor, .task-desc-view,
   .task-editor-item-selector) {

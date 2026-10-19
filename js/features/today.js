@@ -15,6 +15,7 @@ import { showToast, colorToGlassRgba, glassCompensateColor, isColorCode } from '
 import { TASK_COLOR_LABELS } from '../constants.js';
 import { TASK_COLOR_ORDER, countDueItems } from '../core/agenda.js';
 import { fromDateKey, toDateKey } from '../core/quick-capture-parse.js';
+import { dueTimeOf, formatTimeKey } from '../core/due-time.js';
 import { renderBusyStrip, ensureBusyDay } from './busy-strip.js';
 import { getDueItems, openCalendarView, ownsEscape } from './calendar.js';
 import { createTaskPillElement, getTaskById, updateTask, refreshTaskViews } from './tasks.js';
@@ -255,16 +256,17 @@ function formatDay(dateKey) {
   return date ? date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) : dateKey;
 }
 
-// "Today" or "Overdue · 3d"
-function dueChip(due) {
+// "Today", "Today · 3 PM" or "Overdue · 3d"
+function dueChip(due, time = null) {
   const chip = document.createElement('span');
   chip.className = `today-chip ${due.when === 'today' ? 'is-today' : 'is-overdue'}`;
+  const at = time ? formatTimeKey(time) : '';
   if (due.when === 'today') {
-    chip.textContent = 'Today';
-    chip.title = 'Due today';
+    chip.textContent = at ? `Today · ${formatTimeKey(time, { compact: true })}` : 'Today';
+    chip.title = at ? `Due today at ${at}` : 'Due today';
   } else {
     chip.textContent = `Overdue · ${due.days}d`;
-    chip.title = `Was due ${formatDay(due.date)} (${due.days} day${due.days === 1 ? '' : 's'} ago)`;
+    chip.title = `Was due ${formatDay(due.date)}${at ? ` at ${at}` : ''} (${due.days} day${due.days === 1 ? '' : 's'} ago)`;
   }
   return chip;
 }
@@ -287,13 +289,15 @@ function createTaskEntry({ task, due, subtasks }, index) {
   pill.style.setProperty('--fx-t-delay', PIN_DELAYS[index % 4]);
   const icons = pill.querySelector('.eisenhower-task-icons');
   if (due) {
-    icons.prepend(dueChip(due));
+    icons.prepend(dueChip(due, dueTimeOf(task)));
   } else {
     pill.classList.add('today-task-context');
     const chip = document.createElement('span');
     chip.className = 'today-chip is-context';
     chip.textContent = subtasks.length === 1 ? 'Subtask due' : `${subtasks.length} subtasks due`;
-    chip.title = task.dueDate ? `The task itself is due ${formatDay(task.dueDate)}` : 'The task itself has no due date';
+    chip.title = task.dueDate
+      ? `The task itself is due ${formatDay(task.dueDate)}${dueTimeOf(task) ? ` at ${formatTimeKey(dueTimeOf(task))}` : ''}`
+      : 'The task itself has no due date';
     icons.prepend(chip);
   }
   entry.appendChild(pill);

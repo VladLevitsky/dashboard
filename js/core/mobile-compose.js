@@ -14,9 +14,10 @@
 // preview text, Markdown → stored HTML for notes and ideas, and draft age.
 // No DOM access; never mutates its inputs.
 
-import { parseQuickCapture, matchCategory, normalizeUrl, fromDateKey, toDateKey } from './quick-capture-parse.js';
+import { parseQuickCapture, resolveDue, matchCategory, normalizeUrl, fromDateKey, toDateKey } from './quick-capture-parse.js';
 import { markdownToHtml, sanitizeRichHtml } from './markdown.js';
 import { orderCardsForMobile, cardTitle } from './mobile-common.js';
+import { dueTimeOf, formatTimeKey, isTimeKey } from './due-time.js';
 
 export const KINDS = Object.freeze([
   Object.freeze({ id: 'task', label: 'Task' }),
@@ -37,10 +38,11 @@ const WEEKDAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const TRAIL = '[,.;:!?)"\'\\]]*';
 const COLOR_TOKEN = new RegExp(`^!(r|red|o|orange|y|yellow|b|blue)${TRAIL}$`, 'i');
-const PIN_TOKEN = new RegExp(`^!(priority|primary|nopriority|noprimary)${TRAIL}$`, 'i');
+const PIN_TOKEN = new RegExp(`^!(p|nop|priority|primary|nopriority|noprimary)${TRAIL}$`, 'i');
 const TIMER_TOKEN = new RegExp(`^!timer${TRAIL}$`, 'i');
-const GCAL_TOKEN = new RegExp(`^!(gcal|nogcal|calendar|nocalendar)${TRAIL}$`, 'i');
+const GCAL_TOKEN = new RegExp(`^!(cal|nocal|gcal|nogcal|calendar|nocalendar)${TRAIL}$`, 'i');
 const NODATE_TOKEN = new RegExp(`^!nodate${TRAIL}$`, 'i');
+const NOTIME_TOKEN = new RegExp(`^!notime${TRAIL}$`, 'i');
 const CATEGORY_TOKEN = /^!(category|cat):/i;
 const QUOTE_CLOSE = /"[,.;!?)]*$/;
 
@@ -119,6 +121,30 @@ function stripDates(text, now, categories) {
   return out;
 }
 
+// Every time phrase the parser reads (with an "at" / "by" / "due" right before it) and every !notime
+function stripTimes(text, now, categories) {
+  let out = cut(text, rangesOf(text, NOTIME_TOKEN));
+  for (let i = 0; i < 5; i++) {
+    const parsed = parseQuickCapture(out, { now, categories });
+    const span = parsed.timeSpan;
+    if (!span) break;
+    let start = span.start;
+    const lead = /(^|\s)(at|by|due)\s+$/i.exec(out.slice(0, start));
+    if (lead) start = lead.index + lead[1].length;
+    out = cut(out, [{ start, end: span.end }]);
+  }
+  return out;
+}
+
+// 'HH:MM' → the word the line gets: '3pm' / '3:30pm' (12-hour habit) or '15:30'
+export function timeToken(key, hour12 = false) {
+  if (!isTimeKey(key)) return '';
+  const h = Number(key.slice(0, 2));
+  const m = key.slice(3, 5);
+  if (!hour12) return key;
+  return `${h % 12 || 12}${m === '00' ? '' : `:${m}`}${h < 12 ? 'am' : 'pm'}`;
+}
+
 // The category a tray / list pick means: an object with an id (matched by id),
 // else a name (matched exactly, case-insensitive, else taken as given)
 function resolveCategory(value, categories) {
@@ -171,12 +197,16 @@ const append = (text, token) => (token ? tidy(text ? `${text} ${token}` : token)
  * the field falls back to its default.
  * field: 'color' (value 'red'|'orange'|'yellow'|'blue'|null)
  *        'pinned' (true|false|null)
- *        'date' ('today'|'tomorrow'|'tue'…|'next mon'|'YYYY-MM-DD'|null = No date)
+ *        'date' ('today'|'tomorrow'|'tue'…|'next mon'|'YYYY-MM-DD'|null = No date,
+ *               which drops a time too)
+ *        'time' ('HH:MM'|null = No time; written as 3pm / 3:30pm with
+ *               opts.hour12, else 15:30)
  *        'timer' (toggles; value ignored)
  *        'category' (a category { id, name }, or a name; null removes)
  *        'gcal' (true|false|null: Google Calendar; defaults.gcal is the last
  *               choice, or in update mode what the task has now)
- * opts: { now, categories, mode: 'create'|'update', defaults: { color, pinned, gcal } }
+ * opts: { now, categories, mode: 'create'|'update', hour12,
+ *         defaults: { color, pinned, gcal, time (update: the task's time) } }
  * → { text, caret }
  */
 export function setTokenField(text, field, value, opts = {}) {
@@ -199,18 +229,29 @@ export function setTokenField(text, field, value, opts = {}) {
       out = cut(src, rangesOf(src, PIN_TOKEN));
       const v = value == null ? null : !!value;
       const same = v !== null && parsed.pinned === v;
-      if (v !== null && !same && v !== !!defaults.pinned) out = append(out, v ? '!priority' : '!nopriority');
+      if (v !== null && !same && v !== !!defaults.pinned) out = append(out, v ? '!p' : '!nop');
       break;
     }
     case 'date': {
       out = stripDates(src, now, categories);
       if (value == null) {
+        // A time can't stay without its date
+        out = stripTimes(out, now, categories);
         const already = parsed.clearDate;
         if (mode === 'update' && !already) out = append(out, '!nodate');
       } else {
         const token = String(value).trim().toLowerCase();
         const key = parseQuickCapture(token, { now }).dueDate;
         if (key && key !== parsed.dueDate) out = append(out, token);
+      }
+      break;
+    }
+    case 'time': {
+      out = stripTimes(src, now, categories);
+      if (value == null) {
+        if (mode === 'update' && defaults.time && !parsed.clearTime) out = append(out, '!notime');
+      } else if (isTimeKey(value) && value !== parsed.dueTime) {
+        out = append(out, timeToken(value, !!opts.hour12));
       }
       break;
     }
@@ -223,7 +264,7 @@ export function setTokenField(text, field, value, opts = {}) {
       const v = value == null ? null : !!value;
       const same = v !== null && parsed.gcal === v;
       const def = defaults.gcal == null ? null : !!defaults.gcal;
-      if (v !== null && !same && v !== def) out = append(out, v ? '!gcal' : '!nogcal');
+      if (v !== null && !same && v !== def) out = append(out, v ? '!cal' : '!nocal');
       break;
     }
     case 'category': {
@@ -294,6 +335,7 @@ export function effectivePlan(parsed, defaults = {}, { mode = 'create' } = {}) {
   const category = pick(p.category || null, d.category || null);
   const gcal = pick(p.gcal == null ? null : p.gcal, d.gcal == null ? null : !!d.gcal);
   const dueDate = p.dueDate ? { value: p.dueDate, source: 'line' } : { value: null, source: p.clearDate ? 'line' : null };
+  const dueTime = p.dueTime ? { value: p.dueTime, source: 'line' } : { value: null, source: p.clearTime ? 'line' : null };
   return {
     mode,
     color: color.value,
@@ -301,9 +343,13 @@ export function effectivePlan(parsed, defaults = {}, { mode = 'create' } = {}) {
     category: category.value,
     dueDate: dueDate.value,
     clearDate: !!p.clearDate,
+    dueTime: dueTime.value,
+    clearTime: !!p.clearTime,
+    // The day a time alone lands on, when the task has no date of its own
+    impliedDate: p.dueTime && !p.dueDate ? p.impliedDate || null : null,
     timer: !!p.timer,
     gcal: gcal.value,
-    sources: { color: color.source, pinned: pinned.source, category: category.source, date: dueDate.source, timer: p.timer ? 'line' : null, gcal: gcal.source },
+    sources: { color: color.source, pinned: pinned.source, category: category.source, date: dueDate.source, time: dueTime.source, timer: p.timer ? 'line' : null, gcal: gcal.source },
   };
 }
 
@@ -341,6 +387,7 @@ export function buildComposerPlan({ text = '', targetId = null, target = null, d
   const task = mode === 'update' ? target : null;
   let category = parsed.category || null;
   let urls = parsed.urls;
+  const due = resolveDue(parsed, task);
 
   if (mode === 'update') {
     if (!task) {
@@ -359,11 +406,11 @@ export function buildComposerPlan({ text = '', targetId = null, target = null, d
         || (parsed.timer && !timerRunning)
         || urls.length
         || (category && category.id !== task.categoryId)
-        || (parsed.dueDate && parsed.dueDate !== task.dueDate)
-        || (parsed.clearDate && !!task.dueDate)
+        || (due.dueDate !== undefined && due.dueDate !== (task.dueDate || null))
+        || (due.dueTime !== undefined && due.dueTime !== dueTimeOf(task))
         || (parsed.gcal !== null && parsed.gcal !== (task.gcal === true));
       const asked = parsed.color || parsed.pinned !== null || parsed.timer || parsed.urls.length ||
-        category || parsed.dueDate || parsed.clearDate || parsed.gcal !== null;
+        category || parsed.dueDate || parsed.clearDate || parsed.dueTime || parsed.clearTime || parsed.gcal !== null;
       if (!changes) {
         issues.push(asked
           ? { level: 'error', message: 'The task already looks like that: nothing would change' }
@@ -376,7 +423,7 @@ export function buildComposerPlan({ text = '', targetId = null, target = null, d
 
   // Same messages as quick-capture.js buildPlan()
   if (parsed.gcal === true) {
-    const dated = parsed.dueDate || (mode === 'update' && task && task.dueDate && !parsed.clearDate);
+    const dated = due.dueDate !== undefined ? !!due.dueDate : !!(mode === 'update' && task && task.dueDate);
     if (!dated) issues.push({ level: 'warning', message: 'Google Calendar shows tasks that have a due date: add one' });
     else if (!gcalReady) issues.push({ level: 'warning', message: 'Google Calendar isn’t connected here: it shows once it is' });
   }
@@ -388,7 +435,7 @@ export function buildComposerPlan({ text = '', targetId = null, target = null, d
     : { ...parsed };
   const gcal = mode === 'create' ? effective.gcal === true : parsed.gcal;
   issues.sort((a, b) => (a.level === b.level ? 0 : a.level === 'error' ? -1 : 1));
-  return { mode, target: task, parsed: planParsed, category, urls, gcal, issues, hasErrors: issues.some(i => i.level === 'error'), effective };
+  return { mode, target: task, parsed: planParsed, category, urls, gcal, due, issues, hasErrors: issues.some(i => i.level === 'error'), effective };
 }
 
 // ============================================================
@@ -408,18 +455,23 @@ export function describeDate(key, now) {
   return date.getFullYear() === t0.getFullYear() ? base : `${base}, ${date.getFullYear()}`;
 }
 
-// The tray's date chip: 'Today', 'Tomorrow', 'Fri 9', 'Oct 21', 'Oct 21, 2027'
-export function trayDateLabel(key, now) {
+// The tray's date chip: 'Today', 'Tomorrow', 'Fri 9', 'Oct 21', 'Oct 21, 2027',
+// with the time after it when there is one ('Today 3 PM')
+export function trayDateLabel(key, now, time = null, locale) {
   const date = fromDateKey(key);
   if (!date) return 'Date';
   const today = asDate(now);
   const t0 = new Date(today.getFullYear(), today.getMonth(), today.getDate());
   const days = Math.round((date - t0) / 86400000);
-  if (days === 0) return 'Today';
-  if (days === 1) return 'Tomorrow';
-  if (days > 1 && days < 7) return `${WEEKDAY_SHORT[date.getDay()]} ${date.getDate()}`;
-  const base = `${MONTH_SHORT[date.getMonth()]} ${date.getDate()}`;
-  return date.getFullYear() === t0.getFullYear() ? base : `${base}, ${date.getFullYear()}`;
+  let label;
+  if (days === 0) label = 'Today';
+  else if (days === 1) label = 'Tomorrow';
+  else if (days > 1 && days < 7) label = `${WEEKDAY_SHORT[date.getDay()]} ${date.getDate()}`;
+  else {
+    const base = `${MONTH_SHORT[date.getMonth()]} ${date.getDate()}`;
+    label = date.getFullYear() === t0.getFullYear() ? base : `${base}, ${date.getFullYear()}`;
+  }
+  return isTimeKey(time) ? `${label} ${formatTimeKey(time, { compact: true, locale })}` : label;
 }
 
 const clip = (s, max) => { const t = String(s || '').trim(); return t.length > max ? t.slice(0, max - 1).trimEnd() + '…' : t; };
@@ -430,7 +482,7 @@ const clip = (s, max) => { const t = String(s || '').trim(); return t.length > m
  * Quiet errors (no name yet) only turn red after an Add was tried.
  * → { level: 'error'|'warning'|'preview'|'hint', text }
  */
-export function lineFor(plan, { now, attempted = false, typed = true, runningTitle = null } = {}) {
+export function lineFor(plan, { now, attempted = false, typed = true, runningTitle = null, locale } = {}) {
   if (!plan) return { level: 'hint', text: '' };
   const errors = plan.issues.filter(i => i.level === 'error');
   const loud = errors.find(i => !i.quiet) || (attempted ? errors[0] : null);
@@ -440,7 +492,7 @@ export function lineFor(plan, { now, attempted = false, typed = true, runningTit
   if (!typed) {
     return plan.mode === 'update'
       ? { level: 'hint', text: 'Add a date, a command, or text for a new subtask' }
-      : { level: 'hint', text: 'Type a task. Add fri, !red, !timer, or @ to change one' };
+      : { level: 'hint', text: 'Type a task. Add fri, 3pm, !red, !timer, or @ to change one' };
   }
   if (errors.length) return { level: 'hint', text: errors[0].message };
   const p = plan.parsed;
@@ -453,12 +505,17 @@ export function lineFor(plan, { now, attempted = false, typed = true, runningTit
   } else {
     parts.push('New task');
   }
-  if (p.dueDate) parts.push(describeDate(p.dueDate, now));
+  const due = plan.due || resolveDue(p, plan.target);
+  const at = p.dueTime ? formatTimeKey(p.dueTime, { compact: true, locale }) : '';
+  if (p.dueDate) parts.push(at ? `${describeDate(p.dueDate, now)} at ${at}` : describeDate(p.dueDate, now));
+  else if (at && due.dueDate) parts.push(`${describeDate(due.dueDate, now)} at ${at}`);   // a time alone: the day it lands on
+  else if (at) parts.push(`at ${at}`);                                                     // the task keeps its own date
   else if (p.clearDate && plan.mode === 'update') parts.push('no due date');
+  if (p.clearTime && plan.mode === 'update') parts.push('no time');
   if (p.timer) parts.push(runningTitle ? `starts timer, stops “${clip(runningTitle, 18)}”` : 'starts timer');
   if (plan.urls && plan.urls.length) parts.push(plan.urls.length === 1 ? shortUrl(plan.urls[0]) : `${plan.urls.length} links`);
   if (plan.category) parts.push(`# ${plan.category.name}`);
-  if (plan.mode === 'update' ? p.gcal === true : plan.gcal === true && p.dueDate) parts.push('on Google Calendar');
+  if (plan.mode === 'update' ? p.gcal === true : plan.gcal === true && due.dueDate) parts.push('on Google Calendar');
   else if (plan.mode === 'update' && p.gcal === false) parts.push('off Google Calendar');
   return { level: 'preview', text: parts.join(' · ') };
 }
