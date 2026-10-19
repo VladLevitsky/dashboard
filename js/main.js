@@ -322,7 +322,8 @@ import {
 import {
   initStickyNotes,
   updateStickyButtonVisibility,
-  clearAllStickyNotes
+  clearAllStickyNotes,
+  refreshStickyNotes
 } from './features/sticky-notes.js';
 
 import {
@@ -701,6 +702,7 @@ window.applyLogoTransform = applyLogoTransform;
 window.initStickyNotes = initStickyNotes;
 window.updateStickyButtonVisibility = updateStickyButtonVisibility;
 window.clearAllStickyNotes = clearAllStickyNotes;
+window.refreshStickyNotes = refreshStickyNotes;
 
 // Auth
 window.initAuth = initAuth;

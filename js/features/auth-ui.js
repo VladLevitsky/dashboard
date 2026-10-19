@@ -119,7 +119,8 @@ async function endLapsedSession() {
 }
 
 // The dashboard of whoever owns this page now (signed in, a lapsed session,
-// or the signed-out dashboard), shown from its own saved copy
+// or the signed-out dashboard), shown from its own saved copy (and its own
+// sticky notes)
 async function showOwnerDashboard() {
   resetSyncState();
   resetFileCache();
@@ -133,6 +134,7 @@ async function showOwnerDashboard() {
   if (window.applyCellSize) window.applyCellSize();
   if (window.ensureSectionPlusButtons) window.ensureSectionPlusButtons();
   if (window.refreshTimeTrackingUI) window.refreshTimeTrackingUI();
+  if (window.refreshStickyNotes) window.refreshStickyNotes();
 }
 
 function closeAuthModal() {
@@ -372,6 +374,8 @@ async function completeSignIn(username, { created = false } = {}) {
     if (window.applyCellSize) window.applyCellSize();
     if (window.ensureSectionPlusButtons) window.ensureSectionPlusButtons();
     if (window.refreshTimeTrackingUI) window.refreshTimeTrackingUI();
+    // The account's own sticky notes (this browser only)
+    if (window.refreshStickyNotes) window.refreshStickyNotes();
     // Stored images shown while signed out can load now
     if (window.hydrateRichTextImages) window.hydrateRichTextImages();
 
