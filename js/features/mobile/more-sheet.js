@@ -3,8 +3,9 @@
 // keeps in the header and Settings, reachable without edit mode:
 //   account + sync status (Sync now / Sign in / Resolve), Light / Dark,
 //   Classic / Sunset, Time tracking, Completed tasks, Task categories,
-//   Writing & shortcuts, Cloud files, Google Calendar, Backup (Download / Restore…),
-//   Not on mobile, Layout (desktop preview only), Sign out.
+//   Writing & shortcuts, Cloud files, Offline copy (not on iPhone / iPad),
+//   Google Calendar, Backup (Download / Restore…), Not on mobile, Layout
+//   (desktop preview only), Sign out.
 // It calls the existing entry points (setDarkMode, setGlassTheme + saveModel,
 // openTaskSettingsModal, openWritingHelp, openFileManager, the Settings backup
 // controls, the auth buttons); reused dialogs (z 2000+) stack above the sheet.
@@ -20,6 +21,8 @@ import { setDarkMode, setGlassTheme } from '../edit-mode.js';
 import { openFileManager } from '../file-manager.js';
 import { buildGcalPanel, getGcalStatus } from '../google-calendar.js';
 import { buildGoogleSigninPanel } from '../auth-ui.js';
+import { offlineCopySupported } from '../../core/offline-copy.js';
+import { openOfflineSheet, offlineRowValue } from './offline-sheet.js?v=2026-10-mobile-8';
 
 const svg = (body, size = 20, width = 2) =>
   `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="${width}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${body}</svg>`;
@@ -29,6 +32,7 @@ const ICONS = {
   categories: svg('<line x1="5" y1="9" x2="20" y2="9"></line><line x1="4" y1="15" x2="19" y2="15"></line><line x1="10" y1="3" x2="8" y2="21"></line><line x1="16" y1="3" x2="14" y2="21"></line>'),
   help: svg('<circle cx="12" cy="12" r="9"></circle><path d="M9.6 9.2a2.5 2.5 0 0 1 4.8.9c0 1.7-2.4 2.2-2.4 3.6"></path><line x1="12" y1="17" x2="12" y2="17.01"></line>'),
   files: svg('<path d="M18 10h-1.3A7 7 0 1 0 9 19h9a4.5 4.5 0 0 0 0-9z"></path>'),
+  offline: svg('<rect x="6" y="2.5" width="12" height="19" rx="2.5"></rect><path d="M12 7.5v7"></path><polyline points="9 11.5 12 14.5 15 11.5"></polyline><line x1="10.5" y1="18.5" x2="13.5" y2="18.5"></line>'),
   calendar: svg('<rect x="3.5" y="5" width="17" height="15.5" rx="2.5"></rect><line x1="3.5" y1="10" x2="20.5" y2="10"></line><line x1="8" y1="3" x2="8" y2="7"></line><line x1="16" y1="3" x2="16" y2="7"></line>'),
   key: svg('<circle cx="8" cy="15" r="4"></circle><line x1="10.85" y1="12.15" x2="20" y2="3"></line><line x1="16.5" y1="6.5" x2="19" y2="9"></line><line x1="14" y1="9" x2="16" y2="11"></line>'),
   info: svg('<circle cx="12" cy="12" r="9"></circle><line x1="12" y1="11" x2="12" y2="16.5"></line><line x1="12" y1="7.6" x2="12" y2="7.61"></line>'),
@@ -82,6 +86,7 @@ export function createMoreSheet(api, { openTime } = {}) {
   let status = null;         // { dot, text, action }
   let syncing = false;
   let gcalRow = null;
+  let offlineRow = null;
 
   function row({ icon, label, value = '', onClick, cls = '' }) {
     const b = el('button', `mx-more-row ${cls}`.trim());
@@ -221,6 +226,11 @@ export function createMoreSheet(api, { openTime } = {}) {
       onClick: () => { if (window.openWritingHelp) window.openWritingHelp('writing'); },
     }));
     list.appendChild(row({ icon: ICONS.files, label: 'Cloud files', onClick: () => openFileManager() }));
+    if (offlineCopySupported()) {
+      offlineRow = row({ icon: ICONS.offline, label: 'Offline copy', onClick: openOfflineCopy });
+      list.appendChild(offlineRow);
+      paintOfflineRow();
+    }
     gcalRow = row({ icon: ICONS.calendar, label: 'Google Calendar', value: gcalValue(), onClick: openGoogleCalendar });
     list.appendChild(gcalRow);
     if (isLoggedIn()) list.appendChild(row({ icon: ICONS.key, label: 'Google sign-in', onClick: openGoogleSignin }));
@@ -260,6 +270,18 @@ export function createMoreSheet(api, { openTime } = {}) {
       // Back on More: its row says what the sheet changed (text only, focus stays)
       onClose() { if (gcalRow && gcalRow.isConnected) setText(gcalRow.querySelector('.mx-more-row-value'), gcalValue()); },
     });
+  }
+
+  // 'On' while this account has a copy on the phone (Cache Storage: read after build)
+  function paintOfflineRow() {
+    const target = offlineRow;
+    offlineRowValue().then((v) => {
+      if (target && target.isConnected) setText(target.querySelector('.mx-more-row-value'), v);
+    });
+  }
+
+  function openOfflineCopy() {
+    openOfflineSheet(api, { onClose: paintOfflineRow });
   }
 
   // Link / unlink Google sign-in: the account popover's panel (auth-ui.js)

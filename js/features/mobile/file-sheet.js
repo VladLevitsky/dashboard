@@ -7,14 +7,18 @@
 // has the user activation:
 //   - signed out: a toast "Sign in to open files" with a Sign in action
 //   - images: the File sheet (spinner, then the picture, Download and Share)
-//   - HTML: a window opened synchronously, then sent to the isolated viewer
+//   - HTML: a window opened synchronously, then sent to the isolated viewer;
+//     offline (or the viewer Worker unreachable) to offline-viewer.html, which
+//     shows the file from this account's offline copy (More → Offline copy)
 //   - PDF and other files: a window opened synchronously, then sent to the
-//     blob URL
+//     blob URL (fetchFileBlobUrl reads the offline copy when offline)
 //   - popup blocked: the File sheet with Download and Share (no iframe)
 
 import { API_BASE } from '../../constants.js';
 import { isLoggedIn, getAuthToken } from '../../core/auth.js';
 import { fetchFileBlobUrl } from '../../core/file-service.js';
+import { hasOfflineFile, isOffline } from '../../core/offline-copy.js';
+import { viewerHref } from '../../core/offline-plan.js';
 
 const IMAGE_EXT = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg']);
 const FILE_SVG = '<svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>';
@@ -78,16 +82,42 @@ export function openFileMobile(fileId, fileName) {
 }
 
 async function openHtmlIn(w, fileId) {
+  if (isOffline()) { openOfflineViewer(w, fileId); return; }
+  let res;
   try {
-    const res = await fetch(`${API_BASE}/files/${encodeURIComponent(fileId)}/view-link`, {
+    res = await fetch(`${API_BASE}/files/${encodeURIComponent(fileId)}/view-link`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${getAuthToken()}`, 'Content-Type': 'application/json' },
     });
+  } catch {
+    openOfflineViewer(w, fileId);   // the network is down after all
+    return;
+  }
+  if (res.status >= 500) { openOfflineViewer(w, fileId); return; }
+  try {
     if (!res.ok) throw new Error(`view-link ${res.status}`);
     const data = await res.json();
     if (!data || !data.url) throw new Error('no viewer url');
     try { w.opener = null; } catch { /* already detached */ }
     w.location.href = data.url;
+  } catch {
+    try { w.close(); } catch { /* gone */ }
+    toast('Couldn’t open the file');
+  }
+}
+
+// offline-viewer.html reads the file from the offline copy itself and runs it
+// in a sandboxed srcdoc iframe (the viewer Worker's policy, no network)
+async function openOfflineViewer(w, fileId) {
+  const saved = await hasOfflineFile(fileId);
+  if (!saved || w.closed) {
+    try { w.close(); } catch { /* gone */ }
+    toast(saved ? 'Couldn’t open the file' : 'You’re offline and this file isn’t in the offline copy');
+    return;
+  }
+  try { w.opener = null; } catch { /* already detached */ }
+  try {
+    w.location.href = new URL(viewerHref(fileId), location.href).href;
   } catch {
     try { w.close(); } catch { /* gone */ }
     toast('Couldn’t open the file');
@@ -141,7 +171,9 @@ export function openFileSheet({ fileId, fileName, image = false, blocked = false
         if (!blobUrl) {
           const p = document.createElement('p');
           p.className = 'mx-file-error';
-          p.textContent = 'Couldn’t load this file. Check your connection and try again.';
+          p.textContent = isOffline()
+            ? 'You’re offline and this file isn’t in the offline copy.'
+            : 'Couldn’t load this file. Check your connection and try again.';
           stage.appendChild(p);
           return;
         }

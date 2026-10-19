@@ -12,8 +12,8 @@ import { saveModel } from '../../core/storage.js';
 import {
   MOBILE_COLOR_ORDER, MOBILE_COLOR_LABELS, SEGMENT_LABELS, bucket, normColor, stepIndex, snapshotColors, colorsSignature, restoreSnapshot,
 } from '../../core/mobile-tasks.js';
-import { fullColorLabel } from './task-row.js?v=2026-10-mobile-6';
-import { shieldTaps } from './task-gestures.js?v=2026-10-mobile-6';
+import { fullColorLabel } from './task-row.js?v=2026-10-mobile-8';
+import { shieldTaps } from './task-gestures.js?v=2026-10-mobile-8';
 
 // [row][col]: important on top, urgent on the left
 const GRID = [['red', 'yellow'], ['orange', 'blue']];

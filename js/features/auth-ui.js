@@ -31,6 +31,7 @@ import {
 } from '../core/sync.js';
 import { restoreModel, saveModel } from '../core/storage.js';
 import { resetFileCache } from '../core/file-service.js';
+import { scheduleOfflineRefresh } from '../core/offline-copy.js';
 import { model, editState, resetModel } from '../state.js';
 import { buildGcalPanel, afterSignIn as gcalAfterSignIn, resetGcalState } from './google-calendar.js';
 
@@ -388,6 +389,8 @@ async function completeSignIn(username, { created = false } = {}) {
       ? `Signed in as ${username}. This dashboard was uploaded to your account.`
       : `Signed in as ${username}`);
     gcalAfterSignIn();
+    // This account's offline copy on this phone, if it saved one: a quiet update
+    scheduleOfflineRefresh();
   } catch (err) {
     console.error('[Auth] Post-login flow failed:', err);
     showAuthError('Sign-in succeeded but loading data failed. Please refresh.');

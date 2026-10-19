@@ -6,7 +6,7 @@
    any of it); glass rules use the shell prefix
    html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme]
    (see mobile.css for the conventions). Classes are prefixed mx-today- /
-   mx-time- / mx-more-. Tokens only, no new hues; emerald = live / done.
+   mx-time- / mx-more- / mx-offline-. Tokens only, no new hues; emerald = live / done.
    Icon images and copy-paste swatches are never touched.
    Sections: 1 Today screen · 2 rows, subtask rail, meetings, reminders,
    coming-up rows · 3 Time sheet + the hosted card · 4 More sheet · 5 reused:
@@ -489,6 +489,53 @@ html[data-shell="mobile"] .mx-more-signout { align-self: center; min-width: 160p
 html[data-shell="mobile"] .mx-more-nom { margin: 0; display: flex; flex-direction: column; gap: 4px; }
 html[data-shell="mobile"] .mx-more-nom dt { margin: 10px 0 0; font-size: 15px; font-weight: 700; }
 html[data-shell="mobile"] .mx-more-nom dd { margin: 0; font-size: 14px; line-height: 1.45; color: var(--muted); }
+/* Offline copy sheet (More → Offline copy; offline-sheet.js) */
+html[data-shell="mobile"] .mx-offline { display: flex; flex-direction: column; gap: 14px; padding-bottom: 22px; }
+html[data-shell="mobile"] .mx-offline .mx-sheet-note { margin: 0; }
+/* The body scrolls: nothing shrinks (the status card clips its overflow, so it would) */
+html[data-shell="mobile"] .mx-offline > * { flex-shrink: 0; }
+html[data-shell="mobile"] .mx-offline-status {
+  margin: 0; display: grid; grid-template-columns: auto minmax(0, 1fr);
+  border-radius: 18px; overflow: hidden;
+}
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-offline-status {
+  background: var(--glass-reflection), var(--glass-field);
+  border: 1px solid var(--glass-edge);
+  box-shadow: var(--fx-lift-pill), var(--glass-rim);
+}
+html[data-shell="mobile"] .mx-offline-status :is(dt, dd) {
+  margin: 0; padding: 12px 14px; border-top: 1px solid var(--glass-divider);
+  font-size: 14px; line-height: 1.35;
+}
+html[data-shell="mobile"] .mx-offline-status :is(dt, dd):nth-child(-n + 2) { border-top: 0; }
+html[data-shell="mobile"] .mx-offline-status dt { color: var(--muted); white-space: nowrap; }
+html[data-shell="mobile"] .mx-offline-status dd { font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+html[data-shell="mobile"] .mx-offline-plan { margin: 0; padding: 0 6px; font-size: 14px; line-height: 1.45; }
+html[data-shell="mobile"] .mx-offline-plan:empty { display: none; }
+html[data-shell="mobile"] .mx-offline-progress { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 6px 10px; padding: 0 6px; }
+html[data-shell="mobile"] .mx-offline-bar {
+  grid-column: 1 / -1; width: 100%; height: 8px;
+  appearance: none; -webkit-appearance: none; border: 0; border-radius: 999px;
+  background: var(--glass-divider); overflow: hidden;
+}
+html[data-shell="mobile"] .mx-offline-bar::-webkit-progress-bar { background: var(--glass-divider); border-radius: 999px; }
+html[data-shell="mobile"] .mx-offline-bar::-webkit-progress-value { background: rgb(var(--fx-ind-rgb, 22 160 255)); border-radius: 999px; }
+html[data-shell="mobile"] .mx-offline-bar::-moz-progress-bar { background: rgb(var(--fx-ind-rgb, 22 160 255)); border-radius: 999px; }
+html[data-shell="mobile"] .mx-offline-progress-text { min-width: 0; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+html[data-shell="mobile"] .mx-offline-actions { display: flex; flex-direction: column; gap: 8px; }
+html[data-shell="mobile"] .mx-offline-save { width: 100%; }
+html[data-shell="mobile"] .mx-offline-save:disabled { opacity: 0.55; cursor: default; }
+html[data-shell="mobile"] .mx-offline-confirm {
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 12px 14px; border: 1px solid var(--glass-divider); border-radius: 16px;
+}
+html[data-shell="mobile"] .mx-offline-confirm-text { margin: 0; font-size: 14px; line-height: 1.45; }
+html[data-shell="mobile"] .mx-offline-confirm-actions { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
+html[data-shell="mobile"] .mx-offline-confirm-yes:disabled { opacity: 0.55; }
+html[data-shell="mobile"] .mx-offline-heading { margin-top: 4px; }
+html[data-shell="mobile"] .mx-offline-limits dt:first-child { margin-top: 0; }
+html[data-shell="mobile"] :is(.mx-offline-progress, .mx-offline-confirm, .mx-offline .mx-btn)[hidden] { display: none; }
+
 /* Google Calendar sheet (More → Google Calendar; the panel from google-calendar.js) */
 html[data-shell="mobile"] .mx-sheet .gcal-panel { gap: 12px; padding-bottom: 18px; font-size: 15px; }
 html[data-shell="mobile"] .mx-sheet .gcal-note { font-size: 14px; }
@@ -640,7 +687,7 @@ html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-glass-them
 /* --- 9. Accessibility guards -------------------------------------------------- */
 @media (prefers-reduced-transparency: reduce) {
   html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] :is(.mx-today-coming-list, .mx-more-list,
-    .mx-more-account, .mx-today-empty, .mx-today-sub) {
+    .mx-more-account, .mx-today-empty, .mx-today-sub, .mx-offline-status) {
     background: var(--card);
   }
   html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-time-live {
@@ -653,7 +700,7 @@ html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-glass-them
 }
 @media (forced-colors: active) {
   html[data-shell="mobile"] :is(.mx-today-ring, .mx-today-coming-row, .mx-more-row, .mx-today-sub, .mx-today-meeting,
-    .mx-today-calendar, .mx-today-pane) { outline: 1px solid CanvasText; }
+    .mx-today-calendar, .mx-today-pane, .mx-offline-status) { outline: 1px solid CanvasText; }
 }
 
 /* --- 10. Landscape phones ---------------------------------------------------------- */

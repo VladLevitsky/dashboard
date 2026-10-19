@@ -5,6 +5,9 @@
 import { API_BASE } from '../constants.js';
 import { isLoggedIn, getAuthToken } from './auth.js';
 import { collectRichTextFileIds, forEachString, findInlineImages, mapStringsDeep, replaceInlineImage, richTextLabel, imageFileBase } from './rich-text-refs.js';
+// A safe import cycle (offline-copy.js imports getAllReferencedFileIds): neither
+// module uses the other while loading
+import { readOfflineFile, isOffline } from './offline-copy.js';
 
 // ============================================================
 // BLOB URL LIFECYCLE MANAGEMENT
@@ -230,7 +233,9 @@ export async function uploadFile(fileBlob, fileName) {
 
 /**
  * Fetch a file's bytes as a blob URL (for images, PDFs, etc.)
- * Caches the blob URL for reuse.
+ * Caches the blob URL for reuse. Offline, on a network error or a 5xx, the
+ * phone's offline copy of this account's files answers (offline-copy.js);
+ * a 404 stays "not found" as before.
  * @param {string} fileId
  * @returns {Promise<string|null>} blob URL or null
  */
@@ -242,6 +247,7 @@ export async function fetchFileBlobUrl(fileId) {
   if (cached) return cached;
 
   const generation = _cacheGeneration;
+  if (isOffline()) return fromOfflineCopy(fileId, generation);
   try {
     const res = await fetch(`${API_BASE}/files/${fileId}`, {
       headers: { 'Authorization': `Bearer ${getAuthToken()}` }
@@ -250,6 +256,7 @@ export async function fetchFileBlobUrl(fileId) {
     if (generation !== _cacheGeneration) return null; // another account by now
     if (!res.ok) {
       if (res.status === 404) _missingFiles.add(fileId);
+      if (res.status >= 500) return fromOfflineCopy(fileId, generation);
       return null;
     }
 
@@ -259,8 +266,17 @@ export async function fetchFileBlobUrl(fileId) {
     storeBlobUrl(fileId, blobUrl);
     return blobUrl;
   } catch {
-    return null;
+    return fromOfflineCopy(fileId, generation);
   }
+}
+
+// The same bytes from the offline copy (R2 files never change under their id)
+async function fromOfflineCopy(fileId, generation) {
+  const blob = await readOfflineFile(fileId).catch(() => null);
+  if (!blob || generation !== _cacheGeneration) return null;
+  const blobUrl = URL.createObjectURL(blob);
+  storeBlobUrl(fileId, blobUrl);
+  return blobUrl;
 }
 
 /**

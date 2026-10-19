@@ -36,6 +36,7 @@ import { initQuickCapture, showActionToast } from '../features/quick-capture.js'
 import { readGcalReturn, initGoogleCalendar, refreshGcalStatus } from '../features/google-calendar.js';
 import { openTaskSettingsModal } from '../features/task-categories.js';
 import { startRichTextImages } from '../features/rich-text-images.js';
+import { initOfflineCopy, scheduleOfflineRefresh } from './offline-copy.js';
 import { toggleTodayView } from '../features/today.js';
 import {
   loadMediaLibrary,
@@ -779,6 +780,9 @@ export async function init() {
   // Images kept in file storage: fill in <img data-r2-file-id> wherever rich text renders
   startRichTextImages();
 
+  // Offline copy (opt-in, More → Offline copy): nothing unless switched off
+  initOfflineCopy();
+
   applyDarkMode();
   applyGlassMode();
   applyGlassTheme();
@@ -808,6 +812,10 @@ export async function init() {
 
   // Cloud sync: reconcile with server after local render (async, non-blocking)
   const startupSync = wasLoggedIn ? postRestoreAuthSync() : null;
+
+  // Offline copy: once the startup sync is done, a quiet update for an account
+  // that saved one (at most every 6 h; never starts a copy by itself)
+  if (startupSync) startupSync.then(() => scheduleOfflineRefresh(), () => scheduleOfflineRefresh());
 
   // Google Calendar: status, one catch-up sync, and syncs after every upload
   initGoogleCalendar();

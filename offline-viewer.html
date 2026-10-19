@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <!-- The viewer Worker's policy (Reference/Backend/viewer-worker.deployed.js), with
+       connect-src 'none': offline there is nothing to connect to, and the stored file
+       must not reach out once the phone is back online. frame-ancestors can't be set
+       from a meta tag (browsers ignore it there). The stored HTML runs in a srcdoc
+       iframe, which inherits this policy. Reference/pwa-test.mjs compares the two. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'none'; frame-src 'self' data: blob:; object-src 'none'; base-uri 'none'; form-action 'none'; worker-src 'none'">
+  <meta name="referrer" content="no-referrer">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Offline file</title>
+  <style>
+    html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #ffffff; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    #viewer { width: 100%; height: 100%; border: 0; display: block; background: #ffffff; }
+    #status { box-sizing: border-box; display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; padding: 24px; text-align: center; color: #333333; line-height: 1.45; }
+    #status[hidden] { display: none; }
+  </style>
+</head>
+<body>
+  <div id="status" role="status">Opening the offline copy…</div>
+  <iframe id="viewer" title="Offline HTML file" sandbox="allow-scripts" referrerpolicy="no-referrer" hidden></iframe>
+  <!-- offline-viewer.html#<fileId>: the file comes from the offline copy of the account
+       whose dashboard this browser holds (auth.js getDataOwner: the signed-in account,
+       else the one whose session ended), never another account's. It only reads. The
+       document runs in a sandboxed iframe WITHOUT allow-same-origin and gets it as
+       srcdoc (never a blob: URL, which would carry this origin): its scripts can't
+       read this page, Cache Storage or localStorage. Names: js/core/offline-plan.js -->
+  <script>
+    (async function () {
+      var status = document.getElementById('status');
+      var frame = document.getElementById('viewer');
+      function fail(message) { status.textContent = message; status.hidden = false; frame.hidden = true; }
+      try {
+        try { window.opener = null; } catch (e) { /* none */ }
+        var fileId = '';
+        try { fileId = decodeURIComponent(location.hash.slice(1)); } catch (e) { fileId = ''; }
+        if (!fileId) { fail('Open this file from the dashboard.'); return; }
+        var token = localStorage.getItem('pd_auth_token');
+        var owner = localStorage.getItem('pd_auth_username') || (token ? null : localStorage.getItem('pd_auth_lapsed'));
+        if (!owner) { fail('Sign in on the dashboard to open your files.'); return; }
+        var name = 'pd-files-v1@' + encodeURIComponent(owner);
+        if (!window.caches || !(await caches.has(name))) { fail('This file isn’t in the offline copy on this phone.'); return; }
+        var cache = await caches.open(name);
+        var res = await cache.match('offline-file/' + encodeURIComponent(fileId));
+        if (!res) { fail('This file isn’t in the offline copy on this phone.'); return; }
+        var html = await res.text();
+        var title = res.headers.get('X-Offline-Name');
+        if (title) { try { document.title = decodeURIComponent(title); } catch (e) { /* keep */ } }
+        frame.srcdoc = html;
+        frame.hidden = false;
+        status.hidden = true;
+      } catch (err) {
+        fail('Couldn’t open this file.');
+      }
+    })();
+  </script>
+</body>
+</html>
