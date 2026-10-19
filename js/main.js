@@ -50,7 +50,8 @@ import {
   deleteNoteFromViewer,
   copyNoteFromViewer,
   openNoteColorPicker,
-  wireMoveButtonEvents
+  wireMoveButtonEvents,
+  clearEditNoteMoves
 } from './features/edit-mode.js';
 
 import {
@@ -361,7 +362,7 @@ import { getGcalStatus, refreshGcalStatus, syncGoogleCalendar, requestBusyDay, g
 // Mobile shell (phones and the desktop "Mobile" preview). The ?v= keeps the
 // shell and its unit modules (all imported with the same version) from mixing
 // builds after a deploy; bump it with MOBILE_BUILD (js/core/mobile-device.js).
-import { syncMobileShell, renderMobileShell, isShellMounted, mobileShellDebug } from './features/mobile/shell.js?v=2026-10-mobile-6';
+import { syncMobileShell, renderMobileShell, isShellMounted, mobileShellDebug } from './features/mobile/shell.js?v=2026-10-mobile-7';
 
 // Make key functions available globally for the transition period
 // This allows app.js to still work while we gradually migrate
@@ -438,6 +439,7 @@ window.wireAppearanceModalEvents = wireAppearanceModalEvents;
 window.refreshEditingClasses = refreshEditingClasses;
 window.markDirtyAndSave = markDirtyAndSave;
 window.confirmGlobalEdit = confirmGlobalEdit;
+window.clearEditNoteMoves = clearEditNoteMoves;
 window.cancelGlobalEdit = cancelGlobalEdit;
 window.openColorPicker = openColorPicker;
 window.openSubtitleColorPicker = openSubtitleColorPicker;

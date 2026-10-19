@@ -5,6 +5,7 @@
 import { editState, currentData, currentSections } from '../state.js';
 import { $ } from '../utils.js';
 import { markDirtyAndSave, hideEditPopover, hideCalendarPopover, hideIntervalPopover } from './edit-mode.js';
+import { initializeCardDropZone } from './drag-drop.js';
 
 let currentModalSectionId = null;
 
@@ -48,6 +49,9 @@ export function openCardEditModal(sectionId) {
     cardEl.style.cursor = 'default';
     cardEl.style.gridColumn = '';
     body.appendChild(cardEl);
+
+    // Items dragged inside the modal can drop into another section of this card
+    initializeCardDropZone(cardEl, sectionId);
 
     // Add edit buttons (delete, reorder, drag handlers) onto this card
     if (window.addCardButtons) {

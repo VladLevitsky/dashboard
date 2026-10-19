@@ -27,7 +27,11 @@ import {
   startSyncTimer,
   stopSyncTimer,
   immediateCloudSave,
-  isCloudDirty
+  isCloudDirty,
+  hasUnsyncedChanges,
+  waitForCloudSave,
+  beginDashboardLoad,
+  endDashboardLoad
 } from '../core/sync.js';
 import { restoreModel, saveModel } from '../core/storage.js';
 import { resetFileCache } from '../core/file-service.js';
@@ -144,6 +148,9 @@ function closeAuthModal() {
   _loginChallenge = false;
   _isSubmitting = false;
   setSubmitEnabled(true);
+  // A trip to Google that never left (the navigation was stopped) leaves it off
+  setGoogleButtonEnabled(true);
+  _googleTrip++;
 }
 
 // --- Toggle between login and register modes ---
@@ -275,56 +282,73 @@ async function handleAuthSubmit(e) {
   _isSubmitting = true;
   setSubmitEnabled(false);
 
-  let result;
+  // Read once, before the request: the Sign in / Create account switch still
+  // works while it runs, and only an account this request made may take the
+  // signed-out dashboard (a sign-in answered after a switch is never "created")
+  const created = _isRegisterMode;
+  // Edit mode waits from here (sync.js): an edit session opened while the
+  // request runs would hold the dashboard about to be replaced, and its Confirm
+  // would merge it into the account. completeSignIn holds it on its own too
+  beginDashboardLoad();
+  try {
+    let result;
 
-  if (_isRegisterMode) {
-    // Validate Turnstile token before registration
-    const turnstileToken = getTurnstileToken();
-    if (!turnstileToken) {
-      showAuthError('Please complete the security check.');
-      _isSubmitting = false;
-      setSubmitEnabled(true);
-      return;
-    }
-
-    result = await register(username, password, turnstileToken);
-
-    if (!result.ok) {
-      showAuthError(result.error);
-      resetTurnstile();
-      _isSubmitting = false;
-      setSubmitEnabled(true);
-      return;
-    }
-  } else {
-    // After many attempts on this account the server asks for the same
-    // security check as registration (it never locks the owner out)
-    const turnstileToken = _loginChallenge ? getTurnstileToken() : null;
-    if (_loginChallenge && !turnstileToken) {
-      showAuthError('Please complete the security check.');
-      _isSubmitting = false;
-      setSubmitEnabled(true);
-      return;
-    }
-
-    result = await login(username, password, turnstileToken);
-
-    if (!result.ok) {
-      if (result.turnstileRequired && !_loginChallenge) {
-        _loginChallenge = true;
-        $('#auth-turnstile-container').hidden = false;
-        renderTurnstile();
-      } else if (_loginChallenge) {
-        resetTurnstile();
+    if (created) {
+      // Validate Turnstile token before registration
+      const turnstileToken = getTurnstileToken();
+      if (!turnstileToken) {
+        showAuthError('Please complete the security check.');
+        _isSubmitting = false;
+        setSubmitEnabled(true);
+        return;
       }
-      showAuthError(result.error);
-      _isSubmitting = false;
-      setSubmitEnabled(true);
-      return;
-    }
-  }
 
-  await completeSignIn(result.username, { created: _isRegisterMode });
+      result = await register(username, password, turnstileToken);
+
+      if (!result.ok) {
+        showAuthError(result.error);
+        resetTurnstile();
+        _isSubmitting = false;
+        setSubmitEnabled(true);
+        return;
+      }
+    } else {
+      // After many attempts on this account the server asks for the same
+      // security check as registration (it never locks the owner out)
+      const turnstileToken = _loginChallenge ? getTurnstileToken() : null;
+      if (_loginChallenge && !turnstileToken) {
+        showAuthError('Please complete the security check.');
+        _isSubmitting = false;
+        setSubmitEnabled(true);
+        return;
+      }
+
+      result = await login(username, password, turnstileToken);
+
+      if (!result.ok) {
+        if (result.turnstileRequired && !_loginChallenge) {
+          _loginChallenge = true;
+          $('#auth-turnstile-container').hidden = false;
+          renderTurnstile();
+        } else if (_loginChallenge) {
+          resetTurnstile();
+        }
+        showAuthError(result.error);
+        _isSubmitting = false;
+        setSubmitEnabled(true);
+        return;
+      }
+    }
+
+    await completeSignIn(result.username, { created });
+  } catch (err) {
+    console.error('[Auth] Sign-in failed:', err);
+    showAuthError('Sign-in failed. Try again.');
+    _isSubmitting = false;
+    setSubmitEnabled(true);
+  } finally {
+    endDashboardLoad();
+  }
 }
 
 // --- After any successful sign-in (password, Google, a new account) ---
@@ -332,20 +356,37 @@ async function handleAuthSubmit(e) {
 // the account's model, sync with the cloud. created: the account was made just
 // now on this browser (the only case the signed-out dashboard may go into it)
 async function completeSignIn(username, { created = false } = {}) {
+  let persisted = false;
+  // Edit mode waits until the account's dashboard is on screen (sync.js)
+  beginDashboardLoad();
   try {
+    // Edit mode on anyway (it can't open while a sign-in loads): its working
+    // copy is the dashboard on screen, and Confirm would merge it into the
+    // account. The sign-in stops before anything of the account is stored
+    if (editState.enabled) {
+      abandonSignIn();
+      renderAuthUI();
+      const msg = 'Save or cancel your edits, then sign in again.';
+      showAuthError(msg);
+      if ($('#auth-modal').hidden) showToast(msg);
+      return;
+    }
     const prep = await prepareAccountCopy(username, { created });
     if (!prep.ok) {
       // This browser has no copy of the account and the cloud copy couldn't be
-      // read: going on would show (and later upload) another dashboard
+      // read (or stored): going on would show (and later upload) another dashboard
       abandonSignIn();
       renderAuthUI();
-      const msg = 'Signed in, but your dashboard couldn’t be loaded. Check your connection and try again.';
+      const msg = prep.error === 'storage'
+        ? 'Signed in, but this browser’s storage is full, so your dashboard couldn’t be loaded.'
+        : 'Signed in, but your dashboard couldn’t be loaded. Check your connection and try again.';
       showAuthError(msg);
       if ($('#auth-modal').hidden) showToast(msg);
       return;
     }
     // The account's copy is ready: the session is saved from here on
     persistSession();
+    persisted = true;
 
     // Reset the model (and this page's sync flag) so nothing leaks between
     // accounts, then read the account's own copy
@@ -390,35 +431,65 @@ async function completeSignIn(username, { created = false } = {}) {
     gcalAfterSignIn();
   } catch (err) {
     console.error('[Auth] Post-login flow failed:', err);
+    if (!persisted) {
+      // Nothing of the account is on screen yet: the sign-in is undone, so the
+      // dashboard shown is not used (uploads, merges) with the new session
+      abandonSignIn();
+      renderAuthUI();
+      showAuthError('Signed in, but your dashboard couldn’t be loaded. Try again.');
+      if ($('#auth-modal').hidden) showToast('Signed in, but your dashboard couldn’t be loaded. Try again.');
+      return;
+    }
     showAuthError('Sign-in succeeded but loading data failed. Please refresh.');
     // Back from Google the dialog may be closed: say it where it shows
     if ($('#auth-modal').hidden) showToast('Signed in, but loading data failed. Please refresh.');
   } finally {
+    endDashboardLoad();
     _isSubmitting = false;
     setSubmitEnabled(true);
   }
 }
 
 // --- Handle logout ---
+let _signingOut = false;
 async function handleLogout() {
   closeUserPopover();
+  if (_signingOut) return;
   if (editsBlockAccountSwitch('out')) return;
+  _signingOut = true;
   stopSyncTimer();
 
-  // If dirty, try one last save before logout
-  if (isCloudDirty()) {
-    await immediateCloudSave();
+  try {
+    // One last save before logout: an upload already on its way finishes first
+    // (signing out under it would drop it), then whatever is still unsynced goes
+    // up, this page's changes or ones an earlier page left (the stored flag)
+    if (hasUnsyncedChanges()) showToast('Syncing your changes before signing out…');
+    await waitForCloudSave();
+    let unsynced = false;
+    if (isLoggedIn() && hasUnsyncedChanges()) {
+      const r = await immediateCloudSave({ quiet: true });
+      unsynced = !r.ok;
+    }
+    // Edit mode opened while that upload ran: the sign-out waits for it too
+    if (editsBlockAccountSwitch('out')) {
+      if (isLoggedIn()) startSyncTimer();
+      return;
+    }
+
+    await logout();
+    resetGcalState();
+
+    // The signed-out dashboard (legacy key), from its own copy: nothing of the
+    // account's model stays in memory
+    await showOwnerDashboard();
+
+    renderAuthUI();
+    // What didn't sync stays in the account's copy on this browser, and goes
+    // up when the account signs in here again
+    showToast(unsynced ? 'Signed out. Changes that didn’t sync wait on this browser until you sign in again' : 'Signed out');
+  } finally {
+    _signingOut = false;
   }
-
-  await logout();
-  resetGcalState();
-
-  // The signed-out dashboard (legacy key), from its own copy: nothing of the
-  // account's model stays in memory
-  await showOwnerDashboard();
-
-  renderAuthUI();
-  showToast('Signed out');
 }
 
 // --- Google sign-in ---
@@ -446,11 +517,31 @@ async function handleGoogleButton() {
   setSubmitEnabled(false);
   setGoogleButtonEnabled(false);
   const r = await startGoogleSignin('signin');
-  if (r.ok) { location.assign(r.url); return; }
+  if (r.ok) { leaveForGoogle(r.url); return; }
   showAuthError(r.error);
   _isSubmitting = false;
   setSubmitEnabled(true);
   setGoogleButtonEnabled(true);
+}
+
+// Off to Google's page. A navigation that never happens (stopped while it
+// loads: Esc, the browser's ✕) leaves this page as it was, so the form works
+// again after a while instead of staying disabled
+const GOOGLE_LEAVE_GRACE_MS = 8000;
+let _googleTrip = 0; // closing the dialog (which re-enables the form) cancels the wait
+function leaveForGoogle(url) {
+  const trip = ++_googleTrip;
+  let left = false;
+  const onHide = () => { left = true; };
+  window.addEventListener('pagehide', onHide, { once: true });
+  location.assign(url);
+  setTimeout(() => {
+    window.removeEventListener('pagehide', onHide);
+    if (left || trip !== _googleTrip) return;
+    _isSubmitting = false;
+    setSubmitEnabled(true);
+    setGoogleButtonEnabled(true);
+  }, GOOGLE_LEAVE_GRACE_MS);
 }
 
 // The username step for a new Google account: the Create account form
@@ -488,6 +579,7 @@ function openGoogleSignup({ code, secret, email, suggestion }) {
 }
 
 async function handleGoogleSignupSubmit() {
+  if (editState.enabled) { showAuthError('Save or cancel your edits first.'); return; }
   const username = $('#auth-username').value.trim();
   if (!username) { showAuthError('Choose a username.'); return; }
   const turnstileToken = getTurnstileToken();
@@ -496,17 +588,31 @@ async function handleGoogleSignupSubmit() {
   _isSubmitting = true;
   setSubmitEnabled(false);
   const g = _googleSignup;
-  const result = await registerWithGoogle(g.code, g.secret, username, turnstileToken);
-  if (!result.ok) {
-    // Used up, or from another tab: back to the start, where Google can be tried again
-    if (result.reason === 'invalid_code' || result.reason === 'wrong_browser') setAuthMode(false);
-    else resetTurnstile();
-    showAuthError(result.error);
+  // Edit mode waits while the request runs (see handleAuthSubmit)
+  beginDashboardLoad();
+  try {
+    const result = await registerWithGoogle(g.code, g.secret, username, turnstileToken);
+    if (!result.ok) {
+      // Used up, or from another tab: back to the start, where Google can be tried again
+      if (result.reason === 'invalid_code' || result.reason === 'wrong_browser') setAuthMode(false);
+      else resetTurnstile();
+      showAuthError(result.error);
+      _isSubmitting = false;
+      setSubmitEnabled(true);
+      return;
+    }
+    // Only an account the Worker made just now may take the signed-out
+    // dashboard: a Google login linked to an existing account meanwhile (on
+    // another device) signs in to that account, which keeps its own
+    await completeSignIn(result.username, { created: result.created === true });
+  } catch (err) {
+    console.error('[Auth] Google sign-up failed:', err);
+    showAuthError('Couldn’t create the account. Try again.');
     _isSubmitting = false;
     setSubmitEnabled(true);
-    return;
+  } finally {
+    endDashboardLoad();
   }
-  await completeSignIn(result.username, { created: true });
 }
 
 // Called at the end of init(): finishes a sign-in / link that came back from
@@ -515,6 +621,16 @@ async function handleGoogleSignupSubmit() {
 export async function resumeGoogleSignin(startupSync = null) {
   const back = takeGoogleSigninReturn();
   if (!back) return;
+  // A sign-in coming back may replace the dashboard on screen: edit mode waits
+  beginDashboardLoad();
+  try {
+    await finishGoogleReturn(back, startupSync);
+  } finally {
+    endDashboardLoad();
+  }
+}
+
+async function finishGoogleReturn(back, startupSync) {
   const linking = back.mode === 'link';
   // A link's toasts wait for the startup sync, whose own toast would cover them
   const afterStartupSync = async () => {
@@ -776,32 +892,40 @@ export async function initAuthOnStartup() {
 export async function postRestoreAuthSync() {
   if (!isLoggedIn()) return;
 
+  // Edit mode waits for this (sync.js beginDashboardLoad): the model may be
+  // replaced with the cloud copy below
+  beginDashboardLoad();
   // Reconcile with cloud data (async, non-blocking for UI)
   try {
     const syncResult = await syncOnLogin();
 
     if (syncResult && syncResult.action === 'loaded_cloud') {
-      // Do NOT re-render if user is actively editing — they would lose unsaved changes
-      if (editState.enabled) {
-        showToast('Cloud has newer data. Save or cancel edits to sync.');
-        return;
-      }
-      // Cloud data was newer — reset and reload model
+      // Cloud data was newer — reset and reload model. Never skipped: a stale
+      // model left under the copy just stored would write over it on its next
+      // save (and upload it). An edit session open anyway keeps its working
+      // copy on screen; Cancel shows the newer dashboard
+      const editing = editState.enabled;
       resetModel();
       await restoreModel();
-      if (window.renderHeaderAndTitles) window.renderHeaderAndTitles();
-      if (window.renderAllSections) window.renderAllSections();
-      if (window.applyDarkMode) window.applyDarkMode();
-      if (window.applyGlassMode) window.applyGlassMode();
-      if (window.applyGlassTheme) window.applyGlassTheme();
-  
-      if (window.applyCellSize) window.applyCellSize();
-      if (window.ensureSectionPlusButtons) window.ensureSectionPlusButtons();
-      if (window.refreshTimeTrackingUI) window.refreshTimeTrackingUI();
+      if (editing) {
+        showToast('Newer data came from the cloud. Cancel your edits to see it.');
+      } else {
+        if (window.renderHeaderAndTitles) window.renderHeaderAndTitles();
+        if (window.renderAllSections) window.renderAllSections();
+        if (window.applyDarkMode) window.applyDarkMode();
+        if (window.applyGlassMode) window.applyGlassMode();
+        if (window.applyGlassTheme) window.applyGlassTheme();
+
+        if (window.applyCellSize) window.applyCellSize();
+        if (window.ensureSectionPlusButtons) window.ensureSectionPlusButtons();
+        if (window.refreshTimeTrackingUI) window.refreshTimeTrackingUI();
+      }
     }
   } catch (err) {
     // Cloud sync failed — proceed with local data
     console.warn('Cloud sync on startup failed:', err);
+  } finally {
+    endDashboardLoad();
   }
 
   // Start background sync timer

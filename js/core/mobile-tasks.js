@@ -15,7 +15,7 @@
 
 import { dueState, daysBetween, addDays, TASK_COLOR_ORDER } from './agenda.js';
 import { shortDay } from './mobile-common.js';
-import { dueTimeOf, formatTimeKey } from './due-time.js';
+import { dueTimeOf, dueEndTimeOf, formatTimeRange } from './due-time.js';
 
 export const MOBILE_COLOR_ORDER = ['red', 'orange', 'yellow', 'blue'];
 export const MOBILE_COLOR_LABELS = { red: 'Urgent & important', orange: 'Urgent', yellow: 'Important', blue: 'Later' };
@@ -234,15 +234,17 @@ function linkCount(task) {
 }
 
 // The quiet line under a row title:
-// { due: { kind: 'today'|'overdue'|'tomorrow'|'date', text, days?, date, time? } | null,
+// { due: { kind: 'today'|'overdue'|'tomorrow'|'date', text, days?, date, time?, end? } | null,
 //   subs: { done, total } | null, desc, links, categoryId }
-// A due time joins the text ('Today 3 PM', 'Fri, Oct 23 · 9:30 AM'); overdue stays 'Overdue · 2d'
+// A due time joins the text ('Today 3 PM', 'Today 3–4 PM', 'Fri, Oct 23 · 9:30–10 AM');
+// overdue stays 'Overdue · 2d'
 export function rowMeta(task, todayKey, { locale } = {}) {
   const t = task || {};
   let due = null;
   const time = dueTimeOf(t);
-  const at = time ? formatTimeKey(time, { compact: true, locale }) : '';
-  const withTime = time ? { time } : {};
+  const end = dueEndTimeOf(t);
+  const at = time ? formatTimeRange(time, end, { compact: true, locale }) : '';
+  const withTime = time ? (end ? { time, end } : { time }) : {};
   const state = dueState(t.dueDate, todayKey);
   if (state) {
     due = state.when === 'today'
@@ -263,7 +265,7 @@ export function rowMeta(task, todayKey, { locale } = {}) {
 export function rowSignature(task, todayKey) {
   const t = task || {};
   const m = rowMeta(t, todayKey);
-  return [t.title || '', normColor(t.color), t.pinned ? 1 : 0, t.dueDate || '', dueTimeOf(t) || '',
+  return [t.title || '', normColor(t.color), t.pinned ? 1 : 0, t.dueDate || '', dueTimeOf(t) || '', dueEndTimeOf(t) || '',
     m.subs ? `${m.subs.done}/${m.subs.total}` : '', m.desc ? 1 : 0, m.links, m.categoryId || '', todayKey || ''].join('|');
 }
 

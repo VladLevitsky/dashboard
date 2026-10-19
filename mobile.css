@@ -14,11 +14,15 @@
    - colour on buttons goes in background-image (no glass-glow bloom)
    - motion: opacity / transform on small pseudo layers, uneven periods
    Every fixed shell layer stays under z-index 1000: reused modals (lowest
-   1500) always stack above the chrome.
+   1500) always stack above the chrome. One exception: the file viewer
+   (file-sheet.js, a child of <body>, z 10050, mobile-links.css §3) opens
+   over the writer frames, calendar and meetings, under help (10060).
    Sections: 0 hide · 1 tokens · 2 canvas · 3 frame + preview · 4 top bar ·
    5 dock, +, lane, carry slot · 6 shared controls · 7 sheets, scrim, pushed
    screens, conflict sheet · 8 reused-root column pinning + toast lane ·
-   9 landscape · 10 dark · 11 sunset · 12 keyframes · 13 a11y guards
+   9 landscape · 10 dark · 11 sunset · 12 keyframes · 13 a11y guards ·
+   14 time field + time picker (its own dark / a11y guards; the picker is a
+   child of <body> at z 10055)
    ========================================================================== */
 
 /* --- 0. Hide the desktop chrome ------------------------------------------
@@ -732,6 +736,10 @@ html[data-shell="mobile"][data-mx-compose] :is(#toast, #qc-toast) { bottom: calc
    whole page on every restyle), so #qc-toast must stay a direct child of <body>
    (quick-capture.js showActionToast) or this raise silently stops */
 html[data-shell="mobile"]:has(> body > #qc-toast.show) #toast { bottom: calc(var(--mx-dock-b) + var(--mx-dock-h) + var(--mx-live-space) + 66px); }
+/* "Mark as complete?" (task-actions.js confirmComplete sets data-mx-confirm + --mx-confirm-h, the
+   sheet's height): the lane rises above it, so an earlier "Completed · Undo" never covers its buttons */
+html[data-shell="mobile"][data-mx-confirm] :is(#toast, #qc-toast) { bottom: calc(var(--mx-confirm-h, 220px) + 10px); }
+html[data-shell="mobile"][data-mx-confirm]:has(> body > #qc-toast.show) #toast { bottom: calc(var(--mx-confirm-h, 220px) + 62px); }
 
 /* --- 9. Landscape phones ----------------------------------------------------------- */
 @media (orientation: landscape) and (max-height: 500px) {
@@ -861,4 +869,280 @@ html[data-shell="mobile"][data-shell-frame="preview"] body[data-glass-theme="sun
     outline: 1px solid CanvasText;
   }
   html[data-shell="mobile"] .mx-tab[aria-selected="true"] { outline: 2px solid Highlight; }
+}
+
+/* --- 14. Time field + time picker (time-picker.js) ------------------------------------
+   The field stands in for an <input type="time"> under the shell (the task frame's
+   Starts / Ends): a typed time, AM | PM and a clock button. The native input is hidden
+   here; the field is hidden everywhere else. The picker is a child of <body> at z 10055:
+   over the writer frames (10010-10012), focus mode (10040) and the file viewer (10050),
+   under help (10060) and the toasts. What is chosen is never left to a shade: the AM / PM
+   in effect and the picked hour / minute are solid accent with on-accent text, and the
+   readout part being set is tinted, ringed and bold (the others keep full text colour). */
+html[data-shell="mobile"] body[data-theme] {
+  --mx-z-time: 10055;
+  --mx-tp-accent: var(--glass-action);
+  --mx-tp-on-accent: #fff;
+}
+html[data-shell="mobile"] body[data-theme="dark"] {
+  --mx-tp-accent: var(--brand);
+  --mx-tp-on-accent: var(--bg);
+}
+html:not([data-shell="mobile"]) .mx-tf { display: none; }
+html[data-shell="mobile"] input[data-mx-tf] { display: none; }
+
+/* The field: [Starts] [ 3:30 ] [AM|PM] (clock), a line under it for a guess or a typo */
+html[data-shell="mobile"] .mx-tf {
+  display: grid;
+  grid-template-columns: 50px minmax(0, 1fr) auto auto;
+  align-items: center;
+  column-gap: 8px;
+  min-width: 0;
+}
+html[data-shell="mobile"] .mx-tf-label {
+  font: 600 15px/1.2 'Inter', system-ui, sans-serif;
+  letter-spacing: 0; text-transform: none;
+  color: var(--muted);
+}
+html[data-shell="mobile"] .mx-tf-text {
+  box-sizing: border-box;
+  width: 100%; min-width: 0; height: 48px;
+  margin: 0; padding: 0 8px;
+  border: 1px solid var(--glass-divider); border-radius: 14px;
+  background: var(--glass-field); color: var(--text);
+  font: 600 max(16px, 1em)/1 'Inter', system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+html[data-shell="mobile"] .mx-tf-ampm {
+  display: inline-grid; grid-auto-flow: column; grid-auto-columns: 46px; gap: 2px;
+  box-sizing: border-box; height: 48px; padding: 3px;
+  border: 1.5px solid transparent; border-radius: 14px;
+  background: var(--glass-divider);
+}
+/* A guessed side (typed without AM / PM): a dashed track and the line under the field */
+html[data-shell="mobile"] .mx-tf-ampm.is-guessed { border-style: dashed; border-color: var(--mx-tp-accent); }
+html[data-shell="mobile"] :is(.mx-tf-half, .mx-tp-half) {
+  position: relative;
+  margin: 0; padding: 0;
+  border: 0; border-radius: 10px;
+  background: transparent; color: var(--text);
+  font: 700 14px/1 'Inter', system-ui, sans-serif; letter-spacing: 0.03em;
+  cursor: pointer; touch-action: manipulation;
+}
+html[data-shell="mobile"] :is(.mx-tf-half, .mx-tp-half):disabled { color: var(--muted); opacity: 0.45; cursor: default; }
+html[data-shell="mobile"] .mx-tf-clock {
+  position: relative;
+  display: grid; place-items: center;
+  box-sizing: border-box; width: 44px; height: 44px; margin: 0; padding: 0;
+  border: 1px solid var(--glass-divider); border-radius: 50%;
+  background: var(--glass-reflection), var(--glass-field); color: var(--text);
+  cursor: pointer; touch-action: manipulation;
+}
+html[data-shell="mobile"] .mx-tf-clock:active { background-color: var(--glass-hover); }
+html[data-shell="mobile"] .mx-tf-hint {
+  grid-column: 2 / -1;
+  padding-top: 6px;
+  font: 500 13px/1.35 'Inter', system-ui, sans-serif;
+  color: var(--text);
+}
+html[data-shell="mobile"] .mx-tf-hint:empty { display: none; }
+html[data-shell="mobile"] .mx-tf-hint.is-error::before {
+  content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 7px; vertical-align: 1px;
+  border-radius: 50%; background: var(--danger);
+}
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-tf-text {
+  border-color: var(--glass-divider);
+  background: var(--glass-field);
+  box-shadow: inset 0 1px 3px rgb(40 46 56 / 5%), 0 1px 0 var(--glass-edge);
+}
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-tf-text:focus {
+  outline: none;
+  border-color: var(--mx-tp-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--mx-tp-accent) 24%, transparent);
+}
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-tf-text[aria-invalid="true"] {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 20%, transparent);
+}
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-tf-clock { box-shadow: var(--fx-lift-pill), var(--glass-rim); }
+
+/* The picker */
+html[data-shell="mobile"] #mx-time-picker {
+  position: fixed; inset: 0; z-index: var(--mx-z-time, 10055);
+  pointer-events: none;
+  color: var(--text);
+  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+html[data-shell="mobile"] .mx-tp-scrim {
+  position: absolute; top: 0; bottom: 0; left: var(--mx-inline); right: var(--mx-inline);
+  background: var(--glass-scrim);
+  pointer-events: auto;
+  touch-action: none;
+}
+html[data-shell="mobile"] .mx-tp-sheet {
+  position: absolute; left: var(--mx-inline); right: var(--mx-inline); bottom: var(--mx-kb, 0px);
+  box-sizing: border-box;
+  max-height: calc(var(--mx-vvh) - var(--mx-safe-t) - 12px);
+  overflow-y: auto; overscroll-behavior: contain;
+  padding: 18px 18px calc(14px + var(--mx-safe-b));
+  border: 1px solid var(--glass-edge); border-bottom: 0;
+  border-radius: var(--mx-radius-sheet) var(--mx-radius-sheet) 0 0;
+  background: var(--card);
+  pointer-events: auto;
+  outline: none;
+}
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-tp-sheet {
+  background:
+    linear-gradient(90deg, transparent 6%, rgb(var(--fx-cyan) / 44%) 30%, rgb(var(--fx-violet) / 44%) 55%, rgb(var(--fx-pink) / 36%) 78%, transparent 96%) top / 100% 1px no-repeat,
+    radial-gradient(ellipse 180px 60px at calc(100% - 40px) 0%, var(--fx-dialog-glint), transparent 100%),
+    var(--glass-reflection), linear-gradient(var(--glass-dialog), var(--glass-dialog)), color-mix(in srgb, var(--card) 70%, transparent);
+  -webkit-backdrop-filter: blur(36px) saturate(145%);
+  backdrop-filter: blur(36px) saturate(145%);
+  box-shadow: var(--fx-lift-dialog), var(--glass-rim);
+}
+html[data-shell="mobile"] .mx-tp-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 12px; margin-bottom: 10px; }
+html[data-shell="mobile"] .mx-tp-title { margin: 0; font-size: 18px; font-weight: 700; letter-spacing: -0.015em; line-height: 1.25; }
+html[data-shell="mobile"] .mx-tp-sub { margin: 0; font-size: 14px; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* Readout: [3] : [30] [AM|PM] */
+html[data-shell="mobile"] .mx-tp-readout {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  margin: 4px 0 12px;
+}
+html[data-shell="mobile"] .mx-tp-part {
+  position: relative;
+  box-sizing: border-box; min-width: 80px; height: 66px; margin: 0; padding: 0 10px;
+  border: 2px solid var(--glass-divider); border-radius: 18px;
+  background: var(--glass-field); color: var(--text);
+  font: 500 40px/1 'Inter', system-ui, sans-serif;
+  font-variant-numeric: tabular-nums; letter-spacing: -0.02em;
+  cursor: pointer; touch-action: manipulation;
+}
+html[data-shell="mobile"] .mx-tp-part[aria-pressed="true"] {
+  font-weight: 800;
+  border-color: var(--mx-tp-accent);
+  background: color-mix(in srgb, var(--mx-tp-accent) 22%, var(--glass-field));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--mx-tp-accent) 22%, transparent);
+}
+html[data-shell="mobile"] .mx-tp-colon { font: 700 36px/1 'Inter', system-ui, sans-serif; color: var(--text); padding-bottom: 4px; }
+html[data-shell="mobile"] .mx-tp-ampm {
+  display: inline-grid; grid-auto-flow: row; gap: 3px;
+  margin-left: 8px; padding: 3px;
+  border-radius: 14px;
+  background: var(--glass-divider);
+}
+html[data-shell="mobile"] .mx-tp-half { width: 54px; height: 30px; font-size: 15px; }
+html[data-shell="mobile"] .mx-tp-half::before { content: ""; position: absolute; inset: -4px -6px; }     /* 38 x 66: a full hit */
+
+/* End: the length, quick lengths */
+html[data-shell="mobile"] .mx-tp-length { margin: -2px 0 10px; text-align: center; font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
+html[data-shell="mobile"] .mx-tp-length.is-invalid::before {
+  content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 7px; vertical-align: 1px;
+  border-radius: 50%; background: var(--danger);
+}
+html[data-shell="mobile"] .mx-tp-lengths { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; margin-bottom: 12px; }
+html[data-shell="mobile"] .mx-tp-len {
+  position: relative;
+  box-sizing: border-box; min-width: 0; height: 36px; margin: 4px 0; padding: 0;
+  border: 1px solid var(--glass-divider); border-radius: 999px;
+  background: var(--glass-reflection), var(--glass-field); color: var(--text);
+  font: 600 13px/1 'Inter', system-ui, sans-serif; white-space: nowrap;
+  cursor: pointer; touch-action: manipulation;
+}
+html[data-shell="mobile"] .mx-tp-len::before { content: ""; position: absolute; inset: -4px 0; }
+
+/* What the grid sets, and the one-minute nudges */
+html[data-shell="mobile"] .mx-tp-caprow { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+html[data-shell="mobile"] .mx-tp-caption { margin: 0; font-size: 11.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+html[data-shell="mobile"] .mx-tp-nudges { display: inline-flex; gap: 8px; }
+html[data-shell="mobile"] .mx-tp-nudge {
+  display: grid; place-items: center;
+  box-sizing: border-box; width: 44px; height: 36px; margin: 4px 0; padding: 0;
+  border: 1px solid var(--glass-divider); border-radius: 12px;
+  background: var(--glass-reflection), var(--glass-field); color: var(--text);
+  cursor: pointer; touch-action: manipulation;
+}
+
+/* The grids: 4 x 3 (12-hour hours, minutes), 6 x 4 (24-hour hours); the minute
+   grid keeps the hour grid's height, so the sheet never jumps */
+html[data-shell="mobile"] .mx-tp-grid {
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-auto-rows: 48px; gap: 8px;
+  align-content: start;
+  min-height: calc(3 * 48px + 2 * 8px);
+}
+html[data-shell="mobile"] .mx-tp-grid[hidden] { display: none; }
+html[data-shell="mobile"] #mx-time-picker[data-hour12="false"] .mx-tp-grid { min-height: calc(4 * 48px + 3 * 8px); }
+html[data-shell="mobile"] #mx-time-picker[data-hour12="false"] .mx-tp-grid--hour { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+html[data-shell="mobile"] .mx-tp-cell {
+  box-sizing: border-box; min-width: 0; margin: 0; padding: 0;
+  border: 1px solid var(--glass-divider); border-radius: 14px;
+  background: var(--glass-reflection), var(--glass-field); color: var(--text);
+  font: 600 18px/1 'Inter', system-ui, sans-serif; font-variant-numeric: tabular-nums;
+  cursor: pointer; touch-action: manipulation;
+}
+html[data-shell="mobile"] :is(.mx-tp-cell, .mx-tp-len, .mx-tp-nudge):disabled { color: var(--muted); opacity: 0.4; cursor: default; }
+html[data-shell="mobile"] :is(.mx-tp-cell, .mx-tp-len, .mx-tp-nudge, .mx-tp-part):not(:disabled):active { background-color: var(--glass-hover); }
+
+html[data-shell="mobile"] .mx-tp-foot { display: flex; align-items: center; gap: 10px; margin-top: 16px; }
+html[data-shell="mobile"] .mx-tp-spacer { flex: 1 1 auto; }
+html[data-shell="mobile"] .mx-tp-foot .mx-btn { min-width: 84px; }
+html[data-shell="mobile"] .mx-tp-foot .mx-tp-clear { min-width: 0; padding: 0 12px; }
+html[data-shell="mobile"] .mx-tp-foot .mx-btn:disabled { opacity: 0.45; cursor: default; }
+
+/* Chosen = solid accent (colour through background-image: no glass-glow bloom) */
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] :is(.mx-tf-half, .mx-tp-half, .mx-tp-cell, .mx-tp-len)[aria-pressed="true"] {
+  color: var(--mx-tp-on-accent);
+  font-weight: 800;
+  border-color: transparent;
+  background-color: transparent;
+  background-image: radial-gradient(ellipse 70% 50% at 70% 0%, rgb(255 255 255 / 24%), transparent 100%),
+    linear-gradient(var(--mx-tp-accent), var(--mx-tp-accent));
+  box-shadow: var(--fx-lift-pill), inset -1px 1px 1px rgb(255 255 255 / 28%);
+}
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] :is(.mx-tp-cell, .mx-tp-len, .mx-tp-nudge) { box-shadow: var(--fx-lift-pill), var(--glass-rim); }
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] :is(.mx-tp-cell, .mx-tp-len, .mx-tp-nudge):disabled { box-shadow: none; }
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme="dark"] :is(.mx-tf-half, .mx-tp-half, .mx-tp-cell, .mx-tp-len)[aria-pressed="true"] {
+  background-image: radial-gradient(ellipse 70% 50% at 70% 0%, rgb(255 255 255 / 30%), transparent 100%),
+    linear-gradient(var(--mx-tp-accent), var(--mx-tp-accent));
+  box-shadow: var(--fx-lift-pill), 0 0 14px -4px color-mix(in srgb, var(--mx-tp-accent) 60%, transparent);
+}
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme="dark"] .mx-tp-sheet {
+  box-shadow: var(--fx-lift-dialog), var(--glass-rim), inset -18px 18px 40px -30px rgb(190 214 255 / 14%);
+}
+/* Sunset: the glass and accent tokens carry the tint; nothing else changes */
+
+/* Landscape phones: a narrower sheet, hours and minutes in two rows of six */
+@media (orientation: landscape) and (max-height: 500px) {
+  html[data-shell="mobile"] .mx-tp-sheet {
+    left: max(var(--mx-inline), calc(50% - 300px)); right: max(var(--mx-inline), calc(50% - 300px));
+    padding: 12px max(18px, var(--mx-safe-r)) calc(10px + var(--mx-safe-b)) max(18px, var(--mx-safe-l));
+  }
+  html[data-shell="mobile"] .mx-tp-head { margin-bottom: 4px; }
+  html[data-shell="mobile"] .mx-tp-readout { margin: 0 0 6px; }
+  html[data-shell="mobile"] .mx-tp-part { height: 56px; font-size: 34px; }
+  html[data-shell="mobile"] .mx-tp-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); grid-auto-rows: 44px; min-height: calc(2 * 44px + 8px); }
+  html[data-shell="mobile"] #mx-time-picker[data-hour12="false"] .mx-tp-grid { min-height: calc(4 * 44px + 3 * 8px); }
+  html[data-shell="mobile"] .mx-tp-foot { margin-top: 10px; }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-tp-sheet {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    background: var(--card);
+  }
+}
+@media (forced-colors: active) {
+  html[data-shell="mobile"] :is(.mx-tf-text, .mx-tf-clock, .mx-tf-ampm, .mx-tp-part, .mx-tp-cell, .mx-tp-len, .mx-tp-nudge, .mx-tp-ampm, .mx-tp-sheet) {
+    border: 1px solid CanvasText;
+  }
+  html[data-shell="mobile"] :is(.mx-tf-half, .mx-tp-half, .mx-tp-cell, .mx-tp-len)[aria-pressed="true"] {
+    forced-color-adjust: none;
+    background: Highlight; color: HighlightText; border-color: Highlight;
+  }
+  html[data-shell="mobile"] .mx-tp-part[aria-pressed="true"] { border: 3px solid Highlight; }
+  html[data-shell="mobile"] .mx-tf-ampm.is-guessed { border: 2px dashed Highlight; }
+  html[data-shell="mobile"] :is(.mx-tf-half, .mx-tp-half, .mx-tp-cell, .mx-tp-len, .mx-tp-nudge):disabled { color: GrayText; }
+  html[data-shell="mobile"] .mx-tf-text[aria-invalid="true"] { border: 2px solid Mark; }
 }

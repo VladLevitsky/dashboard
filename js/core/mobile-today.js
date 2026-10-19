@@ -7,7 +7,7 @@
 // Dates are 'YYYY-MM-DD' local day keys (agenda.js rules, never toISOString).
 
 import { TASK_COLOR_ORDER, countDueItems, addDays, daysBetween, dueState, meetingDatesBetween } from './agenda.js';
-import { dueTimeOf } from './due-time.js';
+import { dueTimeOf, dueEndTimeOf } from './due-time.js';
 
 const DATE_KEY_RE = /^\d{4}-\d{2}-\d{2}$/;
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -111,7 +111,8 @@ export function comingUp(data, { todayKey, days = 7, reminderDays = null } = {})
     if (!task || task.completed) return;
     const title = task.title || 'Untitled task';
     if (inRange(task.dueDate)) {
-      push({ kind: 'task', date: task.dueDate, title, taskId: task.id, color: laneColor(task.color), time: dueTimeOf(task) });
+      push({ kind: 'task', date: task.dueDate, title, taskId: task.id, color: laneColor(task.color), time: dueTimeOf(task),
+        end: dueEndTimeOf(task) });
     }
     (Array.isArray(task.subtasks) ? task.subtasks : []).forEach(sub => {
       if (!sub || sub.completed || !sub.title || !String(sub.title).trim()) return;

@@ -10,7 +10,7 @@ import { PLACEHOLDER_URL } from '../constants.js';
 import { getNextOccurrence, daysUntil } from './reminders.js';
 import { toDateKey, fromDateKey } from '../core/quick-capture-parse.js';
 import { collectDueItems, countDueItems, meetingDatesBetween, addDays } from '../core/agenda.js';
-import { dueTimeOf, formatTimeKey } from '../core/due-time.js';
+import { dueTimeOf, dueEndTimeOf, formatTimeRange } from '../core/due-time.js';
 
 const TASK_COLOR_HEX = { red: '#ef4444', orange: '#f97316', yellow: '#eab308', blue: '#3b82f6' };
 const MEETING_COLOR = '#8b5cf6';
@@ -88,7 +88,7 @@ function getDatedItemsByDay(startKey, endKey) {
     if (task.completed) return;
     if (task.dueDate) {
       const at = dueTimeOf(task);
-      add({ type: 'task', title: task.title || 'Untitled Task', date: task.dueDate, color: taskColorHex(task.color), taskId: task.id, detail: at ? formatTimeKey(at) : '' });
+      add({ type: 'task', title: task.title || 'Untitled Task', date: task.dueDate, color: taskColorHex(task.color), taskId: task.id, detail: at ? formatTimeRange(at, dueEndTimeOf(task)) : '' });
     }
     (task.subtasks || []).forEach(sub => {
       if (sub.completed || !sub.dueDate) return;
@@ -383,7 +383,7 @@ function getDueRows() {
   due.tasks.forEach(({ task, due: own, subtasks }) => {
     const color = taskColorHex(task.color);
     const at = dueTimeOf(task);
-    if (own) place({ type: 'task', title: task.title || 'Untitled Task', color, taskId: task.id, detail: at ? formatTimeKey(at) : '' }, own.days);
+    if (own) place({ type: 'task', title: task.title || 'Untitled Task', color, taskId: task.id, detail: at ? formatTimeRange(at, dueEndTimeOf(task)) : '' }, own.days);
     subtasks.forEach(({ subtask, due: subDue }) => {
       place({ type: 'subtask', title: subtask.title, color, taskId: task.id, detail: task.title || 'Untitled Task' }, subDue.days);
     });

@@ -39,11 +39,11 @@ import { getTaskById } from '../tasks.js';
 import { formatClock, renderTimeTrackingPanel } from '../time-tracking.js';
 import { showActionToast } from '../quick-capture.js';
 import { getActiveMode } from '../grid-engine.js';
-import { registerLayer, registerBuiltInLayers, syncHistory, startLayers, stopLayers, anyLayerOpen, openLayers, historyDepth } from './layers.js?v=2026-10-mobile-6';
-import { openSheet, pushScreen, closeAllSheets, refreshInert } from './sheet.js?v=2026-10-mobile-6';
-import * as ui from './ui.js?v=2026-10-mobile-6';
-import { startViewport, stopViewport } from './viewport.js?v=2026-10-mobile-6';
-import * as syncGuard from './sync-guard.js?v=2026-10-mobile-6';
+import { registerLayer, registerBuiltInLayers, syncHistory, startLayers, stopLayers, anyLayerOpen, openLayers, historyDepth } from './layers.js?v=2026-10-mobile-7';
+import { openSheet, pushScreen, closeAllSheets, refreshInert } from './sheet.js?v=2026-10-mobile-7';
+import * as ui from './ui.js?v=2026-10-mobile-7';
+import { startViewport, stopViewport } from './viewport.js?v=2026-10-mobile-7';
+import * as syncGuard from './sync-guard.js?v=2026-10-mobile-7';
 
 // Unit entry modules (stubs until each unit lands; a stub registers a
 // placeholder screen). 'compose' has no screen; it provides the composer.
@@ -582,7 +582,10 @@ function launchTab() {
   if (Date.now() - last < RESTORE_TAB_MS && TABS[tab]) {
     const scroll = shellStore.get('scroll', {}) || {};
     Object.assign(tabScroll, scroll);
-    return tab;
+    // A phone opens on Tasks: another tab is a Back entry, and one pushed at
+    // load (no tap yet) is one Chrome lets Back skip, so the first Back would
+    // close the installed app instead of going to Tasks. The tabs keep their scroll
+    return api.frame.phone ? 'tasks' : tab;
   }
   return 'tasks';
 }
@@ -926,7 +929,8 @@ function mount() {
   installWraps();
   startToastAnnouncer();
 
-  // Launch tab: the last one if the last visit was under 30 minutes ago
+  // Launch tab: the last one if the last visit was under 30 minutes ago (the
+  // preview); a phone always opens on Tasks
   const tab = launchTab();
   Object.keys(TABS).forEach(t => { const host = hostFor(t); if (host) host.hidden = t !== tab; });
   activeTab = tab;

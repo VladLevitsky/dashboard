@@ -20,6 +20,8 @@
 //     Delete), the draft banner
 //   - keyboard care: toolbar buttons keep the selection on pointerdown, the
 //     subtask ⋮ dropdown closes when the frame scrolls
+//   - the task frame's due time: start and end become typed time fields with
+//     AM | PM and a clock picker (time-picker.js)
 // Everything is keyed on the shell being mounted; desktop and tablet never see
 // any of it (the injected nodes are hidden outside html[data-shell="mobile"]
 // and removed on unmount).
@@ -37,6 +39,7 @@ import * as tasksApi from '../tasks.js';
 import * as projectsApi from '../projects.js';
 import * as meetingsApi from '../meetings.js';
 import * as notesApi from '../edit-mode.js';
+import { enhanceTimeInput, removeTimeField, closeTimePicker } from './time-picker.js?v=2026-10-mobile-7';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 
@@ -434,7 +437,17 @@ function offerViewDraft(s) {
 }
 
 // --- Back = keep: one adapter per surface ---------------------------------------------
+// A time box still being typed in (Android's first Back only hides the
+// keyboard; the box keeps the focus) commits through its own blur first, so
+// what is read and saved is the settled value: an emptied box removes the
+// time, an unreadable one goes back to what it was (time-picker.js)
+function commitTimeField() {
+  const a = document.activeElement;
+  if (a && a.classList && a.classList.contains('mx-tf-text') && a.closest('#task-editor-modal')) a.blur();
+}
+
 function backTask() {
+  commitTimeField();
   const date = ($('#task-editor-date') || {}).value || '';
   // The stored due date is the baseline of an existing task (the editor's own
   // change check doesn't cover the date); a new one uses the date it opened with
@@ -725,10 +738,22 @@ function decorate(s) {
   if (!mounted()) return;
   const root = rootOf(s);
   if (!root) return;
+  if (s.key === 'task') decorateTask(root);
   if (s.key === 'projects') decorateProjects(root);
   if (s.key === 'ideas') decorateIdeas(root);
   if (s.key === 'meetings') decorateMeetings(root);
   if (s.key === 'viewer') decorateViewer(root);
+}
+
+// The due time: Chrome's native time field can't be typed into and its clock
+// dialog can't be styled, so start and end become our time fields (typed,
+// AM | PM, a clock picker; time-picker.js). tasks.js keeps reading and writing
+// the native inputs, which the fields follow
+function decorateTask(root) {
+  const start = root.querySelector('#task-editor-time');
+  const end = root.querySelector('#task-editor-end-time');
+  if (start) enhanceTimeInput(start, { label: 'Starts', role: 'start' });
+  if (end) enhanceTimeInput(end, { label: 'Ends', role: 'end', getStart: () => (start ? start.value : '') });
 }
 
 function decorateProjects(root) {
@@ -919,6 +944,9 @@ function decorateViewer(root) {
 
 function undecorate() {
   document.querySelectorAll('.mx-writer-title, .mx-writer-more, .mx-draft-banner, .mx-viewer-where').forEach(el => el.remove());
+  closeTimePicker({ immediate: true });
+  removeTimeField($('#task-editor-time'));
+  removeTimeField($('#task-editor-end-time'));
   const label = $('#project-save-label');
   if (label) delete label.dataset.mxState;
 }

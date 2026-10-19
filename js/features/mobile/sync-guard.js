@@ -23,12 +23,12 @@
 
 import { model, resetModel } from '../../state.js';
 import { restoreModel } from '../../core/storage.js';
-import { isLoggedIn } from '../../core/auth.js';
-import { getActiveStorageKey, hasUnsyncedChanges, markCloudDirty } from '../../core/sync.js';
+import { isLoggedIn, getDataOwner } from '../../core/auth.js';
+import { getActiveStorageKey, scopedStorageKey, hasUnsyncedChanges, markCloudDirty, noteStoredCopy } from '../../core/sync.js';
 import { getDeviceId, decideSync, readSeen, writeSeen, sameStamp } from '../../core/mobile-sync.js';
 import { mergeTimeLogs, normalizeTimeLog } from '../../core/time-log.js';
-import { store } from './ui.js?v=2026-10-mobile-6';
-import { anyLayerOpen } from './layers.js?v=2026-10-mobile-6';
+import { store } from './ui.js?v=2026-10-mobile-7';
+import { anyLayerOpen } from './layers.js?v=2026-10-mobile-7';
 
 const PUSH_DEBOUNCE_MS = 2500;
 const RETRY_MS = [4000, 8000, 16000];
@@ -155,13 +155,23 @@ function pushGate(mergeResult) {
 
 // --- Adopt the cloud copy ---------------------------------------------------
 
-async function adopt(profile) {
+// The account a cloud read was made for is still the one on screen, signed in
+// (signed out or switched while the GET was on its way: its answer is dropped,
+// so one account's profile never lands in the signed-out dashboard or another's)
+const stillOwner = (owner) => !!owner && isLoggedIn() && getDataOwner() === owner;
+
+// owner: the account the profile was read for (getDataOwner() before the GET)
+async function adopt(profile, owner) {
   if (!profile || !Array.isArray(profile.sections)) return false;
+  if (!stillOwner(owner)) return false;
   const copy = { ...profile };
   const remoteLog = copy.timeTracking;
   copy.timeTracking = mergeTimeLogs(normalizeTimeLog(model.timeTracking), remoteLog);
   try {
-    localStorage.setItem(getActiveStorageKey(), JSON.stringify(copy));
+    const key = scopedStorageKey(owner);
+    const raw = JSON.stringify(copy);
+    localStorage.setItem(key, raw);
+    noteStoredCopy(key, raw);
   } catch (err) {
     console.error('[mobile] could not store the cloud copy', err);
     return false;
@@ -176,7 +186,7 @@ async function adopt(profile) {
   });
   conflict = null;
   if (api) api.toast('Updated from your other device');
-  if (JSON.stringify(normalizeTimeLog(remoteLog)) !== JSON.stringify(copy.timeTracking)) markCloudDirty();
+  if (JSON.stringify(normalizeTimeLog(remoteLog)) !== JSON.stringify(copy.timeTracking)) markCloudDirty(scopedStorageKey(owner));
   setStatusChanged();
   return true;
 }
@@ -226,8 +236,11 @@ function openConflictSheet() {
       use.textContent = "Use the other device's version";
       use.addEventListener('click', async () => {
         sheet.close();
+        const owner = getDataOwner();
+        if (!stillOwner(owner)) return;
         const res = await cloudLoad();
-        if (!res || !(await adopt(res.profile))) api.toast("Couldn't load the other version. Try again later");
+        if (!stillOwner(owner)) return;   // signed out / in meanwhile: not this dashboard's any more
+        if (!res || !(await adopt(res.profile, owner))) api.toast("Couldn't load the other version. Try again later");
       });
       const later = document.createElement('button');
       later.type = 'button';
@@ -289,14 +302,15 @@ export function onVisible() {
 }
 
 async function resume() {
+  const owner = getDataOwner();
   let res = null;
-  try { res = await cloudLoad(); } catch { res = null; }
+  try { res = stillOwner(owner) ? await cloudLoad() : null; } catch { res = null; }
   try {
-    if (!res || busy()) return;
+    if (!res || busy() || !stillOwner(owner)) return;
     const remote = res.profile ? res.profile._sync : null;
     const decision = decideSync({ dirty: hasUnsyncedChanges(), remote, me: getDeviceId(), seen: readSeen(getActiveStorageKey()) });
     if (decision === 'push') pushNow();
-    else if (decision === 'pull') await adopt(res.profile);
+    else if (decision === 'pull') await adopt(res.profile, owner);
     else if (decision === 'conflict') {
       conflict = remote;
       prefs.set('askedFor', remote);

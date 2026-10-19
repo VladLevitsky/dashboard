@@ -10,7 +10,7 @@
 //   div.mx-task-slot[data-task-id][role=listitem]      static; holds the swipe underlay
 //     div.mx-swipe-under                                emerald "Done" (→) / two azure buttons (←)
 //     div.mx-task.eisenhower-task.task-bubble-<c>[.eisenhower-task-pinned][role=group]
-//       button.mx-check > span.mx-ring                  complete (instant, batched Undo)
+//       button.mx-check > span.mx-ring                  complete (asks first, batched Undo)
 //       div.mx-task-main > .mx-task-title + .mx-task-meta
 //       button.mx-visually-hidden.mx-row-open           "Open …" (screen readers)
 //       div.task-timer (createTaskTimerControl)         44px hit through its wrapper
@@ -28,7 +28,7 @@ import { getTaskCategory, categoryColor } from '../task-categories.js';
 import { phaseFor } from '../../core/mobile-common.js';
 import { rowMeta, normColor, MOBILE_COLOR_LABELS } from '../../core/mobile-tasks.js';
 import { TASK_COLOR_LABELS } from '../../constants.js';
-import { closeAnyReveal } from './task-gestures.js?v=2026-10-mobile-6';
+import { closeAnyReveal } from './task-gestures.js?v=2026-10-mobile-7';
 
 // A double tap on a stopwatch would start and at once stop the timer (and
 // stop the one that was running before it): the user's second tap on any row
@@ -170,6 +170,7 @@ export function createTaskRow(task, opts = {}) {
     check.type = 'button';
     check.className = 'mx-check';
     check.setAttribute('aria-label', `Complete “${title}”`);
+    check.setAttribute('aria-haspopup', 'dialog');      // "Mark as complete?" (task-actions.js confirmComplete)
     check.innerHTML = `<span class="mx-ring" aria-hidden="true">${ICONS.check}</span>`;
     check.addEventListener('click', (e) => {
       e.preventDefault();

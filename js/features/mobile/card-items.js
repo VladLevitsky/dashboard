@@ -10,18 +10,24 @@
 //     item sheet instead of the floating bubbles (page-coordinate popups with
 //     tiny targets)
 //   - openItemSheet(type, item, sectionId, subtitle): the item's own link or
-//     file, its links (link colours kept) and its linked tasks
+//     file, its links (link colours kept), its linked tasks and Move to…: another
+//     section of its card or another card (core/card-move.js, as the desktop Move
+//     list; linked tasks, notes and Quick Access follow; Undo)
+//   - buildMoveItemsButton(sectionId): "Move an item…" under an open card's items
+//     (items without links or tasks have no sheet toggle): pick the item, then where
 //   - the builders the Links tab and Search share: icon cells with readable
 //     labels (zoomed 64px tiles, never filtered), 1-column item groups, mini
 //     thumbs, quick link pills
-// Items are view-only on a phone: nothing here edits or deletes them.
+// Items are otherwise view-only on a phone: nothing here edits or deletes them.
 
 import { model } from '../../state.js';
+import { saveModel } from '../../core/storage.js';
+import { buildMoveTargets, moveCardItem, moveToastText } from '../../core/card-move.js';
 import { getColorForCurrentMode, colorToGlassRgba, glassCompensateColor, isColorCode } from '../../utils.js';
 import { PLACEHOLDER_URL } from '../../constants.js';
 import { setImageFromRef } from '../../core/file-service.js';
 import { createCardItemElement } from '../../components/sections.js';
-import { cardTitle } from '../../core/mobile-common.js';
+import { cardTitle, orderCardsForMobile } from '../../core/mobile-common.js';
 import { normalizeGroups, labelForIcon, iconLabels } from '../../core/mobile-links.js';
 
 export const ITEM_SELECTOR = '.icon-button, .unified-reminder-item, .unified-subtask-item, .unified-copypaste-item';
@@ -35,6 +41,7 @@ const COLLECTION = { icon: 'icons', reminder: 'reminders', subtask: 'subtasks', 
 
 const LINK_SVG = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>';
 const FILE_SVG = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>';
+const MOVE_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg>';
 const OPEN_SVG = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="9 18 15 12 9 6"/></svg>';
 
 let api = null;
@@ -564,10 +571,158 @@ export function openItemSheet(type, item, sectionId, subtitle) {
         }
       }
 
+      if (COLLECTION[type] && !item.isDivider) {
+        const move = document.createElement('button');
+        move.type = 'button';
+        move.className = 'mx-row mx-item-move';
+        move.innerHTML = `<span class="mx-row-glyph">${MOVE_SVG}</span><span class="mx-row-title">Move to…</span><span class="mx-row-glyph">${OPEN_SVG}</span>`;
+        move.setAttribute('aria-haspopup', 'dialog');
+        move.addEventListener('click', () => openMoveItemSheet(type, item, sectionId, subtitle, sheet));
+        body.appendChild(move);
+      }
+
       const foot = document.createElement('p');
       foot.className = 'mx-sheet-note mx-item-foot';
       foot.textContent = 'Hold an item to add it to Quick Access.';
       body.appendChild(foot);
     },
   });
+}
+
+// --- Move to… (another section of the item's card, or another card) --------------------
+// The same targets as the desktop Move list: the item's own card first ("This card")
+// with its OTHER sections, then the other cards in desktop reading order; a card with
+// sections is a heading with its sections beneath. Saved at once (no edit mode on a
+// phone), with Undo back to the exact place.
+function openMoveItemSheet(type, item, sectionId, subtitle, itemSheet) {
+  const itemType = COLLECTION[type];
+  const key = item.key;
+  const rows = buildMoveTargets(model, orderCardsForMobile(model.sections || []), { sectionId, subtitle });
+  return api.openSheet({
+    id: 'item-move',
+    title: 'Move to',
+    size: rows.length > 9 ? 'tall' : 'auto',
+    build(body, sheet) {
+      sheet.el.classList.add('mx-move-item-sheet');
+      if (!rows.length) {
+        const empty = document.createElement('p');
+        empty.className = 'mx-sheet-note';
+        empty.textContent = 'There’s no other section or card to move it to.';
+        body.appendChild(empty);
+        return;
+      }
+      const list = document.createElement('div');
+      list.className = 'mx-move-targets';
+      rows.forEach(row => {
+        if (row.kind === 'header') {
+          const h = document.createElement('div');
+          h.className = 'mx-move-card';
+          const t = document.createElement('span');
+          t.className = 'mx-move-card-title';
+          t.textContent = row.label;
+          h.appendChild(t);
+          if (row.isSource) {
+            const tag = document.createElement('span');
+            tag.className = 'mx-move-card-tag';
+            tag.textContent = 'This card';
+            h.appendChild(tag);
+          }
+          list.appendChild(h);
+          return;
+        }
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = `mx-move-target ${row.kind === 'section' ? 'is-section' : 'is-card'}${row.isTop ? ' is-top' : ''}`;
+        b.textContent = row.label;
+        if (row.kind === 'section') b.setAttribute('aria-label', `${row.label}, in ${row.cardLabel}`);
+        b.addEventListener('click', () => {
+          sheet.close({ immediate: true });
+          if (itemSheet) itemSheet.close({ immediate: true });
+          moveFromSheet(itemType, { sectionId, subtitle, key }, { sectionId: row.sectionId, subtitle: row.subtitle });
+        });
+        list.appendChild(b);
+      });
+      body.appendChild(list);
+    },
+  });
+}
+
+// "Move an item…" under an open card's items in the Links tab
+export function buildMoveItemsButton(sectionId) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'mx-btn mx-btn-quiet mx-card-move';
+  b.innerHTML = `${MOVE_SVG}<span>Move an item…</span>`;
+  b.setAttribute('aria-haspopup', 'dialog');
+  b.addEventListener('click', () => openPickItemToMove(sectionId));
+  return b;
+}
+
+// Step 1: which item (grouped by section, in card order); step 2: Move to…
+function openPickItemToMove(sectionId) {
+  if (!api) return null;
+  // Old array-shaped sections can't be moved from (they are converted on the desktop)
+  const groups = normalizeGroups(model[sectionId]).filter(g => !g.legacy);
+  const allIcons = groups.flatMap(g => g.icons);
+  const labels = iconLabels(allIcons);
+  const labelOf = new Map(allIcons.map((icon, i) => [icon, labels[i]]));
+  const KIND = { icon: 'Icon', reminder: 'Reminder', subtask: 'Subtask', copyPaste: 'Snippet' };
+  const named = groups.some(g => g.subtitle !== '_default');
+  return api.openSheet({
+    id: 'item-move-pick',
+    title: 'Move which item?',
+    size: 'tall',
+    build(body, sheet) {
+      sheet.el.classList.add('mx-move-item-sheet');
+      groups.forEach(g => {
+        const entries = [
+          ...g.icons.filter(i => !i.isDivider).map(i => ['icon', i]),
+          ...g.reminders.map(i => ['reminder', i]),
+          ...g.subtasks.map(i => ['subtask', i]),
+          ...g.copyPaste.map(i => ['copyPaste', i]),
+        ];
+        if (!entries.length) return;
+        if (named) body.appendChild(caption(g.subtitle === '_default' ? 'Top of card' : g.subtitle));
+        const list = document.createElement('div');
+        list.className = 'mx-move-pick';
+        entries.forEach(([type, item]) => {
+          const b = document.createElement('button');
+          b.type = 'button';
+          b.className = 'mx-row mx-move-pick-row';
+          if (type === 'icon') b.appendChild(iconThumb(item, 24));
+          const t = document.createElement('span');
+          t.className = 'mx-row-title';
+          t.textContent = type === 'icon' ? (labelOf.get(item) || labelForIcon(item)) : itemLabel(type, item, sectionId);
+          const kind = document.createElement('span');
+          kind.className = 'mx-row-meta';
+          kind.textContent = KIND[type];
+          b.append(t, kind);
+          b.setAttribute('aria-haspopup', 'dialog');
+          b.addEventListener('click', () => openMoveItemSheet(type, item, sectionId, g.subtitle, sheet));
+          list.appendChild(b);
+        });
+        body.appendChild(list);
+      });
+    },
+  });
+}
+
+function moveFromSheet(itemType, src, dst) {
+  const result = moveCardItem(model, { ...src, itemType }, dst);
+  if (result.error) {
+    api.toast(result.error);
+    return;
+  }
+  saveModel();
+  api.haptic('tick');
+  api.toast(moveToastText(result, model.sections), [{
+    label: 'Undo',
+    run: () => {
+      const back = moveCardItem(model,
+        { sectionId: result.to.sectionId, subtitle: result.to.subtitle, itemType, key: result.to.key },
+        { sectionId: result.from.sectionId, subtitle: result.from.subtitle, index: result.from.index, key: result.from.key });
+      if (back.error) { api.toast('Can’t undo: the card changed since'); return; }
+      saveModel();
+    },
+  }]);
 }

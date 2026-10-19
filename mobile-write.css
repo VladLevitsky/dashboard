@@ -921,6 +921,25 @@ html[data-shell="mobile"] #task-editor-modal .task-editor-actions {
 }
 html[data-shell="mobile"] #task-editor-modal :is(.task-editor-delete-btn, .task-editor-complete-btn) { min-width: var(--mx-hit); min-height: var(--mx-hit); }
 html[data-shell="mobile"] #task-editor-cancel { min-height: var(--mx-hit); padding: 0 18px; border-radius: 14px; }
+/* The due row: the date full width, then Starts and (once there is a start) Ends,
+   each a typed time with AM | PM and a clock (time-picker.js, mobile.css §14); the ×
+   beside Starts clears both. The native time inputs and the "–" are hidden */
+html[data-shell="mobile"] #task-editor-modal .task-editor-due-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+html[data-shell="mobile"] #task-editor-modal .task-editor-due-row > input[type="date"] { width: 100%; min-height: 48px; }
+html[data-shell="mobile"] #task-editor-modal .task-editor-time-wrap {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 10px 2px;
+  max-width: none; min-width: 0;
+}
+html[data-shell="mobile"] #task-editor-modal .task-editor-time-wrap > .mx-tf { grid-column: 1; grid-row: 1; }
+html[data-shell="mobile"] #task-editor-modal .task-editor-end-wrap { grid-column: 1; grid-row: 2; display: block; min-width: 0; }
+html[data-shell="mobile"] #task-editor-modal .task-editor-end-wrap[hidden] { display: none; }
+html[data-shell="mobile"] #task-editor-modal .task-editor-time-sep { display: none; }
+html[data-shell="mobile"] #task-editor-modal .task-editor-time-clear {
+  grid-column: 2; grid-row: 1;
+  width: 40px; height: 48px; border-radius: 14px;
+}
+html[data-shell="mobile"] #task-editor-modal .task-editor-time-clear[hidden] { display: none; }
+html[data-shell="mobile"] #task-editor-modal .task-editor-time-clear svg { width: 16px; height: 16px; }
 
 /* Subtask description: the editor fills the frame, the toolbar under it */
 html[data-shell="mobile"] #subtask-desc-modal .subtask-desc-body {

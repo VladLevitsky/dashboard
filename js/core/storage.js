@@ -2,9 +2,10 @@
 // Handles saving and restoring the model to/from localStorage
 
 import { PLACEHOLDER_URL, APP_VERSION, STORAGE_KEY } from '../constants.js';
-import { model, currentData, normalizeTaskCategories } from '../state.js';
+import { model, editState, currentData, normalizeTaskCategories } from '../state.js';
 import { showToast } from '../utils.js';
-import { getActiveStorageKey, markCloudDirty } from './sync.js';
+import { revertNoteMove } from './card-move.js';
+import { getActiveStorageKey, markCloudDirty, noteStoredCopy, storedCopyChangedElsewhere } from './sync.js';
 import { normalizeTimeLog } from './time-log.js';
 import { sanitizeStoredHtml } from './markdown.js';
 import { makeSyncStamp, noteRestoredStamp } from './mobile-sync.js';
@@ -474,6 +475,19 @@ export function sanitizeStoredRichText(data) {
 // screen is never written into another account's copy
 let _modelStorageKey = null;
 
+// Subtask notes as the stored copy must hold them. A move made in edit mode moves
+// its notes on `model` at once (edit-mode.js mirrorNoteMoves) while the item move
+// waits in the working copy, so until Confirm the saved copy keeps the notes with
+// their items as saved (the moves undone on a copy, newest first): a save made
+// meanwhile, then a reload or a closed tab without Confirm or Cancel, orphans none
+function committedSubtaskNotes(notes) {
+  const moves = editState.enabled ? editState.noteMoves : null;
+  if (!Array.isArray(moves) || !moves.length || !notes || typeof notes !== 'object') return notes;
+  const copy = { ...notes };
+  for (let i = moves.length - 1; i >= 0; i--) revertNoteMove(copy, moves[i]);
+  return copy;
+}
+
 // --- Save model to localStorage
 export function saveModel() {
   // Clean up old backups before saving to prevent quota issues
@@ -493,7 +507,7 @@ export function saveModel() {
     collapsedSubtitles: data.collapsedSubtitles,
     collapsedCards: data.collapsedCards,
     cardNotes: data.cardNotes,
-    subtaskNotes: data.subtaskNotes,
+    subtaskNotes: committedSubtaskNotes(data.subtaskNotes),
     header: data.header,
     darkMode: data.darkMode,
     glassMode: data.glassMode,
@@ -524,15 +538,16 @@ export function saveModel() {
   });
 
   const storageKey = _modelStorageKey || getActiveStorageKey();
+  const json = JSON.stringify(payload);
   try {
-    localStorage.setItem(storageKey, JSON.stringify(payload));
+    localStorage.setItem(storageKey, json);
   } catch (error) {
     if (error.name === 'QuotaExceededError') {
       try {
         const keys = Object.keys(localStorage);
         const backupKeys = keys.filter(key => key.includes('__backup__'));
         backupKeys.forEach(key => localStorage.removeItem(key));
-        localStorage.setItem(storageKey, JSON.stringify(payload));
+        localStorage.setItem(storageKey, json);
       } catch (retryError) {
         console.error('Failed to save even after cleanup:', retryError);
         showToast('Error: Unable to save data. Storage quota exceeded.');
@@ -544,6 +559,8 @@ export function saveModel() {
       return false;
     }
   }
+  // What this page knows is stored (a page restored from the back/forward cache compares it)
+  noteStoredCopy(storageKey, json);
 
   // Mark cloud sync as needed (skip during initial load / restore)
   if (!window.isInitialLoad) {
@@ -552,6 +569,13 @@ export function saveModel() {
 
   announceSave();
   return true;
+}
+
+// The saved copy of the dashboard on screen no longer holds what this page last
+// wrote or read there (the device stamp aside): another page of this browser
+// changed it while this one was frozen in the back/forward cache (init.js)
+export function storedModelChangedElsewhere() {
+  return storedCopyChangedElsewhere(_modelStorageKey || getActiveStorageKey());
 }
 
 // One change funnel: every persisted write raises a coalesced window event
@@ -577,6 +601,7 @@ export async function restoreModel() {
     const storageKey = getActiveStorageKey();
     _modelStorageKey = storageKey;
     let raw = localStorage.getItem(storageKey);
+    noteStoredCopy(storageKey, raw);
     let saved = raw ? JSON.parse(raw) : null;
 
     if (!saved && storageKey === STORAGE_KEY) {
@@ -907,8 +932,11 @@ export function deepMergeModel(target, source) {
   if (source.cardNotes) {
     target.cardNotes = { ...(target.cardNotes || {}), ...source.cardNotes };
   }
+  // Every note write mirrors into the working copy (edit-mode.js storeNotes / saveNote),
+  // and moves made in edit mode move the notes on both copies, so the working copy is
+  // complete: taking it whole drops the notes of subtasks deleted (or moved) while editing
   if (source.subtaskNotes) {
-    target.subtaskNotes = { ...(target.subtaskNotes || {}), ...source.subtaskNotes };
+    target.subtaskNotes = { ...source.subtaskNotes };
   }
   if (source.collapsedCards) {
     target.collapsedCards = { ...(target.collapsedCards || {}), ...source.collapsedCards };

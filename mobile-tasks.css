@@ -11,7 +11,7 @@
    opacity / transform of small pseudo layers only.
    Sections: 1 screen + sub-bar chips · 2 panes, rows, ring, meta · 3 gestures:
    underlay, ghost, carry gaps, .is-carried, carry dock · 4 sheets: actions,
-   move, completed, read · 5 dark · 6 sunset · 7 keyframes mxTask* · 8 a11y ·
+   move, completed, read, "Mark as complete?" · 5 dark · 6 sunset · 7 keyframes mxTask* · 8 a11y ·
    9 landscape
    ========================================================================== */
 
@@ -129,8 +129,11 @@ html[data-shell="mobile"] .mx-task-slot {
 }
 html[data-shell="mobile"] .mx-task-slot[hidden] { display: none; }
 html[data-shell="mobile"] .mx-task-slot.is-lifted { visibility: hidden; }
+/* A swiped pill never widens the page (a phone would grow its layout viewport and push fixed
+   sheets off screen); today-view.js's fallback row too, which waits slid out while it asks */
 html[data-shell="mobile"] .mx-task-slot[data-swipe],
-html[data-shell="mobile"] .mx-task-slot[data-state="completing"] { overflow: hidden; }
+html[data-shell="mobile"] .mx-task-slot[data-state="completing"],
+html[data-shell="mobile"] .mx-today-slot.is-swiping { overflow: hidden; }
 html[data-shell="mobile"] .mx-task-slot[data-state="completing"] { pointer-events: none; }
 html[data-shell="mobile"] .mx-task.eisenhower-task {
   position: relative; z-index: 1;
@@ -219,6 +222,13 @@ html[data-shell="mobile"] .mx-ring svg {
 }
 html[data-shell="mobile"] .mx-check:active .mx-ring { box-shadow: 0 0 14px -2px rgb(var(--priority-rgb, 148 163 184) / 75%), inset 0 0 0 4px rgb(var(--priority-rgb, 148 163 184) / 18%); }
 html[data-shell="mobile"] .mx-check:focus-visible { outline: 2px solid rgb(var(--fx-ind-rgb, 22 160 255) / 75%); outline-offset: -6px; }
+/* The row "Mark as complete?" is asking about (data-confirm, task-actions.js confirmComplete):
+   a steady emerald ring, static like every light on the dashboard (glass-fx.css 11d) */
+html[data-shell="mobile"] .mx-task-slot[data-confirm] .mx-ring {
+  border-color: rgb(var(--fx-live-rgb, 24 211 116) / 92%);
+  box-shadow: 0 0 0 3px rgb(var(--fx-live-rgb, 24 211 116) / 20%), 0 0 14px -2px rgb(var(--fx-live-rgb, 24 211 116) / 70%),
+    inset 0 0 0 3px rgb(var(--fx-live-rgb, 24 211 116) / 16%);
+}
 html[data-shell="mobile"] [data-state="completing"] .mx-ring {
   border-color: transparent;
   background-color: transparent;
@@ -435,7 +445,7 @@ html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx
   box-shadow: var(--fx-lift-pill), 0 0 12px -4px rgb(var(--fx-ind-rgb) / 55%);
 }
 
-/* --- 4. Sheets: actions, move, completed, read ---------------------------------------- */
+/* --- 4. Sheets: actions, move, completed, read, confirm ------------------------------- */
 html[data-shell="mobile"] .mx-sec-label {
   display: block;
   margin: 0 0 8px;
@@ -642,6 +652,37 @@ html[data-shell="mobile"] .mx-read-text {
 }
 html[data-shell="mobile"] .mx-read-actions { display: flex; gap: 10px; }
 html[data-shell="mobile"] .mx-read-actions .mx-btn { flex: 1 1 0; }
+/* "Mark as complete?" (task-actions.js confirmComplete): the question, the task (dot + title,
+   3 lines at most) and its meta, then [Cancel] [Complete], Complete on the thumb side */
+html[data-shell="mobile"] .mx-confirm-title {
+  margin: 2px 2px 12px;
+  font: 700 18px/1.3 'Inter', system-ui, sans-serif; letter-spacing: -0.015em;
+}
+html[data-shell="mobile"] .mx-confirm-task { align-items: flex-start; padding-top: 0; }
+html[data-shell="mobile"] .mx-confirm-task .mx-actions-dot { margin-top: 5px; }
+html[data-shell="mobile"] .mx-confirm-name {
+  margin: 0; min-width: 0;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3;
+  overflow: hidden; overflow-wrap: anywhere;
+  font: 600 16px/1.35 'Inter', system-ui, sans-serif;
+}
+html[data-shell="mobile"] .mx-confirm > .mx-confirm-name { margin: 0 2px 16px; }   /* today-view.js fallback: no head */
+html[data-shell="mobile"] .mx-confirm .mx-actions-meta { margin-bottom: 14px; }
+html[data-shell="mobile"] .mx-confirm-note { margin: -6px 0 14px 24px; }
+html[data-shell="mobile"] .mx-confirm-actions { display: flex; gap: 10px; }
+html[data-shell="mobile"] .mx-confirm-actions .mx-btn { flex: 1 1 0; min-width: 0; }
+html[data-shell="mobile"] .mx-confirm-yes svg { flex: 0 0 auto; width: 18px; height: 18px; }
+/* Complete: emerald like the ring fill and the swipe underlay, deep enough for white text
+   (colour through background-image: no glass-glow bloom) */
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-btn-done {
+  border-color: transparent;
+  color: #fff;
+  background-color: transparent;
+  background-image: radial-gradient(ellipse 60% 45% at 72% 0%, rgb(255 255 255 / 30%), transparent 100%),
+    linear-gradient(160deg, rgb(var(--fx-live-rgb) / 92%) 0%, rgb(var(--fx-live-deep) / 96%) 62%);
+  box-shadow: var(--fx-lift-pill), inset -1px 1px 1px rgb(255 255 255 / 35%), 0 0 16px -4px rgb(var(--fx-live-rgb) / 60%);
+  text-shadow: 0 1px 1px rgb(0 40 20 / 30%);
+}
 
 /* --- 5. Dark ------------------------------------------------------------------------------ */
 html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme="dark"] .mx-tasks-sub {
@@ -699,6 +740,8 @@ html[data-shell="mobile"] body[data-glass-theme="sunset"] .mx-pane.eisenhower-pr
   html[data-shell="mobile"] :is(.mx-ring, .mx-gap, .mx-lens-chip, .mx-move-tile, .mx-done-lens, .mx-big-btn, .mx-row-btn) { outline: 1px solid CanvasText; }
   html[data-shell="mobile"] .mx-gap-beam { background: Highlight; }
   html[data-shell="mobile"] :is(.mx-lens-chip, .mx-move-tile)[aria-pressed="true"] { outline: 2px solid Highlight; }
+  html[data-shell="mobile"] .mx-task-slot[data-confirm] .mx-ring { outline: 2px solid Highlight; }
+  html[data-shell="mobile"] .mx-btn-done { outline: 2px solid CanvasText; }
 }
 /* Focus rings restated at glass specificity: glass.css's generic
    `body[data-style="glass"][data-theme] :is(button, a, input, …):focus-visible`

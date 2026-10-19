@@ -4,12 +4,14 @@
 import { model, editState, currentData, currentSections } from '../state.js';
 import { $, deepClone, showToast, getColorForCurrentMode, setColorForCurrentMode, moveCursorAfterNode } from '../utils.js';
 import { saveModel } from '../core/storage.js';
+import { isDashboardLoading } from '../core/sync.js';
 import { attachImageUpload } from './rich-text-images.js';
 import { api as writingApi, attachWritingFeatures, attachWritingView } from './writing/editor.js';
 import { cleanEditorHtml, isEffectivelyEmpty, unwrapInline, replaceRangeHtml, trimRangeEnd, expandToWholeInlines } from './writing/dom.js';
 import { keyHint, isMacPlatform } from '../core/writing-commands.js';
 import { sanitizeRichHtml, htmlHasRiskyStartTag } from '../core/markdown.js';
 import { getActiveMode } from './grid-engine.js';
+import { buildMoveTargets, moveCardItem, relocateSectionRefs, renameSection, moveNotes, revertNoteMove, moveToastText } from '../core/card-move.js';
 
 // --- Stored rich text about to go through innerHTML (defense in depth: import
 // and load sanitize too). Markup that could run code goes through the
@@ -38,6 +40,12 @@ export function toggleEditMode() {
     showToast('Card editing is on the tablet and desktop layouts');
     return;
   }
+  // The account's dashboard is still loading (startup sync, a sign-in): an edit
+  // session now would hold a copy of the one about to be replaced
+  if (!editState.enabled && isDashboardLoading()) {
+    showToast('Loading your dashboard… try again in a moment');
+    return;
+  }
 
   // Find the card closest to the center of the viewport to restore position after render
   const viewportCenter = window.scrollY + window.innerHeight / 2;
@@ -60,6 +68,7 @@ export function toggleEditMode() {
   if (!editState.enabled) {
     editState.enabled = true;
     editState.working = deepClone(model);
+    editState.noteMoves = [];
 
     // Note: Legacy code to "ensure reminders structure" was removed here.
     // With unified cards (schemaVersion 3), section data like model["reminders"]
@@ -68,7 +77,9 @@ export function toggleEditMode() {
 
     editState.dirty = false;
   } else {
-    // Exiting edit mode - just discard working copy
+    // Exiting edit mode - just discard working copy (a Confirm already cleared the note
+    // moves; after a Cancel the notes go back with their items)
+    revertEditNoteMoves();
     editState.enabled = false;
     editState.working = null;
     editState.dirty = false;
@@ -745,6 +756,7 @@ export function confirmGlobalEdit() {
   if (window.deepMergeModel) {
     window.deepMergeModel(model, editState.working);
   }
+  clearEditNoteMoves();
 
   saveModel();
   editState.dirty = false;
@@ -940,6 +952,61 @@ export function openSubtitleColorPicker(sectionId, subtitle) {
 
 // ========== Move Item Feature ==========
 
+// --- Notes never wait for Confirm: they live on `model` (getNotesForSection reads it).
+// A move made in edit mode therefore moves its subtask notes on `model` too, so the item
+// shows them in its new place, and Cancel moves them back. noteMoves = the working
+// copy's note moves (moveCardItem / relocateSectionRefs return them)
+function mirrorNoteMoves(noteMoves) {
+  if (!editState.enabled || !editState.working || editState.working === model) return;
+  noteMoves.filter(Boolean).forEach(m => {
+    if (!model.subtaskNotes || typeof model.subtaskNotes !== 'object') model.subtaskNotes = {};
+    const rec = moveNotes(model.subtaskNotes, m.fromId, m.toId);
+    if (rec) (editState.noteMoves = editState.noteMoves || []).push(rec);
+  });
+}
+
+// Cancel: put the notes back where their items are again (newest move first)
+export function revertEditNoteMoves() {
+  const moves = editState.noteMoves || [];
+  // Cleared before the save: saveModel undoes pending moves in what it stores (storage.js)
+  editState.noteMoves = [];
+  if (moves.length && model.subtaskNotes) {
+    for (let i = moves.length - 1; i >= 0; i--) revertNoteMove(model.subtaskNotes, moves[i]);
+    saveModel();
+  }
+}
+
+// Confirm: the moves are final
+export function clearEditNoteMoves() {
+  editState.noteMoves = [];
+}
+
+// --- Rename a section of a card in edit mode, keeping its place among the sections;
+// its colour, collapsed state and everything pointing at its items follow it.
+// Returns false (with a toast) when the name is taken.
+export function renameCardSection(sectionId, from, to) {
+  const data = currentData();
+  const cardData = data[sectionId];
+  if (!cardData || !cardData[from] || !to || to === from) return false;
+  if (to === '_default' || cardData[to]) {
+    showToast(`This card already has a section named "${to}"`);
+    return false;
+  }
+  data[sectionId] = renameSection(cardData, from, to);
+  const oldKey = `${sectionId}:${from}`;
+  const newKey = `${sectionId}:${to}`;
+  if (data.subtitleColors && data.subtitleColors[oldKey]) {
+    data.subtitleColors[newKey] = data.subtitleColors[oldKey];
+    delete data.subtitleColors[oldKey];
+  }
+  if (data.collapsedSubtitles && data.collapsedSubtitles[oldKey]) {
+    data.collapsedSubtitles[newKey] = data.collapsedSubtitles[oldKey];
+    delete data.collapsedSubtitles[oldKey];
+  }
+  mirrorNoteMoves(relocateSectionRefs(data, { sectionId, subtitle: from }, { sectionId, subtitle: to }));
+  return true;
+}
+
 // --- Toggle Move Card Selector
 export function toggleMoveCardSelector() {
   const selector = $('#move-card-selector');
@@ -955,88 +1022,56 @@ export function toggleMoveCardSelector() {
 }
 
 // --- Populate Move Card List
+// An item can move to another section of its OWN card (listed first, as "This card")
+// or to any section of another card. Cards are headers; their sections sit indented
+// beneath them. A card without named sections is a single row (its top). Moving a
+// whole subtitle only targets other cards (reordering covers its own card).
 function populateMoveCardList() {
   const list = $('#move-card-list');
   if (!list || !currentMoveContext) return;
 
   list.innerHTML = '';
-
-  const sections = currentSections() || [];
-  const data = currentData();
-  const sourceSectionId = currentMoveContext.sectionId;
   const isSubtitleMove = currentMoveContext.isSubtitle === true;
+  const rows = buildMoveTargets(currentData(), currentSections(), currentMoveContext);
 
-  // Get all available cards (excluding the source card)
-  sections.forEach(section => {
-    // Skip the source card
-    if (section.id === sourceSectionId) return;
-    // Skip non-unified cards (two-col containers don't store items)
-    if (section.type !== 'unified') return;
-
-    if (isSubtitleMove) {
-      // Moving a subtitle - just show card names (subtitle will be added to that card)
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'move-card-option';
-      btn.textContent = section.title || section.id;
-      btn.addEventListener('click', () => {
-        handleMoveSubtitleToCard(section.id);
-      });
-      list.appendChild(btn);
-    } else {
-      // Moving an item - show card headers with subtitle options
-      const cardData = data[section.id] || {};
-      const subtitles = Object.keys(cardData).filter(s => s !== '_default');
-
-      if (subtitles.length > 0) {
-        // Card has named subtitles - show card header and subtitle options
-        const cardHeader = document.createElement('div');
-        cardHeader.className = 'move-card-header';
-        cardHeader.textContent = section.title || section.id;
-        list.appendChild(cardHeader);
-
-        // Add _default option (top of card)
-        const defaultBtn = document.createElement('button');
-        defaultBtn.type = 'button';
-        defaultBtn.className = 'move-card-option move-subtitle-option';
-        defaultBtn.textContent = '(Top of card)';
-        defaultBtn.addEventListener('click', () => {
-          handleMoveToCard(section.id, '_default');
-        });
-        list.appendChild(defaultBtn);
-
-        // Add each subtitle as an option
-        subtitles.forEach(subtitle => {
-          const btn = document.createElement('button');
-          btn.type = 'button';
-          btn.className = 'move-card-option move-subtitle-option';
-          btn.textContent = subtitle;
-          btn.addEventListener('click', () => {
-            handleMoveToCard(section.id, subtitle);
-          });
-          list.appendChild(btn);
-        });
-      } else {
-        // Card has no named subtitles - just show card option
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'move-card-option';
-        btn.textContent = section.title || section.id;
-        btn.addEventListener('click', () => {
-          handleMoveToCard(section.id, '_default');
-        });
-        list.appendChild(btn);
+  rows.forEach(row => {
+    if (row.kind === 'header') {
+      const header = document.createElement('div');
+      header.className = 'move-card-header';
+      const title = document.createElement('span');
+      title.className = 'move-card-header-title';
+      title.textContent = row.label;
+      header.appendChild(title);
+      if (row.isSource) {
+        const tag = document.createElement('span');
+        tag.className = 'move-card-header-tag';
+        tag.textContent = 'This card';
+        header.appendChild(tag);
       }
+      list.appendChild(header);
+      return;
     }
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = row.label;
+    if (row.kind === 'section') {
+      btn.className = 'move-card-option move-subtitle-option' + (row.isTop ? ' is-top' : '');
+      btn.setAttribute('aria-label', `${row.label}, in ${row.cardLabel}`);
+    } else {
+      btn.className = 'move-card-option move-card-row';
+    }
+    btn.addEventListener('click', () => {
+      if (isSubtitleMove) handleMoveSubtitleToCard(row.sectionId);
+      else handleMoveToCard(row.sectionId, row.subtitle);
+    });
+    list.appendChild(btn);
   });
 
   // If no valid targets, show a message
   if (list.children.length === 0) {
     const msg = document.createElement('div');
-    msg.className = 'move-card-option';
-    msg.style.color = 'var(--muted)';
-    msg.style.cursor = 'default';
-    msg.textContent = 'No other cards available';
+    msg.className = 'move-card-empty';
+    msg.textContent = isSubtitleMove ? 'No other cards available' : 'No other sections or cards available';
     list.appendChild(msg);
   }
 }
@@ -1044,64 +1079,25 @@ function populateMoveCardList() {
 // --- Handle Move To Card
 function handleMoveToCard(targetSectionId, targetSubtitle = '_default') {
   if (!currentMoveContext) return;
-
-  const { sectionId: sourceSectionId, subtitle: sourceSubtitle, itemType, itemKey } = currentMoveContext;
-  const data = currentData();
-
-  // Get source collection
-  const sourceData = data[sourceSectionId];
-  if (!sourceData || !sourceData[sourceSubtitle]) {
-    showToast('Source not found');
-    console.error('[MoveToCard] Source not found:', { sourceSectionId, sourceSubtitle, sourceData });
-    return;
-  }
-
-  const sourceCollection = sourceData[sourceSubtitle][itemType];
-  if (!Array.isArray(sourceCollection)) {
-    showToast('Invalid source collection');
-    console.error('[MoveToCard] Invalid source collection:', sourceData[sourceSubtitle]);
-    return;
-  }
-
-  // Find and remove the item from source
-  const itemIndex = sourceCollection.findIndex(item => item.key === itemKey);
-  if (itemIndex === -1) {
-    showToast('Item not found');
-    console.error('[MoveToCard] Item not found in collection');
-    return;
-  }
-
-  const [movedItem] = sourceCollection.splice(itemIndex, 1);
-
-  // Ensure target card and subtitle have data structure
-  if (!data[targetSectionId]) {
-    data[targetSectionId] = {};
-  }
-  if (!data[targetSectionId][targetSubtitle]) {
-    data[targetSectionId][targetSubtitle] = {
-      icons: [],
-      reminders: [],
-      subtasks: [],
-      copyPaste: []
-    };
-  }
-  if (!Array.isArray(data[targetSectionId][targetSubtitle][itemType])) {
-    data[targetSectionId][targetSubtitle][itemType] = [];
-  }
-
-  // Add item to end of target subtitle
-  data[targetSectionId][targetSubtitle][itemType].push(movedItem);
-
-  // Save and re-render
-  markDirtyAndSave();
+  const { sectionId, subtitle, itemType, itemKey } = currentMoveContext;
   hideEditPopover();
+  moveItemInEdit({ sectionId, subtitle, itemType, key: itemKey }, { sectionId: targetSectionId, subtitle: targetSubtitle });
+}
 
+// --- Move a card item in edit mode (Move list and drag-and-drop): the working copy,
+// its notes on `model` too (see mirrorNoteMoves), then a re-render and a toast
+export function moveItemInEdit(src, dst) {
+  const result = moveCardItem(currentData(), src, dst);
+  if (result.error) {
+    showToast(result.error);
+    return null;
+  }
+  mirrorNoteMoves([result.noteMove]);
+  markDirtyAndSave();
+  // renderAllSections also re-adds the edit-mode card buttons and the open Card Edit Modal
   if (window.renderAllSections) window.renderAllSections();
-  if (editState.enabled && window.addCardButtons) window.addCardButtons();
-
-  // Show toast with destination subtitle
-  const subtitleLabel = targetSubtitle === '_default' ? '' : ` to "${targetSubtitle}"`;
-  showToast(`Item moved${subtitleLabel}`);
+  showToast(moveToastText(result, currentSections()));
+  return result;
 }
 
 // --- Handle Move Subtitle To Card (moves entire subtitle with all items)
@@ -1136,6 +1132,9 @@ function handleMoveSubtitleToCard(targetSectionId) {
   // Move the subtitle data
   data[targetSectionId][finalSubtitleName] = sourceData[sourceSubtitle];
   delete sourceData[sourceSubtitle];
+  mirrorNoteMoves(relocateSectionRefs(data,
+    { sectionId: sourceSectionId, subtitle: sourceSubtitle },
+    { sectionId: targetSectionId, subtitle: finalSubtitleName }));
 
   // Also move subtitle color if it exists
   if (data.subtitleColors) {
@@ -1162,7 +1161,6 @@ function handleMoveSubtitleToCard(targetSectionId) {
   hideEditPopover();
 
   if (window.renderAllSections) window.renderAllSections();
-  if (editState.enabled && window.addCardButtons) window.addCardButtons();
 
   const targetSection = currentSections().find(s => s.id === targetSectionId);
   const targetName = targetSection ? (targetSection.title || targetSectionId) : targetSectionId;
@@ -2506,7 +2504,8 @@ function noteDocMeta(title, note) {
   const fields = [];
   if (cardTitle) fields.push({ label: 'Card', value: cardTitle });
   if (currentNoteContextType === 'subtask' && currentSubtaskNoteId) {
-    const subtitle = String(currentSubtaskNoteId).split(':')[1];
+    const noteId = String(currentSubtaskNoteId);
+    const subtitle = noteId.slice(noteId.indexOf(':') + 1, noteId.lastIndexOf(':'));
     if (subtitle && subtitle !== '_default') fields.push({ label: 'Section', value: subtitle });
     const subtask = notepadContextLabel(currentNotepadSectionId, currentNoteContextType, currentSubtaskNoteId);
     if (subtask && subtask !== cardTitle) fields.push({ label: 'Subtask', value: subtask });

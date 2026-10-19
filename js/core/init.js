@@ -4,7 +4,7 @@
 import { model, editState, currentData, currentSections } from '../state.js';
 import { $, $$, showToast, generateKey, escapeAttr } from '../utils.js';
 import { PLACEHOLDER_URL, ANIMATION_DELAY_MS, CARD_HIDE_DELAY_MS, AUTH_TOKEN_KEY, AUTH_USERNAME_KEY } from '../constants.js';
-import { saveModel, restoreModel, exportBackupFile, deepMergeModel, cleanupOldBackups } from './storage.js';
+import { saveModel, restoreModel, exportBackupFile, deepMergeModel, cleanupOldBackups, storedModelChangedElsewhere } from './storage.js';
 import { setImageFromRef, classifyImageRef, uploadFile } from './file-service.js';
 import { isLoggedIn, readGoogleSigninReturn, getAuthToken, getUsername } from './auth.js';
 import { htmlToPlainText } from './markdown.js';
@@ -737,12 +737,14 @@ export { clearSearch };
 
 // Back onto this page from the back/forward cache (e.g. the second Back after a
 // trip to Google lands on the page that started it). Signed in, out or as
-// someone else meanwhile (the page that came back from Google did it): this
-// copy is stale, so it reloads, or offers to while it holds unsaved edits.
-// Same account: Calendar's status is read again (the Google sign-in panel
-// refreshes itself, auth-ui.js); a changed saved dashboard is picked up by the
-// phone's storage listener. Every load re-stamps the saved copy (_sync), so
-// the saved copy itself is no signal
+// someone else meanwhile (the page that came back from Google did it), or the
+// same dashboard changed by another page meanwhile (a task added on the page
+// that came back): this page's model is stale and its next save would write
+// over the newer copy, so it reloads, or offers to while it holds unsaved
+// edits. The saved copy is compared without its device stamp (_sync): every
+// load re-stamps it, so a page that only opened the dashboard changes nothing
+// (storage.js storedModelChangedElsewhere). Otherwise Calendar's status is read
+// again (the Google sign-in panel refreshes itself, auth-ui.js)
 function refreshAfterRestore() {
   window.addEventListener('pageshow', (e) => {
     if (!e.persisted) return;
@@ -752,9 +754,11 @@ function refreshAfterRestore() {
       token = localStorage.getItem(AUTH_TOKEN_KEY) || null;
       user = localStorage.getItem(AUTH_USERNAME_KEY) || null;
     } catch (err) { return; }
-    if (token !== (getAuthToken() || null) || user !== (getUsername() || null)) {
+    const signedElsewhere = token !== (getAuthToken() || null) || user !== (getUsername() || null);
+    if (signedElsewhere || storedModelChangedElsewhere()) {
       if (editState.enabled || taskEditorHasChanges() || isNotepadDirty()) {
-        showActionToast('Signed in or out in another window', [{ label: 'Reload', run: () => location.reload() }]);
+        const what = signedElsewhere ? 'Signed in or out in another window' : 'This dashboard changed in another window';
+        showActionToast(what, [{ label: 'Reload', run: () => location.reload() }]);
       } else {
         location.reload();
       }
@@ -1228,6 +1232,7 @@ export function wireUI() {
     if (editState.working) {
       // Deep merge the working copy into the model to preserve all nested structures
       deepMergeModel(model, editState.working);
+      if (window.clearEditNoteMoves) window.clearEditNoteMoves();
       saveModel();
       // Also create a timestamped backup file for longevity
       try { exportBackupFile(); } catch {}

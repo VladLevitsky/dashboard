@@ -41,7 +41,7 @@ const ICONS = {
 // What the phone leaves to a larger screen (SPEC §7), in plain words
 const NOT_ON_MOBILE = [
   ['Arranging cards', 'Creating, deleting, resizing and moving cards, card titles, colours and sections. Cards are arranged on the tablet and desktop layouts.'],
-  ['Editing card items', 'Changing or deleting existing icons, reminders, subtasks and snippets, their links and schedules. Adding new items works here.'],
+  ['Editing card items', 'Changing or deleting existing icons, reminders, subtasks and snippets, their links and schedules. Adding new items works here, and so does moving one to another section or card (tap it, then Move to…).'],
   ['Separators', 'Placing separators between icons.'],
   ['Sticky notes', 'Sticky notes stay on the desktop.'],
   ['Header photo and logo', 'Positioning the profile photo and logo, the name and title.'],

@@ -6,7 +6,8 @@
 // - Tasks flagged `gcal: true` with a due date are mirrored into the app's own
 //   "Dashboard tasks" calendar. The Worker reads them from the CLOUD profile, so
 //   a sync runs after every successful upload ('cloud:saved', sync.js) and once
-//   after startup. On a computer a flagged-task change uploads after ~3 s
+//   after startup; one that fails or stops early is tried again a few times
+//   (planSyncRetry). On a computer a flagged-task change uploads after ~3 s
 //   (phones already push 2.5 s after every save, sync-guard.js).
 // - Busy times come from Google free/busy: start/end only, kept in memory.
 // - Status is cached per account in localStorage so the UI shows at once.
@@ -34,6 +35,9 @@ let lastSyncResult = null;
 let seenSig = null;       // flagged-task signature last seen on a save
 let uploadedSig = null;   // … and at the last successful upload
 let uploadTimer = null;
+let retryTimer = null;    // a failed / unfinished calendar sync, tried again later
+let retryCount = 0;       // … how many times since the last clean run or upload
+let retryOnline = false;  // … or failed offline: the 'online' event retries it
 const busyCache = new Map(); // dayKey → { at, calendars, sig, failed }
 const busyInflight = new Map();
 let busyBackoffUntil = 0;
@@ -73,6 +77,7 @@ function ensureAccount() {
   uploadedSig = null;
   lastSyncResult = null;
   manualPending = false;
+  clearSyncRetry(true);
   busyVersion++;
 }
 
@@ -264,15 +269,64 @@ const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 // run ends, so the toast always says how it actually went
 let manualPending = false;
 
+// A run that failed for a passing reason (no network, a Worker or Google
+// hiccup, another device's sync holding the lease) or that stopped with work
+// left (failed events, more than 8 rounds, Google said slow down) is tried
+// again on its own: 30 s, 2 min, 10 min (10 min after a slow down). Capped,
+// so an event Google always refuses can't loop; a clean run, a fresh upload,
+// Sync now or another account starts the count over. Back online, a waiting
+// retry goes at once
+const RETRY_DELAYS_MS = [30 * 1000, 2 * 60 * 1000, 10 * 60 * 1000];
+
+function clearSyncRetry(resetCount = false) {
+  clearTimeout(retryTimer);
+  retryTimer = null;
+  retryOnline = false;
+  if (resetCount) retryCount = 0;
+}
+
+function syncNeedsRetry(result) {
+  if (!result) return false;
+  if (result.ok === false) {
+    return result.status === 0 || result.error === 'gcal_busy'
+      || (result.status >= 500 && result.error !== 'gcal_not_configured');
+  }
+  return !!(result.failed || result.remaining);
+}
+
+function planSyncRetry(result, user) {
+  if (!sameAccount(user)) return;
+  if (!syncNeedsRetry(result) || !isGcalTasksReady()) { retryCount = 0; return; }
+  // Offline: going back online retries, without using up a try
+  if (result.ok === false && result.status === 0 && navigator.onLine === false) { clearSyncRetry(); retryOnline = true; return; }
+  if (retryCount >= RETRY_DELAYS_MS.length) return;
+  const delay = result.rateLimited ? RETRY_DELAYS_MS[RETRY_DELAYS_MS.length - 1] : RETRY_DELAYS_MS[retryCount];
+  retryCount++;
+  clearSyncRetry();
+  retryTimer = setTimeout(() => {
+    retryTimer = null;
+    if (sameAccount(user)) syncGoogleCalendar();
+  }, delay);
+}
+
+function onOnline() {
+  if (!retryTimer && !retryOnline) return;
+  clearSyncRetry();
+  syncGoogleCalendar();
+}
+
 export async function syncGoogleCalendar({ manual = false } = {}) {
   if (!isGcalTasksReady()) {
     if (manual || manualPending) { manualPending = false; showToast('Google Calendar isn’t connected'); }
     return null;
   }
-  if (manual) manualPending = true;
+  if (manual) { manualPending = true; retryCount = 0; }
   if (syncing) { syncAgain = true; return syncing; }
   syncing = (async () => {
     let result = null;
+    const user = statusUser;
+    // This run replaces a retry that was waiting (it plans the next one itself)
+    clearSyncRetry();
     // A manual sync also asks the Worker to confirm the calendar still exists
     const check = manualPending;
     for (let round = 0; round < 8; round++) {
@@ -284,10 +338,12 @@ export async function syncGoogleCalendar({ manual = false } = {}) {
         break;
       }
       result = r.data || {};
-      // Google said slow down: the next upload (or Sync now) carries on
+      // Google said slow down: the retry (or the next upload / Sync now) carries on
       if (!result.remaining || result.rateLimited) break;
     }
     lastSyncResult = { at: Date.now(), ...(result || {}) };
+    // Another run follows right away when one was asked for meanwhile
+    if (!syncAgain) planSyncRetry(result, user);
     if (manualPending && !syncAgain) {
       manualPending = false;
       const done = result && result.ok !== false && !result.failed && !result.remaining;
@@ -342,6 +398,8 @@ function onCloudSaved(e) {
   // moved on while the upload was in flight)
   const payload = e && e.detail && e.detail.payload;
   uploadedSig = gcalSignature(payload || model);
+  // A fresh upload starts a fresh set of retries
+  clearSyncRetry(true);
   if (isGcalTasksReady()) syncGoogleCalendar();
 }
 
@@ -637,6 +695,7 @@ export function initGoogleCalendar() {
   started = true;
   window.addEventListener('cloud:saved', onCloudSaved);
   window.addEventListener('model:saved', onModelSaved);
+  window.addEventListener('online', onOnline);
   afterSignIn();
 }
 
@@ -666,6 +725,7 @@ export async function afterSignIn() {
 export function resetGcalState() {
   clearTimeout(uploadTimer);
   uploadTimer = null;
+  clearSyncRetry(true);
   statusUser = undefined;
   ensureAccount();
   busyVersion++;

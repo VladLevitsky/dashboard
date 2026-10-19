@@ -49,11 +49,14 @@ export function getAuthToken() {
 // --- Centralized API call helper
 // Returns { ok, data?, error?, status? }
 // keepSession: a 401 is just an answer (the Google sign-in routes: a Worker
-// without them yet, or a link step, must never end the session)
+// without them yet, or a link step, must never end the session; /login and
+// /register: a wrong password)
 export async function apiCall(method, path, body = null, { keepSession = false } = {}) {
   const headers = { 'Content-Type': 'application/json' };
-  if (_auth.token) {
-    headers['Authorization'] = `Bearer ${_auth.token}`;
+  // The session this call is made with (a 401 ends only that one)
+  const sent = _auth.token;
+  if (sent) {
+    headers['Authorization'] = `Bearer ${sent}`;
   }
 
   const opts = { method, headers };
@@ -65,9 +68,11 @@ export async function apiCall(method, path, body = null, { keepSession = false }
     const res = await fetch(`${API_BASE}${path}`, opts);
 
     // Session expired / invalid token: signed out, but the account's
-    // dashboard stays this page's (getDataOwner) until a sign-in or sign-out
-    if (res.status === 401 && !keepSession) {
-      clearAuthState({ lapsed: true });
+    // dashboard stays this page's (getDataOwner) until a sign-in or sign-out.
+    // Only a call that sent a session can find it expired, and only while this
+    // page still uses that session (a late answer to an older one changes nothing)
+    if (res.status === 401 && !keepSession && sent) {
+      if (_auth.token === sent) clearAuthState({ lapsed: true });
       return { ok: false, error: 'Session expired. Please sign in again.', status: 401 };
     }
 
@@ -132,25 +137,36 @@ export function abandonSignIn() {
 // --- Clear auth state (logout or expired session)
 // lapsed: an expired session (a 401), not a sign-out: the account is
 // remembered as the owner of what is on screen. A 401 to a sign-in still in
-// progress, or while signed out (a wrong password), keeps whatever was remembered
+// progress keeps whatever was remembered.
+// The saved session (and the remembered ended one) is only changed when it is
+// this page's own: another window may have signed out, or in as someone else,
+// since this page read it, and that is not this page's to end or replace
 function clearAuthState({ lapsed = false } = {}) {
+  const token = _auth.token;
+  const before = _auth.lapsed;
   const established = _auth.persisted ? _auth.username : null;
   _auth.lapsed = lapsed ? (established || _auth.lapsed) : null;
   _auth.token = null;
   _auth.username = null;
   _auth.persisted = false;
-  localStorage.removeItem(AUTH_TOKEN_KEY);
-  localStorage.removeItem(AUTH_USERNAME_KEY);
   try {
-    if (_auth.lapsed) localStorage.setItem(AUTH_LAPSED_KEY, _auth.lapsed);
-    else localStorage.removeItem(AUTH_LAPSED_KEY);
+    const stored = localStorage.getItem(AUTH_TOKEN_KEY);
+    if (token && stored === token) {
+      localStorage.removeItem(AUTH_TOKEN_KEY);
+      localStorage.removeItem(AUTH_USERNAME_KEY);
+      if (_auth.lapsed) localStorage.setItem(AUTH_LAPSED_KEY, _auth.lapsed);
+      else localStorage.removeItem(AUTH_LAPSED_KEY);
+    } else if (!token && !lapsed && before && !stored && localStorage.getItem(AUTH_LAPSED_KEY) === before) {
+      // "Sign out instead" of a session that had ended: forgotten for good
+      localStorage.removeItem(AUTH_LAPSED_KEY);
+    }
   } catch (e) { /* the in-memory owner still holds for this page */ }
 }
 
 // --- Register a new account
 // Returns { ok, username?, error? }
 export async function register(username, password, turnstileToken) {
-  const result = await apiCall('POST', '/register', { username, password, turnstileToken });
+  const result = await apiCall('POST', '/register', { username, password, turnstileToken }, { keepSession: true });
   if (result.ok && result.data) {
     setAuthState(result.data.token, result.data.username);
     return { ok: true, username: result.data.username };
@@ -165,7 +181,8 @@ export async function register(username, password, turnstileToken) {
 export async function login(username, password, turnstileToken = null) {
   const body = { username, password };
   if (turnstileToken) body.turnstileToken = turnstileToken;
-  const result = await apiCall('POST', '/login', body);
+  // A 401 here is a wrong password (the Worker's own message), never an ended session
+  const result = await apiCall('POST', '/login', body, { keepSession: true });
   if (result.ok && result.data) {
     setAuthState(result.data.token, result.data.username);
     return { ok: true, username: result.data.username };
@@ -262,13 +279,16 @@ export async function finishGoogleSignin(code, secret) {
 }
 
 // A new account for a Google login (after the security check)
-// Returns { ok, username?, error?, reason? }
+// Returns { ok, username?, created?, error?, reason? }
 export async function registerWithGoogle(code, secret, username, turnstileToken) {
   const r = await apiCall('POST', '/auth/google/register', { code, secret, username, turnstileToken }, { keepSession: true });
   const d = r.data || {};
   if (r.ok && d.token && d.username) {
     setAuthState(d.token, d.username);
-    return { ok: true, username: d.username };
+    // created: the Worker made the account just now. A Google login linked to an
+    // existing account meanwhile gets a plain session for it (no created), and
+    // that account must never take this browser's signed-out dashboard
+    return { ok: true, username: d.username, created: d.created === true };
   }
   return { ok: false, error: r.error || 'Couldn’t create the account. Try again.', reason: d.reason || '' };
 }

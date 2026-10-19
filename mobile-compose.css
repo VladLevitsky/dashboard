@@ -361,6 +361,9 @@ html[data-shell="mobile"] .mx-tray-date.has-time { flex-direction: column; justi
 html[data-shell="mobile"] .mx-tray-date.has-time .mx-tray-chip-icon { display: none; }
 html[data-shell="mobile"] .mx-tray-date.has-time .mx-tray-chip-label { font-size: 11.5px; line-height: 1.1; }
 html[data-shell="mobile"] .mx-tray-date.has-time .mx-tray-chip-time { display: block; font-size: 11px; line-height: 1.1; font-weight: 600; opacity: 0.8; }
+/* A start and an end ellipsize past '3–4:30 PM' (as wide as 'Tomorrow') rather than widen the chip,
+   so the tray keeps its one row at 390 and 360; the chip's aria-label and the line say it in full */
+html[data-shell="mobile"] .mx-tray-date.has-time .mx-tray-chip-time { max-width: 58px; overflow: hidden; text-overflow: ellipsis; }
 html[data-shell="mobile"] .mx-tray-caret { display: inline-flex; margin-left: -1px; opacity: 0.7; }
 html[data-shell="mobile"] .mx-tray-chip:active { background-color: var(--glass-hover); }
 html[data-shell="mobile"] .mx-tray-star[aria-pressed="true"] svg polygon { fill: currentColor; }

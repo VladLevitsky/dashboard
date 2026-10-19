@@ -392,10 +392,13 @@ function wireScroller(host, sc) {
   // A mouse drags the day sideways (touch scrolls natively)
   sc.addEventListener('pointerdown', (e) => {
     if (e.pointerType !== 'mouse' || e.button !== 0) return;
+    if (sc._busyDragEnd) sc._busyDragEnd();
     const startX = e.clientX;
     const startLeft = sc.scrollLeft;
     let dragging = false;
     const move = (ev) => {
+      // Released where this gesture didn't hear it: over, never a hover-scroll
+      if ((ev.buttons & 1) === 0) { up(); return; }
       const dx = ev.clientX - startX;
       if (!dragging) {
         if (Math.abs(dx) < 4) return;
@@ -405,15 +408,19 @@ function wireScroller(host, sc) {
       }
       sc.scrollLeft = startLeft - dx;
     };
-    const up = () => {
+    const up = (ev) => {
+      if (ev && ev.pointerId !== e.pointerId) return;
       sc.removeEventListener('pointermove', move);
-      sc.removeEventListener('pointerup', up);
-      sc.removeEventListener('pointercancel', up);
+      window.removeEventListener('pointerup', up, true);
+      window.removeEventListener('pointercancel', up, true);
+      if (sc._busyDragEnd === up) sc._busyDragEnd = null;
       if (dragging) sc.classList.remove('is-dragging');
     };
+    sc._busyDragEnd = up;
     sc.addEventListener('pointermove', move);
-    sc.addEventListener('pointerup', up);
-    sc.addEventListener('pointercancel', up);
+    // On the window: a release off the bar (no capture until a real drag) ends it too
+    window.addEventListener('pointerup', up, true);
+    window.addEventListener('pointercancel', up, true);
   });
 }
 

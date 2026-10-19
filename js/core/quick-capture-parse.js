@@ -14,7 +14,9 @@
 //
 // Dates are day-first (21/12/26 is 21 December) and are built from the local
 // calendar day, never through UTC. Times are 'HH:MM' on the local wall clock
-// (3pm, 3:30 pm, 15:30, noon); a time alone means its next occurrence.
+// (3pm, 3:30 pm, 15:30, noon); a time alone means its next occurrence. A range
+// (3-4pm, 9:30-11am, 15:00-16:30, 2pm to 3:30pm) also gives an end time;
+// !end:5pm changes only the end, !noend removes it.
 
 // --- Commands: !name or !name:value (case-insensitive)
 // Lookup tables have no prototype, so words like "constructor" or "toString"
@@ -46,6 +48,8 @@ const COMMANDS = table({
   nogcal: { kind: 'gcal', value: false },
   nodate: { kind: 'nodate' },
   notime: { kind: 'notime' },
+  end: { kind: 'end', needsValue: true },
+  noend: { kind: 'noend' },
   url: { kind: 'url', needsValue: true },
   category: { kind: 'category', needsValue: true },
   cat: { kind: 'category', needsValue: true },
@@ -307,6 +311,99 @@ function matchTime(tokens, i) {
   return null;
 }
 
+// One side of a range as typed in a word: '3' · '3:30' · '3pm' · '3:30p.m' · 'noon'
+function rangeSide(w) {
+  if (w === 'noon') return { h: 12, m: 0, mer: 'p', colon: false };
+  const m = /^(\d{1,2})(?::(\d{2}))?(?:([ap])\.?m\.?)?$/.exec(w || '');
+  if (!m || (m[2] && +m[2] > 59)) return null;
+  return { h: +m[1], m: m[2] ? +m[2] : 0, mer: m[3] || null, colon: !!m[2], lead0: m[1].length === 2 && m[1][0] === '0' };
+}
+
+// Two sides → { time, end } | null (not a range: it stays text). It is one
+// only when a side says am / pm (or noon) or both are 24-hour h:mm, so
+// "3-5", "10-11" and "9-5 job" stay text. A side without am / pm takes the
+// other's, unless that would put the start after the end: 11-1pm is 11 to 1,
+// 11am-1 is 11 to 1 pm. An end that still isn't after the start (10pm-1am)
+// is returned as it is: the caller warns and keeps the start.
+function resolveRange(a, b) {
+  if (!a || !b) return null;
+  if (!a.mer && !b.mer && !(a.colon && b.colon)) return null;
+  const at = (s, mer) => (mer ? clock12(s.h, s.m, mer) : timeKey(s.h, s.m));
+  const literal = (s) => s.h === 0 || s.h > 12 || s.lead0;   // can only be 24-hour
+  const other = (mer) => (mer === 'a' ? 'p' : 'a');
+  let start;
+  let end;
+  if (a.mer && b.mer) {
+    start = at(a, a.mer);
+    end = at(b, b.mer);
+  } else if (!a.mer && !b.mer) {
+    start = timeKey(a.h, a.m);
+    end = timeKey(b.h, b.m);
+  } else if (b.mer) {
+    end = at(b, b.mer);
+    start = literal(a) ? timeKey(a.h, a.m) : clock12(a.h, a.m, b.mer);
+    if (!literal(a) && start && end && start >= end) start = clock12(a.h, a.m, other(b.mer));
+  } else {
+    start = at(a, a.mer);
+    end = literal(b) ? timeKey(b.h, b.m) : clock12(b.h, b.m, a.mer);
+    if (!literal(b) && start && end && end <= start) end = clock12(b.h, b.m, other(a.mer));
+  }
+  return start && end ? { time: start, end } : null;
+}
+
+const RANGE_DASH = /^[-–—]$/;
+const RANGE_WORD = /^(to|until|till)$/;
+
+// Match a time range starting at token i → null | { length, time, end }:
+//   one word      3-4pm · 3pm–4pm · 3:30-4:30pm · 15:00-16:30 · noon-1pm (· 3-4 pm)
+//   spaced dash   3 - 4pm · 3 pm – 4 pm · 9:30 — 11am (the start may be a bare number)
+//   to / until / till   3pm to 4:30pm · 15:00 until 16:30 (only between two whole times,
+//                 so "Move 3 to 4pm" keeps its 3)
+// Later words can't be escaped (an escape ends the phrase).
+function matchTimeRange(tokens, i) {
+  const t = tokens[i];
+  if (!t || !t.word) return null;
+  const free = (k) => {
+    const x = tokens[i + k];
+    return x && !x.escaped ? x : null;
+  };
+  const merOf = (tok) => {
+    const m = tok ? MERIDIEM.exec(tok.word) : null;
+    return m ? m[1] : null;
+  };
+
+  const one = /^(.+?)[-–—](.+)$/.exec(t.word);
+  if (one) {
+    let b = rangeSide(one[2]);
+    let length = 1;
+    if (b && !b.mer && !t.trail && merOf(free(1))) {
+      b = { ...b, mer: merOf(free(1)) };
+      length = 2;
+    }
+    const r = resolveRange(rangeSide(one[1]), b);
+    return r ? { length, ...r } : null;
+  }
+
+  // The start: a whole time (1 or 2 words), else a bare number / h:mm before a dash
+  const whole = matchTime(tokens, i);
+  const aLen = whole ? whole.length : 1;
+  let a = rangeSide(t.word);
+  if (!a || tokens[i + aLen - 1].trail) return null;
+  if (whole && aLen === 2) a = { ...a, mer: merOf(tokens[i + 1]) };
+  const sep = free(aLen);
+  if (!sep || sep.trail) return null;
+  const dash = RANGE_DASH.test(sep.raw);
+  if (!dash && !(whole && RANGE_WORD.test(sep.word))) return null;
+  const bAt = aLen + 1;
+  if (!free(bAt)) return null;
+  const endTime = matchTime(tokens, i + bAt);
+  if (!endTime) return null;
+  let b = rangeSide(tokens[i + bAt].word);
+  if (b && endTime.length === 2) b = { ...b, mer: merOf(tokens[i + bAt + 1]) };
+  const r = resolveRange(a, b);
+  return r ? { length: bAt + endTime.length, ...r } : null;
+}
+
 const minutesOf = (key) => Number(key.slice(0, 2)) * 60 + Number(key.slice(3, 5));
 
 // ============================================================
@@ -382,7 +479,10 @@ function suggestCommand(name) {
  *   title: string, explicitTask: boolean, color: string|null, pinned: boolean|null,
  *   timer: boolean, gcal: boolean|null, urls: string[], category: object|null, dueDate: string|null,
  *   clearDate: boolean, past: boolean, dateSpan: {start, end}|null,
- *   dueTime: string|null ('HH:MM'), clearTime: boolean (!notime), timeSpan: {start, end}|null,
+ *   dueTime: string|null ('HH:MM'), clearTime: boolean (!notime), timeSpan: {start, end}|null
+ *     (a range: all of it),
+ *   dueEndTime: string|null ('HH:MM': a range's end or !end:, after dueTime when both are there),
+ *   clearEnd: boolean (!noend), endSpan: {start, end}|null,
  *   impliedDate: string|null (a time without a date: today, or tomorrow once it has passed;
  *     resolveDue decides whether it is used),
  *   issues: Array<{ level: 'error'|'warning', message: string, start: number, end: number }>,
@@ -411,12 +511,16 @@ export function parseQuickCapture(text, options = {}) {
     dueTime: null,
     clearTime: false,
     timeSpan: null,
+    dueEndTime: null,
+    clearEnd: false,
+    endSpan: null,
     impliedDate: null,
     issues: [],
     hasErrors: false,
   };
   const parts = [];                  // words that stay as text: { text, index }
   const seen = { date: false, time: false, color: false, pin: false, category: false, gcal: false };
+  let endFrom = null;                // where the end came from: 'range' | 'command' (!end: / !noend)
   const issue = (level, message, start, end) => result.issues.push({ level, message, start, end });
 
   const setDate = (dueDate, span, past) => {
@@ -428,12 +532,31 @@ export function parseQuickCapture(text, options = {}) {
     result.dateSpan = dueDate ? span : null;
   };
 
-  const setTime = (dueTime, span) => {
+  // An end set by !end: / !noend outlives a later start; a range's end goes
+  // with the next start phrase (its end belonged to the old start)
+  const setEnd = (dueEndTime, span, from) => {
+    if (endFrom === 'command' || (from === 'command' && endFrom)) {
+      issue('warning', dueEndTime && result.dueEndTime ? 'Two end times: using the last one' : 'An end time and !noend: using the last one', span.start, span.end);
+    }
+    endFrom = from;
+    result.dueEndTime = dueEndTime;
+    result.clearEnd = !dueEndTime;
+    result.endSpan = dueEndTime ? span : null;
+  };
+
+  const setTime = (dueTime, span, end = null) => {
     if (seen.time) issue('warning', 'Two times: using the last one', span.start, span.end);
     seen.time = true;
     result.dueTime = dueTime;
     result.clearTime = !dueTime;
     result.timeSpan = dueTime ? span : null;
+    if (end) {
+      setEnd(end, span, 'range');
+    } else if (endFrom === 'range') {
+      endFrom = null;
+      result.dueEndTime = null;
+      result.endSpan = null;
+    }
   };
 
   // "by fri" / "due tomorrow" / "at 3pm": the lead word goes with the date or time
@@ -461,7 +584,9 @@ export function parseQuickCapture(text, options = {}) {
     if (def.needsValue && value === null) {
       issue('error', def.kind === 'url'
         ? 'Put the link after a colon: !url:telcobridges.com'
-        : 'Type !category: and pick one from the list', t.start, t.end);
+        : def.kind === 'end'
+          ? 'Put a time after the colon: !end:5pm'
+          : 'Type !category: and pick one from the list', t.start, t.end);
       return i;
     }
     if (!def.needsValue && value !== null) {
@@ -496,6 +621,23 @@ export function parseQuickCapture(text, options = {}) {
         break;
       case 'notime':
         setTime(null, spanTo(i));
+        break;
+      case 'end': {
+        // !end:5pm · !end:4:30pm · !end:16:30 · !end:noon · !end:5 pm
+        const own = tokenize(value)[0];
+        const next = tokens[i + 1];
+        const at = own ? matchTime(next && !next.escaped && !own.trail ? [own, next] : [own], 0) : null;
+        if (!at) {
+          const v = value.replace(TRAIL_PUNCT, '');
+          issue('error', v ? `"${v}" isn't a time: try !end:5pm` : 'Put a time after the colon: !end:5pm', t.start, t.end);
+          break;
+        }
+        if (at.length === 2) last = i + 1;
+        setEnd(at.time, spanTo(last), 'command');
+        break;
+      }
+      case 'noend':
+        setEnd(null, spanTo(i), 'command');
         break;
       case 'url': {
         const v = value.replace(/[,;!?)\]]+$/, '').replace(/\.+$/, '');
@@ -562,7 +704,7 @@ export function parseQuickCapture(text, options = {}) {
 
     // \word: keep as text. A whole date or time phrase stays text when its first word is escaped.
     if (t.escaped) {
-      const m = matchDate(tokens, i, today) || matchTime(tokens, i);
+      const m = matchDate(tokens, i, today) || matchTimeRange(tokens, i) || matchTime(tokens, i);
       const n = m ? m.length : 1;
       for (let k = 0; k < n; k++) parts.push({ text: k === 0 ? t.text : tokens[i + k].raw, index: i + k });
       i += n;
@@ -587,6 +729,15 @@ export function parseQuickCapture(text, options = {}) {
         setDate(toDateKey(m.date), span, m.past);
       }
       i += m.length;
+      continue;
+    }
+
+    const range = matchTimeRange(tokens, i);
+    if (range) {
+      // "at 3-4pm" / "from 3pm to 4pm"
+      dropLeadWord(i, /^(at|by|due|from)$/i);
+      setTime(range.time, { start: t.start, end: tokens[i + range.length - 1].end }, range.end);
+      i += range.length;
       continue;
     }
 
@@ -618,6 +769,21 @@ export function parseQuickCapture(text, options = {}) {
       issue('warning', 'That time has already passed today', span.start, span.end);
     }
   }
+  // The end goes with the time and the date; it has to come after the start
+  if (result.dueEndTime && (result.clearDate || result.clearTime)) {
+    const span = result.endSpan;
+    if (endFrom === 'command') {
+      issue('warning', result.clearDate ? 'An end time needs a due date: !nodate drops it' : 'An end time needs a start: !notime drops it', span.start, span.end);
+    }
+    result.dueEndTime = null;
+    result.endSpan = null;
+  }
+  if (result.dueTime && result.dueEndTime && result.dueEndTime <= result.dueTime) {
+    const span = result.endSpan;
+    issue('warning', 'An end time has to be after the start (same day): only the start is kept', span.start, span.end);
+    result.dueEndTime = null;
+    result.endSpan = null;
+  }
 
   result.title = parts.map(p => p.text).join(' ')
     .replace(/\s+/g, ' ')
@@ -636,24 +802,96 @@ export function parseQuickCapture(text, options = {}) {
 /**
  * The due date and time a parsed line gives a task: target is the task an
  * "@ pick" changes (null for a new one). A time alone keeps the task's own
- * date, else lands on its next occurrence (parsed.impliedDate).
- * → { dueDate, dueTime }: a value to set, null to clear, undefined = leave as is
+ * date, else lands on its next occurrence (parsed.impliedDate). The end: a
+ * range's end goes with its start; a start alone leaves the end to
+ * updateTask (it moves with the start); !end: alone changes the end of a task
+ * that has a time, when it comes after it.
+ * → { dueDate, dueTime, dueEndTime }: a value to set, null to clear, undefined = leave as is
  */
 export function resolveDue(parsed, target = null) {
   const p = parsed || {};
   let dueDate;
   let dueTime;
+  let dueEndTime;
   if (p.dueDate) dueDate = p.dueDate;
   else if (p.clearDate) dueDate = null;
+  const own = target && typeof target.dueDate === 'string' && DATE_KEY.test(target.dueDate);
   if (p.dueTime) {
     dueTime = p.dueTime;
-    const own = target && typeof target.dueDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(target.dueDate);
     if (dueDate === undefined && !own) dueDate = p.impliedDate || null;
     if (!dueDate && !own) dueTime = undefined;
+    if (dueTime !== undefined) {
+      if (p.dueEndTime && p.dueEndTime > dueTime) dueEndTime = p.dueEndTime;
+      else if (p.clearEnd) dueEndTime = null;
+    }
   } else if (p.clearTime) {
     dueTime = null;
+    dueEndTime = null;
+  } else if (p.clearEnd) {
+    dueEndTime = null;
+  } else if (p.dueEndTime && dueDate !== null) {
+    const ownTime = ownTimes(target).time;
+    if (ownTime && p.dueEndTime > ownTime) dueEndTime = p.dueEndTime;
   }
-  return { dueDate, dueTime };
+  return { dueDate, dueTime, dueEndTime };
+}
+
+const DATE_KEY = /^\d{4}-\d{2}-\d{2}$/;
+const TIME_KEY = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+// A task's own time and end (due-time.js dueTimeOf / dueEndTimeOf rules)
+function ownTimes(task) {
+  const time = task && typeof task.dueDate === 'string' && DATE_KEY.test(task.dueDate) && TIME_KEY.test(task.dueTime || '')
+    ? task.dueTime : null;
+  const end = time && TIME_KEY.test(task.dueEndTime || '') && task.dueEndTime > time ? task.dueEndTime : null;
+  return { time, end };
+}
+
+/**
+ * The end a line leaves a task with (for previews): the line's own, else a
+ * start alone moves the task's end with it (updateTask's rule; past midnight
+ * it goes). target: the task being changed, null for a new one.
+ * → 'HH:MM' | null (no end)
+ */
+export function endAfter(due, target = null) {
+  const d = due || {};
+  if (d.dueEndTime !== undefined) return d.dueEndTime;
+  if (d.dueTime === null || d.dueDate === null) return null;
+  const { time: from, end } = ownTimes(target);
+  if (d.dueTime === undefined || !end) return d.dueTime === undefined ? end : null;
+  const moved = minutesOf(end) + minutesOf(d.dueTime) - minutesOf(from);
+  return moved <= 1439 && moved >= 0 ? timeKey(Math.floor(moved / 60), moved % 60) : null;
+}
+
+/**
+ * !end: without a start on the line changes the task's own end, so it needs a
+ * task with a time it comes after. → a warning for the line, or null
+ * mode: 'create' | 'update'
+ */
+export function endIssue(parsed, due, target, mode) {
+  const d = due || {};
+  if (!parsed || !parsed.dueEndTime || parsed.dueTime || d.dueEndTime !== undefined || d.dueDate === null) return null;
+  if (mode !== 'update') return 'An end time needs a start: try 3-4pm';
+  if (!target) return null;
+  return ownTimes(target).time
+    ? 'An end time has to be after the start (same day)'
+    : 'This task has no time to end: add a start, like 3-4pm';
+}
+
+/**
+ * A new start alone moves the task's end with it (updateTask's rule), and an
+ * end pushed past midnight is removed: say so (the task editor does too).
+ * due: resolveDue's answer; target: the task being changed (null for a new one).
+ * format: how the end is written in the message ('HH:MM' by default).
+ * → a warning for the line, or null
+ */
+export function endDropIssue(due, target, { format } = {}) {
+  const d = due || {};
+  if (!target || typeof d.dueTime !== 'string' || d.dueEndTime !== undefined || d.dueDate === null) return null;
+  const { time, end } = ownTimes(target);
+  if (!time || !end || d.dueTime === time || endAfter(d, target) !== null) return null;
+  const label = typeof format === 'function' ? format(end) : end;
+  return `Its end (${label}) would pass midnight: it is removed`;
 }
 
 // ============================================================
@@ -687,7 +925,9 @@ export const QUICK_CAPTURE_HELP = [
     rows: [
       { examples: [{ text: '3pm', insert: '3pm ' }, { text: '3:30 pm', insert: '3:30 pm ' }, { text: '15:30', insert: '15:30 ' }, { text: 'noon', insert: 'noon ' }], meaning: 'A time on the due date. Alone it means today, or tomorrow once that time has passed' },
       { examples: [{ text: 'fri 9am', insert: 'fri 9am ' }, { text: 'tomorrow at 2pm', insert: 'tomorrow at 2pm ' }], meaning: 'With a date. Google Calendar shows the task at that time' },
-      { examples: [{ text: '!notime', insert: '!notime ' }], meaning: 'Remove the time (the date stays)' },
+      { examples: [{ text: '3-4pm', insert: '3-4pm ' }, { text: '9:30-11am', insert: '9:30-11am ' }, { text: '15:00-16:30', insert: '15:00-16:30 ' }, { text: '2pm to 3:30pm', insert: '2pm to 3:30pm ' }], meaning: 'A start and an end: Google Calendar blocks that time (a time alone shows 30 minutes)' },
+      { examples: [{ text: '!end:5pm', insert: '!end:' }, { text: '!noend', insert: '!noend ' }], meaning: 'Change only when it ends (the start stays), or remove the end. A new start alone moves the end with it' },
+      { examples: [{ text: '!notime', insert: '!notime ' }], meaning: 'Remove the time and its end (the date stays)' },
     ],
   },
   {

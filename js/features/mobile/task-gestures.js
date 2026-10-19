@@ -11,8 +11,9 @@
 //   dragging: a ghost follows the finger; targets are static rects captured at the lift (gaps, pane
 //             headers, colour chips, the other segment); near the chrome edges the page auto-scrolls.
 //             Release over a target places it (Undo toast); anywhere else glides back.
-//   swiping:  the pill follows dx. → past 40% (or a fling) completes; ← past 72px reveals two buttons
-//             (it never commits); otherwise it springs back.
+//   swiping:  the pill follows dx. → past 40% (or a fling) asks to complete (the row waits slid out
+//             over Done; Cancel glides it back); ← past 72px reveals two buttons (it never commits);
+//             otherwise it springs back.
 //
 // Movement never writes style per frame: the ghost, the pill offset and the
 // drop light move through paused Web Animations (ui.createMover, drop-light.js),
@@ -578,13 +579,21 @@ export function attachGestures(root, opts) {
     g.mover = null;
     end();
     if (commit) {
-      api.haptic('commit');
+      // Slid out over Done while "Mark as complete?" asks (arming ticked already,
+      // the completion itself commits); Cancel / Back / the scrim glide it back
       slot.dataset.armed = '';
       const out = glide(pill, off, width, 140, true);
       if (mover) mover.release();
       const a = actions();
+      const putBack = () => {
+        const back = pill.isConnected ? glide(pill, width, 0, 180) : null;
+        if (out) { try { out.cancel(); } catch { /* gone */ } }   // after the glide back starts: no flash at 0
+        const done = () => { delete slot.dataset.swipe; delete slot.dataset.armed; };
+        if (back) back.onfinish = done; else done();
+      };
       const go = () => {
-        if (a.completeWithUndo) a.completeWithUndo(taskId, { slot, swiped: true, onAbort: () => { if (out) out.cancel(); delete slot.dataset.swipe; delete slot.dataset.armed; } });
+        if (a.confirmComplete) a.confirmComplete(taskId, { slot, swiped: true, onCancel: putBack });
+        else if (a.completeWithUndo) a.completeWithUndo(taskId, { slot, swiped: true, onAbort: putBack });
       };
       if (out) out.onfinish = go; else go();
       return;

@@ -6,7 +6,7 @@
 // inline style writes per frame. Units import these through the shell api,
 // or directly with the ?v= specifier.
 
-import { getUsername } from '../../core/auth.js';
+import { getDataOwner } from '../../core/auth.js';
 
 const reducedMotionQuery = (() => {
   try { return window.matchMedia('(prefers-reduced-motion: reduce)'); } catch { return null; }
@@ -64,13 +64,14 @@ export function haptic(kind = 'tick') {
 
 // Per-browser state under localStorage 'dashboard_mobile_<ns>' (one JSON
 // object per namespace). Never synced, never in the model.
-// { perAccount: true } (unsaved writing: 'write', 'compose') adds the signed-in
-// account to the key ('dashboard_mobile_<ns>@<username>'; signed out: the bare
-// key), worked out on every access like the profile's own scoped key, so one
-// account's drafts never show under another on a shared phone
+// { perAccount: true } (unsaved writing: 'write', 'compose') adds the account
+// whose dashboard is on screen to the key ('dashboard_mobile_<ns>@<username>';
+// the signed-out dashboard: the bare key), worked out on every access like the
+// profile's own scoped key (getDataOwner: also an account whose session ended),
+// so one account's drafts never show under another or signed out on a shared phone
 export function store(ns, { perAccount = false } = {}) {
   const keyOf = () => {
-    const user = perAccount ? getUsername() : '';
+    const user = perAccount ? getDataOwner() : '';
     return 'dashboard_mobile_' + ns + (user ? '@' + user : '');
   };
   const read = () => {

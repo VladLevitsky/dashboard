@@ -908,6 +908,9 @@ export function applyUrlOverrides(data) {
   if (editState.enabled && editState.working) {
     editState.working = JSON.parse(JSON.stringify(model));
   }
+  // The imported notes are the new baseline: no note move made in this edit session
+  // applies to them (Cancel would shift them off their items; edit-mode.js)
+  editState.noteMoves = [];
 
   // Save the restored data to localStorage so it persists
   // Only save to localStorage, not to JSON file during import

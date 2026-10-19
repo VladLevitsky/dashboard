@@ -24,6 +24,59 @@ export function getActiveStorageKey() {
   return scopedStorageKey(owner);
 }
 
+// --- What this page last knew of each saved copy ---
+// The exact text this page last wrote to or read from a copy's key (saveModel,
+// restoreModel, a cloud copy stored by a sign-in, the startup sync or a phone
+// pull). A page Chrome brings back from its back/forward cache compares it with
+// what is stored now (storage.js storedModelChangedElsewhere, init.js): another
+// page of this browser changed the dashboard while this one was frozen, so this
+// page's model is older and its next save would write over that change.
+// The device stamp (_sync) is left out: every load re-stamps the copy
+const _knownCopies = new Map();
+
+export function noteStoredCopy(key, raw) {
+  if (key) _knownCopies.set(key, typeof raw === 'string' ? raw : null);
+}
+
+function withoutSyncStamp(raw) {
+  try {
+    const obj = JSON.parse(raw);
+    if (obj && typeof obj === 'object') delete obj._sync;
+    return JSON.stringify(obj);
+  } catch (e) {
+    return raw;
+  }
+}
+
+export function storedCopyChangedElsewhere(key) {
+  if (!key || !_knownCopies.has(key)) return false;
+  let now = null;
+  try { now = localStorage.getItem(key); } catch (e) { return false; }
+  const known = _knownCopies.get(key);
+  if (now === known) return false;
+  if (now === null || known === null) return true;
+  return withoutSyncStamp(now) !== withoutSyncStamp(known);
+}
+
+// --- The account's dashboard is still being loaded ---
+// The startup sync, or a sign-in, may still replace the model with the
+// account's (cloud) copy. An edit session opened meanwhile would hold a working
+// copy of the dashboard about to be replaced, and its Confirm would write that
+// over the newer copy, so edit mode waits (edit-mode.js toggleEditMode)
+let _dashboardLoads = 0;
+
+export function beginDashboardLoad() {
+  _dashboardLoads++;
+}
+
+export function endDashboardLoad() {
+  _dashboardLoads = Math.max(0, _dashboardLoads - 1);
+}
+
+export function isDashboardLoading() {
+  return _dashboardLoads > 0;
+}
+
 // The signed-out dashboard went into this account (see prepareAccountCopy)
 const CARRIED_KEY = STORAGE_KEY + '__carried';
 
@@ -50,24 +103,46 @@ function signedOutDashboardIsOwn() {
 // the signed-out dashboard or another account is shown, merged or uploaded:
 //   · a copy of this account already here → kept (changes it holds that never
 //     synced go up in syncOnLogin, e.g. ones made after its session ended)
-//   · else the account's cloud copy, when it has one
+//   · else the account's cloud copy, when it has one (also for created: an
+//     account that turns out to have a saved copy is never given another one)
 //   · else (nothing saved yet) the signed-out dashboard, only for an account
 //     created just now on this browser (created), once; otherwise empty
 // Returns { ok, source: 'local' | 'cloud' | 'carried' | 'empty', cloud? }
 // (cloud: the GET /profile result, for syncOnLogin). ok false: the cloud copy
-// couldn't be read for an account this browser has no copy of; the sign-in
-// must not go on (it would show, and later upload, the wrong dashboard)
+// couldn't be read for an account this browser has no copy of, or this
+// browser's storage couldn't hold the copy (error 'storage'); the sign-in must
+// not go on (it would show, and later upload, the wrong dashboard)
 export async function prepareAccountCopy(username, { created = false } = {}) {
   const key = scopedStorageKey(username);
   if (localStorage.getItem(key)) return { ok: true, source: 'local' };
 
-  const result = await apiCall('GET', '/profile');
-  if (!result.ok) return { ok: false, status: result.status, error: result.error };
+  // Writes all of a copy or none of it (a full storage leaves no half copy)
+  const store = (entries) => {
+    try {
+      entries.forEach(([k, v]) => localStorage.setItem(k, v));
+      entries.forEach(([k, v]) => { if (k === key) noteStoredCopy(k, v); });
+      return true;
+    } catch (e) {
+      entries.forEach(([k]) => { try { localStorage.removeItem(k); } catch (err) { /* ignore */ } });
+      return false;
+    }
+  };
+  const storageFull = { ok: false, error: 'storage' };
 
-  const profile = result.data && result.data.profile;
-  if (isSavedProfile(profile)) {
-    localStorage.setItem(key, JSON.stringify(profile));
-    return { ok: true, source: 'cloud', cloud: result };
+  let result = await apiCall('GET', '/profile');
+  if (!result.ok) {
+    // An account registered just now has nothing saved in the cloud yet, and
+    // its username is taken by then (stopping would mean the signed-out
+    // dashboard could never go into it): a failed read goes on, and syncOnLogin
+    // reads the cloud itself. An ended session (401) stops it all the same
+    if (!created || result.status === 401) return { ok: false, status: result.status, error: result.error };
+    result = null;
+  } else {
+    const profile = result.data && result.data.profile;
+    if (isSavedProfile(profile)) {
+      if (!store([[key, JSON.stringify(profile)]])) return storageFull;
+      return { ok: true, source: 'cloud', cloud: result };
+    }
   }
 
   if (created && signedOutDashboardIsOwn()) {
@@ -75,10 +150,8 @@ export async function prepareAccountCopy(username, { created = false } = {}) {
     let signedOut = null;
     try { signedOut = raw ? JSON.parse(raw) : null; } catch (e) { signedOut = null; }
     if (isProfileMeaningful(signedOut)) {
-      localStorage.setItem(key, raw);
       // Uploaded by syncOnLogin (unsynced changes of this account now)
-      localStorage.setItem(key + '__dirty', '1');
-      localStorage.setItem(CARRIED_KEY, username);
+      if (!store([[key, raw], [key + '__dirty', '1'], [CARRIED_KEY, username]])) return storageFull;
       return { ok: true, source: 'carried', cloud: result };
     }
   }
@@ -91,6 +164,7 @@ let _dirty = false;
 let _dirtyGeneration = 0; // bumps on every change, so a save only clears what it uploaded
 let _syncTimerId = null;
 let _isSaving = false;
+let _savePromise = null; // the upload in flight (waitForCloudSave)
 
 // Dirty flag is also persisted to localStorage so unsynced changes
 // survive a page refresh (otherwise syncOnLogin would let stale cloud
@@ -159,10 +233,23 @@ async function mergeCloudTimeLog(prefetched = null, owner = getDataOwner()) {
 }
 
 // --- Cloud save: sends the COMPLETE profile JSON to PUT /profile ---
+// One upload at a time: while one is in flight the answer is
+// { ok: false, busy: true } (no status, no error: not a failure, look again)
 
 export async function cloudSave(prefetchedProfile = null) {
-  if (!isLoggedIn() || _isSaving) return { ok: false };
+  if (!isLoggedIn()) return { ok: false };
+  if (_isSaving) return { ok: false, busy: true };
   _isSaving = true;
+  _savePromise = uploadProfile(prefetchedProfile);
+  return _savePromise;
+}
+
+// Settles when the upload in flight (if any) is done, whatever its outcome
+export function waitForCloudSave() {
+  return _savePromise ? _savePromise.then(() => {}, () => {}) : Promise.resolve();
+}
+
+async function uploadProfile(prefetchedProfile) {
   // Signed in or out while waiting: this upload was for the previous copy
   const owner = getDataOwner();
   const switched = () => getDataOwner() !== owner || !isLoggedIn();
@@ -237,6 +324,7 @@ export async function cloudSave(prefetchedProfile = null) {
     return result;
   } finally {
     _isSaving = false;
+    _savePromise = null;
   }
 }
 
@@ -260,15 +348,27 @@ export async function cloudLoad() {
 
 // --- Immediate cloud save (called after edit-mode confirm and import) ---
 
-export async function immediateCloudSave() {
+// opts.quiet: no toast (the caller says how it went)
+export async function immediateCloudSave(opts = null) {
+  const quiet = !!(opts && opts.quiet === true);
   if (!isLoggedIn()) return { ok: false };
 
+  const owner = getDataOwner();
   _dirty = true; // Ensure dirty flag is set
-  const result = await cloudSave();
+  let result = await cloudSave();
 
+  if (result.busy) {
+    // Another upload was on its way: it may have read the copy before this
+    // change, so this one follows it (unless it carried everything)
+    await waitForCloudSave();
+    if (!isLoggedIn() || getDataOwner() !== owner) return { ok: false };
+    result = _dirty ? await cloudSave() : { ok: true };
+  }
+
+  if (quiet) return result;
   if (result.ok) {
     showToast('Saved to cloud');
-  } else if (result.status !== 401 && result.status !== 413 && !result.held) {
+  } else if (result.status !== 401 && result.status !== 413 && !result.held && !result.busy) {
     // Subtle failure notice (non-intrusive)
     showToast("Couldn't sync to cloud. Will retry.");
   }
@@ -336,7 +436,9 @@ export async function syncOnLogin(prefetched = null) {
 
   if (cloudSaved) {
     // Cloud is authoritative — load it
-    localStorage.setItem(getActiveStorageKey(), JSON.stringify(cloudProfile));
+    const cloudRaw = JSON.stringify(cloudProfile);
+    localStorage.setItem(getActiveStorageKey(), cloudRaw);
+    noteStoredCopy(getActiveStorageKey(), cloudRaw);
     // Signal that a reload is needed
     return { action: 'loaded_cloud' };
   }

@@ -5,6 +5,8 @@
 //   1. Due & overdue: one tinted pane per colour (red → blue, agenda order).
 //      Rows come from F1's taskRow service (mode 'today'); without F1 a plain
 //      row of our own (ring, title, chip, stopwatch, swipe → to complete).
+//      The ring and the swipe ask first ("Mark as complete?"), as does the
+//      Time sheet's Complete.
 //      Due subtasks hang on a rail in their task's colour under it.
 //   2. Meetings today (row → the meeting; Notes → F3's jump-in when present)
 //   3. Reminders: the real card items (createCardItemElement), passed through
@@ -29,10 +31,10 @@ import { getTaskCategories } from '../task-categories.js';
 import * as mobileTasks from '../../core/mobile-tasks.js';
 import { toDateKey } from '../../core/quick-capture-parse.js';
 import { renderBusyStrip, ensureBusyDay } from '../busy-strip.js';
-import { formatTimeKey } from '../../core/due-time.js';
+import { formatTimeKey, formatTimeRange } from '../../core/due-time.js';
 import { gcalStateKey, onGcalChange } from '../google-calendar.js';
-import { createTimeSheet } from './time-sheet.js?v=2026-10-mobile-6';
-import { createMoreSheet } from './more-sheet.js?v=2026-10-mobile-6';
+import { createTimeSheet } from './time-sheet.js?v=2026-10-mobile-7';
+import { createMoreSheet } from './more-sheet.js?v=2026-10-mobile-7';
 
 const SHORT_LABELS = { red: 'Urgent & important', orange: 'Urgent', yellow: 'Important', blue: 'Later' };
 const COMING_DAYS = 7;
@@ -123,6 +125,41 @@ export function completeTaskWithUndo(taskId) {
   if (window.refreshProjectHighlights) window.refreshProjectHighlights();
   api.haptic('commit');
   api.toast(`Completed “${title}”`, [{ label: 'Undo', run: () => restoreTask(taskId, index, place) }]);
+}
+
+// Ask before completing: F1's "Mark as complete?" sheet (task-actions.js
+// confirmComplete) when it is there, else the same question in a plain sheet
+// of our own (never window.confirm). Without F1, onConfirm runs on Complete
+// (default: completeTaskWithUndo); onCancel runs on every other close
+export function confirmCompleteTask(taskId, { slot = null, onCancel = null, onConfirm = null } = {}) {
+  const actions = svc('taskActions');
+  if (actions && typeof actions.confirmComplete === 'function') { actions.confirmComplete(taskId, { slot, onCancel }); return; }
+  const task = tasksApi.getTaskById(taskId);
+  if (!task || !api) { if (onCancel) onCancel(); return; }
+  let confirmed = false;
+  api.openSheet({
+    id: 'complete-confirm',
+    size: 'auto',
+    build(body, sheet) {
+      body.classList.add('mx-confirm');
+      body.append(el('h2', 'mx-confirm-title', 'Mark as complete?'), el('p', 'mx-confirm-name', task.title || 'Untitled task'));
+      const row = el('div', 'mx-confirm-actions');
+      const no = el('button', 'mx-btn mx-confirm-no', 'Cancel');
+      no.type = 'button';
+      no.addEventListener('click', () => sheet.close());
+      const yes = el('button', 'mx-btn mx-btn-done mx-confirm-yes', 'Complete');
+      yes.type = 'button';
+      yes.addEventListener('click', () => {
+        confirmed = true;
+        sheet.close();
+        if (onConfirm) onConfirm(); else completeTaskWithUndo(taskId);
+      });
+      row.append(no, yes);
+      body.appendChild(row);
+      yes.focus({ preventScroll: true });
+    },
+    onClose() { if (!confirmed && onCancel) onCancel(); },
+  });
 }
 
 function restoreTask(taskId, index, place) {
@@ -232,7 +269,7 @@ function reminderSig(r, view) {
 }
 
 function comingSig(item) {
-  return [item.date, item.title, item.color || '', item.detail || '', item.time || ''].join('|');
+  return [item.date, item.title, item.color || '', item.detail || '', item.time || '', item.end || ''].join('|');
 }
 
 function signature(ctx) {
@@ -401,7 +438,7 @@ function createEntry(entry, view) {
 
 // Without F1: a plain row on the desktop pill glass (Primary keeps its
 // breathing light body), ring to complete, title + chip, the stopwatch, and
-// swipe → to complete. Tap opens the task.
+// swipe → to complete (both ask first). Tap opens the task.
 function createFallbackRow(entry) {
   const { task } = entry;
   const color = task.color || 'blue';
@@ -427,9 +464,13 @@ function createFallbackRow(entry) {
   check.addEventListener('click', (e) => {
     e.stopPropagation();
     if (check.disabled) return;
-    check.disabled = true;
-    row.classList.add('is-completing');
-    setTimeout(() => completeTaskWithUndo(task.id), api.reduceMotion() ? 0 : 140);
+    confirmCompleteTask(task.id, {
+      onConfirm: () => {
+        check.disabled = true;
+        row.classList.add('is-completing');
+        setTimeout(() => completeTaskWithUndo(task.id), api.reduceMotion() ? 0 : 140);
+      },
+    });
   });
 
   const main = el('div', 'mx-today-main');
@@ -461,21 +502,26 @@ function createFallbackRow(entry) {
   });
   row.addEventListener('contextmenu', (e) => e.preventDefault());
   slot.append(under, row);
-  wireSwipe(slot, row, () => completeTaskWithUndo(task.id));
+  wireSwipe(slot, row, (putBack) => confirmCompleteTask(task.id, { onCancel: putBack }));
   return slot;
 }
 
-// Swipe → past 40% of the row (or a fling) completes it; anything less springs
-// back. Pointer events (the slot is touch-action: pan-y, so vertical moves
-// scroll); the row moves through a paused-WAAPI mover (no style writes).
+// Swipe → past 40% of the row (or a fling) asks to complete it (onCommit gets
+// putBack: the row waits where the finger let go, over Done, until the answer);
+// anything less springs back. Pointer events (the slot is touch-action: pan-y,
+// so vertical moves scroll); the row moves through a paused-WAAPI mover (no
+// style writes).
 function wireSwipe(slot, row, onCommit) {
   let s = null;
-  const reset = () => {
+  // hold: keep the row out (mover + underlay) for the question
+  const reset = (hold = false) => {
     if (!s) return;
     const st = s;
     s = null;
-    slot.classList.remove('is-swiping', 'is-armed');
-    if (st.mover) st.mover.release();
+    if (!hold) {
+      slot.classList.remove('is-swiping', 'is-armed');
+      if (st.mover) st.mover.release();
+    }
     if (st.mode === 'swipe') api.setGestureActive(false, 'today-swipe');
   };
   slot.addEventListener('pointerdown', (e) => {
@@ -519,14 +565,19 @@ function wireSwipe(slot, row, onCommit) {
     const v = first && lastP && lastP.t > first.t ? (lastP.x - first.x) / (lastP.t - first.t) : 0;
     const commit = e.type === 'pointerup' && (s.dx > SWIPE.COMMIT * s.w || (v > SWIPE.FLING_V && s.dx >= SWIPE.FLING_DX));
     const dx = s.dx;
+    const mover = s.mover;
     // The click that follows a swipe must not open the task
     const swallow = (ev) => { ev.stopPropagation(); ev.preventDefault(); };
     window.addEventListener('click', swallow, { capture: true, once: true });
     setTimeout(() => window.removeEventListener('click', swallow, { capture: true }), 400);
-    reset();
+    reset(commit);
     if (commit) {
-      api.animate(row, [{ transform: `translateX(${dx}px)`, opacity: 1 }, { transform: `translateX(${dx + 60}px)`, opacity: 0 }], { duration: 140 });
-      onCommit();
+      // Complete: the render takes the row away; anything else glides it back
+      onCommit(() => {
+        slot.classList.remove('is-swiping', 'is-armed');
+        if (mover) mover.release();
+        if (dx > 2 && row.isConnected) api.animate(row, [{ transform: `translateX(${dx}px)` }, { transform: 'translateX(0)' }], { duration: 160 });
+      });
     } else if (dx > 2) {
       api.animate(row, [{ transform: `translateX(${dx}px)` }, { transform: 'translateX(0)' }], { duration: 160 });
     }
@@ -613,10 +664,11 @@ function createComingRow(item) {
   const text = el('span', 'mx-today-coming-text');
   text.appendChild(el('span', 'mx-today-coming-title', item.title));
   if (item.kind === 'subtask' && item.detail) text.appendChild(el('span', 'mx-today-coming-detail', `in ${item.detail}`));
-  if (item.time) text.appendChild(el('span', 'mx-today-coming-detail', formatTimeKey(item.time, { compact: true })));
+  if (item.time) text.appendChild(el('span', 'mx-today-coming-detail', formatTimeRange(item.time, item.end, { compact: true })));
   row.append(day, mark, text);
   const kindLabel = { task: 'Task', subtask: 'Subtask', meeting: 'Meeting', reminder: 'Reminder' }[item.kind];
-  row.setAttribute('aria-label', `${item.label}${item.time ? ` at ${formatTimeKey(item.time)}` : ''}: ${kindLabel} ${item.title}`);
+  const at = !item.time ? '' : item.end ? `, ${formatTimeRange(item.time, item.end)}` : ` at ${formatTimeKey(item.time)}`;
+  row.setAttribute('aria-label', `${item.label}${at}: ${kindLabel} ${item.title}`);
   row.addEventListener('click', () => {
     if (item.kind === 'task' || item.kind === 'subtask') openTask(item.taskId);
     else if (item.kind === 'meeting') openMeeting(item.meetingId);
@@ -690,7 +742,7 @@ export default {
       signature,
       render,
     });
-    const time = createTimeSheet(api, { complete: completeTaskWithUndo, openTask });
+    const time = createTimeSheet(api, { complete: (id) => confirmCompleteTask(id), openTask });
     api.provide('time', time);
     api.provide('more', createMoreSheet(api, { openTime: () => time.openSheet() }));
     // Rows come from F1, Notes from F3, item touch from F5: when one of them
