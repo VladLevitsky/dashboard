@@ -4,7 +4,7 @@
 import { editState, model, currentData, currentSections } from '../state.js';
 import { $, $$, openUrl, generateKey, getSectionDataKey, getColorForCurrentMode, darkenColor, lightenAndDesaturateColor, colorToGlassRgba, isGlassModeActive, isColorCode, getContrastTextColor, createAnimatedBorder, showToast } from '../utils.js';
 import { PLACEHOLDER_URL, icons, LINK_ICON_SVG, TASKS_ICON_SVG } from '../constants.js';
-import { markDirtyAndSave, openEditPopover, openSubtitleColorPicker } from '../features/edit-mode.js';
+import { markDirtyAndSave, openEditPopover, openSubtitleColorPicker, renameCardSection } from '../features/edit-mode.js';
 import { saveModel } from '../core/storage.js';
 import { initializeDragHandlers, initializeItemDragHandlers, initializeContainerDragHandlers, initializeReminderDragHandlers, initializeCardDropZone } from '../features/drag-drop.js';
 import { createCardDeleteButton, createCardReorderButtons } from '../features/cards.js';
@@ -1635,18 +1635,10 @@ export function renderUnifiedCard(sectionEl, sectionId) {
               renderAllSections();
               return;
             }
-            if (text && text !== subtitle) {
-              cardData[text] = cardData[subtitle];
-              delete cardData[subtitle];
-              if (data.subtitleColors && data.subtitleColors[`${sectionId}:${subtitle}`]) {
-                data.subtitleColors[`${sectionId}:${text}`] = data.subtitleColors[`${sectionId}:${subtitle}`];
-                delete data.subtitleColors[`${sectionId}:${subtitle}`];
-              }
-              // Also rename collapsed state key
-              if (data.collapsedSubtitles && data.collapsedSubtitles[collapseKey]) {
-                data.collapsedSubtitles[`${sectionId}:${text}`] = data.collapsedSubtitles[collapseKey];
-                delete data.collapsedSubtitles[collapseKey];
-              }
+            // Never onto another section's name (that would drop its items); the
+            // section keeps its place and its colour, collapsed state, linked tasks,
+            // notes and Quick Access entries follow it
+            if (text && text !== subtitle && renameCardSection(sectionId, subtitle, text)) {
               markDirtyAndSave();
               renderAllSections();
             }

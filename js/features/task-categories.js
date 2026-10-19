@@ -24,9 +24,12 @@ export function getTaskCategory(categoryId) {
   return getTaskCategories().find(c => c.id === categoryId) || null;
 }
 
-// CSS color for a category's swatch/slice (light/dark values live in styles.css)
+// CSS color for a category's swatch/slice (light/dark values live in styles.css).
+// A category past the 8 color slots (overflow: true, see Task Settings) shows as Other
 export function categoryColor(category) {
-  return category ? `var(--task-cat-${category.slot})` : 'var(--task-cat-none)';
+  if (!category) return 'var(--task-cat-none)';
+  const slot = category.slot;
+  return Number.isInteger(slot) && slot >= 1 && slot <= MAX_TASK_CATEGORIES ? `var(--task-cat-${slot})` : 'var(--task-cat-other)';
 }
 
 function generateCategoryId() {
@@ -44,11 +47,12 @@ function lowestFreeSlot(categories) {
 // --- Task Settings modal
 
 let draftCategories = null;
+let draftOverflow = null;   // categories past the 8 color slots (two devices added at once)
 let draftTemplates = null;
 let initialDraftJson = '';
 
 function draftJson() {
-  return JSON.stringify({ categories: draftCategories, templates: draftTemplates });
+  return JSON.stringify({ categories: draftCategories, overflow: draftOverflow, templates: draftTemplates });
 }
 
 const TRASH_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>`;
@@ -82,6 +86,8 @@ function getTaskSettingsModal() {
           </div>
           <div class="appearance-section task-settings-col task-settings-col-cats">
             <div class="appearance-label">Categories</div>
+            <div class="task-settings-overflow" id="task-settings-overflow" role="region" aria-labelledby="task-settings-overflow-title" hidden
+              style="margin: 0 0 12px; padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--brand) 40%, transparent); border-radius: 10px; background: color-mix(in srgb, var(--brand) 8%, transparent);"></div>
             <div class="task-settings-cat-list" id="task-settings-cat-list"></div>
             <form class="task-settings-add-row" id="task-settings-add-form">
               <input type="text" id="task-settings-add-input" class="task-settings-input" maxlength="40" placeholder="New category" aria-label="New category name" autocomplete="off" />
@@ -118,7 +124,8 @@ function getTaskSettingsModal() {
 
 export function openTaskSettingsModal() {
   const modal = getTaskSettingsModal();
-  draftCategories = getTaskCategories().map(c => ({ ...c }));
+  draftCategories = getTaskCategories().filter(c => !c.overflow).map(c => ({ ...c }));
+  draftOverflow = getTaskCategories().filter(c => c.overflow).map(c => ({ ...c }));
   draftTemplates = cloneTemplates(model.subtaskTemplates);
   initialDraftJson = draftJson();
   $('#task-settings-add-input').value = '';
@@ -136,6 +143,7 @@ function closeTaskSettingsModal(force = false) {
   }
   modal.hidden = true;
   draftCategories = null;
+  draftOverflow = null;
   draftTemplates = null;
 }
 
@@ -182,12 +190,91 @@ function renderDraftCategories() {
     list.appendChild(row);
   });
 
+  renderDraftOverflow();
+
   const full = draftCategories.length >= MAX_TASK_CATEGORIES;
   $('#task-settings-add-input').disabled = full;
   $('#task-settings-add-btn').disabled = full;
   $('#task-settings-hint').textContent = full
     ? `That's the maximum of ${MAX_TASK_CATEGORIES} categories. Delete one to add another.`
     : `Up to ${MAX_TASK_CATEGORIES} categories. Colors are assigned automatically and match the time tracking chart.`;
+}
+
+// Categories past the 8 color slots: a sync brought two devices' new categories
+// together (state.js normalizeTaskCategories, profile-merge.js capTaskCategories).
+// Nothing is dropped by itself: they stay usable (shown as Other in the chart) until
+// the user keeps one (it takes a free color slot) or removes it. Draft until Save
+function renderDraftOverflow() {
+  const box = $('#task-settings-overflow');
+  if (!box) return;
+  box.innerHTML = '';
+  box.hidden = !draftOverflow || draftOverflow.length === 0;
+  if (box.hidden) return;
+
+  const full = draftCategories.length >= MAX_TASK_CATEGORIES;
+  const title = document.createElement('div');
+  title.id = 'task-settings-overflow-title';
+  title.style.cssText = 'font-weight: 600; font-size: 13px; margin-bottom: 4px;';
+  title.textContent = draftOverflow.length === 1
+    ? '1 category didn’t fit in the 8 colors'
+    : `${draftOverflow.length} categories didn’t fit in the 8 colors`;
+  const text = document.createElement('p');
+  text.style.cssText = 'margin: 0 0 8px; font-size: 12px; line-height: 1.4; color: var(--muted);';
+  text.textContent = 'Two devices added categories at the same time. Tasks keep these and they still work, shown in grey. '
+    + (full ? 'Delete a category below to make room, then keep one, or remove it.' : 'Keep one to give it a color, or remove it.');
+  box.append(title, text);
+
+  const list = document.createElement('div');
+  list.className = 'task-settings-cat-list';
+  list.style.marginBottom = '0';
+  draftOverflow.forEach((category, index) => {
+    const row = document.createElement('div');
+    row.className = 'task-settings-cat-row';
+
+    const swatch = document.createElement('span');
+    swatch.className = 'task-settings-swatch';
+    swatch.style.background = categoryColor(category);
+    swatch.setAttribute('aria-hidden', 'true');
+
+    const name = document.createElement('span');
+    name.style.cssText = 'flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px;';
+    name.textContent = category.name;
+
+    const keepBtn = document.createElement('button');
+    keepBtn.type = 'button';
+    keepBtn.className = 'appearance-backup-btn task-settings-add-btn';
+    keepBtn.textContent = 'Keep';
+    keepBtn.disabled = full;
+    keepBtn.title = full ? 'All 8 colors are taken: delete a category below first' : `Keep “${category.name}” with a color`;
+    keepBtn.setAttribute('aria-label', full ? `Keep “${category.name}” (all 8 colors are taken)` : keepBtn.title);
+    keepBtn.addEventListener('click', () => {
+      if (draftCategories.length >= MAX_TASK_CATEGORIES) return;
+      const lower = category.name.trim().toLowerCase();
+      if (draftCategories.some(c => c.name.trim().toLowerCase() === lower)) {
+        showToast(`“${category.name}” already exists`);
+        return;
+      }
+      draftOverflow.splice(index, 1);
+      const { overflow, ...kept } = category;
+      draftCategories.push({ ...kept, slot: lowestFreeSlot(draftCategories) });
+      renderDraftCategories();
+    });
+
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.className = 'task-settings-delete-btn';
+    removeBtn.title = `Remove “${category.name}”`;
+    removeBtn.setAttribute('aria-label', removeBtn.title);
+    removeBtn.innerHTML = TRASH_SVG;
+    removeBtn.addEventListener('click', () => {
+      draftOverflow.splice(index, 1);
+      renderDraftCategories();
+    });
+
+    row.append(swatch, name, keepBtn, removeBtn);
+    list.appendChild(row);
+  });
+  box.appendChild(list);
 }
 
 function addDraftCategory() {
@@ -244,7 +331,7 @@ function saveTaskSettings() {
   }
 
   // Deleted categories that tasks still use: their tasks become Uncategorized
-  const keptIds = new Set(draftCategories.map(c => c.id));
+  const keptIds = new Set([...draftCategories, ...draftOverflow].map(c => c.id));
   const removed = getTaskCategories().filter(c => !keptIds.has(c.id));
   if (removed.length > 0) {
     const data = currentData();
@@ -260,7 +347,10 @@ function saveTaskSettings() {
     }
   }
 
-  model.taskCategories = normalizeTaskCategories(draftCategories.map(c => ({ ...c, name: c.name.trim() })));
+  model.taskCategories = normalizeTaskCategories([
+    ...draftCategories.map(c => ({ ...c, name: c.name.trim() })),
+    ...draftOverflow.map(c => ({ ...c, overflow: true })),
+  ]);
   model.subtaskTemplates = templates;
   saveModel();
   closeTaskSettingsModal(true);

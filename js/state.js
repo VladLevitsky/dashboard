@@ -9,26 +9,36 @@ export function defaultTaskCategories() {
 }
 
 // Validate saved/imported categories: unique ids, names, and one unique color
-// slot (1..MAX) each. Categories past the limit are dropped.
+// slot (1..MAX) each. Nothing is dropped past the limit: the extras stay in the
+// list as { id, name, overflow: true } (no color slot), in place, so a sync that
+// brought two devices' new categories together never loses one; tasks keep them
+// and Task Settings lists them to keep (once a slot is free) or remove
 export function normalizeTaskCategories(raw) {
   if (!Array.isArray(raw)) return defaultTaskCategories();
   const ids = new Set();
   const slots = new Set();
   const out = [];
+  let colored = 0;
   raw.forEach(c => {
     if (!c || typeof c.id !== 'string' || !c.id || ids.has(c.id)) return;
     const name = typeof c.name === 'string' ? c.name.trim() : '';
-    if (!name || out.length >= MAX_TASK_CATEGORIES) return;
+    if (!name) return;
     ids.add(c.id);
+    if (c.overflow === true || colored >= MAX_TASK_CATEGORIES) {
+      out.push({ id: c.id, name, overflow: true });
+      return;
+    }
+    colored++;
     out.push({ id: c.id, name, slot: Number.isInteger(c.slot) ? c.slot : 0 });
   });
   // Keep valid unique slots; give the rest the lowest free slot
   out.forEach(c => {
+    if (c.overflow) return;
     if (c.slot >= 1 && c.slot <= MAX_TASK_CATEGORIES && !slots.has(c.slot)) slots.add(c.slot);
     else c.slot = 0;
   });
   out.forEach(c => {
-    if (c.slot) return;
+    if (c.overflow || c.slot) return;
     for (let s = 1; s <= MAX_TASK_CATEGORIES; s++) {
       if (!slots.has(s)) { c.slot = s; slots.add(s); break; }
     }

@@ -14,10 +14,10 @@
 // preview text, Markdown → stored HTML for notes and ideas, and draft age.
 // No DOM access; never mutates its inputs.
 
-import { parseQuickCapture, resolveDue, matchCategory, normalizeUrl, fromDateKey, toDateKey } from './quick-capture-parse.js';
+import { parseQuickCapture, resolveDue, endAfter, endIssue, endDropIssue, matchCategory, normalizeUrl, fromDateKey, toDateKey } from './quick-capture-parse.js';
 import { markdownToHtml, sanitizeRichHtml } from './markdown.js';
 import { orderCardsForMobile, cardTitle } from './mobile-common.js';
-import { dueTimeOf, formatTimeKey, isTimeKey } from './due-time.js';
+import { dueTimeOf, dueEndTimeOf, formatTimeKey, formatTimeRange, isTimeKey, timeKeyMinutes, shiftTimeKey, prefersHour12 } from './due-time.js';
 
 export const KINDS = Object.freeze([
   Object.freeze({ id: 'task', label: 'Task' }),
@@ -43,6 +43,9 @@ const TIMER_TOKEN = new RegExp(`^!timer${TRAIL}$`, 'i');
 const GCAL_TOKEN = new RegExp(`^!(cal|nocal|gcal|nogcal|calendar|nocalendar)${TRAIL}$`, 'i');
 const NODATE_TOKEN = new RegExp(`^!nodate${TRAIL}$`, 'i');
 const NOTIME_TOKEN = new RegExp(`^!notime${TRAIL}$`, 'i');
+const NOEND_TOKEN = new RegExp(`^!noend${TRAIL}$`, 'i');
+const END_TOKEN = /^!end:/i;
+const MERIDIEM_WORD = new RegExp(`^[ap]\\.?m\\.?${TRAIL}$`, 'i');
 const CATEGORY_TOKEN = /^!(category|cat):/i;
 const QUOTE_CLOSE = /"[,.;!?)]*$/;
 
@@ -121,7 +124,8 @@ function stripDates(text, now, categories) {
   return out;
 }
 
-// Every time phrase the parser reads (with an "at" / "by" / "due" right before it) and every !notime
+// Every time phrase the parser reads, ranges too (with an "at" / "by" / "due",
+// or a range's "from", right before it) and every !notime
 function stripTimes(text, now, categories) {
   let out = cut(text, rangesOf(text, NOTIME_TOKEN));
   for (let i = 0; i < 5; i++) {
@@ -129,11 +133,33 @@ function stripTimes(text, now, categories) {
     const span = parsed.timeSpan;
     if (!span) break;
     let start = span.start;
-    const lead = /(^|\s)(at|by|due)\s+$/i.exec(out.slice(0, start));
+    const range = /[-–—]|\s(to|until|till)\s/i.test(out.slice(span.start, span.end));
+    const lead = (range ? /(^|\s)(at|by|due|from)\s+$/i : /(^|\s)(at|by|due)\s+$/i).exec(out.slice(0, start));
     if (lead) start = lead.index + lead[1].length;
     out = cut(out, [{ start, end: span.end }]);
   }
   return out;
+}
+
+// Every !noend and !end:… (with the am / pm word an "!end:5 pm" takes)
+function stripEnds(text) {
+  const list = words(text);
+  const ranges = [];
+  list.forEach((w, i) => {
+    if (NOEND_TOKEN.test(w.raw)) ranges.push({ start: w.start, end: w.end });
+    else if (END_TOKEN.test(w.raw)) {
+      const next = list[i + 1];
+      const bare = /^!end:\d{1,2}(:\d{2})?$/i.test(w.raw);
+      ranges.push({ start: w.start, end: bare && next && MERIDIEM_WORD.test(next.raw) ? next.end : w.end });
+    }
+  });
+  return cut(text, ranges);
+}
+
+// The line's start and end came as one range phrase (3-4pm), not !end:
+function lineRange(parsed) {
+  return !!(parsed.dueTime && parsed.dueEndTime && parsed.endSpan && parsed.timeSpan &&
+    parsed.endSpan.start === parsed.timeSpan.start);
 }
 
 // 'HH:MM' → the word the line gets: '3pm' / '3:30pm' (12-hour habit) or '15:30'
@@ -143,6 +169,19 @@ export function timeToken(key, hour12 = false) {
   const m = key.slice(3, 5);
   if (!hour12) return key;
   return `${h % 12 || 12}${m === '00' ? '' : `:${m}`}${h < 12 ? 'am' : 'pm'}`;
+}
+
+// A start and an end → one range word the parser reads back exactly:
+// '3-4:30pm' (one am / pm when both share it), '11am-1pm', '15:00-16:30'.
+// No end after the start: the start alone (timeToken)
+export function rangeToken(start, end, hour12 = false) {
+  if (!isTimeKey(start)) return '';
+  if (!isTimeKey(end) || end <= start) return timeToken(start, hour12);
+  if (!hour12) return `${start}-${end}`;
+  const sameHalf = (Number(start.slice(0, 2)) < 12) === (Number(end.slice(0, 2)) < 12);
+  return sameHalf
+    ? `${timeToken(start, true).replace(/[ap]m$/, '')}-${timeToken(end, true)}`
+    : `${timeToken(start, true)}-${timeToken(end, true)}`;
 }
 
 // The category a tray / list pick means: an object with an id (matched by id),
@@ -198,15 +237,19 @@ const append = (text, token) => (token ? tidy(text ? `${text} ${token}` : token)
  * field: 'color' (value 'red'|'orange'|'yellow'|'blue'|null)
  *        'pinned' (true|false|null)
  *        'date' ('today'|'tomorrow'|'tue'…|'next mon'|'YYYY-MM-DD'|null = No date,
- *               which drops a time too)
- *        'time' ('HH:MM'|null = No time; written as 3pm / 3:30pm with
- *               opts.hour12, else 15:30)
+ *               which drops a time and its end too)
+ *        'time' ('HH:MM'|null = No time, which drops the end too; written as
+ *               3pm / 3:30pm with opts.hour12, else 15:30. A range on the line
+ *               moves with it, keeping its length: 4-5pm)
+ *        'end'  ('HH:MM'|null = no end: with a start on the line it becomes a
+ *               range (3-4:30pm); changing a task that has a time, !end:4:30pm /
+ *               !noend; anything else leaves the line alone)
  *        'timer' (toggles; value ignored)
  *        'category' (a category { id, name }, or a name; null removes)
  *        'gcal' (true|false|null: Google Calendar; defaults.gcal is the last
  *               choice, or in update mode what the task has now)
  * opts: { now, categories, mode: 'create'|'update', hour12,
- *         defaults: { color, pinned, gcal, time (update: the task's time) } }
+ *         defaults: { color, pinned, gcal, time, end (update: the task's time and end) } }
  * → { text, caret }
  */
 export function setTokenField(text, field, value, opts = {}) {
@@ -235,8 +278,8 @@ export function setTokenField(text, field, value, opts = {}) {
     case 'date': {
       out = stripDates(src, now, categories);
       if (value == null) {
-        // A time can't stay without its date
-        out = stripTimes(out, now, categories);
+        // A time (and its end) can't stay without its date
+        out = stripEnds(stripTimes(out, now, categories));
         const already = parsed.clearDate;
         if (mode === 'update' && !already) out = append(out, '!nodate');
       } else {
@@ -249,9 +292,32 @@ export function setTokenField(text, field, value, opts = {}) {
     case 'time': {
       out = stripTimes(src, now, categories);
       if (value == null) {
+        out = stripEnds(out);
         if (mode === 'update' && defaults.time && !parsed.clearTime) out = append(out, '!notime');
       } else if (isTimeKey(value) && value !== parsed.dueTime) {
-        out = append(out, timeToken(value, !!opts.hour12));
+        // A range keeps its length (past midnight: the start alone)
+        const end = lineRange(parsed)
+          ? shiftTimeKey(parsed.dueEndTime, timeKeyMinutes(value) - timeKeyMinutes(parsed.dueTime))
+          : null;
+        out = append(out, rangeToken(value, end, !!opts.hour12));
+      }
+      break;
+    }
+    case 'end': {
+      const hour12 = !!opts.hour12;
+      const start = parsed.dueTime;
+      if (value == null) {
+        out = stripEnds(src);
+        if (lineRange(parsed)) out = append(stripTimes(out, now, categories), timeToken(start, hour12));
+        // A task's own end (a start alone would move it along): !noend
+        if (mode === 'update' && defaults.end) out = append(out, '!noend');
+      } else if (!isTimeKey(value) || value === parsed.dueEndTime) {
+        out = tidy(src);
+      } else if (start) {
+        if (value > start) out = append(stripEnds(stripTimes(src, now, categories)), rangeToken(start, value, hour12));
+      } else if (mode === 'update' && isTimeKey(defaults.time) && !parsed.clearTime && !parsed.clearDate) {
+        out = stripEnds(src);
+        if (value > defaults.time && value !== defaults.end) out = append(out, `!end:${timeToken(value, hour12)}`);
       }
       break;
     }
@@ -336,6 +402,7 @@ export function effectivePlan(parsed, defaults = {}, { mode = 'create' } = {}) {
   const gcal = pick(p.gcal == null ? null : p.gcal, d.gcal == null ? null : !!d.gcal);
   const dueDate = p.dueDate ? { value: p.dueDate, source: 'line' } : { value: null, source: p.clearDate ? 'line' : null };
   const dueTime = p.dueTime ? { value: p.dueTime, source: 'line' } : { value: null, source: p.clearTime ? 'line' : null };
+  const dueEndTime = p.dueEndTime ? { value: p.dueEndTime, source: 'line' } : { value: null, source: p.clearEnd ? 'line' : null };
   return {
     mode,
     color: color.value,
@@ -345,11 +412,13 @@ export function effectivePlan(parsed, defaults = {}, { mode = 'create' } = {}) {
     clearDate: !!p.clearDate,
     dueTime: dueTime.value,
     clearTime: !!p.clearTime,
+    dueEndTime: dueEndTime.value,
+    clearEnd: !!p.clearEnd,
     // The day a time alone lands on, when the task has no date of its own
     impliedDate: p.dueTime && !p.dueDate ? p.impliedDate || null : null,
     timer: !!p.timer,
     gcal: gcal.value,
-    sources: { color: color.source, pinned: pinned.source, category: category.source, date: dueDate.source, time: dueTime.source, timer: p.timer ? 'line' : null, gcal: gcal.source },
+    sources: { color: color.source, pinned: pinned.source, category: category.source, date: dueDate.source, time: dueTime.source, end: dueEndTime.source, timer: p.timer ? 'line' : null, gcal: gcal.source },
   };
 }
 
@@ -408,9 +477,11 @@ export function buildComposerPlan({ text = '', targetId = null, target = null, d
         || (category && category.id !== task.categoryId)
         || (due.dueDate !== undefined && due.dueDate !== (task.dueDate || null))
         || (due.dueTime !== undefined && due.dueTime !== dueTimeOf(task))
+        || (due.dueEndTime !== undefined && due.dueEndTime !== dueEndTimeOf(task))
         || (parsed.gcal !== null && parsed.gcal !== (task.gcal === true));
       const asked = parsed.color || parsed.pinned !== null || parsed.timer || parsed.urls.length ||
-        category || parsed.dueDate || parsed.clearDate || parsed.dueTime || parsed.clearTime || parsed.gcal !== null;
+        category || parsed.dueDate || parsed.clearDate || parsed.dueTime || parsed.clearTime ||
+        parsed.dueEndTime || parsed.clearEnd || parsed.gcal !== null;
       if (!changes) {
         issues.push(asked
           ? { level: 'error', message: 'The task already looks like that: nothing would change' }
@@ -420,6 +491,11 @@ export function buildComposerPlan({ text = '', targetId = null, target = null, d
   } else if (!parsed.title) {
     issues.push({ level: 'error', quiet: true, message: 'Type a name for the task' });
   }
+  const lonelyEnd = endIssue(parsed, due, task, mode);
+  if (lonelyEnd) issues.push({ level: 'warning', message: lonelyEnd });
+  // A new start that pushes the task's end past midnight removes the end
+  const droppedEnd = mode === 'update' ? endDropIssue(due, task, { format: (k) => formatTimeKey(k, { compact: true }) }) : null;
+  if (droppedEnd) issues.push({ level: 'warning', message: droppedEnd });
 
   // Same messages as quick-capture.js buildPlan()
   if (parsed.gcal === true) {
@@ -456,8 +532,8 @@ export function describeDate(key, now) {
 }
 
 // The tray's date chip: 'Today', 'Tomorrow', 'Fri 9', 'Oct 21', 'Oct 21, 2027',
-// with the time after it when there is one ('Today 3 PM')
-export function trayDateLabel(key, now, time = null, locale) {
+// with the time after it when there is one ('Today 3 PM', 'Today 3–4:30 PM')
+export function trayDateLabel(key, now, time = null, locale, end = null) {
   const date = fromDateKey(key);
   if (!date) return 'Date';
   const today = asDate(now);
@@ -471,7 +547,18 @@ export function trayDateLabel(key, now, time = null, locale) {
     const base = `${MONTH_SHORT[date.getMonth()]} ${date.getDate()}`;
     label = date.getFullYear() === t0.getFullYear() ? base : `${base}, ${date.getFullYear()}`;
   }
-  return isTimeKey(time) ? `${label} ${formatTimeKey(time, { compact: true, locale })}` : label;
+  return isTimeKey(time) ? `${label} ${formatTimeRange(time, end, { compact: true, locale })}` : label;
+}
+
+// The time line under the tray's date chip: the range as everywhere ('3 PM',
+// '3–4:30 PM') while it is that short; a longer one ('11 AM – 1 PM',
+// '10:30–11:45 AM') drops its AM / PM ('11–1', '10:30–11:45') so both ends stay
+// in the chip's width (the line above and the chip's aria-label say it in full)
+export function trayTimeLabel(time, end = null, locale) {
+  const full = formatTimeRange(time, end, { compact: true, locale });
+  if (full.length <= 9 || !isTimeKey(end) || end <= time || !prefersHour12(locale)) return full;
+  const bare = (key) => timeToken(key, true).replace(/[ap]m$/, '');
+  return `${bare(time)}–${bare(end)}`;
 }
 
 const clip = (s, max) => { const t = String(s || '').trim(); return t.length > max ? t.slice(0, max - 1).trimEnd() + '…' : t; };
@@ -506,12 +593,16 @@ export function lineFor(plan, { now, attempted = false, typed = true, runningTit
     parts.push('New task');
   }
   const due = plan.due || resolveDue(p, plan.target);
-  const at = p.dueTime ? formatTimeKey(p.dueTime, { compact: true, locale }) : '';
+  // A start alone on a task that ends: its end moves along (shown as a range)
+  const end = p.dueTime ? endAfter(due, plan.mode === 'update' ? plan.target : null) : null;
+  const at = p.dueTime ? formatTimeRange(p.dueTime, end, { compact: true, locale }) : '';
   if (p.dueDate) parts.push(at ? `${describeDate(p.dueDate, now)} at ${at}` : describeDate(p.dueDate, now));
   else if (at && due.dueDate) parts.push(`${describeDate(due.dueDate, now)} at ${at}`);   // a time alone: the day it lands on
   else if (at) parts.push(`at ${at}`);                                                     // the task keeps its own date
   else if (p.clearDate && plan.mode === 'update') parts.push('no due date');
   if (p.clearTime && plan.mode === 'update') parts.push('no time');
+  else if (!p.dueTime && due.dueEndTime) parts.push(`ends ${formatTimeKey(due.dueEndTime, { compact: true, locale })}`);
+  else if (p.clearEnd && !p.dueEndTime && plan.mode === 'update') parts.push('no end time');
   if (p.timer) parts.push(runningTitle ? `starts timer, stops “${clip(runningTitle, 18)}”` : 'starts timer');
   if (plan.urls && plan.urls.length) parts.push(plan.urls.length === 1 ? shortUrl(plan.urls[0]) : `${plan.urls.length} links`);
   if (plan.category) parts.push(`# ${plan.category.name}`);

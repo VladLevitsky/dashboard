@@ -20,6 +20,11 @@
 //     Delete), the draft banner
 //   - keyboard care: toolbar buttons keep the selection on pointerdown, the
 //     subtask ⋮ dropdown closes when the frame scrolls
+//   - the task frame's due time: start and end become typed time fields with
+//     AM | PM and a clock picker (time-picker.js)
+//   - typed dates: the task's due date and the meeting date become typed date
+//     fields (a calendar button beside them), a subtask's date button opens
+//     the date sheet (date-field.js)
 // Everything is keyed on the shell being mounted; desktop and tablet never see
 // any of it (the injected nodes are hidden outside html[data-shell="mobile"]
 // and removed on unmount).
@@ -37,6 +42,8 @@ import * as tasksApi from '../tasks.js';
 import * as projectsApi from '../projects.js';
 import * as meetingsApi from '../meetings.js';
 import * as notesApi from '../edit-mode.js';
+import { enhanceTimeInput, removeTimeField, closeTimePicker } from './time-picker.js?v=2026-10-mobile-9';
+import { enhanceDateInput, removeDateField, openDatePicker, closeDatePicker, setDateInputValue } from './date-field.js?v=2026-10-mobile-9';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 
@@ -434,7 +441,19 @@ function offerViewDraft(s) {
 }
 
 // --- Back = keep: one adapter per surface ---------------------------------------------
+// A time or date box still being typed in (Android's first Back only hides
+// the keyboard; the box keeps the focus) commits through its own blur first,
+// so what is read and saved is the settled value: an emptied box removes the
+// time / date, an unreadable one goes back to what it was (time-picker.js,
+// date-field.js)
+function commitTypedFields() {
+  const a = document.activeElement;
+  if (a && a.classList && (a.classList.contains('mx-tf-text') || a.classList.contains('mx-df-text')) &&
+    a.closest('#task-editor-modal, #meetings-modal')) a.blur();
+}
+
 function backTask() {
+  commitTypedFields();
   const date = ($('#task-editor-date') || {}).value || '';
   // The stored due date is the baseline of an existing task (the editor's own
   // change check doesn't cover the date); a new one uses the date it opened with
@@ -507,6 +526,7 @@ function backIdeas({ discard = false } = {}) {
 }
 
 function backMeetings() {
+  commitTypedFields();
   const s = BY_KEY.get('meetings');
   const name = $('#meetings-inline-name');
   const desc = editorOf(s);
@@ -725,10 +745,72 @@ function decorate(s) {
   if (!mounted()) return;
   const root = rootOf(s);
   if (!root) return;
+  if (s.key === 'task') decorateTask(root);
   if (s.key === 'projects') decorateProjects(root);
   if (s.key === 'ideas') decorateIdeas(root);
-  if (s.key === 'meetings') decorateMeetings(root);
+  if (s.key === 'meetings') { decorateMeetings(root); decorateMeetingDate(); }
   if (s.key === 'viewer') decorateViewer(root);
+}
+
+// The due date and time: Chrome's native date and time fields can't be typed
+// into (and its clock dialog can't be styled), so the date becomes our typed
+// date field (a calendar button opens the native dialog; date-field.js) and
+// start and end our time fields (typed, AM | PM, a clock picker;
+// time-picker.js). tasks.js keeps reading and writing the native inputs,
+// which the fields follow
+function decorateTask(root) {
+  const date = root.querySelector('#task-editor-date');
+  const start = root.querySelector('#task-editor-time');
+  const end = root.querySelector('#task-editor-end-time');
+  if (date) enhanceDateInput(date, { label: 'Date', sheetTitle: 'Due date' });
+  if (start) enhanceTimeInput(start, { label: 'Starts', role: 'start' });
+  if (end) enhanceTimeInput(end, { label: 'Ends', role: 'end', getStart: () => (start ? start.value : '') });
+}
+
+// A subtask's date button (its hidden native input's showPicker() is only a
+// calendar) opens the date sheet instead: typed, quick chips, Clear. The pick
+// goes into that hidden input with its input / change events, so tasks.js
+// saves it as before
+function onSubtaskDateClick(e) {
+  if (!mounted()) return;
+  const btn = e.target && e.target.closest ? e.target.closest('#task-editor-modal .task-subtask-date-btn') : null;
+  if (!btn) return;
+  const hidden = btn.parentElement ? btn.parentElement.querySelector('input.task-subtask-date-input') : null;
+  if (!hidden) return;
+  e.preventDefault();
+  e.stopImmediatePropagation();
+  const value = hidden.value || '';
+  openDatePicker({
+    value,
+    title: 'Subtask due date',
+    returnFocus: btn,
+    onPick: (key) => { setDateInputValue(hidden, key); },
+    onClear: value ? () => { setDateInputValue(hidden, ''); } : null,
+  });
+}
+
+// Save tapped right after the due / meeting date refused what was typed (that
+// tap's blur did it: the date went back to what it was): this Save is
+// refused, the field and its line saying why scrolled into view; the next
+// Save keeps the date it kept. Back (nativeClick) never asks: it never traps
+const DATE_SAVES = [['#task-editor-save', '#task-editor-date'], ['#meetings-inline-save', '#meetings-inline-date']];
+function onDateSaveClick(e) {
+  if (bypass || !mounted()) return;
+  const t = e.target;
+  const pair = t && t.closest ? DATE_SAVES.find(([btn]) => t.closest(btn)) : null;
+  const input = pair ? $(pair[1]) : null;
+  const field = input && input._mxDf;
+  if (!field || !field.el.getClientRects().length || !field.refuseSave()) return;
+  e.preventDefault();
+  e.stopImmediatePropagation();
+  try { field.el.scrollIntoView({ block: 'nearest' }); } catch { /* gone */ }
+}
+
+// The meeting date (the form is rebuilt on every edit open: enhanced again
+// from the load hook, after meetings.js filled it)
+function decorateMeetingDate() {
+  const date = $('#meetings-inline-date');
+  if (date && !date._mxDf) enhanceDateInput(date, { label: 'Meeting date', showLabel: false, sheetTitle: 'Meeting date' });
 }
 
 function decorateProjects(root) {
@@ -919,6 +1001,12 @@ function decorateViewer(root) {
 
 function undecorate() {
   document.querySelectorAll('.mx-writer-title, .mx-writer-more, .mx-draft-banner, .mx-viewer-where').forEach(el => el.remove());
+  closeTimePicker({ immediate: true });
+  closeDatePicker({ immediate: true });
+  removeTimeField($('#task-editor-time'));
+  removeTimeField($('#task-editor-end-time'));
+  removeDateField($('#task-editor-date'));
+  removeDateField($('#meetings-inline-date'));
   const label = $('#project-save-label');
   if (label) delete label.dataset.mxState;
 }
@@ -929,6 +1017,7 @@ function onEditorLoad(editor) {
   if (!s || !mounted()) return;
   baselines.set(s.key, snapshot(s));
   if (s.key === 'projects') refreshProjectTitle();
+  if (s.key === 'meetings') decorateMeetingDate();
   maybeOfferDraft(s);
 }
 
@@ -1181,6 +1270,8 @@ function installGlobal() {
   if (mountedHooks) return;
   mountedHooks = true;
   document.addEventListener('click', onCloserClick, true);
+  document.addEventListener('click', onSubtaskDateClick, true);
+  document.addEventListener('click', onDateSaveClick, true);
   document.addEventListener('scroll', onScrollCapture, true);
   document.addEventListener('pointerdown', onPointerDownCapture, true);
   document.addEventListener('selectionchange', onCaretMove);

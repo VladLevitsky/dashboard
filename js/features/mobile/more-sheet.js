@@ -1,11 +1,11 @@
 // Personal Dashboard - Mobile shell: the More sheet (unit F4, service `more`)
 // Opened from the avatar. Replaces F0's interim sheet. Everything the desktop
 // keeps in the header and Settings, reachable without edit mode:
-//   account + sync status (Sync now / Sign in / Resolve), Light / Dark,
+//   account + sync status (Sync now / Sign in), Light / Dark,
 //   Classic / Sunset, Time tracking, Completed tasks, Task categories,
 //   Writing & shortcuts, Cloud files, Offline copy (not on iPhone / iPad),
-//   Google Calendar, Backup (Download / Restore…), Not on mobile, Layout
-//   (desktop preview only), Sign out.
+//   Google Calendar, Backup (Download / Restore… / Add back…), Not on mobile,
+//   Layout (desktop preview only), Sign out.
 // It calls the existing entry points (setDarkMode, setGlassTheme + saveModel,
 // openTaskSettingsModal, openWritingHelp, openFileManager, the Settings backup
 // controls, the auth buttons); reused dialogs (z 2000+) stack above the sheet.
@@ -19,10 +19,10 @@ import { setImageFromRef } from '../../core/file-service.js';
 import { relativeTime } from '../../core/mobile-common.js';
 import { setDarkMode, setGlassTheme } from '../edit-mode.js';
 import { openFileManager } from '../file-manager.js';
-import { buildGcalPanel, getGcalStatus } from '../google-calendar.js';
+import { buildGcalPanel, getGcalStatus, onGcalChange } from '../google-calendar.js';
 import { buildGoogleSigninPanel } from '../auth-ui.js';
 import { offlineCopySupported } from '../../core/offline-copy.js';
-import { openOfflineSheet, offlineRowValue } from './offline-sheet.js?v=2026-10-mobile-8';
+import { openOfflineSheet, offlineRowValue } from './offline-sheet.js?v=2026-10-mobile-9';
 
 const svg = (body, size = 20, width = 2) =>
   `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="${width}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${body}</svg>`;
@@ -38,6 +38,7 @@ const ICONS = {
   info: svg('<circle cx="12" cy="12" r="9"></circle><line x1="12" y1="11" x2="12" y2="16.5"></line><line x1="12" y1="7.6" x2="12" y2="7.61"></line>'),
   download: svg('<path d="M12 3v12"></path><polyline points="7 10 12 15 17 10"></polyline><path d="M4 20h16"></path>', 18),
   upload: svg('<path d="M12 15V3"></path><polyline points="7 8 12 3 17 8"></polyline><path d="M4 20h16"></path>', 18),
+  addback: svg('<path d="M3 12a9 9 0 1 0 3-6.7"></path><polyline points="3 3 3 9 9 9"></polyline><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line>', 18),
   signout: svg('<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line>', 18),
   chevron: svg('<polyline points="9 6 15 12 9 18"></polyline>', 16, 2.2),
 };
@@ -45,7 +46,7 @@ const ICONS = {
 // What the phone leaves to a larger screen (SPEC §7), in plain words
 const NOT_ON_MOBILE = [
   ['Arranging cards', 'Creating, deleting, resizing and moving cards, card titles, colours and sections. Cards are arranged on the tablet and desktop layouts.'],
-  ['Editing card items', 'Changing or deleting existing icons, reminders, subtasks and snippets, their links and schedules. Adding new items works here.'],
+  ['Editing card items', 'Changing or deleting existing icons, reminders, subtasks and snippets, their links and schedules. Adding new items works here, and so does moving one to another section or card (tap it, then Move to…).'],
   ['Separators', 'Placing separators between icons.'],
   ['Sticky notes', 'Sticky notes stay on the desktop.'],
   ['Header photo and logo', 'Positioning the profile photo and logo, the name and title.'],
@@ -71,9 +72,9 @@ function setText(node, text) {
 // { text, state: 'ok' | 'pending' | 'error' | 'out' }
 export function syncStatusText(st, now = Date.now()) {
   if (!st || !st.signedIn) return { text: 'Not signed in', state: 'out' };
-  if (st.conflict) return { text: 'Changes on two devices', state: 'error' };
   if (st.inFlight) return { text: 'Syncing…', state: 'pending' };
   if (st.failed) return { text: 'Couldn’t sync · will retry', state: 'error' };
+  if (st.deferred) return { text: 'Syncs when you finish editing', state: 'pending' };
   if (st.dirty) return { text: 'Changes waiting to sync', state: 'pending' };
   if (st.lastPushAt) return { text: `Synced ${relativeTime(st.lastPushAt, now)}`, state: 'ok' };
   return { text: 'Synced', state: 'ok' };
@@ -145,7 +146,6 @@ export function createMoreSheet(api, { openTime } = {}) {
         if (toggle) toggle.click();
         return;
       }
-      if (st.conflict) { api.sync.resolveConflict(); return; }
       syncNow(action);
     });
     box.append(photo, info, action);
@@ -161,8 +161,8 @@ export function createMoreSheet(api, { openTime } = {}) {
     let r = null;
     try { r = await api.sync.syncNow(); } catch { r = null; }
     syncing = false;
-    if (r && r.ok) api.toast('Synced');
-    else if (r && r.held) { /* the conflict sheet asks */ }
+    if (r && r.ok) api.toast(r.applied ? 'Synced · updated from your other device' : 'Synced');
+    else if (r && r.deferred) api.toast('Syncs when you finish editing');
     else if (r && r.busy) api.toast('Syncing…');
     else api.toast('Offline, will retry');
     paintStatus();
@@ -174,11 +174,11 @@ export function createMoreSheet(api, { openTime } = {}) {
     const { text, state } = syncStatusText(st);
     setText(status.text, text);
     if (status.dot.dataset.state !== state) status.dot.dataset.state = state;
-    const label = !st.signedIn ? 'Sign in' : st.conflict ? 'Resolve' : 'Sync now';
+    const label = !st.signedIn ? 'Sign in' : 'Sync now';
     setText(status.action, label);
-    const busy = syncing || (st.signedIn && !st.conflict && !!st.inFlight);
+    const busy = syncing || (st.signedIn && !!st.inFlight);
     if (status.action.disabled !== busy) status.action.disabled = busy;
-    status.action.classList.toggle('mx-btn-primary', !st.signedIn || st.conflict);
+    status.action.classList.toggle('mx-btn-primary', !st.signedIn);
   }
 
   function buildAppearance() {
@@ -248,16 +248,28 @@ export function createMoreSheet(api, { openTime } = {}) {
     up.innerHTML = `${ICONS.upload}<span>Restore…</span>`;
     // The file picker needs this tap's activation: no await before it
     up.addEventListener('click', () => { const i = document.getElementById('settings-import-input'); if (i) i.click(); });
-    wrap.append(dl, up);
+    // Add back: only what the file holds and this dashboard lacks (edit-mode.js / import-export.js)
+    const add = el('button', 'mx-btn mx-more-backup-btn mx-more-addback-btn');
+    add.type = 'button';
+    add.innerHTML = `${ICONS.addback}<span>Add back…</span>`;
+    add.addEventListener('click', () => { const i = document.getElementById('settings-addback-input'); if (i) i.click(); });
+    wrap.append(dl, up, add);
     const g = group('Backup', wrap);
-    g.appendChild(el('p', 'mx-more-note', 'A JSON file of everything on this dashboard. Restoring replaces it (you are asked first).'));
+    g.appendChild(el('p', 'mx-more-note', 'A JSON file of everything on this dashboard. Restoring replaces it (you are asked first). Add back only adds what this dashboard is missing.'));
     return g;
   }
 
+  // Says the state without opening the sheet: why busy times may be missing on Today
   function gcalValue() {
     const gcal = getGcalStatus();
-    return gcal && gcal.connected ? (gcal.needsReconnect ? 'Reconnect' : 'On') : '';
+    if (!gcal) return '';
+    if (gcal.unavailable) return 'Not enabled';
+    if (!gcal.connected) return 'Off';
+    if (gcal.needsReconnect) return 'Reconnect';
+    return gcal.canBusy ? 'On' : 'No busy times';
   }
+  // … and follows a status read while More is open (text only)
+  onGcalChange(() => { if (gcalRow && gcalRow.isConnected) setText(gcalRow.querySelector('.mx-more-row-value'), gcalValue()); });
 
   // The same panel as the account popover on a computer (google-calendar.js)
   function openGoogleCalendar() {

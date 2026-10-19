@@ -1,7 +1,7 @@
 /* ==========================================================================
-   mobile-links.css (unit F5): the Links tab, the item and file sheets, the
-   Search screen, and the reused item creator / media library / quick-link
-   modal on the phone shell. Loaded last; every rule keys on
+   mobile-links.css (unit F5): the Links tab, the item sheet, the file
+   viewer, the Search screen, and the reused item creator / media library /
+   quick-link modal on the phone shell. Loaded last; every rule keys on
    html[data-shell="mobile"] (structural) or
    html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme]
    (glass, 0,5,2+), so tablet and desktop never see any of it.
@@ -11,7 +11,7 @@
    never add pseudo content, opacity or filters to copy-paste pills or colour
    swatches (their core stays var(--copy-base)).
    Sections: 1 Links screen and card panes · 2 icon grid, labels, thumbs ·
-   3 item sheet, file sheet · 4 search screen · 5 reused: item creator, media
+   3 item sheet, file viewer · 4 search screen · 5 reused: item creator, media
    library, quick-link modal · 6 dark · 7 sunset · 8 keyframes · 9 a11y ·
    10 landscape
    ========================================================================== */
@@ -252,7 +252,7 @@ html[data-shell="mobile"] .mx-thumb img { display: block; width: 78%; height: 78
 html[data-shell="mobile"] .mx-thumb:has(> img:not([src])) { display: none; }
 html[data-shell="mobile"] .mx-thumb--emoji { font-size: calc(var(--mx-thumb) * 0.72); line-height: 1; }
 
-/* --- 3. Item sheet and file sheet ------------------------------------------------ */
+/* --- 3. Item sheet and file viewer ----------------------------------------------- */
 html[data-shell="mobile"] .mx-item-head {
   display: flex; align-items: center; gap: 12px;
   padding: 2px 0 12px;
@@ -324,33 +324,129 @@ html[data-shell="mobile"] .mx-row-title { min-width: 0; flex: 1 1 auto; font-wei
 html[data-shell="mobile"] .mx-row-meta { flex: 0 0 auto; font-size: 12.5px; color: var(--muted); white-space: nowrap; }
 html[data-shell="mobile"] .mx-row-glyph { display: inline-flex; flex: 0 0 auto; color: var(--muted); }
 
-/* File sheet */
-html[data-shell="mobile"] .mx-file-stage {
+/* File viewer (file-sheet.js): images full screen, and the file card of a
+   blocked popup. A child of <body> at z 10050: the one deliberate exception
+   to the shell's < 1000 plan (mobile.css §1), so it opens over the writer
+   frames (≤ 10011), the calendar (10000), meetings (10001) and focus mode
+   (10040) it is opened from, and stays under the help window (10060), the
+   writing menus (100004), quick capture (100100) and #toast (100150), so its
+   own toasts still show. Black in every theme (the photo convention); no
+   full-screen blur (the glass stack's GPU cost). The whole viewer takes every
+   touch (touch-action: none, the bar and its buttons too: a pinch never zooms
+   the page under it, and taps still click); the picture moves only through
+   paused Web Animations (createMover), so nothing here transitions but the
+   bar's opacity. */
+html[data-shell="mobile"] .mx-viewer {
+  position: fixed;
+  z-index: 10050;
+  touch-action: none;
+  left: var(--mx-inline); right: var(--mx-inline);
+  top: var(--mx-vv-top, 0px);
+  height: var(--mx-vvh, 100dvh);
+  overflow: hidden;
+  overscroll-behavior: none;
+  color: #fff;
+  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  outline: none;
+}
+html[data-shell="mobile"] .mx-viewer-backdrop { position: absolute; inset: 0; background: rgb(0 0 0 / 94%); }
+html[data-shell="mobile"] .mx-viewer-stage {
+  position: absolute; inset: 0;
   display: flex; align-items: center; justify-content: center;
-  min-height: 160px;
-  padding: 8px 0 14px;
+  touch-action: none;
 }
-html[data-shell="mobile"] .mx-file-img {
+html[data-shell="mobile"] .mx-viewer[data-mode="image"] .mx-viewer-stage { cursor: zoom-in; }
+/* The element fills the stage; the picture is fitted inside it (contain), so
+   the transform origin (its centre) is the stage centre */
+html[data-shell="mobile"] .mx-viewer-img {
+  position: absolute; inset: 0;
   display: block;
-  max-width: 100%; max-height: min(60vh, calc(var(--mx-vvh) - 260px));
-  border-radius: 14px;
-  box-shadow: var(--fx-lift-pill, 0 6px 18px rgb(0 0 0 / 18%));
+  width: 100%; height: 100%;
   object-fit: contain;
+  pointer-events: none;                     /* the stage takes the pointers */
+  -webkit-user-drag: none;
+  -webkit-touch-callout: none;
+  user-select: none;
 }
-html[data-shell="mobile"] .mx-file-card {
-  display: flex; flex-direction: column; align-items: center; gap: 10px;
-  color: var(--muted);
+html[data-shell="mobile"] .mx-viewer-bar {
+  position: absolute; left: 0; right: 0; top: 0;
+  display: flex; align-items: center; gap: 4px;
+  padding: calc(var(--mx-safe-t) + 6px) max(8px, var(--mx-safe-r)) 22px max(8px, var(--mx-safe-l));
+  background-image: linear-gradient(rgb(0 0 0 / 62%), rgb(0 0 0 / 28%) 60%, rgb(0 0 0 / 0%));
+  transition: opacity 0.16s ease;
 }
-html[data-shell="mobile"] .mx-file-name { color: var(--text); font-weight: 600; font-size: 15px; text-align: center; overflow-wrap: anywhere; }
-html[data-shell="mobile"] .mx-file-error { margin: 0; font-size: 14px; color: var(--muted); text-align: center; }
-html[data-shell="mobile"] .mx-file-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: 10px; }
-html[data-shell="mobile"] .mx-file-actions .mx-btn { text-decoration: none; }
+/* A single tap on the picture hides the bar; keyboard focus brings it back */
+html[data-shell="mobile"] .mx-viewer[data-chrome="off"] .mx-viewer-bar:not(:focus-within) { opacity: 0; pointer-events: none; }
+html[data-shell="mobile"] .mx-viewer-title {
+  flex: 1 1 auto; min-width: 0;
+  margin: 0 6px;
+  font: 600 16px/1.25 'Inter', system-ui, sans-serif;
+  letter-spacing: -0.01em;
+  color: #fff;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  text-shadow: 0 1px 2px rgb(0 0 0 / 55%);
+}
+html[data-shell="mobile"] .mx-viewer-actions { flex: 0 0 auto; display: flex; gap: 6px; }
+/* Round 44px buttons; colour in background-image (no glass-glow bloom) */
+html[data-shell="mobile"] .mx-viewer-btn {
+  position: relative;
+  flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  box-sizing: border-box;
+  width: var(--mx-hit); height: var(--mx-hit);
+  margin: 0; padding: 0;
+  border: 0; border-radius: 50%;
+  background-color: transparent;
+  background-image: linear-gradient(rgb(28 30 34 / 58%), rgb(28 30 34 / 58%));
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 14%);
+  color: #fff;
+  text-decoration: none;
+  cursor: pointer;
+  touch-action: none;
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+html[data-shell="mobile"] .mx-viewer-btn:active { background-image: linear-gradient(rgb(255 255 255 / 24%), rgb(255 255 255 / 24%)); }
+html[data-shell="mobile"] .mx-viewer :is(.mx-viewer-btn, .mx-viewer-pill):focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+/* Messages, Try again and the file card's Open */
+html[data-shell="mobile"] :is(.mx-viewer-msg, .mx-viewer-file) {
+  position: relative;
+  display: grid; justify-items: center; gap: 14px;
+  max-width: 320px;
+  padding: 0 28px;
+  text-align: center;
+  color: rgb(255 255 255 / 80%);
+  -webkit-user-select: text;
+  user-select: text;
+}
+html[data-shell="mobile"] :is(.mx-viewer-msg, .mx-viewer-file) p { margin: 0; font-size: 15px; line-height: 1.45; }
+html[data-shell="mobile"] .mx-viewer-file .mx-viewer-file-name { color: #fff; font-size: 16px; font-weight: 600; overflow-wrap: anywhere; }
+html[data-shell="mobile"] .mx-viewer-file .mx-viewer-note { font-size: 13.5px; color: rgb(255 255 255 / 72%); }
+html[data-shell="mobile"] .mx-viewer-pill {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  box-sizing: border-box;
+  min-height: var(--mx-hit); padding: 0 22px;
+  margin: 4px 0 0;
+  border: 1px solid rgb(255 255 255 / 32%); border-radius: 999px;
+  background-color: transparent;
+  background-image: linear-gradient(rgb(255 255 255 / 10%), rgb(255 255 255 / 10%));
+  color: #fff;
+  font: 600 15px/1.2 'Inter', system-ui, sans-serif;
+  cursor: pointer;
+  touch-action: none;
+}
+html[data-shell="mobile"] .mx-viewer-pill.is-primary { border-color: transparent; background-image: linear-gradient(var(--glass-action, #42699b), var(--glass-action, #42699b)); }
+html[data-shell="mobile"] .mx-viewer-pill:active { background-image: linear-gradient(rgb(255 255 255 / 24%), rgb(255 255 255 / 24%)); }
 html[data-shell="mobile"] .mx-spinner {
   width: 28px; height: 28px; border-radius: 50%;
   border: 3px solid var(--glass-divider);
   border-top-color: rgb(var(--fx-ind-rgb, 22 160 255));
   animation: mxLinksSpin 0.9s linear infinite;
 }
+html[data-shell="mobile"] .mx-viewer .mx-spinner { border-color: rgb(255 255 255 / 22%); border-top-color: #fff; }
 
 /* --- 4. Search screen ------------------------------------------------------------ */
 html[data-shell="mobile"] .mx-search .mx-pushed-bar { gap: 8px; padding-left: var(--mx-gutter); }
@@ -508,6 +604,10 @@ html[data-shell="mobile"] .ic-overlay .ic-btn { min-height: var(--mx-hit); font-
 html[data-shell="mobile"] .ic-overlay .ic-seg button { min-height: 36px; padding: 6px 12px; font-size: 13px; }
 html[data-shell="mobile"] .ic-overlay .ic-check { min-height: var(--mx-hit); font-size: 14px; }
 html[data-shell="mobile"] .ic-overlay .ic-check input { width: 20px; height: 20px; }
+/* The reminder's date: typed, with a calendar button (date-field.js, mobile.css §15),
+   at the creator's own field height and corner */
+html[data-shell="mobile"] .ic-overlay .mx-df { column-gap: 6px; }
+html[data-shell="mobile"] .ic-overlay .mx-df-text { height: var(--mx-hit); min-height: var(--mx-hit); border-radius: 12px; }
 /* The sticky footer is a real glass slab: the form scrolls under it, never
    through Cancel / Add or the validation hint */
 html[data-shell="mobile"] .ic-overlay .ic-footer {
@@ -552,6 +652,9 @@ html[data-shell="mobile"] body[data-theme="dark"] .reminder-link-bubble.mx-link-
 @keyframes mxLinksSpin { to { transform: rotate(360deg); } }
 
 /* --- 9. Accessibility guards ---------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  html[data-shell="mobile"] .mx-viewer-bar { transition: none; }
+}
 @media (prefers-reduced-transparency: reduce) {
   html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .ic-overlay .ic-dialog {
     -webkit-backdrop-filter: none;
@@ -563,10 +666,20 @@ html[data-shell="mobile"] body[data-theme="dark"] .reminder-link-bubble.mx-link-
     backdrop-filter: none;
     background: var(--card);
   }
+  html[data-shell="mobile"] .mx-viewer-backdrop { background: #000; }
+  html[data-shell="mobile"] .mx-viewer-btn {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    background-image: linear-gradient(rgb(28 30 34), rgb(28 30 34));
+  }
 }
 @media (forced-colors: active) {
   html[data-shell="mobile"] :is(.mx-card-toggle, .mx-row, .mx-link-pill, .mx-search-field) { outline: 1px solid CanvasText; }
   html[data-shell="mobile"] .mx-icon-sep { background: CanvasText; }
+  html[data-shell="mobile"] .mx-viewer { color: CanvasText; }
+  html[data-shell="mobile"] .mx-viewer-backdrop { background: Canvas; }
+  html[data-shell="mobile"] :is(.mx-viewer-btn, .mx-viewer-pill) { outline: 1px solid ButtonText; color: ButtonText; }
+  html[data-shell="mobile"] :is(.mx-viewer-title, .mx-viewer-msg, .mx-viewer-file, .mx-viewer-file .mx-viewer-file-name) { color: CanvasText; }
 }
 
 /* --- 10. Landscape phones --------------------------------------------------------------------- */
@@ -574,5 +687,72 @@ html[data-shell="mobile"] body[data-theme="dark"] .reminder-link-bubble.mx-link-
   html[data-shell="mobile"] .unified-icons-group.mx-icon-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
   html[data-shell="mobile"] .ic-overlay { padding-top: 4px; }
   html[data-shell="mobile"] .ic-overlay .ic-dialog { max-width: 640px; margin-inline: auto; }
-  html[data-shell="mobile"] .mx-file-img { max-height: calc(var(--mx-vvh) - 150px); }
+  /* The viewer's bar is thinner: the picture keeps the short side */
+  html[data-shell="mobile"] .mx-viewer-bar { padding-top: calc(var(--mx-safe-t) + 2px); padding-bottom: 12px; }
+}
+
+/* --- 11. Move to… (item sheet → another section or card) ------------------------------------
+   Cards are headings with a small card glyph ("This card" = the item's own card);
+   their sections sit indented beneath on a tree rail; a card without sections is one
+   row. Static (no animation); colours from tokens. */
+html[data-shell="mobile"] .mx-item-move { margin-top: 14px; }
+html[data-shell="mobile"] .mx-card-move { margin: 6px auto 0; font-size: 14px; }
+html[data-shell="mobile"] .mx-card-move svg { flex: none; }
+html[data-shell="mobile"] .mx-move-pick { display: grid; gap: 8px; }
+html[data-shell="mobile"] .mx-move-item-sheet .mx-caption { margin: 12px 4px 8px; }
+html[data-shell="mobile"] .mx-move-targets { display: grid; gap: 2px; }
+html[data-shell="mobile"] .mx-move-card,
+html[data-shell="mobile"] .mx-move-target.is-card {
+  display: flex; align-items: center; gap: 10px;
+}
+html[data-shell="mobile"] .mx-move-card::before,
+html[data-shell="mobile"] .mx-move-target.is-card::before {
+  content: ''; flex: none;
+  width: 14px; height: 11px;
+  border: 1.5px solid currentColor; border-radius: 3px;
+  opacity: 0.5;
+}
+html[data-shell="mobile"] .mx-move-card {
+  margin: 12px 4px 2px;
+  font: 700 15px/1.3 'Inter', system-ui, sans-serif;
+  color: var(--text);
+}
+html[data-shell="mobile"] .mx-move-targets > .mx-move-card:first-child { margin-top: 2px; }
+html[data-shell="mobile"] .mx-move-card-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+html[data-shell="mobile"] .mx-move-card-tag {
+  flex: none; margin-left: auto;
+  padding: 2px 8px; border-radius: 999px;
+  font: 600 11.5px/1.3 'Inter', system-ui, sans-serif;
+  color: var(--muted);
+  background: rgb(127 127 127 / 14%);
+}
+html[data-shell="mobile"] .mx-move-target {
+  position: relative;
+  box-sizing: border-box;
+  width: 100%; min-height: var(--mx-hit);
+  margin: 0; padding: 8px 14px;
+  border: 0; border-radius: 12px;
+  background: transparent;
+  color: var(--text);
+  font: 500 15px/1.3 'Inter', system-ui, sans-serif;
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+html[data-shell="mobile"] .mx-move-target.is-card { font-weight: 600; padding-left: 4px; }
+html[data-shell="mobile"] .mx-move-target:active { background-color: var(--glass-hover); }
+html[data-shell="mobile"] .mx-move-target.is-section { padding-left: 40px; }
+html[data-shell="mobile"] .mx-move-target.is-section::before,
+html[data-shell="mobile"] .mx-move-target.is-section::after {
+  content: ''; position: absolute; left: 21px;
+  opacity: 0.24; pointer-events: none;
+}
+html[data-shell="mobile"] .mx-move-target.is-section::before { top: 0; bottom: 0; border-left: 1.5px solid currentColor; }
+html[data-shell="mobile"] .mx-move-target.is-section:last-child::before,
+html[data-shell="mobile"] .mx-move-target.is-section:has(+ :is(.mx-move-card, .is-card))::before { bottom: 50%; }
+html[data-shell="mobile"] .mx-move-target.is-section::after { top: 50%; width: 10px; border-top: 1.5px solid currentColor; }
+html[data-shell="mobile"] .mx-move-target.is-top { font-style: italic; color: var(--muted); }
+@media (forced-colors: active) {
+  html[data-shell="mobile"] .mx-move-target { outline: 1px solid CanvasText; }
 }

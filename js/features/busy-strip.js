@@ -12,6 +12,11 @@
 // The window follows the clock (once an hour) until the bar is scrolled by
 // hand; it starts again from now whenever the strip is shown again.
 //
+// Where busy times can't show for a signed-in account, the strip says why
+// instead (not connected → Connect · Not now; not enabled on the server →
+// Hide; connected without the busy permission → Reconnect · Hide); a hidden
+// hint stays hidden for that account on this device (google-calendar.js).
+//
 // The host is rebuilt only when the day or the data changes (gcalStateKey);
 // the window survives a rebuild. Once a minute the "now" marker and the
 // next-free line move in place (a CSS variable and Text.data), and the day is
@@ -21,8 +26,10 @@ import { busyDayLayout, pctOfDay } from '../core/gcal-plan.js';
 import { shortClock, prefersHour12 } from '../core/due-time.js';
 import { isLoggedIn } from '../core/auth.js';
 import {
-  getGcalStatus, gcalStateKey, getBusyDay, requestBusyDay, dayBounds, connectGoogleCalendar
+  getGcalStatus, gcalStateKey, getBusyDay, requestBusyDay, dayBounds, connectGoogleCalendar,
+  refreshGcalStatusIfStale, isGcalHintHidden, hideGcalHint
 } from './google-calendar.js';
+import { showToast } from '../utils.js';
 
 const HOUR = 3600000;
 const WINDOW_MS = 8 * HOUR;     // what the bar shows at once
@@ -69,19 +76,70 @@ function reduceMotion() {
   try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { return false; }
 }
 
-// What the strip can show right now: 'off' (hide it) | 'reconnect' | 'loading' | 'failed' | 'ready'
+// What the strip can show right now: 'off' (hide it) | a hint saying why busy
+// times can't show ('connect' | 'unavailable' | 'nobusy', until the account
+// hides it) | 'reconnect' | 'loading' | 'failed' | 'ready'. Signed out (or an
+// expired session) and a status not known yet stay 'off'
 function stripState(dayKey) {
   if (!isLoggedIn()) return 'off';
   const s = getGcalStatus();
-  if (!s || !s.connected || !s.canBusy) return 'off';
+  if (!s) return 'off';
+  const why = s.unavailable ? 'unavailable' : !s.connected ? 'connect' : null;
+  if (why) return isGcalHintHidden(why) ? 'off' : why;
   if (s.needsReconnect) return 'reconnect';
+  if (!s.canBusy) return isGcalHintHidden('nobusy') ? 'off' : 'nobusy';
   const day = getBusyDay(dayKey);
   if (!day) return 'loading';
   return day.failed ? 'failed' : 'ready';
 }
 
-// Ask for the day's busy times when they're missing or stale (cheap to call often)
+// The hints: why there are no busy times, what would bring them, and a way
+// to stop being told (per account; Google Calendar stays in the account
+// menu, More on a phone)
+const HINTS = {
+  connect: {
+    note: 'See when you’re busy today, from Google Calendar. Only start and end times, never what the events are.',
+    action: 'Connect', actionLabel: 'Connect Google Calendar', dismiss: 'Not now'
+  },
+  unavailable: {
+    note: 'Google Calendar isn’t enabled for this account yet, so busy times can’t show here.',
+    dismiss: 'Hide'
+  },
+  nobusy: {
+    note: 'Google Calendar is connected without permission to see busy times. Reconnect and keep that permission ticked.',
+    action: 'Reconnect', actionLabel: 'Reconnect Google Calendar', dismiss: 'Hide'
+  }
+};
+
+function renderHint(host, kind) {
+  const h = HINTS[kind];
+  host.classList.add('is-hint');
+  host.dataset.busyHint = kind;
+  const p = el('p', 'busy-strip-note busy-strip-hint', h.note);
+  const actions = el('div', 'busy-strip-actions');
+  if (h.action) {
+    const go = el('button', 'busy-strip-action', h.action);
+    go.type = 'button';
+    go.setAttribute('aria-label', h.actionLabel);
+    go.addEventListener('click', connectGoogleCalendar);
+    actions.append(go);
+  }
+  const hide = el('button', 'busy-strip-dismiss', h.dismiss);
+  hide.type = 'button';
+  hide.setAttribute('aria-label', kind === 'connect' ? 'Not now: hide this from Today' : 'Hide this from Today');
+  hide.addEventListener('click', () => {
+    hideGcalHint(kind);
+    const phone = document.documentElement.dataset.shell === 'mobile';
+    showToast(`Hidden. Google Calendar is ${phone ? 'under More' : 'in your account menu'} whenever you want it`);
+  });
+  actions.append(hide);
+  host.append(p, actions);
+}
+
+// Ask for the day's busy times when they're missing or stale, and re-read a
+// status that doesn't allow them once it is old (cheap to call often)
 export function ensureBusyDay(dayKey) {
+  refreshGcalStatusIfStale();
   requestBusyDay(dayKey);
 }
 
@@ -98,6 +156,8 @@ export function renderBusyStrip(host, dayKey, { now = Date.now() } = {}) {
   host.textContent = '';
   host.hidden = state === 'off';
   host._busy = null;
+  if (host.classList.contains('is-hint')) host.classList.remove('is-hint');
+  if ('busyHint' in host.dataset) delete host.dataset.busyHint;
   if (state === 'off') { stopTicking(host); unobserve(host); return false; }
 
   host.classList.add('busy-strip');
@@ -106,6 +166,13 @@ export function renderBusyStrip(host, dayKey, { now = Date.now() } = {}) {
   const summary = el('span', 'busy-strip-summary');
   head.append(el('span', 'busy-strip-title', 'Busy times'));
   host.append(head);
+
+  if (HINTS[state]) {
+    renderHint(host, state);
+    stopTicking(host);
+    unobserve(host);
+    return true;
+  }
 
   if (state === 'reconnect') {
     head.append(summary);
@@ -392,10 +459,13 @@ function wireScroller(host, sc) {
   // A mouse drags the day sideways (touch scrolls natively)
   sc.addEventListener('pointerdown', (e) => {
     if (e.pointerType !== 'mouse' || e.button !== 0) return;
+    if (sc._busyDragEnd) sc._busyDragEnd();
     const startX = e.clientX;
     const startLeft = sc.scrollLeft;
     let dragging = false;
     const move = (ev) => {
+      // Released where this gesture didn't hear it: over, never a hover-scroll
+      if ((ev.buttons & 1) === 0) { up(); return; }
       const dx = ev.clientX - startX;
       if (!dragging) {
         if (Math.abs(dx) < 4) return;
@@ -405,15 +475,19 @@ function wireScroller(host, sc) {
       }
       sc.scrollLeft = startLeft - dx;
     };
-    const up = () => {
+    const up = (ev) => {
+      if (ev && ev.pointerId !== e.pointerId) return;
       sc.removeEventListener('pointermove', move);
-      sc.removeEventListener('pointerup', up);
-      sc.removeEventListener('pointercancel', up);
+      window.removeEventListener('pointerup', up, true);
+      window.removeEventListener('pointercancel', up, true);
+      if (sc._busyDragEnd === up) sc._busyDragEnd = null;
       if (dragging) sc.classList.remove('is-dragging');
     };
+    sc._busyDragEnd = up;
     sc.addEventListener('pointermove', move);
-    sc.addEventListener('pointerup', up);
-    sc.addEventListener('pointercancel', up);
+    // On the window: a release off the bar (no capture until a real drag) ends it too
+    window.addEventListener('pointerup', up, true);
+    window.addEventListener('pointercancel', up, true);
   });
 }
 

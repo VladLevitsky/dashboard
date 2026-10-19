@@ -7,10 +7,11 @@
 // colour, empty ones as a dimmed header that still takes a drop.
 //
 // Rows (task-row.js) keep the pill look and the live stopwatch; gestures
-// (task-gestures.js): tap = open (read-first), ◯ = complete (batched Undo),
-// swipe → = complete, swipe ← = reveal ⇣/⇡ and ⋯, hold = lift → drag to a
-// gap / chip / the other segment, or release still = Lift & place (carry
-// mode: glowing gaps, tap where it goes; Back / Esc / Cancel leave it).
+// (task-gestures.js): tap = open (read-first), ◯ or swipe → = "Mark as
+// complete?", then complete (batched Undo), swipe ← = reveal ⇣/⇡ and ⋯,
+// hold = lift → drag to a gap / chip / the other segment, or release still =
+// Lift & place (carry mode: glowing gaps, tap where it goes; Back / Esc /
+// Cancel leave it).
 // Lists are keyed patches (ui.patchList), the screen signature skips renders
 // that would change nothing, and renders never happen under a finger.
 //
@@ -24,11 +25,11 @@ import { dueState } from '../../core/agenda.js';
 import {
   MOBILE_COLOR_ORDER, MOBILE_COLOR_LABELS, SEGMENT_LABELS, lensCounts, defaultLens, lensTasks, rowSignature, normColor,
 } from '../../core/mobile-tasks.js';
-import { createTaskRow, fullColorLabel } from './task-row.js?v=2026-10-mobile-8';
-import { attachGestures, closeAnyReveal } from './task-gestures.js?v=2026-10-mobile-8';
-import { createTaskActions } from './task-actions.js?v=2026-10-mobile-8';
-import { openMoveSheet } from './move-sheet.js?v=2026-10-mobile-8';
-import { openCompleted } from './completed-view.js?v=2026-10-mobile-8';
+import { createTaskRow, fullColorLabel } from './task-row.js?v=2026-10-mobile-9';
+import { attachGestures, closeAnyReveal } from './task-gestures.js?v=2026-10-mobile-9';
+import { createTaskActions } from './task-actions.js?v=2026-10-mobile-9';
+import { openMoveSheet } from './move-sheet.js?v=2026-10-mobile-9';
+import { openCompleted } from './completed-view.js?v=2026-10-mobile-9';
 
 const PRIORITY_RGB = { red: '249 76 100', orange: '255 133 35', yellow: '242 189 24', blue: '61 151 248' };
 const CHECK_DONE = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="5 12.5 10 17 19 7.5"></polyline></svg>';
@@ -626,7 +627,7 @@ export default {
 
     const rowHandlers = {
       open: (id) => actions.openTask(id),
-      complete: (id, slot) => actions.completeWithUndo(id, { slot }),
+      complete: (id, slot) => actions.confirmComplete(id, { slot }),   // asks first (Mark as complete?)
       actions: (id) => actions.openActionsSheet(id),
       toggleGroup: (id) => actions.toggleGroupWithUndo(id),
     };

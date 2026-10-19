@@ -3,7 +3,7 @@
 // image reference classification, and Base64-to-R2 migration.
 
 import { API_BASE } from '../constants.js';
-import { isLoggedIn, getAuthToken } from './auth.js';
+import { isLoggedIn, getAuthToken, getDataOwner } from './auth.js';
 import { collectRichTextFileIds, forEachString, findInlineImages, mapStringsDeep, replaceInlineImage, richTextLabel, imageFileBase } from './rich-text-refs.js';
 // A safe import cycle (offline-copy.js imports getAllReferencedFileIds): neither
 // module uses the other while loading
@@ -391,12 +391,17 @@ export function filenameFromDataUrl(dataUrl, prefix) {
  * images embedded in rich text (which then become <img data-r2-file-id>).
  * Called once after authenticated profile load.
  * Safe, idempotent, non-blocking.
+ * Stops as soon as another account (or none) is signed in: the images are the
+ * account's that started it, and must never go into another account's storage
+ * or dashboard (what is left goes up on its next sign-in)
  */
 export async function migrateBase64ToR2() {
   if (!isLoggedIn()) return;
 
   const model = window.model;
   if (!model) return;
+  const owner = getDataOwner();
+  const sameAccount = () => isLoggedIn() && getDataOwner() === owner;
 
   let migrated = false;
   const migrations = [];
@@ -456,10 +461,12 @@ export async function migrateBase64ToR2() {
 
   // Migrate sequentially for reliability
   for (const m of migrations) {
+    if (!sameAccount()) return;
     try {
       const blob = dataURLtoBlob(m.value);
       const fileName = filenameFromDataUrl(m.value, m.prefix);
       const result = await uploadFile(blob, fileName);
+      if (!sameAccount()) return;
 
       if (result.ok && result.fileId) {
         m.parent[m.field] = { type: 'r2', fileId: result.fileId };
@@ -472,9 +479,11 @@ export async function migrateBase64ToR2() {
   }
 
   for (const [dataUrl, baseName] of inlineImages) {
+    if (!sameAccount()) return;
     try {
       const blob = dataURLtoBlob(dataUrl);
       const result = await uploadFile(blob, filenameFromDataUrl(dataUrl, baseName));
+      if (!sameAccount()) return;
       if (result.ok && result.fileId) {
         cacheFileBlob(result.fileId, blob);
         const toReference = (html) => replaceInlineImage(html, dataUrl, result.fileId);
@@ -489,7 +498,7 @@ export async function migrateBase64ToR2() {
     }
   }
 
-  if (migrated) {
+  if (migrated && sameAccount()) {
     // Save to localStorage
     if (window.saveModel) window.saveModel();
     // Sync to cloud

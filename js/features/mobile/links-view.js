@@ -24,9 +24,10 @@ import { orderCardsForMobile, cardTitle } from '../../core/mobile-common.js';
 import { cardSummary, labelForIcon, fitThumbs, fitParts, linkedRefsSig, localDayKey } from '../../core/mobile-links.js';
 import { getQuickAccessItems, reconcileQuickAccessItems, openQuickLinkModal } from '../quick-access.js';
 import { openItemCreator } from '../item-creator.js';
-import { initCardItems, enhance, openItemSheet, buildCardBody, buildQuickAccess, iconThumb } from './card-items.js?v=2026-10-mobile-8';
-import { initSearch, openSearch } from './search-view.js?v=2026-10-mobile-8';
-import { initFileSheet, installFileOpener, uninstallFileOpener } from './file-sheet.js?v=2026-10-mobile-8';
+import { initCardItems, enhance, openItemSheet, buildCardBody, buildQuickAccess, iconThumb, buildMoveItemsButton } from './card-items.js?v=2026-10-mobile-9';
+import { initSearch, openSearch } from './search-view.js?v=2026-10-mobile-9';
+import { initFileSheet, installFileOpener, uninstallFileOpener } from './file-sheet.js?v=2026-10-mobile-9';
+import { enhanceDateInput, removeDateField } from './date-field.js?v=2026-10-mobile-9';
 
 const PLUS_SVG = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true" focusable="false"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>';
 const CHEVRON_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="6 9 12 15 18 9"/></svg>';
@@ -151,6 +152,7 @@ function paintCard(section) {
   body.className = 'mx-card-body';
   body.id = entry.bodyId;
   const keys = buildCardBody(body, id, model);
+  if (keys.length) body.appendChild(buildMoveItemsButton(id));
   if (entry.body) entry.body.replaceWith(body); else entry.el.appendChild(body);
   // A new item (item creator, another device) glows once
   if (entry.keys) {
@@ -335,6 +337,42 @@ function addItem(sectionId) {
   openItemCreator({ sectionId });
   creatorOpenedAt = performance.now();
   guardCreatorBackdrop();
+  enhanceCreatorDate();
+  guardCreatorAdd();
+}
+
+// The reminder's date: typed on a phone (date-field.js; a reminder needs a
+// date, so an emptied box keeps it). The creator's window is built once and
+// kept, so this runs once; each open's reset repaints it
+const creatorDate = () => document.querySelector('.ic-overlay input[data-f="date"]');
+function enhanceCreatorDate() {
+  const input = creatorDate();
+  if (input && !input._mxDf) enhanceDateInput(input, { label: 'Date', showLabel: false, clearable: false, sheetTitle: 'Reminder date' });
+}
+
+// Add tapped right after the reminder date refused what was typed (that tap's
+// blur did it: the date went back to what it was): this Add is refused with
+// the window's own shake, so the line under the field is seen; the next Add
+// takes the date it kept. (An Enter that couldn't commit never reaches the
+// creator's Enter-to-Add: date-field.js)
+function guardCreatorAdd() {
+  const overlay = document.querySelector('.ic-overlay');
+  if (!overlay || overlay._mxAddGuard) return;
+  overlay._mxAddGuard = true;
+  overlay.addEventListener('click', (e) => {
+    if (!(e.target && e.target.closest && e.target.closest('.ic-save'))) return;
+    const input = creatorDate();
+    const field = input && input._mxDf;
+    if (!field || !field.el.getClientRects().length || !field.refuseSave()) return;
+    e.stopImmediatePropagation();
+    e.preventDefault();
+    const dialog = overlay.querySelector('.ic-dialog');
+    if (dialog) {
+      dialog.classList.remove('ic-shake');
+      void dialog.offsetWidth;                     // restart the shake
+      dialog.classList.add('ic-shake');
+    }
+  }, true);
 }
 
 // The creator is a bottom sheet: its backdrop now covers the ＋ that opened
@@ -485,6 +523,7 @@ export default {
 
     api.on('mount', installFileOpener);
     api.on('unmount', uninstallFileOpener);
+    api.on('unmount', () => removeDateField(creatorDate()));
     if (api.isMounted && api.isMounted()) installFileOpener();
   },
 };

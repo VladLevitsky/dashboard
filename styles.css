@@ -2588,7 +2588,7 @@ body[data-style="glass"]:not([data-theme="dark"]) .red {
   border: 1px solid #e5e7eb;
   border-radius: 8px;
   box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.1);
-  max-height: 200px;
+  max-height: 260px;
   overflow-y: auto;
   z-index: 10;
 }
@@ -2632,29 +2632,90 @@ body[data-style="glass"]:not([data-theme="dark"]) .red {
   background: #334155;
 }
 
-/* Move card header (card name when it has subtitles) */
+/* Move list: a card glyph marks every card; a card with sections is a header and its
+   sections sit indented beneath it on a tree rail ("This card" = the item's own card) */
+.move-card-row,
 .move-card-header {
-  padding: 8px 12px 4px;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--muted);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.move-card-row { font-weight: 600; }
+.move-card-row::before,
+.move-card-header::before {
+  content: '';
+  flex: none;
+  width: 12px;
+  height: 10px;
+  border: 1.5px solid currentColor;
+  border-radius: 3px;
+  opacity: 0.5;
+}
+.move-card-header {
+  padding: 10px 12px 4px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
   border-top: 1px solid #e5e7eb;
   margin-top: 4px;
 }
-.move-card-header:first-child {
-  border-top: none;
-  margin-top: 0;
-}
+.move-card-list > :first-child { border-top: none; margin-top: 0; }
 [data-theme="dark"] .move-card-header {
   border-color: #475569;
 }
+.move-card-header-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.move-card-header-tag {
+  flex: none;
+  margin-left: auto;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--muted);
+  background: rgba(127, 127, 127, 0.14);
+}
 
-/* Subtitle options (indented under card header) */
+/* Section options (indented under their card header, on a tree rail) */
 .move-subtitle-option {
-  padding-left: 24px !important;
+  position: relative;
+  padding-left: 34px !important;
   font-size: 13px;
+}
+.move-subtitle-option::before,
+.move-subtitle-option::after {
+  content: '';
+  position: absolute;
+  left: 18px;
+  opacity: 0.22;
+  pointer-events: none;
+}
+.move-subtitle-option::before {
+  top: 0;
+  bottom: 0;
+  border-left: 1.5px solid currentColor;
+}
+.move-subtitle-option:last-child::before,
+.move-subtitle-option:has(+ .move-card-header, + .move-card-row)::before {
+  bottom: 50%;
+}
+.move-subtitle-option::after {
+  top: 50%;
+  width: 8px;
+  border-top: 1.5px solid currentColor;
+}
+.move-subtitle-option.is-top {
+  font-style: italic;
+  color: var(--muted);
+}
+.move-card-empty {
+  padding: 10px 12px;
+  font-size: 13px;
+  color: var(--muted);
 }
 
 /* Emoji picker container in edit popover */
@@ -4016,6 +4077,17 @@ section.card[id^="new-card-"].card-size-full {
 [data-theme="dark"] .appearance-backup-btn:hover {
   background: #475569;
   border-color: #64748b;
+}
+/* Add back from a backup (only what the dashboard lacks), under Download / Upload */
+.appearance-addback-btn {
+  justify-content: center;
+  margin-top: 10px;
+}
+.appearance-addback-note {
+  margin: 8px 2px 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--muted);
 }
 
 /* Task Settings modal (Settings → Tasks). Reuses the appearance modal
@@ -9702,12 +9774,27 @@ body[data-theme="dark"][data-style="glass"][data-glass-theme="sunset"] .tasks-su
   background: #1e293b;
   color-scheme: dark;
 }
-.task-editor-due-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.task-editor-due-row > input[type="date"] { flex: 1 1 auto; min-width: 0; }
-.task-editor-time-wrap { flex: 0 0 auto; display: flex; align-items: center; gap: 4px; }
-.task-editor-time-wrap > input[type="time"] { width: 132px; }
+/* Date · start – end ×: the time pair wraps under the date when the dialog is narrow */
+.task-editor-due-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
+.task-editor-due-row > input[type="date"] { flex: 1 1 150px; min-width: 0; }
+.task-editor-time-wrap { flex: 0 1 auto; display: flex; align-items: center; gap: 4px; min-width: 0; max-width: 100%; }
+/* 132px at the desktop's 14px; the phone frame's 16px fields grow with it so "PM" isn't cut
+   (and give way on a line narrower than both) */
+.task-editor-time-wrap input[type="time"] { flex: 0 1 9.45em; width: 9.45em; min-width: 0; }
+.task-editor-end-wrap { display: flex; align-items: center; gap: 4px; flex: 0 1 auto; min-width: 0; }
+.task-editor-end-wrap[hidden] { display: none; }
+.task-editor-time-sep { color: var(--muted); padding: 0 1px; user-select: none; }
 /* No time yet: the empty field reads quieter */
-.task-editor-time-wrap > input[type="time"].is-empty:not(:focus) { color: var(--muted); }
+.task-editor-time-wrap input[type="time"].is-empty:not(:focus) { color: var(--muted); }
+/* An end that isn't after the start (dropped on save) */
+body .task-editor-field .task-editor-time-wrap input[type="time"][aria-invalid="true"],
+body[data-style="glass"][data-theme] .task-editor-field .task-editor-time-wrap input[type="time"][aria-invalid="true"] {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 18%, transparent);
+}
+@media (forced-colors: active) {
+  .task-editor-field .task-editor-time-wrap input[type="time"][aria-invalid="true"] { border: 2px solid Mark; }
+}
 .task-editor-time-clear {
   display: grid; place-items: center;
   width: 24px; height: 24px; padding: 0;
@@ -16062,6 +16149,23 @@ body:has(> .today-modal:not([hidden])) .wrench-btn { visibility: hidden; }
   border: 1px solid var(--brand); border-radius: 8px;
   background: transparent; color: var(--brand);
   font: inherit; font-size: 12.5px; font-weight: 500; cursor: pointer;
+}
+.busy-strip-action:focus-visible, .busy-strip-dismiss:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+/* A hint instead of the bar: why busy times can't show (not connected, not
+   enabled for the account, no busy permission), its action and a quiet Hide */
+.busy-strip.is-hint { gap: 8px; }
+.busy-strip-hint { max-width: 60ch; font-size: 12.5px; }
+.busy-strip-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.busy-strip-actions .busy-strip-action { align-self: auto; }
+.busy-strip-dismiss {
+  padding: 5px 10px;
+  border: 1px solid transparent; border-radius: 8px;
+  background: transparent; color: var(--muted);
+  font: inherit; font-size: 12.5px; font-weight: 500; cursor: pointer;
+}
+.busy-strip-dismiss:hover { color: var(--text); border-color: rgba(148, 163, 184, 0.4); }
+@media (forced-colors: active) {
+  .busy-strip-action, .busy-strip-dismiss { border-color: ButtonText; }
 }
 [data-theme="dark"] .busy-strip { --busy-rgb: 129 140 248; border-color: rgba(148, 163, 184, 0.2); background: rgba(148, 163, 184, 0.05); }
 [data-theme="dark"] .busy-strip-track { background: rgba(148, 163, 184, 0.14); }

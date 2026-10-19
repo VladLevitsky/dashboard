@@ -29,7 +29,7 @@
 import { model } from '../../state.js';
 import { saveModel } from '../../core/storage.js';
 import { TASK_COLOR_LABELS } from '../../constants.js';
-import { QUICK_CAPTURE_HELP } from '../../core/quick-capture-parse.js';
+import { QUICK_CAPTURE_HELP, endAfter } from '../../core/quick-capture-parse.js';
 import { meetingOccursOn } from '../../core/agenda.js';
 import { firstLineTitle, shortDay } from '../../core/mobile-common.js';
 import * as C from '../../core/mobile-compose.js';
@@ -39,9 +39,11 @@ import * as projectsApi from '../projects.js';
 import * as timeApi from '../time-tracking.js';
 import * as categoriesApi from '../task-categories.js';
 import * as notesApi from '../edit-mode.js';
-import { getUsername } from '../../core/auth.js';
+import { getDataOwner } from '../../core/auth.js';
 import { isGcalTasksReady, getGcalDefault } from '../google-calendar.js';
-import { dueTimeOf, formatTimeKey, prefersHour12, timeKeyFromInput } from '../../core/due-time.js';
+import { dueTimeOf, dueEndTimeOf, formatTimeKey, prefersHour12, timeKeyFromInput, shiftTimeKey } from '../../core/due-time.js';
+import { openTimePicker, closeTimePicker } from './time-picker.js?v=2026-10-mobile-9';
+import { openDatePicker, closeDatePicker } from './date-field.js?v=2026-10-mobile-9';
 
 const CONFIRM_MS = 7000;
 const DRAFT_DEBOUNCE = 300;
@@ -269,10 +271,10 @@ function ensureDom() {
 
   els.dateInput = el('input', 'mx-compose-date-input', { type: 'date', tabindex: '-1', 'aria-hidden': 'true' });
   els.dateInput.addEventListener('change', onDatePicked);
-  els.timeInput = el('input', 'mx-compose-date-input mx-compose-time-input', { type: 'time', tabindex: '-1', 'aria-hidden': 'true' });
-  els.timeInput.addEventListener('change', onTimePicked);
+  // (times use the shell's own picker, time-picker.js: Chrome's native one
+  // can't be typed into and its header can't be read on the app's theme)
 
-  els.root.append(els.grab, els.kinds, els.today, els.form, els.body, els.line, els.trayHost, els.panel, els.dateInput, els.timeInput);
+  els.root.append(els.grab, els.kinds, els.today, els.form, els.body, els.line, els.trayHost, els.panel, els.dateInput);
   host.append(els.scrim, els.root);
 
   wireDom();
@@ -284,7 +286,7 @@ function wireDom() {
   // the text fields takes focus on press; actions run on click
   const keep = (e) => {
     const t = e.target;
-    if (t === els.input || t === els.body || t === els.dateInput || t === els.timeInput) return;
+    if (t === els.input || t === els.body || t === els.dateInput) return;
     e.preventDefault();
   };
   els.root.addEventListener('pointerdown', keep);
@@ -415,8 +417,8 @@ function open(opts = {}) {
   }
   // Signed out or in as someone else since: that account's text stays in its
   // own draft; the fields show this account's
-  if ((getUsername() || '') !== fieldsOwner && !state.open) {
-    fieldsOwner = getUsername() || '';
+  if ((getDataOwner() || '') !== fieldsOwner && !state.open) {
+    fieldsOwner = getDataOwner() || '';
     els.input.value = '';
     els.body.value = '';
     state.targetId = null;
@@ -639,7 +641,7 @@ function rewrite(field, value) {
   const mode = state.targetId ? 'update' : 'create';
   const target = getTask(state.targetId);
   const defaults = mode === 'update' && target
-    ? { color: target.color, pinned: !!target.pinned, gcal: target.gcal === true, time: dueTimeOf(target) }
+    ? { color: target.color, pinned: !!target.pinned, gcal: target.gcal === true, time: dueTimeOf(target), end: dueEndTimeOf(target) }
     : { color: state.defaults.color, pinned: state.defaults.pinned, gcal: gcalDefault() };
   const r = C.setTokenField(els.input.value, field, value, { now: new Date(), categories: categories(), mode, defaults, hour12: prefersHour12() });
   // End on a space, so the next typed word never glues onto the token ("!orangeCall")
@@ -718,16 +720,18 @@ function paintTray(plan) {
     const lineDate = eff.dueDate || (eff.dueTime && !ownDate ? eff.impliedDate : null);
     const due = lineDate || ownDate;
     const time = due ? (eff.dueTime || (target && !eff.clearTime && !eff.clearDate ? dueTimeOf(target) : null)) : null;
-    const lineSets = !!lineDate || src.time === 'line';
+    const end = time ? effectiveEnd() : null;
+    const lineSets = !!lineDate || src.time === 'line' || src.end === 'line';
     setText(r.date.querySelector('.mx-tray-chip-label'), eff.clearDate && plan.mode === 'update' ? 'No date' : (due ? C.trayDateLabel(due, new Date()) : 'Date'));
-    setText(r.dateTime, time ? formatTimeKey(time, { compact: true }) : '');
+    setText(r.dateTime, time ? C.trayTimeLabel(time, end) : '');
     setHidden(r.dateTime, !time);
     setClass(r.date, 'has-time', !!time);
     setClass(r.date, 'is-set', lineSets || (eff.clearDate && plan.mode === 'update'));
     setClass(r.date, 'is-default', !lineSets && !!due);
     setClass(r.date, 'has-date', !!due);          // narrow phones drop the icon then
     setAttr(r.date, 'aria-pressed', String(state.panel === 'date'));
-    setAttr(r.date, 'aria-label', due ? `Due ${C.describeDate(due, new Date())}${time ? ` at ${formatTimeKey(time)}` : ''}. Change the date or time` : 'Pick a due date');
+    const at = !time ? '' : end ? `, ${formatTimeKey(time)} to ${formatTimeKey(end)}` : ` at ${formatTimeKey(time)}`;
+    setAttr(r.date, 'aria-label', due ? `Due ${C.describeDate(due, new Date())}${at}. Change the date or time` : 'Pick a due date');
     setAttr(r.timer, 'aria-pressed', String(!!eff.timer));
     setClass(r.timer, 'is-set', !!eff.timer);
     const gcalReady = isGcalTasksReady();
@@ -830,7 +834,7 @@ function panelSignature(name) {
     return `picker|${state.picker.kind}|${state.picker.items.map(i => i.id).join(',')}`;
   }
   const eff = state.plan ? state.plan.effective : {};
-  return `${name}|${eff.dueDate || ''}|${eff.clearDate ? 1 : 0}|${eff.dueTime || ''}|${eff.clearTime ? 1 : 0}|${state.targetId || ''}|${eff.category ? eff.category.id : ''}|${state.noteCard || ''}|${todayKey()}`;
+  return `${name}|${eff.dueDate || ''}|${eff.clearDate ? 1 : 0}|${eff.dueTime || ''}|${eff.clearTime ? 1 : 0}|${effectiveEnd() || ''}|${eff.clearEnd ? 1 : 0}|${state.targetId || ''}|${eff.category ? eff.category.id : ''}|${state.noteCard || ''}|${todayKey()}`;
 }
 
 // The time in effect: the line's, else (changing a task) the task's own
@@ -839,6 +843,14 @@ function effectiveTime() {
   if (eff.dueTime) return eff.dueTime;
   const target = getTask(state.targetId);
   return target && !eff.clearTime && !eff.clearDate ? dueTimeOf(target) : null;
+}
+
+// The end in effect: the line's, else (changing a task) the task's own, moved
+// with a new start the way updateTask will move it
+function effectiveEnd() {
+  const plan = state.plan;
+  if (!plan || state.kind !== 'task' || !effectiveTime()) return null;
+  return endAfter(plan.due, plan.mode === 'update' ? getTask(state.targetId) : null) || null;
 }
 
 function datePanel() {
@@ -862,6 +874,20 @@ function datePanel() {
     onClick: pickTaskTime,
   }));
   if (time) {
+    // When it ends (Google Calendar blocks start to end; without one, 30 minutes)
+    const end = effectiveEnd();
+    row.appendChild(panelChip(end ? formatTimeKey(end, { compact: true }) : 'Ends…', {
+      cls: 'mx-panel-chip--pick mx-panel-chip--end',
+      sub: end ? 'ends' : '',
+      title: end ? 'Change when it ends' : 'Add when it ends',
+      onClick: pickTaskEnd,
+    }));
+    if (end) {
+      row.appendChild(panelChip('No end', {
+        cls: 'mx-panel-chip--quiet',
+        onClick: () => { state.panel = null; rewrite('end', null); },
+      }));
+    }
     row.appendChild(panelChip('No time', {
       cls: 'mx-panel-chip--quiet',
       onClick: () => { state.panel = null; rewrite('time', null); },
@@ -1019,31 +1045,87 @@ function clearTarget() {
   scheduleDraft();
 }
 
+// The native calendar opens on the line's own date only: with none it opens
+// on today with an empty value, so confirming today is a change (and fires).
+// The line takes typed dates itself (fri, 21/12, Dec 21)
 function pickTaskDate() {
   const eff = state.plan ? state.plan.effective : {};
-  els.dateInput.dataset.for = 'task';
-  els.dateInput.value = eff.dueDate || todayKey();
+  els.dateInput.value = eff.dueDate || '';
   showNativePicker();
 }
 
+// The meeting line is its title: the date is picked or typed in the date
+// sheet (date-field.js, over the composer). Set on the date it shows counts
+// as picked; the focus (and the keyboard) goes back to the line
 function pickMeetingDate() {
-  els.dateInput.dataset.for = 'meeting';
-  els.dateInput.value = state.meetingDate || todayKey();
-  showNativePicker();
+  openDatePicker({
+    value: state.meetingDate || todayKey(),
+    title: 'Meeting date',
+    returnFocus: els.input,
+    onPick: (v) => {
+      state.meetingDate = v;
+      state.meetingPicked = true;
+      paint();
+      focusInput();
+    },
+  });
 }
 
-// The time picker opens on the time in effect, else on the next whole hour
+// The time picker (time-picker.js, over the composer) opens on the time in
+// effect, else on the next whole hour. Set rewrites the line and gives the
+// focus (and the keyboard) back to it; Cancel / Back just give it back
 function pickTaskTime() {
+  const time = effectiveTime();
   const next = new Date(Date.now() + 3600000);
-  els.timeInput.value = effectiveTime() || `${String(next.getHours()).padStart(2, '0')}:00`;
-  showNativePicker(els.timeInput);
+  openTimePicker({
+    value: time || `${String(next.getHours()).padStart(2, '0')}:00`,
+    mode: 'start',
+    title: time ? 'Change the time' : 'Add a time',
+    hour12: prefersHour12(),
+    returnFocus: els.input,
+    onPick: onTimePicked,
+    onClear: time ? () => { state.panel = null; rewrite('time', null); } : null,
+  });
 }
 
-function onTimePicked() {
-  const v = timeKeyFromInput(els.timeInput.value);
+function onTimePicked(value) {
+  const v = timeKeyFromInput(value);
   if (!v) return;
+  // Set on the time already in effect leaves the line alone (setTokenField's
+  // same value would remove the time and its range; Clear / No time do that)
+  if (v === effectiveTime()) { closePanel(); return; }
   state.panel = null;
   rewrite('time', v);
+}
+
+// The end picker opens on the end in effect, else an hour after the start
+// (times at or before the start are off in it)
+function pickTaskEnd() {
+  const start = effectiveTime();
+  if (!start) return;
+  const end = effectiveEnd();
+  openTimePicker({
+    value: end || shiftTimeKey(start, 60) || '23:59',
+    mode: 'end',
+    start,
+    title: end ? 'Change when it ends' : 'When it ends',
+    hour12: prefersHour12(),
+    returnFocus: els.input,
+    onPick: onEndPicked,
+    onClear: end ? () => { state.panel = null; rewrite('end', null); } : null,
+  });
+}
+
+function onEndPicked(value) {
+  const v = timeKeyFromInput(value);
+  const start = effectiveTime();
+  if (!v || !start) return;
+  if (v <= start) {
+    showMessage(`It has to end after it starts (${formatTimeKey(start)})`);
+    return;
+  }
+  state.panel = null;
+  rewrite('end', v);
 }
 
 // Inside the tap (showPicker needs the user activation)
@@ -1057,13 +1139,10 @@ function showNativePicker(input = els.dateInput) {
 function onDatePicked() {
   const v = els.dateInput.value;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return;
-  if (els.dateInput.dataset.for === 'meeting') {
-    state.meetingDate = v;
-    state.meetingPicked = true;
-    paint();
-    focusInput();
-    return;
-  }
+  // The date already in effect leaves the line alone (setTokenField's same
+  // value would remove it; No date does that)
+  const eff = state.plan ? state.plan.effective : {};
+  if (v === eff.dueDate) { closePanel(); return; }
   state.panel = null;
   rewrite('date', v);
 }
@@ -1210,8 +1289,10 @@ function paintLine(plan) {
     msg = kindLine();
   }
   // The inline confirmation stays for its 7 s unless the line has something to say
-  // (an @ target's change preview wins: it says what Add will do to that task)
-  if (state.confirm && Date.now() < state.confirm.until && !state.targetId && (msg.level === 'preview' || msg.level === 'hint')) {
+  // (an @ target's change preview wins: it says what Add will do to that task; so does
+  // a warning just shown, like a line warning)
+  const loudMessage = !!state.message && Date.now() < state.message.until && (state.message.level === 'warning' || state.message.level === 'error');
+  if (state.confirm && Date.now() < state.confirm.until && !state.targetId && !loudMessage && (msg.level === 'preview' || msg.level === 'hint')) {
     writeLine(state.confirm.text, 'done', state.confirm.actions);
     return;
   }
@@ -1666,7 +1747,7 @@ export default {
   init(shellApi) {
     api = shellApi;
     store = api.store('compose', { perAccount: true });
-    fieldsOwner = getUsername() || '';
+    fieldsOwner = getDataOwner() || '';
     ensureDom();
     restoreDraft();
     if (els.root) applyKind(state.kind);
@@ -1689,7 +1770,7 @@ export default {
       back: () => close({ keepDraft: true, refocus: true }),
     });
     api.on('hide', () => { if (state.open || els.input?.value || els.body?.value) persistDraft(); });
-    api.on('unmount', () => { close({ keepDraft: true }); });
+    api.on('unmount', () => { closeTimePicker({ immediate: true }); closeDatePicker({ immediate: true }); close({ keepDraft: true }); });
     api.on('day', () => {
       if (!state.meetingPicked) state.meetingDate = todayKey();
       if (state.open) paint();

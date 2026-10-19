@@ -19,7 +19,8 @@ export function isCalendarTask(task) {
 }
 
 // Everything the calendar shows for the flagged tasks (active and completed):
-// a due time (and the zone it was set in) makes a timed event.
+// a due time (and the zone it was set in) makes a timed event, ending at its
+// end time when it has one after the start (else 30 minutes later).
 // Two models with the same signature need no calendar sync.
 export function gcalSignature(data) {
   const parts = [];
@@ -28,7 +29,10 @@ export function gcalSignature(data) {
     for (const t of list) {
       if (!isCalendarTask(t)) continue;
       const time = typeof t.dueTime === 'string' && TIME_KEY_RE.test(t.dueTime) ? t.dueTime : '';
-      parts.push([t.id, t.title || '', t.dueDate, t.color || '', done ? 1 : 0, time, time ? t.dueTz || '' : ''].join('\u0001'));
+      const end = time && typeof t.dueEndTime === 'string' && TIME_KEY_RE.test(t.dueEndTime) && t.dueEndTime > time ? t.dueEndTime : '';
+      const row = [t.id, t.title || '', t.dueDate, t.color || '', done ? 1 : 0, time, time ? t.dueTz || '' : ''];
+      if (end) row.push(end);      // only then, so a task without an end keeps the signature it had
+      parts.push(row.join('\u0001'));
     }
   };
   add(data && data.tasks, false);

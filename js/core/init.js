@@ -1,10 +1,10 @@
 // Personal Dashboard - Initialization Module
 // Handles application startup, event listeners, and UI wiring
 
-import { model, editState, currentData, currentSections } from '../state.js';
+import { model, editState, currentData, currentSections, resetModel } from '../state.js';
 import { $, $$, showToast, generateKey, escapeAttr } from '../utils.js';
 import { PLACEHOLDER_URL, ANIMATION_DELAY_MS, CARD_HIDE_DELAY_MS, AUTH_TOKEN_KEY, AUTH_USERNAME_KEY } from '../constants.js';
-import { saveModel, restoreModel, exportBackupFile, deepMergeModel, cleanupOldBackups } from './storage.js';
+import { saveModel, restoreModel, exportBackupFile, deepMergeModel, cleanupOldBackups, storedModelChangedElsewhere, setDashboardRenderer, rerenderDashboard, applyStoredCopyWhenFree } from './storage.js';
 import { setImageFromRef, classifyImageRef, uploadFile } from './file-service.js';
 import { isLoggedIn, readGoogleSigninReturn, getAuthToken, getUsername } from './auth.js';
 import { htmlToPlainText } from './markdown.js';
@@ -60,7 +60,8 @@ import {
   closeTasksSummaryModal,
   openAddTaskModal,
   openIdeasModal,
-  taskEditorHasChanges
+  taskEditorHasChanges,
+  refreshTaskViews
 } from '../features/tasks.js';
 import {
   openMeetingsModal
@@ -79,7 +80,7 @@ import {
 import { ensureSectionPlusButtons } from '../features/cards.js';
 import { initStickyNotes } from '../features/sticky-notes.js';
 import { initAuthOnStartup, postRestoreAuthSync, resumeGoogleSignin } from '../features/auth-ui.js';
-import { immediateCloudSave } from '../core/sync.js';
+import { immediateCloudSave, cloudSave, addApplyBlocker, isApplyBlocked, getActiveStorageKey, sameStoredContent, refreshStoredMeta, noteAdoptedCopy } from '../core/sync.js';
 
 // Module state
 
@@ -738,12 +739,14 @@ export { clearSearch };
 
 // Back onto this page from the back/forward cache (e.g. the second Back after a
 // trip to Google lands on the page that started it). Signed in, out or as
-// someone else meanwhile (the page that came back from Google did it): this
-// copy is stale, so it reloads, or offers to while it holds unsaved edits.
-// Same account: Calendar's status is read again (the Google sign-in panel
-// refreshes itself, auth-ui.js); a changed saved dashboard is picked up by the
-// phone's storage listener. Every load re-stamps the saved copy (_sync), so
-// the saved copy itself is no signal
+// someone else meanwhile (the page that came back from Google did it), or the
+// same dashboard changed by another page meanwhile (a task added on the page
+// that came back): this page's model is stale and its next save would write
+// over the newer copy, so it reloads, or offers to while it holds unsaved
+// edits. The saved copy is compared without its device stamp (_sync): every
+// load re-stamps it, so a page that only opened the dashboard changes nothing
+// (storage.js storedModelChangedElsewhere). Otherwise Calendar's status is read
+// again (the Google sign-in panel refreshes itself, auth-ui.js)
 function refreshAfterRestore() {
   window.addEventListener('pageshow', (e) => {
     if (!e.persisted) return;
@@ -753,9 +756,11 @@ function refreshAfterRestore() {
       token = localStorage.getItem(AUTH_TOKEN_KEY) || null;
       user = localStorage.getItem(AUTH_USERNAME_KEY) || null;
     } catch (err) { return; }
-    if (token !== (getAuthToken() || null) || user !== (getUsername() || null)) {
+    const signedElsewhere = token !== (getAuthToken() || null) || user !== (getUsername() || null);
+    if (signedElsewhere || storedModelChangedElsewhere()) {
       if (editState.enabled || taskEditorHasChanges() || isNotepadDirty()) {
-        showActionToast('Signed in or out in another window', [{ label: 'Reload', run: () => location.reload() }]);
+        const what = signedElsewhere ? 'Signed in or out in another window' : 'This dashboard changed in another window';
+        showActionToast(what, [{ label: 'Reload', run: () => location.reload() }]);
       } else {
         location.reload();
       }
@@ -765,7 +770,80 @@ function refreshAfterRestore() {
   });
 }
 
+// --- Cloud sync: what a merge waits for, and how it repaints ---
+// A sync that would change the dashboard on screen (another device's changes
+// merged in) waits while one of these is open: each holds its own copy of what
+// it edits (a task's subtasks, a note, the category list) and writes it back
+// whole on save, which would undo the merged changes and read as deleting them
+// (sync.js isApplyBlocked; edit mode and a dashboard load always block). The
+// same modals are the writer frames on a phone; the shell adds its gestures and
+// the composer (sync-guard.js)
+const SYNC_EDITORS = ['task-editor-modal', 'subtask-desc-modal', 'projects-modal', 'ideas-modal', 'meetings-modal',
+  'notepad-popover', 'note-viewer-modal', 'task-settings-modal'];
+
+function editorOpenForSync() {
+  for (const id of SYNC_EDITORS) {
+    const el = document.getElementById(id);
+    if (el && !el.hidden && el.isConnected) return true;
+  }
+  const creator = document.querySelector('.ic-overlay');
+  return !!(creator && !creator.hidden) || document.documentElement.classList.contains('sep-placing-active');
+}
+
+// Back on this computer after a while (another tab or window, the laptop asleep),
+// or its network back: one quiet sync, so an open page picks up what other
+// devices changed instead of sitting on an old copy. Phones: the shell's sync
+// guard does this (resume)
+const FRESHEN_AFTER_MS = 60000;
+let lastFreshen = 0;
+
+async function freshenFromCloud(reason) {
+  if (!isLoggedIn() || document.documentElement.dataset.mxSync === 'phone') return;
+  if (Date.now() - lastFreshen < 5000) return;
+  lastFreshen = Date.now();
+  const r = await cloudSave(null, { quiet: true, reason });
+  if (r && r.ok && r.applied) showToast('Updated from your other device');
+}
+
+function wireSyncFreshness() {
+  let hiddenAt = 0;
+  let blurredAt = 0;
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') { hiddenAt = Date.now(); return; }
+    const away = hiddenAt ? Date.now() - hiddenAt : 0;
+    hiddenAt = 0;
+    if (away >= FRESHEN_AFTER_MS) freshenFromCloud('visible');
+  });
+  window.addEventListener('blur', () => { blurredAt = Date.now(); });
+  window.addEventListener('focus', () => {
+    const away = blurredAt ? Date.now() - blurredAt : 0;
+    blurredAt = 0;
+    if (away >= FRESHEN_AFTER_MS) freshenFromCloud('focus');
+  });
+  // When coming back online: the same merge (pending changes go up, other devices' come in)
+  window.addEventListener('online', () => { freshenFromCloud('online'); });
+  // Another tab of this browser saved the dashboard on screen: this page shows its copy
+  // in place (while an editor or edit mode holds this page's own: once it closes, and its
+  // saves meanwhile merge into the stored copy, storage.js saveModel), so this page's next
+  // save doesn't write its older model over it. Only the meta fields changed (that tab's
+  // sync moved the base, or cleared a done import): this page's record of them follows
+  // (sync.js refreshStoredMeta), so its next save never brings back an old base or a
+  // replace. Phones: the shell's sync guard
+  window.addEventListener('storage', (e) => {
+    if (document.documentElement.dataset.mxSync === 'phone') return;
+    if (e.storageArea !== localStorage || !e.newValue || e.key !== getActiveStorageKey()) return;
+    if (e.oldValue && sameStoredContent(e.oldValue, e.newValue)) { refreshStoredMeta(e.key, e.newValue, e.oldValue); return; }
+    if (isApplyBlocked()) { applyStoredCopyWhenFree(); return; }
+    noteAdoptedCopy();
+    resetModel();
+    restoreModel().then(() => rerenderDashboard());
+  });
+}
+
 export async function init() {
+  addApplyBlocker(editorOpenForSync);
+  setDashboardRenderer(() => refreshTaskViews());
+  wireSyncFreshness();
   refreshAfterRestore();
   // Back from Google's consent page: read and drop ?gcal=… (Calendar) and
   // #google-signin=… (sign-in) before anything (the phone shell) uses history
@@ -1236,6 +1314,7 @@ export function wireUI() {
     if (editState.working) {
       // Deep merge the working copy into the model to preserve all nested structures
       deepMergeModel(model, editState.working);
+      if (window.clearEditNoteMoves) window.clearEditNoteMoves();
       saveModel();
       // Also create a timestamped backup file for longevity
       try { exportBackupFile(); } catch {}
@@ -1500,13 +1579,8 @@ export function wireUI() {
   setupCardCollapseExpand();
 }
 
-// When coming back online, sync any pending changes
-window.addEventListener('online', () => {
-  // On phones the shell's sync guard pushes quietly instead (no toast per reconnect)
-  if (isLoggedIn() && document.documentElement.dataset.mxSync !== 'phone') {
-    immediateCloudSave();
-  }
-});
+// Coming back online: wireSyncFreshness (init) runs one quiet merge (phones: the
+// shell's sync guard). It never uploads this page's copy as it is
 
 // Run initialization when DOM is ready
 document.addEventListener('DOMContentLoaded', init);

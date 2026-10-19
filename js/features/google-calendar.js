@@ -6,7 +6,8 @@
 // - Tasks flagged `gcal: true` with a due date are mirrored into the app's own
 //   "Dashboard tasks" calendar. The Worker reads them from the CLOUD profile, so
 //   a sync runs after every successful upload ('cloud:saved', sync.js) and once
-//   after startup. On a computer a flagged-task change uploads after ~3 s
+//   after startup; one that fails or stops early is tried again a few times
+//   (planSyncRetry). On a computer a flagged-task change uploads after ~3 s
 //   (phones already push 2.5 s after every save, sync-guard.js).
 // - Busy times come from Google free/busy: start/end only, kept in memory.
 // - Status is cached per account in localStorage so the UI shows at once.
@@ -21,12 +22,16 @@ import { fromDateKey } from '../core/quick-capture-parse.js';
 
 const STATUS_KEY = 'dashboard_gcal_status';
 const DEFAULT_KEY = 'dashboard_gcal_default';
+const HINT_KEY = 'dashboard_gcal_hint';   // the busy-strip hint this account hid on this device
+const STATUS_TTL_MS = 5 * 60 * 1000;      // Today re-reads a status that doesn't allow busy times after this
 const BUSY_TTL_MS = 5 * 60 * 1000;
 const BUSY_BACKOFF_MS = 60 * 1000;
 const UPLOAD_DELAY_MS = 3000;
 
 let status = null;        // last known /gcal/status for statusUser
 let statusUser = null;
+let statusAt = 0;         // when statusUser's status was last asked for (0 = only the cached copy so far)
+let hint = null;          // the busy-strip hint statusUser hid: 'connect' | 'unavailable' | 'nobusy'
 let pendingReturn = null; // { ok, reason } after coming back from Google
 let syncing = null;
 let syncAgain = false;
@@ -34,6 +39,9 @@ let lastSyncResult = null;
 let seenSig = null;       // flagged-task signature last seen on a save
 let uploadedSig = null;   // … and at the last successful upload
 let uploadTimer = null;
+let retryTimer = null;    // a failed / unfinished calendar sync, tried again later
+let retryCount = 0;       // … how many times since the last clean run or upload
+let retryOnline = false;  // … or failed offline: the 'online' event retries it
 const busyCache = new Map(); // dayKey → { at, calendars, sig, failed }
 const busyInflight = new Map();
 let busyBackoffUntil = 0;
@@ -66,6 +74,9 @@ function ensureAccount() {
   if (user === statusUser) return;
   statusUser = user;
   status = user ? readJson(accountKey(STATUS_KEY)) : null;
+  statusAt = 0;
+  const hidden = user ? readJson(accountKey(HINT_KEY)) : null;
+  hint = typeof hidden === 'string' ? hidden : null;
   busyCache.clear();
   busyInflight.clear();
   busyBackoffUntil = 0;
@@ -73,6 +84,7 @@ function ensureAccount() {
   uploadedSig = null;
   lastSyncResult = null;
   manualPending = false;
+  clearSyncRetry(true);
   busyVersion++;
 }
 
@@ -96,7 +108,27 @@ function emit() {
 export function gcalStateKey() {
   ensureAccount();
   const s = status || {};
-  return [statusUser || '', s.connected ? 1 : 0, s.canTasks ? 1 : 0, s.canBusy ? 1 : 0, s.needsReconnect ? 1 : 0, s.unavailable ? 1 : 0, busyVersion].join('|');
+  return [statusUser || '', s.connected ? 1 : 0, s.canTasks ? 1 : 0, s.canBusy ? 1 : 0, s.needsReconnect ? 1 : 0, s.unavailable ? 1 : 0, hint || '', busyVersion].join('|');
+}
+
+// --- the busy strip's hints (per account, per device) ------------------------------
+// Where busy times can't show, the strip says why (connect / unavailable /
+// nobusy) until the account hides that hint. Only the hint it hid stays
+// hidden: a different reason later (the server enabled Calendar, so now it
+// offers Connect) shows again
+
+export function isGcalHintHidden(kind) {
+  ensureAccount();
+  return !!kind && hint === kind;
+}
+
+export function hideGcalHint(kind) {
+  ensureAccount();
+  if (!statusUser || !kind || hint === kind) return;
+  hint = kind;
+  writeJson(accountKey(HINT_KEY), kind);
+  busyVersion++;
+  emit();
 }
 
 // --- status -------------------------------------------------------------------------
@@ -121,6 +153,7 @@ function setStatus(next) {
   ensureAccount();
   const before = JSON.stringify(status);
   status = next;
+  statusAt = Date.now();
   writeJson(accountKey(STATUS_KEY), next);
   if (!isGcalBusyReady()) busyCache.clear();
   if (JSON.stringify(next) !== before) {
@@ -159,12 +192,25 @@ export async function refreshGcalStatus() {
   ensureAccount();
   if (!isLoggedIn()) return null;
   const user = statusUser;
+  statusAt = Date.now();   // asked: a failed read waits its turn too (no ask per render)
   const r = await gcalCall('GET', '/gcal/status');
   if (!sameAccount(user)) return status;
   if (r.ok && r.data && typeof r.data.connected === 'boolean') setStatus(r.data);
   // Not allowed for this account, or not set up on the server: nothing to offer
   else if (r.status === 403 || r.status === 503) setStatus({ connected: false, unavailable: true });
   return status;
+}
+
+// Today shown or back on screen: a status that doesn't allow busy times is
+// read again once it is older than maxAgeMs, so a server change (Calendar
+// enabled for this account) or a connect made on another device shows up
+// without a restart. A status that works is kept (busy requests catch a
+// lost connection). Cheap: safe to call on every render
+export function refreshGcalStatusIfStale(maxAgeMs = STATUS_TTL_MS) {
+  ensureAccount();
+  if (!isLoggedIn() || isGcalBusyReady()) return null;
+  if (Date.now() - statusAt < maxAgeMs) return null;
+  return refreshGcalStatus();
 }
 
 // --- the checkbox's remembered choice (per account, per device) ------------------
@@ -190,7 +236,7 @@ const RETURN_MESSAGES = {
   expired: 'The Google sign-in took too long. Try Connect again',
   no_permission: 'Google Calendar needs at least one of its permissions. Try again and keep them ticked',
   no_refresh_token: 'Google didn’t give lasting access. Try Connect again',
-  forbidden: 'Google Calendar isn’t available for this account',
+  forbidden: 'Google Calendar isn’t enabled for this account yet',
   not_configured: 'Google Calendar isn’t set up on the server yet'
 };
 
@@ -264,15 +310,64 @@ const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 // run ends, so the toast always says how it actually went
 let manualPending = false;
 
+// A run that failed for a passing reason (no network, a Worker or Google
+// hiccup, another device's sync holding the lease) or that stopped with work
+// left (failed events, more than 8 rounds, Google said slow down) is tried
+// again on its own: 30 s, 2 min, 10 min (10 min after a slow down). Capped,
+// so an event Google always refuses can't loop; a clean run, a fresh upload,
+// Sync now or another account starts the count over. Back online, a waiting
+// retry goes at once
+const RETRY_DELAYS_MS = [30 * 1000, 2 * 60 * 1000, 10 * 60 * 1000];
+
+function clearSyncRetry(resetCount = false) {
+  clearTimeout(retryTimer);
+  retryTimer = null;
+  retryOnline = false;
+  if (resetCount) retryCount = 0;
+}
+
+function syncNeedsRetry(result) {
+  if (!result) return false;
+  if (result.ok === false) {
+    return result.status === 0 || result.error === 'gcal_busy'
+      || (result.status >= 500 && result.error !== 'gcal_not_configured');
+  }
+  return !!(result.failed || result.remaining);
+}
+
+function planSyncRetry(result, user) {
+  if (!sameAccount(user)) return;
+  if (!syncNeedsRetry(result) || !isGcalTasksReady()) { retryCount = 0; return; }
+  // Offline: going back online retries, without using up a try
+  if (result.ok === false && result.status === 0 && navigator.onLine === false) { clearSyncRetry(); retryOnline = true; return; }
+  if (retryCount >= RETRY_DELAYS_MS.length) return;
+  const delay = result.rateLimited ? RETRY_DELAYS_MS[RETRY_DELAYS_MS.length - 1] : RETRY_DELAYS_MS[retryCount];
+  retryCount++;
+  clearSyncRetry();
+  retryTimer = setTimeout(() => {
+    retryTimer = null;
+    if (sameAccount(user)) syncGoogleCalendar();
+  }, delay);
+}
+
+function onOnline() {
+  if (!retryTimer && !retryOnline) return;
+  clearSyncRetry();
+  syncGoogleCalendar();
+}
+
 export async function syncGoogleCalendar({ manual = false } = {}) {
   if (!isGcalTasksReady()) {
     if (manual || manualPending) { manualPending = false; showToast('Google Calendar isn’t connected'); }
     return null;
   }
-  if (manual) manualPending = true;
+  if (manual) { manualPending = true; retryCount = 0; }
   if (syncing) { syncAgain = true; return syncing; }
   syncing = (async () => {
     let result = null;
+    const user = statusUser;
+    // This run replaces a retry that was waiting (it plans the next one itself)
+    clearSyncRetry();
     // A manual sync also asks the Worker to confirm the calendar still exists
     const check = manualPending;
     for (let round = 0; round < 8; round++) {
@@ -284,10 +379,12 @@ export async function syncGoogleCalendar({ manual = false } = {}) {
         break;
       }
       result = r.data || {};
-      // Google said slow down: the next upload (or Sync now) carries on
+      // Google said slow down: the retry (or the next upload / Sync now) carries on
       if (!result.remaining || result.rateLimited) break;
     }
     lastSyncResult = { at: Date.now(), ...(result || {}) };
+    // Another run follows right away when one was asked for meanwhile
+    if (!syncAgain) planSyncRetry(result, user);
     if (manualPending && !syncAgain) {
       manualPending = false;
       const done = result && result.ok !== false && !result.failed && !result.remaining;
@@ -312,20 +409,13 @@ export function getLastGcalSync() {
   return lastSyncResult;
 }
 
-// "Sync now": upload first, so the calendar mirrors what this device shows
+// "Sync now": the dashboard syncs first, so the calendar mirrors what this
+// device shows. A sync merges (sync.js): it never uploads an older copy over
+// newer data, so it runs whether or not this device has unsynced changes
 export async function syncGoogleCalendarNow() {
   if (!isGcalTasksReady()) { showToast('Google Calendar isn’t connected'); return; }
-  // Upload only this device's own unsynced changes: a clean device's copy is
-  // already in the cloud, and uploading an old one would overwrite newer data
-  if (window.cloudSave && isLoggedIn() && hasUnsyncedChanges()) {
-    const r = await window.cloudSave();
-    if (r && r.held) {
-      // Phones: another device saved a newer copy; settle that first
-      const sync = window.mobileShell && window.mobileShell.api && window.mobileShell.api.sync;
-      if (sync && typeof sync.resolveConflict === 'function') sync.resolveConflict();
-      else showToast('Choose which device’s changes to keep first');
-      return;
-    }
+  if (window.cloudSave && isLoggedIn()) {
+    const r = await window.cloudSave(null, { quiet: true, reason: 'gcal' });
     if (r && r.ok === false && (r.status || r.error)) {
       // cloudSave already explained a 401 (signed out) or a 413 (too big)
       if (r.status !== 401 && r.status !== 413) showToast('Couldn’t upload your changes, so Google Calendar wasn’t updated. Try again');
@@ -342,6 +432,8 @@ function onCloudSaved(e) {
   // moved on while the upload was in flight)
   const payload = e && e.detail && e.detail.payload;
   uploadedSig = gcalSignature(payload || model);
+  // A fresh upload starts a fresh set of retries
+  clearSyncRetry(true);
   if (isGcalTasksReady()) syncGoogleCalendar();
 }
 
@@ -371,9 +463,10 @@ function scheduleUpload(delay) {
     // Nothing of this device's own to send: the change came from the cloud
     // (a sign-in or start-up that adopted another device's copy)
     if (!hasUnsyncedChanges()) return;
-    const r = await window.cloudSave();
-    // A bare { ok: false } = another upload was running: try again shortly
-    if (r && r.ok === false && !r.status && !r.held && !r.error) scheduleUpload(4000);
+    const r = await window.cloudSave(null, { quiet: true, reason: 'gcal' });
+    // Another sync was running: try again shortly (a sync waiting for an open
+    // editor runs by itself when it closes, and its upload syncs the calendar)
+    if (r && r.ok === false && r.busy) scheduleUpload(4000);
   }, delay);
 }
 
@@ -515,7 +608,18 @@ export function buildGcalPanel(host, { title = true } = {}) {
       return;
     }
     if (s && s.unavailable) {
-      host.append(el('p', 'gcal-note', 'Google Calendar isn’t available for this account.'));
+      // What to do about it, without naming server settings
+      const who = getUsername();
+      host.append(
+        el('p', 'gcal-note', who ? `Google Calendar isn’t enabled for “${who}” yet.` : 'Google Calendar isn’t enabled for this account yet.'),
+        el('p', 'gcal-hint', 'Whoever runs this dashboard’s server can turn it on for this account. Then check again here.'),
+        button('Check again', '', async () => {
+          focusNext = 'connect';
+          const now = await refreshGcalStatus();
+          if (now && now.unavailable) { focusNext = null; showToast('Still not enabled for this account'); }
+        }, 'recheck')
+      );
+      restoreFocus(want);
       return;
     }
     if (!s || !s.connected) {
@@ -637,6 +741,7 @@ export function initGoogleCalendar() {
   started = true;
   window.addEventListener('cloud:saved', onCloudSaved);
   window.addEventListener('model:saved', onModelSaved);
+  window.addEventListener('online', onOnline);
   afterSignIn();
 }
 
@@ -666,6 +771,7 @@ export async function afterSignIn() {
 export function resetGcalState() {
   clearTimeout(uploadTimer);
   uploadTimer = null;
+  clearSyncRetry(true);
   statusUser = undefined;
   ensureAccount();
   busyVersion++;

@@ -23,6 +23,7 @@ import { normalizeUrl, toDateKey, fromDateKey } from '../core/quick-capture-pars
 import { showActionToast } from './quick-capture.js';
 import { showDropLight, hideDropLight } from './drop-light.js';
 import { resolveIconMedia } from '../components/sections.js';
+import { cardItemsOfType } from '../core/card-move.js';
 
 const TYPES = ['icon', 'subtask', 'reminder', 'copyPaste'];
 const TYPE_LABELS = { icon: 'Icon', subtask: 'Subtask', reminder: 'Reminder', copyPaste: 'Copy-paste', separator: 'Separator' };
@@ -730,7 +731,8 @@ async function save() {
     if (!Array.isArray(group[collectionName])) group[collectionName] = [];
     const collection = group[collectionName];
 
-    const item = buildItem(type, collection, link, iconRef);
+    // Keys unique per type across the card: a move between sections never meets a twin
+    const item = buildItem(type, cardItemsOfType(cardData, collectionName), link, iconRef);
     collection.push(item);
     lastSubtitleByCard.set(sectionId, subtitle);
 
@@ -1068,7 +1070,7 @@ function placeSeparator(slot) {
   const byKey = new Map(group.icons.map(i => [i.key, i]));
   const ordered = slot.keys.map(k => byKey.get(k)).filter(Boolean);
   group.icons.forEach(i => { if (!ordered.includes(i)) ordered.push(i); });
-  const key = generateKey('sep', group.icons);
+  const key = generateKey('sep', cardItemsOfType(data[sectionId], 'icons'));
   ordered.splice(slot.index, 0, { key, icon: DIVIDER_SRC(), isDivider: true });
   group.icons = ordered;
   const after = ordered.slice();

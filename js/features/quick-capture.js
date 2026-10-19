@@ -16,8 +16,8 @@ import { editState } from '../state.js';
 import { showToast } from '../utils.js';
 import { saveModel } from '../core/storage.js';
 import { TASK_COLOR_LABELS } from '../constants.js';
-import { parseQuickCapture, resolveDue, fromDateKey, normalizeUrl, QUICK_CAPTURE_HELP } from '../core/quick-capture-parse.js';
-import { dueTimeOf, formatTimeKey } from '../core/due-time.js';
+import { parseQuickCapture, resolveDue, endAfter, endIssue, endDropIssue, fromDateKey, normalizeUrl, QUICK_CAPTURE_HELP } from '../core/quick-capture-parse.js';
+import { dueTimeOf, dueEndTimeOf, formatTimeKey, formatTimeRange } from '../core/due-time.js';
 import {
   getAllTasks, getTaskById, createTask, updateTask, deleteTask, openEditTaskModal,
   refreshTaskViews, generateSubtaskId
@@ -662,9 +662,11 @@ function buildPlan() {
         || (category && category.id !== target.categoryId)
         || (due.dueDate !== undefined && due.dueDate !== (target.dueDate || null))
         || (due.dueTime !== undefined && due.dueTime !== dueTimeOf(target))
+        || (due.dueEndTime !== undefined && due.dueEndTime !== dueEndTimeOf(target))
         || (parsed.gcal !== null && parsed.gcal !== (target.gcal === true));
       const asked = parsed.color || parsed.pinned !== null || parsed.timer || parsed.urls.length ||
-        category || parsed.dueDate || parsed.clearDate || parsed.dueTime || parsed.clearTime || parsed.gcal !== null;
+        category || parsed.dueDate || parsed.clearDate || parsed.dueTime || parsed.clearTime ||
+        parsed.dueEndTime || parsed.clearEnd || parsed.gcal !== null;
       if (!changes) {
         issues.push(asked
           ? { level: 'error', message: 'The task already looks like that: nothing would change' }
@@ -674,6 +676,11 @@ function buildPlan() {
   } else if (!parsed.title) {
     issues.push({ level: 'error', quiet: true, message: 'Type a name for the task' });
   }
+  const lonelyEnd = endIssue(parsed, due, mode === 'update' ? target : null, mode);
+  if (lonelyEnd) issues.push({ level: 'warning', message: lonelyEnd });
+  // A new start that pushes the task's end past midnight removes the end
+  const droppedEnd = mode === 'update' ? endDropIssue(due, target, { format: formatTimeKey }) : null;
+  if (droppedEnd) issues.push({ level: 'warning', message: droppedEnd });
 
   // Google Calendar: what the line says, else (a new task) the last choice
   const gcal = mode === 'create' && parsed.gcal === null ? (isGcalTasksReady() && getGcalDefault()) : parsed.gcal;
@@ -802,17 +809,23 @@ function renderPreview(plan) {
     add({ icon: CALENDAR_SVG, text: 'No due date' });
   }
   if (p.dueTime && plan.due.dueTime) {
-    // A time alone says which day it lands on
+    // A time alone says which day it lands on; a task's end moves with a new start
     const day = !p.dueDate && plan.due.dueDate ? describeDue(plan.due.dueDate).split(' · ')[1] : '';
+    const end = endAfter(plan.due, plan.mode === 'update' ? plan.target : null);
+    const moved = end && plan.due.dueEndTime === undefined;
+    const at = formatTimeRange(p.dueTime, end);
     add({
-      icon: CLOCK_SVG, label: 'At', text: day ? `${formatTimeKey(p.dueTime)} · ${day}` : formatTimeKey(p.dueTime), kind: 'time',
-      title: 'Not a time? Click to keep it as text',
+      icon: CLOCK_SVG, label: 'At', text: day ? `${at} · ${day}` : at, kind: 'time',
+      title: moved ? 'Its end moves with the start. Not a time? Click to keep it as text' : 'Not a time? Click to keep it as text',
       clickKey: p.timeSpan ? `${p.timeSpan.start}:${p.timeSpan.end}` : '',
       onClick: () => keepDateAsText(p.timeSpan),
     });
   } else if (p.clearTime) {
     add({ icon: CLOCK_SVG, text: 'No time' });
+  } else if (p.dueEndTime && plan.due.dueEndTime) {
+    add({ icon: CLOCK_SVG, label: 'Ends', text: formatTimeKey(plan.due.dueEndTime) });
   }
+  if (p.clearEnd && !p.clearTime && !p.dueEndTime) add({ icon: CLOCK_SVG, text: 'No end time' });
 
   const color = p.color || (plan.mode === 'create' ? 'blue' : null);
   if (color) {
@@ -914,6 +927,7 @@ export function createFromPlan(plan) {
   const due = resolveDue(p, null);
   if (due.dueDate) updates.dueDate = due.dueDate;
   if (due.dueDate && due.dueTime) updates.dueTime = due.dueTime;
+  if (due.dueDate && due.dueTime && due.dueEndTime) updates.dueEndTime = due.dueEndTime;
   if (plan.urls.length) updates.taskLinks = plan.urls.map(value => ({ type: 'url', value }));
   // plan.gcal: the line's !cal / !nocal, else the remembered choice (the bar's
   // and the composer's plans both carry it); an explicit one is remembered
@@ -935,6 +949,8 @@ export function updateFromPlan(plan) {
   const due = resolveDue(p, task);
   if (due.dueDate !== undefined) updates.dueDate = due.dueDate;
   if (due.dueTime !== undefined) updates.dueTime = due.dueTime;
+  // A start alone leaves the end out: updateTask moves it with the start
+  if (due.dueEndTime !== undefined) updates.dueEndTime = due.dueEndTime;
   if (typeof p.gcal === 'boolean' && p.gcal !== (task.gcal === true)) updates.gcal = p.gcal;
   if (plan.urls.length) {
     const links = [...linkListOf(task), ...plan.urls.map(value => ({ type: 'url', value }))];

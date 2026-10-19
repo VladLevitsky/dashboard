@@ -5,12 +5,16 @@
 // complexity and extensive dependencies. This module provides the interface for
 // future migration. The window.* exports allow gradual transition.
 
-import { model, editState, currentData, normalizeTaskCategories } from '../state.js';
-import { PLACEHOLDER_URL, APP_VERSION, LINKS_FILE_PATH } from '../constants.js';
-import { saveModel, cleanupOldBackups, migrateToUnifiedCards, migrateToHalfWidthCards, sanitizeStoredRichText } from './storage.js';
+import { model, editState, currentData, normalizeTaskCategories, resetModel } from '../state.js';
+import { PLACEHOLDER_URL, APP_VERSION, LINKS_FILE_PATH, STORAGE_KEY, DEFAULT_TASK_CATEGORIES, MAX_TASK_CATEGORIES } from '../constants.js';
+import { saveModel, restoreModel, rerenderDashboard, cleanupOldBackups, migrateToUnifiedCards, migrateToHalfWidthCards, sanitizeStoredRichText } from './storage.js';
 import { migrateToDeviceLayouts, hydrateLayout, getActiveMode } from '../features/grid-engine.js';
-import { getActiveStorageKey, markCloudDirty } from './sync.js';
+import { getActiveStorageKey, markCloudDirty, noteStoredCopy, getStoredBase, noteReplacePending, cloudSave } from './sync.js';
+import { getDataOwner, isLoggedIn } from './auth.js';
 import { normalizeTimeLog, prepareImportedTimeLog } from './time-log.js';
+import { makeSyncStamp } from './mobile-sync.js';
+import { ITEM_TYPES, cardItemKeys, cardItemsOfType } from './card-move.js';
+import { showToast } from '../utils.js';
 
 // --- Helper to convert reminder from internal format to JSON for export
 // Exports in the same format as the internal model (compatible with old app)
@@ -908,6 +912,9 @@ export function applyUrlOverrides(data) {
   if (editState.enabled && editState.working) {
     editState.working = JSON.parse(JSON.stringify(model));
   }
+  // The imported notes are the new baseline: no note move made in this edit session
+  // applies to them (Cancel would shift them off their items; edit-mode.js)
+  editState.noteMoves = [];
 
   // Save the restored data to localStorage so it persists
   // Only save to localStorage, not to JSON file during import
@@ -944,6 +951,15 @@ export function applyUrlOverrides(data) {
       subtaskTemplates: current.subtaskTemplates || [],
     };
 
+    // An import is the one explicit "replace": the next cloud sync sends this copy
+    // as it is (only the time log merged, its resetAt dropping older history)
+    // instead of merging it (sync.js). Kept in the copy until that sync is done
+    const storageKey = getActiveStorageKey();
+    const scoped = storageKey !== STORAGE_KEY;
+    payload._sync = makeSyncStamp();
+    if (scoped && getStoredBase(storageKey)) payload._base = getStoredBase(storageKey);
+    if (scoped) payload._replace = true;
+
     // Add ALL sections - all are now unified format
     current.sections.forEach(section => {
       if (current[section.id]) {
@@ -951,22 +967,345 @@ export function applyUrlOverrides(data) {
       }
     });
 
-    const storageKey = getActiveStorageKey();
+    const json = JSON.stringify(payload);
     try {
-      localStorage.setItem(storageKey, JSON.stringify(payload));
+      localStorage.setItem(storageKey, json);
     } catch (error) {
       if (error.name === 'QuotaExceededError') {
         // Emergency cleanup - remove ALL backup entries
         cleanupOldBackups();
         // Try again
-        localStorage.setItem(storageKey, JSON.stringify(payload));
+        localStorage.setItem(storageKey, json);
       } else {
         throw error;
       }
     }
+    noteStoredCopy(storageKey, json);
+    noteReplacePending(storageKey, scoped);
     // Mark for cloud sync after import
     markCloudDirty();
   } else {
     saveModel();
   }
+}
+
+// ===== Add back from a backup file =====
+// Puts what a backup holds and this dashboard lacks back into it, without
+// changing or removing anything the dashboard holds now (Settings → JSON File
+// Backup → Add back…, More → Backup → Add back… on a phone). How recovered data
+// (an export, or a profile read out of a D1 restore) goes back in.
+//   tasks / completed tasks  an id in either list now is left alone (kept,
+//                            changed or completed since); a missing active task
+//                            goes to the end of its colour, a missing completed
+//                            one to Completed
+//   categories               the dashboard's own list stands and missing ones are
+//                            added (the ones a task uses first) while a colour slot
+//                            is free (8); a dashboard still on the new-dashboard
+//                            defaults takes the backup's list (a default a task
+//                            uses stays)
+//   subtask templates, projects, meetings, ideas   by id
+//   cards                    a missing card comes back whole (title, icon, colours,
+//                            its notes), below the others; a card both have gets
+//                            its missing sections and the items whose key it lacks
+//   card notes, subtask notes   by note key
+// Never touched: the header, the theme, Quick Access, the time log, the layout
+// of the cards already here. Both inputs are left as they are.
+
+const AB_MAX_PROFILE_BYTES = 2 * 1024 * 1024;
+const abIsObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
+const abArr = (v) => (Array.isArray(v) ? v : []);
+const abClone = (v) => JSON.parse(JSON.stringify(v));
+const AB_SECTION_MAPS = ['sectionTitles', 'sectionIcons', 'sectionColors', 'subtitleColors', 'collapsedSubtitles', 'collapsedCards', 'cardNotes', 'subtaskNotes'];
+
+// A Settings export keeps the cards' structure under _structure; a cloud
+// profile (a D1 recovery) has it at the top. Either becomes a profile
+function backupAsProfile(b) {
+  if (!abIsObj(b)) return null;
+  const s = abIsObj(b._structure) ? b._structure : {};
+  const p = {};
+  ['sections', 'header', ...AB_SECTION_MAPS].forEach(k => { p[k] = s[k] !== undefined ? s[k] : b[k]; });
+  ['tasks', 'completedTasks', 'taskCategories', 'subtaskTemplates', 'projects', 'meetings', 'ideas'].forEach(k => { p[k] = b[k]; });
+  abArr(p.sections).forEach(sec => { if (abIsObj(sec) && sec.id && abIsObj(b[sec.id])) p[sec.id] = b[sec.id]; });
+  return p;
+}
+
+const isUnifiedGroup = (g) => abIsObj(g) && ITEM_TYPES.some(t => Array.isArray(g[t]));
+
+// One section of card items as the dashboard stores it (an export's reminders
+// in its JSON shape, like an import reads them)
+function groupFromBackup(g) {
+  const out = {};
+  ITEM_TYPES.forEach(t => {
+    const items = abArr(g[t]).filter(abIsObj).map(abClone);
+    out[t] = t === 'reminders' ? items.map(r => convertReminderFromJson(r)) : items;
+  });
+  return out;
+}
+
+function isDefaultCategories(list) {
+  if (!Array.isArray(list)) return true;          // missing: the app shows the defaults
+  if (list.length !== DEFAULT_TASK_CATEGORIES.length) return false;
+  return DEFAULT_TASK_CATEGORIES.every((d, i) => abIsObj(list[i]) && list[i].id === d.id && String(list[i].name || '').trim() === d.name);
+}
+
+function titleOf(p, section) {
+  const t = abIsObj(p.sectionTitles) ? p.sectionTitles[section.id] : undefined;
+  return (typeof t === 'string' && t) || section.title || '';
+}
+
+// Notes of one bucket (a card's, or a subtask's): the ones whose key isn't there
+function addMissingNotes(curBuckets, bakBuckets, bucketIds, report) {
+  bucketIds.forEach(id => {
+    const bak = bakBuckets[id];
+    const cur = curBuckets[id];
+    if (cur === undefined) {
+      if (bak === undefined || (Array.isArray(bak) && !bak.length) || bak === '') return;
+      curBuckets[id] = abClone(bak);
+      report.notes += Array.isArray(bak) ? bak.length : 1;
+      return;
+    }
+    if (!Array.isArray(cur) || !Array.isArray(bak)) return;   // an old single note: left as it is
+    const keys = new Set(cur.filter(abIsObj).map(n => n.key));
+    bak.filter(n => abIsObj(n) && n.key && !keys.has(n.key)).forEach(n => {
+      cur.push(abClone(n));
+      keys.add(n.key);
+      report.notes++;
+    });
+  });
+}
+
+export function mergeBackupInto(current, backup) {
+  const merged = abClone(abIsObj(current) ? current : {});
+  const report = { tasks: 0, completed: 0, categories: [], categoriesLeftOut: [], templates: 0, projects: 0, meetings: 0, ideas: 0, cards: 0, items: 0, notes: 0, total: 0, lines: [], summary: '' };
+  const bak = backupAsProfile(backup);
+  if (!bak) return { merged, report };
+
+  // --- Tasks and completed tasks, by id
+  merged.tasks = abArr(merged.tasks);
+  merged.completedTasks = abArr(merged.completedTasks);
+  const present = new Set([...merged.tasks, ...merged.completedTasks].filter(abIsObj).map(t => t.id));
+  const maxOrder = {};
+  merged.tasks.filter(abIsObj).forEach(t => {
+    const o = Number(t.order);
+    if (Number.isFinite(o)) maxOrder[t.color] = Math.max(maxOrder[t.color] ?? -1, o);
+  });
+  abArr(bak.completedTasks).filter(t => abIsObj(t) && t.id && !present.has(t.id)).forEach(t => {
+    merged.completedTasks.push(abClone(t));
+    present.add(t.id);
+    report.completed++;
+  });
+  abArr(bak.tasks).filter(t => abIsObj(t) && t.id && !present.has(t.id))
+    .sort((a, b) => (Number(a.order) || 0) - (Number(b.order) || 0))
+    .forEach(t => {
+      const task = abClone(t);
+      const next = (maxOrder[task.color] ?? -1) + 1;
+      maxOrder[task.color] = next;
+      task.order = next;
+      merged.tasks.push(task);
+      present.add(task.id);
+      report.tasks++;
+    });
+
+  // --- Categories
+  if (Array.isArray(bak.taskCategories) && bak.taskCategories.length) {
+    const cur = abArr(merged.taskCategories).filter(abIsObj);
+    const used = new Set([...merged.tasks, ...merged.completedTasks].filter(abIsObj).map(t => t.categoryId).filter(Boolean));
+    const from = bak.taskCategories.filter(c => abIsObj(c) && typeof c.id === 'string' && c.id && String(c.name || '').trim());
+    let next;
+    if (isDefaultCategories(merged.taskCategories) && !isDefaultCategories(bak.taskCategories)) {
+      // Never chosen here: the backup's list, and any default a task uses
+      next = [...from.map(abClone), ...cur.filter(c => used.has(c.id) && !from.some(b => b.id === c.id))];
+    } else {
+      next = [...cur];
+      const ids = new Set(cur.map(c => c.id));
+      // Overflow categories (no colour slot) don't use one of the 8 slots
+      const coloured = () => next.filter(c => !c.overflow).length;
+      const missing = from.filter(c => !ids.has(c.id))
+        .map((c, i) => ({ c, i }))
+        .sort((x, y) => (used.has(y.c.id) ? 1 : 0) - (used.has(x.c.id) ? 1 : 0) || x.i - y.i)
+        .map(x => x.c);
+      missing.forEach(c => {
+        if (coloured() >= MAX_TASK_CATEGORIES) { report.categoriesLeftOut.push(String(c.name).trim()); return; }
+        next.push(abClone(c));
+        ids.add(c.id);
+      });
+    }
+    const before = new Set(cur.map(c => c.id));
+    merged.taskCategories = normalizeTaskCategories(next);
+    report.categories = merged.taskCategories.filter(c => !before.has(c.id)).map(c => c.name);
+  }
+
+  // --- Templates, projects, meetings, ideas: by id
+  [['subtaskTemplates', 'templates'], ['projects', 'projects'], ['meetings', 'meetings'], ['ideas', 'ideas']].forEach(([k, r]) => {
+    merged[k] = abArr(merged[k]);
+    const ids = new Set(merged[k].filter(abIsObj).map(d => d.id));
+    abArr(bak[k]).filter(d => abIsObj(d) && d.id && !ids.has(d.id)).forEach(d => {
+      merged[k].push(abClone(d));
+      ids.add(d.id);
+      report[r]++;
+    });
+  });
+
+  // --- Cards and their items
+  merged.sections = abArr(merged.sections);
+  AB_SECTION_MAPS.forEach(k => { if (!abIsObj(merged[k])) merged[k] = {}; });
+  const bakMaps = {};
+  AB_SECTION_MAPS.forEach(k => { bakMaps[k] = abIsObj(bak[k]) ? bak[k] : {}; });
+  const takenIds = new Set([...merged.sections.filter(abIsObj).map(s => s.id), ...Object.keys(merged)]);
+  abArr(bak.sections).filter(s => abIsObj(s) && s.id && s.type !== 'header').forEach(bs => {
+    const bakCard = abIsObj(bak[bs.id]) ? bak[bs.id] : {};
+    const here = merged.sections.find(s => abIsObj(s) && s.id === bs.id);
+    // The same id for another card (older builds numbered new cards): a different
+    // title and no item in common
+    const sameCard = here && (titleOf(merged, here) === titleOf(bak, bs) || ITEM_TYPES.some(t => {
+      const keys = cardItemKeys(merged[bs.id], t);
+      return cardItemsOfType(bakCard, t).some(i => abIsObj(i) && keys.has(i.key));
+    }));
+    if (here && sameCard) {
+      const card = abIsObj(merged[bs.id]) ? merged[bs.id] : (merged[bs.id] = {});
+      Object.entries(bakCard).forEach(([sub, g]) => {
+        if (!isUnifiedGroup(g)) return;
+        if (!abIsObj(card[sub])) {
+          const group = groupFromBackup(g);
+          const n = ITEM_TYPES.reduce((sum, t) => sum + group[t].length, 0);
+          if (!n) return;
+          card[sub] = group;
+          report.items += n;
+          return;
+        }
+        ITEM_TYPES.forEach(t => {
+          const keys = cardItemKeys(card, t);
+          const list = Array.isArray(card[sub][t]) ? card[sub][t] : (card[sub][t] = []);
+          groupFromBackup({ [t]: g[t] })[t]
+            .filter(i => i.key && !keys.has(i.key) && !(t === 'icons' && (i.isDivider || i.isSeparator)))
+            .forEach(i => { list.push(i); keys.add(i.key); report.items++; });
+        });
+      });
+      addMissingNotes(merged.cardNotes, bakMaps.cardNotes, [bs.id], report);
+      addMissingNotes(merged.subtaskNotes, bakMaps.subtaskNotes, Object.keys(bakMaps.subtaskNotes).filter(id => id.startsWith(bs.id + ':')), report);
+      return;
+    }
+    // A card this dashboard lacks: whole, under a free id when its id is taken,
+    // without a layout (it is placed below the other cards)
+    let id = bs.id;
+    if (takenIds.has(id)) { let n = 2; while (takenIds.has(`${bs.id}-${n}`)) n++; id = `${bs.id}-${n}`; }
+    takenIds.add(id);
+    const section = abClone(bs);
+    section.id = id;
+    delete section.layouts;
+    ['gridCol', 'gridRow', 'gridColSpan', 'gridRowSpan', 'gridSpan'].forEach(k => { delete section[k]; });
+    merged.sections.push(section);
+    const card = {};
+    Object.entries(bakCard).forEach(([sub, g]) => { if (isUnifiedGroup(g)) card[sub] = groupFromBackup(g); });
+    merged[id] = card;
+    report.cards++;
+    ['sectionTitles', 'sectionIcons', 'sectionColors', 'collapsedCards'].forEach(k => {
+      if (bakMaps[k][bs.id] !== undefined && merged[k][id] === undefined) merged[k][id] = abClone(bakMaps[k][bs.id]);
+    });
+    ['subtitleColors', 'collapsedSubtitles'].forEach(k => {
+      Object.keys(bakMaps[k]).filter(x => x.startsWith(bs.id + ':')).forEach(x => {
+        const nk = id + x.slice(bs.id.length);
+        if (merged[k][nk] === undefined) merged[k][nk] = abClone(bakMaps[k][x]);
+      });
+    });
+    if (bakMaps.cardNotes[bs.id] !== undefined && merged.cardNotes[id] === undefined) {
+      merged.cardNotes[id] = abClone(bakMaps.cardNotes[bs.id]);
+      report.notes += Array.isArray(merged.cardNotes[id]) ? merged.cardNotes[id].length : 1;
+    }
+    Object.keys(bakMaps.subtaskNotes).filter(x => x.startsWith(bs.id + ':')).forEach(x => {
+      const nk = id + x.slice(bs.id.length);
+      if (merged.subtaskNotes[nk] !== undefined) return;
+      merged.subtaskNotes[nk] = abClone(bakMaps.subtaskNotes[x]);
+      report.notes += Array.isArray(merged.subtaskNotes[nk]) ? merged.subtaskNotes[nk].length : 1;
+    });
+  });
+
+  // --- The report
+  const plural = (n, one, many = one + 's') => `${n} ${n === 1 ? one : many}`;
+  const parts = [];
+  if (report.tasks) parts.push(plural(report.tasks, 'task'));
+  if (report.completed) parts.push(plural(report.completed, 'completed task'));
+  if (report.categories.length) parts.push(plural(report.categories.length, 'category', 'categories'));
+  if (report.templates) parts.push(plural(report.templates, 'subtask template'));
+  if (report.projects) parts.push(plural(report.projects, 'project'));
+  if (report.meetings) parts.push(plural(report.meetings, 'meeting'));
+  if (report.ideas) parts.push(plural(report.ideas, 'idea'));
+  if (report.cards) parts.push(plural(report.cards, 'card'));
+  if (report.items) parts.push(plural(report.items, 'card item'));
+  if (report.notes) parts.push(plural(report.notes, 'note'));
+  report.total = report.tasks + report.completed + report.categories.length + report.templates + report.projects +
+    report.meetings + report.ideas + report.cards + report.items + report.notes;
+  report.lines = parts.map(p => `• ${p}`);
+  if (report.categories.length) report.lines.push(`Categories: ${report.categories.join(', ')}`);
+  if (report.categoriesLeftOut.length) report.lines.push(`No free slot (8 at most) for: ${report.categoriesLeftOut.join(', ')}`);
+  report.summary = parts.join(', ');
+  return { merged, report };
+}
+
+// The flow behind the Add back… buttons: read the file, say what comes back,
+// and on Confirm put it into this dashboard (the one on screen, never another
+// account's), then sync. Refused in edit mode (the working copy would hide it,
+// and Confirm would write over it)
+export async function addBackFromBackupFile(file) {
+  if (!file) return { ok: false };
+  if (editState.enabled) { showToast('Save or cancel your edits first, then add back'); return { ok: false, reason: 'editing' }; }
+  const owner = getDataOwner();
+  const key = getActiveStorageKey();
+  let backup = null;
+  try { backup = JSON.parse(await file.text()); } catch (e) { backup = null; }
+  if (!abIsObj(backup) || !(Array.isArray(backup.tasks) || Array.isArray(backup.sections) || abIsObj(backup._structure))) {
+    showToast('That file isn’t a dashboard backup');
+    return { ok: false, reason: 'invalid' };
+  }
+  // Signed in or out, or edit mode opened, while the file was read: not this dashboard any more
+  const stillHere = () => !editState.enabled && getDataOwner() === owner && getActiveStorageKey() === key;
+  if (!stillHere()) return { ok: false, reason: 'changed' };
+
+  const readCurrent = () => {
+    let raw = localStorage.getItem(key);
+    if (!raw) { saveModel(); raw = localStorage.getItem(key); }
+    return raw;
+  };
+  let raw = readCurrent();
+  let current;
+  try { current = JSON.parse(raw); } catch (e) { current = null; }
+  if (!abIsObj(current)) { showToast('This dashboard couldn’t be read, so nothing was added'); return { ok: false, reason: 'unreadable' }; }
+  let { merged, report } = mergeBackupInto(current, backup);
+  if (!report.total) {
+    showToast('Nothing to add back: everything in this backup is already here');
+    return { ok: true, added: 0, report };
+  }
+  const name = file.name ? `“${file.name}”` : 'the backup';
+  const question = `Add back from ${name}:\n${report.lines.join('\n')}\n\nNothing on this dashboard is changed or removed.`;
+  if (!window.confirm(question)) return { ok: false, reason: 'cancelled', report };
+  if (!stillHere()) return { ok: false, reason: 'changed' };
+
+  // The copy may have changed while the question was open (another tab): merge into it as it is now
+  const rawNow = readCurrent();
+  if (rawNow !== raw) {
+    raw = rawNow;
+    try { current = JSON.parse(raw); } catch (e) { current = null; }
+    if (!abIsObj(current)) return { ok: false, reason: 'unreadable' };
+    ({ merged, report } = mergeBackupInto(current, backup));
+  }
+  merged._sync = makeSyncStamp();
+  const json = JSON.stringify(merged);
+  if (new TextEncoder().encode(json).byteLength > AB_MAX_PROFILE_BYTES) {
+    showToast('Adding all of it would pass the 2 MB dashboard limit, so nothing was added');
+    return { ok: false, reason: 'too_big', report };
+  }
+  try {
+    localStorage.setItem(key, json);
+  } catch (e) {
+    showToast('This browser’s storage is full, so nothing was added');
+    return { ok: false, reason: 'storage', report };
+  }
+  noteStoredCopy(key, json);
+  markCloudDirty(key);
+  resetModel();
+  await restoreModel();
+  rerenderDashboard();
+  showToast(`Added back: ${report.summary}`);
+  if (isLoggedIn() && getDataOwner() === owner) cloudSave(null, { quiet: true, reason: 'add-back' });
+  return { ok: true, added: report.total, report };
 }

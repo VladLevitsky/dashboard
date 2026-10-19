@@ -11,6 +11,8 @@
 //   - completeWithUndo: the ring fills, the row folds away, completeTask; the
 //     completions made while the toast is up join one "3 completed · Undo",
 //     which puts each task back at its exact index (reverse order)
+//   - confirmComplete: the ring, a swipe → and the Time sheet's Complete ask
+//     first ("Mark as complete?" sheet), then completeWithUndo
 // Also the actions sheet (⋯ / hold in Today / the screen-reader button).
 // The service object is `taskActions` (SPEC §9.9).
 
@@ -22,13 +24,14 @@ import { saveModel } from '../../core/storage.js';
 import { toDateKey, fromDateKey } from '../../core/quick-capture-parse.js';
 import { addDays } from '../../core/agenda.js';
 import { shortDay } from '../../core/mobile-common.js';
-import { dueTimeOf, formatTimeKey } from '../../core/due-time.js';
+import { dueTimeOf, dueEndTimeOf, formatTimeRange } from '../../core/due-time.js';
 import {
   planPlacement, applyPlacement, snapshotColors, colorsSignature, restoreSnapshot, bucket, normColor,
   completeSubtaskUpdates, MOBILE_COLOR_LABELS, SEGMENT_LABELS,
 } from '../../core/mobile-tasks.js';
-import { buildMeta, ICONS } from './task-row.js?v=2026-10-mobile-8';
-import { shieldTaps } from './task-gestures.js?v=2026-10-mobile-8';
+import { buildMeta, ICONS } from './task-row.js?v=2026-10-mobile-9';
+import { shieldTaps } from './task-gestures.js?v=2026-10-mobile-9';
+import { openDatePicker } from './date-field.js?v=2026-10-mobile-9';
 
 const BATCH_MS = 7000;
 const SUBTASKS_SHOWN = 6;
@@ -189,6 +192,87 @@ export function createTaskActions(api, view) {
     return true;
   }
 
+  // Ask first (user request 2026-10-19; the desktop pill asks "Mark “…” as
+  // complete?" too): a small sheet, never window.confirm. Complete → completeWithUndo
+  // (still batched into "N completed · Undo"); Cancel, Back, the scrim or a drag
+  // down → opts.onCancel. The asked-about ring glows (data-confirm: data-state
+  // would block its gestures), and the toast lane rises above the sheet
+  // (html[data-mx-confirm] + --mx-confirm-h, mobile.css §8) so an earlier
+  // "Completed · Undo" never covers its buttons. opts: { slot?, swiped?, onCancel? }
+  function confirmComplete(taskId, opts = {}) {
+    const task = getTaskById(taskId);
+    if (!task || pending.has(taskId)) { if (opts.onCancel) opts.onCancel(); return null; }
+    shieldTaps();               // a double tap's second tap never lands on the scrim or a button
+    api.haptic('tick');
+    const slot = opts.slot && opts.slot.isConnected ? opts.slot : null;
+    const root = document.documentElement;
+    let completed = false;
+    const sheet = api.openSheet({
+      id: 'complete-confirm',
+      size: 'auto',
+      build(body, handle) {
+        const color = normColor(task.color);
+        body.classList.add('mx-confirm');
+        const head = el('div', `mx-actions-head mx-confirm-task mx-tone-${color}`);
+        const dot = el('span', 'mx-actions-dot');
+        dot.setAttribute('aria-hidden', 'true');
+        head.append(dot, el('p', 'mx-confirm-name', task.title || 'Untitled Task'));
+        const meta = el('p', 'mx-actions-meta');
+        meta.append(el('span', '', `${groupLabel(!!task.pinned)} · ${MOBILE_COLOR_LABELS[color]}`));
+        buildMeta(task, todayKey()).forEach(n => meta.append(n));
+        body.append(el('h2', 'mx-confirm-title', 'Mark as complete?'), head, meta);
+        if (isTaskTimerRunning(taskId)) body.append(el('p', 'mx-sheet-note mx-confirm-note', 'Its timer stops.'));
+        const row = el('div', 'mx-confirm-actions');
+        const no = el('button', 'mx-btn mx-confirm-no', 'Cancel');
+        no.type = 'button';
+        no.addEventListener('click', () => handle.close());
+        const yes = el('button', 'mx-btn mx-btn-done mx-confirm-yes');
+        yes.type = 'button';
+        yes.innerHTML = SHEET_ICONS.done;
+        yes.appendChild(el('span', '', 'Complete'));
+        yes.addEventListener('click', () => {
+          completed = true;
+          handle.close();
+          if (!getTaskById(taskId)) {           // completed or deleted elsewhere meanwhile
+            api.toast('That task was already completed or deleted');
+            if (opts.onCancel) opts.onCancel();
+            return;
+          }
+          completeWithUndo(taskId, { slot: slot && slot.isConnected ? slot : null, swiped: !!opts.swiped, onAbort: opts.onCancel });
+        });
+        row.append(no, yes);
+        body.append(row);
+        yes.focus({ preventScroll: true });   // Enter / Space confirm (a tap shows no focus ring)
+      },
+      onClose() {
+        // Closing uncovers the dock, the + and the rows at once: a double tap's
+        // second tap on Complete, Cancel or the scrim must not land on them
+        shieldTaps();
+        if (slot) delete slot.dataset.confirm;
+        root.removeAttribute('data-mx-confirm');
+        root.style.removeProperty('--mx-confirm-h');
+        if (!completed && opts.onCancel) opts.onCancel();
+      },
+    });
+    // Escape cancels (the preview's layer Escape does too), Enter on the sheet confirms;
+    // a held Enter / Space (the key that pressed the ring, auto-repeating) never does
+    sheet.el.addEventListener('keydown', (e) => {
+      if (e.defaultPrevented) return;
+      if (e.repeat && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); return; }
+      if (e.key === 'Escape') { e.preventDefault(); sheet.close(); }
+      else if (e.key === 'Enter' && !e.target.closest('button')) {
+        e.preventDefault();
+        const yes = sheet.body.querySelector('.mx-confirm-yes');
+        if (yes) yes.click();
+      }
+    });
+    // Set after the open: opening replaces an older question, whose onClose clears these
+    if (slot) slot.dataset.confirm = '';
+    root.style.setProperty('--mx-confirm-h', `${Math.ceil(sheet.el.offsetHeight)}px`);
+    root.setAttribute('data-mx-confirm', '');
+    return sheet;
+  }
+
   function restoreWithUndo(taskId) {
     const task = restoreCompletedTask(taskId);
     if (!task) return null;
@@ -229,8 +313,8 @@ export function createTaskActions(api, view) {
     const task = getTaskById(taskId);
     if (!task) return;
     const before = task.dueDate || null;
-    // A new date keeps the time; clearing the date drops it (Undo brings both back)
-    const beforeTime = { dueTime: task.dueTime || null, dueTz: task.dueTz || null };
+    // A new date keeps the time and its end; clearing the date drops them (Undo brings all back)
+    const beforeTime = { dueTime: task.dueTime || null, dueTz: task.dueTz || null, dueEndTime: task.dueEndTime || null };
     const nextKey = key || null;
     if (before === nextKey) return;
     updateTask(taskId, { dueDate: nextKey });
@@ -373,7 +457,7 @@ export function createTaskActions(api, view) {
         // Due date chips
         const dueSec = el('section', 'mx-actions-sec');
         const dueAt = dueTimeOf(task);
-        dueSec.append(el('h3', 'mx-sec-label', task.dueDate ? `Due · ${shortDay(task.dueDate)}${dueAt ? ` · ${formatTimeKey(dueAt, { compact: true })}` : ''}` : 'Due'));
+        dueSec.append(el('h3', 'mx-sec-label', task.dueDate ? `Due · ${shortDay(task.dueDate)}${dueAt ? ` · ${formatTimeRange(dueAt, dueEndTimeOf(task), { compact: true })}` : ''}` : 'Due'));
         const chips = el('div', 'mx-chip-row');
         dueChoices().forEach(c => {
           const b = el('button', 'mx-chip', c.label);
@@ -383,14 +467,29 @@ export function createTaskActions(api, view) {
           b.addEventListener('click', () => { setDueWithUndo(taskId, c.key); handle.update(); });
           chips.append(b);
         });
-        const pick = el('label', 'mx-chip mx-chip-pick');
-        pick.append(el('span', '', 'Pick…'));
-        const date = el('input', 'mx-date-input');
-        date.type = 'date';
-        date.value = task.dueDate || '';
-        date.setAttribute('aria-label', 'Pick a due date');
-        date.addEventListener('change', () => { if (date.value) { setDueWithUndo(taskId, date.value); handle.update(); } });
-        pick.append(date);
+        // Pick…: the date sheet (typed, quick chips, the calendar). Set on the
+        // date it already has changes nothing
+        const pick = el('button', 'mx-chip mx-chip-pick', 'Pick…');
+        pick.type = 'button';
+        pick.setAttribute('aria-label', 'Pick or type a due date');
+        pick.addEventListener('click', () => {
+          const cur = getTaskById(taskId);
+          if (!cur) return;
+          const was = cur.dueDate || '';
+          openDatePicker({
+            value: was,
+            title: 'Due date',
+            // The sheet body is rebuilt after a pick: back to its new Pick…
+            returnFocus: () => (handle.body && handle.body.querySelector('.mx-chip-pick')) || pick,
+            onPick: (key) => {
+              const now = getTaskById(taskId);
+              if (!now) return;
+              if (key !== (now.dueDate || '')) setDueWithUndo(taskId, key);
+              handle.update();
+            },
+            onClear: was ? () => { setDueWithUndo(taskId, null); handle.update(); } : null,
+          });
+        });
         chips.append(pick);
         if (task.dueDate) {
           const clear = el('button', 'mx-chip mx-chip-quiet', 'Clear');
@@ -441,6 +540,7 @@ export function createTaskActions(api, view) {
   return {
     openTask,
     completeWithUndo,
+    confirmComplete,
     completeSubtaskWithUndo,
     restoreWithUndo,
     placeTaskWithUndo,
