@@ -27,13 +27,12 @@ import {
   startSyncTimer,
   stopSyncTimer,
   immediateCloudSave,
-  isCloudDirty,
   hasUnsyncedChanges,
   waitForCloudSave,
   beginDashboardLoad,
   endDashboardLoad
 } from '../core/sync.js';
-import { restoreModel, saveModel } from '../core/storage.js';
+import { restoreModel, rerenderDashboard } from '../core/storage.js';
 import { resetFileCache } from '../core/file-service.js';
 import { model, editState, resetModel } from '../state.js';
 import { buildGcalPanel, afterSignIn as gcalAfterSignIn, resetGcalState } from './google-calendar.js';
@@ -130,15 +129,7 @@ async function showOwnerDashboard() {
   resetFileCache();
   resetModel();
   await restoreModel();
-  if (window.renderHeaderAndTitles) window.renderHeaderAndTitles();
-  if (window.renderAllSections) window.renderAllSections();
-  if (window.applyDarkMode) window.applyDarkMode();
-  if (window.applyGlassMode) window.applyGlassMode();
-  if (window.applyGlassTheme) window.applyGlassTheme();
-  if (window.applyCellSize) window.applyCellSize();
-  if (window.ensureSectionPlusButtons) window.ensureSectionPlusButtons();
-  if (window.refreshTimeTrackingUI) window.refreshTimeTrackingUI();
-  if (window.refreshStickyNotes) window.refreshStickyNotes();
+  rerenderDashboard({ stickyNotes: true });
 }
 
 function closeAuthModal() {
@@ -395,30 +386,17 @@ async function completeSignIn(username, { created = false } = {}) {
     resetModel();
     await restoreModel();
 
-    // Reconcile with cloud data (a copy just taken from the cloud needs nothing more)
+    // Reconcile with cloud data (a copy just taken from the cloud needs nothing
+    // more). One merge: changes this copy holds that never synced (made after its
+    // session ended, an offline start) and the cloud's both stay; a merge that
+    // changes this copy is applied to the model by the sync itself
     if (prep.source !== 'cloud') {
-      const syncResult = await syncOnLogin(prep.cloud || null);
-      if (syncResult && syncResult.action === 'loaded_cloud') {
-        // Cloud data was loaded — need to re-restore model from updated localStorage
-        resetModel();
-        await restoreModel();
-      }
+      await syncOnLogin(prep.cloud || null, { render: false });
     }
 
-    // Re-render the entire dashboard with the correct data
-    if (window.renderHeaderAndTitles) window.renderHeaderAndTitles();
-    if (window.renderAllSections) window.renderAllSections();
-    if (window.applyDarkMode) window.applyDarkMode();
-    if (window.applyGlassMode) window.applyGlassMode();
-    if (window.applyGlassTheme) window.applyGlassTheme();
-
-    if (window.applyCellSize) window.applyCellSize();
-    if (window.ensureSectionPlusButtons) window.ensureSectionPlusButtons();
-    if (window.refreshTimeTrackingUI) window.refreshTimeTrackingUI();
-    // The account's own sticky notes (this browser only)
-    if (window.refreshStickyNotes) window.refreshStickyNotes();
-    // Stored images shown while signed out can load now
-    if (window.hydrateRichTextImages) window.hydrateRichTextImages();
+    // Re-render the entire dashboard with the correct data, the account's own
+    // sticky notes (this browser only) and stored images included
+    rerenderDashboard({ stickyNotes: true });
 
     // Start background sync timer
     startSyncTimer();
@@ -460,16 +438,16 @@ async function handleLogout() {
   stopSyncTimer();
 
   try {
-    // One last save before logout: an upload already on its way finishes first
-    // (signing out under it would drop it), then whatever is still unsynced goes
-    // up, this page's changes or ones an earlier page left (the stored flag)
+    // One last sync before logout: a sync already on its way finishes first
+    // (signing out under it would drop it), then whatever is still unsynced is
+    // merged in, this page's changes or ones an earlier page left (the stored
+    // flag). A merge never uploads an older copy over newer changes
     if (hasUnsyncedChanges()) showToast('Syncing your changes before signing out…');
     await waitForCloudSave();
-    let unsynced = false;
     if (isLoggedIn() && hasUnsyncedChanges()) {
-      const r = await immediateCloudSave({ quiet: true });
-      unsynced = !r.ok;
+      await immediateCloudSave({ quiet: true });
     }
+    const unsynced = isLoggedIn() && hasUnsyncedChanges();
     // Edit mode opened while that upload ran: the sign-out waits for it too
     if (editsBlockAccountSwitch('out')) {
       if (isLoggedIn()) startSyncTimer();
@@ -798,7 +776,7 @@ function toggleUserPopover() {
   // Set sync status
   const syncStatus = $('#auth-sync-status');
   if (syncStatus) {
-    syncStatus.textContent = isCloudDirty() ? 'Changes pending sync' : 'Synced';
+    syncStatus.textContent = hasUnsyncedChanges() ? 'Changes pending sync' : 'Synced';
   }
 
   buildGoogleSigninPanel($('#auth-google'));
@@ -893,39 +871,21 @@ export async function postRestoreAuthSync() {
   if (!isLoggedIn()) return;
 
   // Edit mode waits for this (sync.js beginDashboardLoad): the model may be
-  // replaced with the cloud copy below
+  // replaced with the merge below. It may open once the dashboard on screen is
+  // final, while the merge is still uploading
   beginDashboardLoad();
-  // Reconcile with cloud data (async, non-blocking for UI)
+  let loading = true;
+  const loaded = () => { if (loading) { loading = false; endDashboardLoad(); } };
+  // Reconcile with cloud data (async, non-blocking for UI): one merge of this
+  // copy and the cloud's, applied to the model on screen by the sync itself (a
+  // copy this page holds an editor open on waits until it closes: sync.js)
   try {
-    const syncResult = await syncOnLogin();
-
-    if (syncResult && syncResult.action === 'loaded_cloud') {
-      // Cloud data was newer — reset and reload model. Never skipped: a stale
-      // model left under the copy just stored would write over it on its next
-      // save (and upload it). An edit session open anyway keeps its working
-      // copy on screen; Cancel shows the newer dashboard
-      const editing = editState.enabled;
-      resetModel();
-      await restoreModel();
-      if (editing) {
-        showToast('Newer data came from the cloud. Cancel your edits to see it.');
-      } else {
-        if (window.renderHeaderAndTitles) window.renderHeaderAndTitles();
-        if (window.renderAllSections) window.renderAllSections();
-        if (window.applyDarkMode) window.applyDarkMode();
-        if (window.applyGlassMode) window.applyGlassMode();
-        if (window.applyGlassTheme) window.applyGlassTheme();
-
-        if (window.applyCellSize) window.applyCellSize();
-        if (window.ensureSectionPlusButtons) window.ensureSectionPlusButtons();
-        if (window.refreshTimeTrackingUI) window.refreshTimeTrackingUI();
-      }
-    }
+    await syncOnLogin(null, { onLocalReady: loaded });
   } catch (err) {
     // Cloud sync failed — proceed with local data
     console.warn('Cloud sync on startup failed:', err);
   } finally {
-    endDashboardLoad();
+    loaded();
   }
 
   // Start background sync timer

@@ -160,13 +160,19 @@ function ensureDom() {
     e.preventDefault();
     closeTodayView();
   });
+  // Back on this tab with Today open: busy times (or a status that didn't
+  // allow them) may be old by now. A change repaints through the gcal listeners
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && isTodayViewOpen()) ensureBusyDay(toDateKey(new Date()));
+  });
 }
 
 function render() {
   const scrollTop = els.body.scrollTop;
   const now = new Date();
   els.date.textContent = now.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
-  // Busy times from Google Calendar (its own host: renderDue clears only its own)
+  // Busy times from Google Calendar, or why they can't show (its own host:
+  // renderDue clears only its own). ensureBusyDay also re-reads an old status
   const dayKey = toDateKey(now);
   ensureBusyDay(dayKey);
   renderBusyStrip(els.strip, dayKey, { now: now.getTime() });

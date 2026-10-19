@@ -604,6 +604,10 @@ html[data-shell="mobile"] .ic-overlay .ic-btn { min-height: var(--mx-hit); font-
 html[data-shell="mobile"] .ic-overlay .ic-seg button { min-height: 36px; padding: 6px 12px; font-size: 13px; }
 html[data-shell="mobile"] .ic-overlay .ic-check { min-height: var(--mx-hit); font-size: 14px; }
 html[data-shell="mobile"] .ic-overlay .ic-check input { width: 20px; height: 20px; }
+/* The reminder's date: typed, with a calendar button (date-field.js, mobile.css §15),
+   at the creator's own field height and corner */
+html[data-shell="mobile"] .ic-overlay .mx-df { column-gap: 6px; }
+html[data-shell="mobile"] .ic-overlay .mx-df-text { height: var(--mx-hit); min-height: var(--mx-hit); border-radius: 12px; }
 /* The sticky footer is a real glass slab: the form scrolls under it, never
    through Cancel / Add or the validation hint */
 html[data-shell="mobile"] .ic-overlay .ic-footer {

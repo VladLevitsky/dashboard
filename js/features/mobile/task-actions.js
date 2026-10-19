@@ -29,8 +29,9 @@ import {
   planPlacement, applyPlacement, snapshotColors, colorsSignature, restoreSnapshot, bucket, normColor,
   completeSubtaskUpdates, MOBILE_COLOR_LABELS, SEGMENT_LABELS,
 } from '../../core/mobile-tasks.js';
-import { buildMeta, ICONS } from './task-row.js?v=2026-10-mobile-7';
-import { shieldTaps } from './task-gestures.js?v=2026-10-mobile-7';
+import { buildMeta, ICONS } from './task-row.js?v=2026-10-mobile-8';
+import { shieldTaps } from './task-gestures.js?v=2026-10-mobile-8';
+import { openDatePicker } from './date-field.js?v=2026-10-mobile-8';
 
 const BATCH_MS = 7000;
 const SUBTASKS_SHOWN = 6;
@@ -466,14 +467,29 @@ export function createTaskActions(api, view) {
           b.addEventListener('click', () => { setDueWithUndo(taskId, c.key); handle.update(); });
           chips.append(b);
         });
-        const pick = el('label', 'mx-chip mx-chip-pick');
-        pick.append(el('span', '', 'Pick…'));
-        const date = el('input', 'mx-date-input');
-        date.type = 'date';
-        date.value = task.dueDate || '';
-        date.setAttribute('aria-label', 'Pick a due date');
-        date.addEventListener('change', () => { if (date.value) { setDueWithUndo(taskId, date.value); handle.update(); } });
-        pick.append(date);
+        // Pick…: the date sheet (typed, quick chips, the calendar). Set on the
+        // date it already has changes nothing
+        const pick = el('button', 'mx-chip mx-chip-pick', 'Pick…');
+        pick.type = 'button';
+        pick.setAttribute('aria-label', 'Pick or type a due date');
+        pick.addEventListener('click', () => {
+          const cur = getTaskById(taskId);
+          if (!cur) return;
+          const was = cur.dueDate || '';
+          openDatePicker({
+            value: was,
+            title: 'Due date',
+            // The sheet body is rebuilt after a pick: back to its new Pick…
+            returnFocus: () => (handle.body && handle.body.querySelector('.mx-chip-pick')) || pick,
+            onPick: (key) => {
+              const now = getTaskById(taskId);
+              if (!now) return;
+              if (key !== (now.dueDate || '')) setDueWithUndo(taskId, key);
+              handle.update();
+            },
+            onClear: was ? () => { setDueWithUndo(taskId, null); handle.update(); } : null,
+          });
+        });
         chips.append(pick);
         if (task.dueDate) {
           const clear = el('button', 'mx-chip mx-chip-quiet', 'Clear');

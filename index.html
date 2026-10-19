@@ -52,19 +52,19 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Caveat:wght@500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=2026-10-19-moves">
+  <link rel="stylesheet" href="styles.css?v=2026-10-19-sync">
   <link rel="stylesheet" href="glass.css?v=2026-10-07-perf">
   <!-- Glass FX v2 layer: every rule is scoped under html[data-fx="v2"] -->
   <link rel="stylesheet" href="glass-fx.css?v=2026-10-17-gcal">
   <!-- Writing power-up: toolbar additions, menus, block styles (one section per module) -->
   <link rel="stylesheet" href="writing.css?v=2026-10-04-writing2">
   <!-- Mobile shell: every rule is scoped under html[data-shell="mobile"] (one file per unit) -->
-  <link rel="stylesheet" href="mobile.css?v=2026-10-mobile-7">
-  <link rel="stylesheet" href="mobile-tasks.css?v=2026-10-mobile-7">
-  <link rel="stylesheet" href="mobile-compose.css?v=2026-10-mobile-7">
-  <link rel="stylesheet" href="mobile-write.css?v=2026-10-mobile-7">
-  <link rel="stylesheet" href="mobile-today.css?v=2026-10-mobile-7">
-  <link rel="stylesheet" href="mobile-links.css?v=2026-10-mobile-7">
+  <link rel="stylesheet" href="mobile.css?v=2026-10-mobile-8">
+  <link rel="stylesheet" href="mobile-tasks.css?v=2026-10-mobile-8">
+  <link rel="stylesheet" href="mobile-compose.css?v=2026-10-mobile-8">
+  <link rel="stylesheet" href="mobile-write.css?v=2026-10-mobile-8">
+  <link rel="stylesheet" href="mobile-today.css?v=2026-10-mobile-8">
+  <link rel="stylesheet" href="mobile-links.css?v=2026-10-mobile-8">
   <link rel="apple-touch-icon" href="assets/icons/app-icon-180.png">
   <script type="module" src="js/features/glass-glow.js?v=2026-10-07-perf"></script>
   <script type="module" src="js/features/glass-fx.js?v=2026-10-08-static"></script>
@@ -828,6 +828,17 @@
               </button>
               <input type="file" id="settings-import-input" accept=".json" hidden />
             </div>
+            <button type="button" id="settings-addback-btn" class="appearance-backup-btn appearance-addback-btn" style="width: 100%;">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 12a9 9 0 1 0 3-6.7"></path>
+                <polyline points="3 3 3 9 9 9"></polyline>
+                <line x1="12" y1="8" x2="12" y2="16"></line>
+                <line x1="8" y1="12" x2="16" y2="12"></line>
+              </svg>
+              Add back from a backup…
+            </button>
+            <input type="file" id="settings-addback-input" accept=".json,application/json" hidden />
+            <p class="appearance-addback-note">Upload replaces this dashboard. Add back only adds what it is missing (tasks, categories, cards…) and changes nothing else.</p>
           </div>
         </div>
         <div class="appearance-actions">
@@ -960,7 +971,7 @@
     </div>
 
     <!-- ES6 Modules - fully modularized, no app.js dependency -->
-    <script type="module" src="js/main.js?v=2026-10-mobile-7"></script>
+    <script type="module" src="js/main.js?v=2026-10-mobile-8"></script>
   </body>
   </html>
 

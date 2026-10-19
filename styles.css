@@ -4078,6 +4078,17 @@ section.card[id^="new-card-"].card-size-full {
   background: #475569;
   border-color: #64748b;
 }
+/* Add back from a backup (only what the dashboard lacks), under Download / Upload */
+.appearance-addback-btn {
+  justify-content: center;
+  margin-top: 10px;
+}
+.appearance-addback-note {
+  margin: 8px 2px 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--muted);
+}
 
 /* Task Settings modal (Settings → Tasks). Reuses the appearance modal
    classes; sits above Settings, like the File Manager. */
@@ -16138,6 +16149,23 @@ body:has(> .today-modal:not([hidden])) .wrench-btn { visibility: hidden; }
   border: 1px solid var(--brand); border-radius: 8px;
   background: transparent; color: var(--brand);
   font: inherit; font-size: 12.5px; font-weight: 500; cursor: pointer;
+}
+.busy-strip-action:focus-visible, .busy-strip-dismiss:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+/* A hint instead of the bar: why busy times can't show (not connected, not
+   enabled for the account, no busy permission), its action and a quiet Hide */
+.busy-strip.is-hint { gap: 8px; }
+.busy-strip-hint { max-width: 60ch; font-size: 12.5px; }
+.busy-strip-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.busy-strip-actions .busy-strip-action { align-self: auto; }
+.busy-strip-dismiss {
+  padding: 5px 10px;
+  border: 1px solid transparent; border-radius: 8px;
+  background: transparent; color: var(--muted);
+  font: inherit; font-size: 12.5px; font-weight: 500; cursor: pointer;
+}
+.busy-strip-dismiss:hover { color: var(--text); border-color: rgba(148, 163, 184, 0.4); }
+@media (forced-colors: active) {
+  .busy-strip-action, .busy-strip-dismiss { border-color: ButtonText; }
 }
 [data-theme="dark"] .busy-strip { --busy-rgb: 129 140 248; border-color: rgba(148, 163, 184, 0.2); background: rgba(148, 163, 184, 0.05); }
 [data-theme="dark"] .busy-strip-track { background: rgba(148, 163, 184, 0.14); }

@@ -30,8 +30,8 @@
 //     a change; the focus goes back to the opener (returnFocus: that element,
 //     a text field included).
 
-import { registerLayer, syncHistory } from './layers.js?v=2026-10-mobile-7';
-import { animate, haptic, reduceMotion } from './ui.js?v=2026-10-mobile-7';
+import { registerLayer, syncHistory } from './layers.js?v=2026-10-mobile-8';
+import { animate, haptic, reduceMotion } from './ui.js?v=2026-10-mobile-8';
 import {
   parseTypedTime, prefersHour12, timeKeyFromInput, timeKeyMinutes, minutesToTimeKey, formatTimeKey,
 } from '../../core/due-time.js';

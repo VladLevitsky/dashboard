@@ -33,8 +33,8 @@ import { toDateKey } from '../../core/quick-capture-parse.js';
 import { renderBusyStrip, ensureBusyDay } from '../busy-strip.js';
 import { formatTimeKey, formatTimeRange } from '../../core/due-time.js';
 import { gcalStateKey, onGcalChange } from '../google-calendar.js';
-import { createTimeSheet } from './time-sheet.js?v=2026-10-mobile-7';
-import { createMoreSheet } from './more-sheet.js?v=2026-10-mobile-7';
+import { createTimeSheet } from './time-sheet.js?v=2026-10-mobile-8';
+import { createMoreSheet } from './more-sheet.js?v=2026-10-mobile-8';
 
 const SHORT_LABELS = { red: 'Urgent & important', orange: 'Urgent', yellow: 'Important', blue: 'Later' };
 const COMING_DAYS = 7;
@@ -303,7 +303,7 @@ function section(className, title) {
 function mount(host) {
   const root = el('div', 'mx-today');
 
-  // Busy times from Google Calendar (busy-strip.js; hidden when not connected)
+  // Busy times from Google Calendar (busy-strip.js; or why they can't show)
   const busy = el('section', 'mx-today-busy');
   busy.hidden = true;
 
@@ -359,7 +359,10 @@ function mount(host) {
 }
 
 // Fetch outside render: on show, on return, at midnight and when the Google
-// status changes (cached 5 min; the screen repaints only when the data changes)
+// status changes (cached 5 min; the screen repaints only when the data changes).
+// ensureBusyDay also re-reads a status that doesn't allow busy times once it
+// is 5 minutes old (Calendar enabled on the server, or connected on another
+// device), so the strip's hint turns into the strip without a restart
 function askBusy() {
   if (!api || api.getTab() !== 'today') return;
   if (window.isMobileShellMounted && !window.isMobileShellMounted()) return;

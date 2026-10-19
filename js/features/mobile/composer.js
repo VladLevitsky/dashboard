@@ -42,7 +42,8 @@ import * as notesApi from '../edit-mode.js';
 import { getDataOwner } from '../../core/auth.js';
 import { isGcalTasksReady, getGcalDefault } from '../google-calendar.js';
 import { dueTimeOf, dueEndTimeOf, formatTimeKey, prefersHour12, timeKeyFromInput, shiftTimeKey } from '../../core/due-time.js';
-import { openTimePicker, closeTimePicker } from './time-picker.js?v=2026-10-mobile-7';
+import { openTimePicker, closeTimePicker } from './time-picker.js?v=2026-10-mobile-8';
+import { openDatePicker, closeDatePicker } from './date-field.js?v=2026-10-mobile-8';
 
 const CONFIRM_MS = 7000;
 const DRAFT_DEBOUNCE = 300;
@@ -1044,17 +1045,30 @@ function clearTarget() {
   scheduleDraft();
 }
 
+// The native calendar opens on the line's own date only: with none it opens
+// on today with an empty value, so confirming today is a change (and fires).
+// The line takes typed dates itself (fri, 21/12, Dec 21)
 function pickTaskDate() {
   const eff = state.plan ? state.plan.effective : {};
-  els.dateInput.dataset.for = 'task';
-  els.dateInput.value = eff.dueDate || todayKey();
+  els.dateInput.value = eff.dueDate || '';
   showNativePicker();
 }
 
+// The meeting line is its title: the date is picked or typed in the date
+// sheet (date-field.js, over the composer). Set on the date it shows counts
+// as picked; the focus (and the keyboard) goes back to the line
 function pickMeetingDate() {
-  els.dateInput.dataset.for = 'meeting';
-  els.dateInput.value = state.meetingDate || todayKey();
-  showNativePicker();
+  openDatePicker({
+    value: state.meetingDate || todayKey(),
+    title: 'Meeting date',
+    returnFocus: els.input,
+    onPick: (v) => {
+      state.meetingDate = v;
+      state.meetingPicked = true;
+      paint();
+      focusInput();
+    },
+  });
 }
 
 // The time picker (time-picker.js, over the composer) opens on the time in
@@ -1125,13 +1139,10 @@ function showNativePicker(input = els.dateInput) {
 function onDatePicked() {
   const v = els.dateInput.value;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return;
-  if (els.dateInput.dataset.for === 'meeting') {
-    state.meetingDate = v;
-    state.meetingPicked = true;
-    paint();
-    focusInput();
-    return;
-  }
+  // The date already in effect leaves the line alone (setTokenField's same
+  // value would remove it; No date does that)
+  const eff = state.plan ? state.plan.effective : {};
+  if (v === eff.dueDate) { closePanel(); return; }
   state.panel = null;
   rewrite('date', v);
 }
@@ -1759,7 +1770,7 @@ export default {
       back: () => close({ keepDraft: true, refocus: true }),
     });
     api.on('hide', () => { if (state.open || els.input?.value || els.body?.value) persistDraft(); });
-    api.on('unmount', () => { closeTimePicker({ immediate: true }); close({ keepDraft: true }); });
+    api.on('unmount', () => { closeTimePicker({ immediate: true }); closeDatePicker({ immediate: true }); close({ keepDraft: true }); });
     api.on('day', () => {
       if (!state.meetingPicked) state.meetingDate = todayKey();
       if (state.open) paint();

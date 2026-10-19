@@ -2,13 +2,17 @@
 // Handles saving and restoring the model to/from localStorage
 
 import { PLACEHOLDER_URL, APP_VERSION, STORAGE_KEY } from '../constants.js';
-import { model, editState, currentData, normalizeTaskCategories } from '../state.js';
+import { model, editState, currentData, normalizeTaskCategories, resetModel } from '../state.js';
 import { showToast } from '../utils.js';
 import { revertNoteMove } from './card-move.js';
-import { getActiveStorageKey, markCloudDirty, noteStoredCopy, storedCopyChangedElsewhere } from './sync.js';
+import {
+  getActiveStorageKey, markCloudDirty, noteStoredCopy, storedCopyChangedElsewhere, storedCopyIfChangedElsewhere,
+  getStoredBase, noteStoredBase, isReplacePending, noteReplacePending, setModelApplier, isApplyBlocked, noteAdoptedCopy
+} from './sync.js';
 import { normalizeTimeLog } from './time-log.js';
 import { sanitizeStoredHtml } from './markdown.js';
-import { makeSyncStamp, noteRestoredStamp } from './mobile-sync.js';
+import { makeSyncStamp } from './mobile-sync.js';
+import { profileHash, mergeProfiles } from './profile-merge.js';
 import { migrateToGrid24, migrateToDeviceLayouts, hydrateLayout, persistActiveLayout, getActiveMode, DEFAULT_COL_SPAN, DEFAULT_ROW_SPAN } from '../features/grid-engine.js';
 
 // --- Migrate legacy card types to unified card structure (schemaVersion 3)
@@ -488,13 +492,111 @@ function committedSubtaskNotes(notes) {
   return copy;
 }
 
+// (through JSON text: the model holds Date objects where the copy holds their strings)
+function sameDashboard(payload, raw) {
+  try {
+    return profileHash(JSON.stringify(payload)) === profileHash(raw);
+  } catch (e) {
+    return false;   // a copy that can't be read is written over
+  }
+}
+
+// The stored copy still asks for its import to replace the cloud copy (another page's
+// sync may have done it and cleared the flag since this page noted it)
+function storedAsksReplace(key) {
+  try {
+    const obj = JSON.parse(localStorage.getItem(key));
+    return !!obj && typeof obj === 'object' && obj._replace === true;
+  } catch (e) {
+    return false;
+  }
+}
+
+// --- Another page of this browser wrote the copy since this page last read or wrote it
+// (a tab whose storage event this page skipped while an editor or edit mode was open,
+// or one not delivered yet): this page's save is merged into it, never written over
+// it, or the other page's unsynced work would be gone from this browser and, at the
+// next sync, from the cloud. A trusted 3-way merge (profile-merge.js): base = the copy
+// this page last knew (its model descends from it, and so does the copy stored now),
+// local = this save, cloud = the copy stored now. The merge keeps this page's meta
+// fields (its stamp, and its base: an ancestor of both) and a pending import of the
+// stored copy. Returns { json, behind } (behind: the merge holds something this
+// page's model doesn't), or null to write the save as it is (the stored copy can't
+// be read)
+function mergeIntoStoredCopy(storageKey, payload, { known, now }) {
+  let stored;
+  try { stored = JSON.parse(now); } catch (e) { return null; }
+  if (!stored || typeof stored !== 'object' || Array.isArray(stored)) return null;
+  const base = typeof known === 'string' ? known : null;
+  let r = null;
+  try {
+    r = mergeProfiles({ base, local: payload, cloud: stored, mode: base ? 'trusted' : 'union' });
+  } catch (e) {
+    // The copy this page knew can't be read: keep everything of both
+    try { r = mergeProfiles({ local: payload, cloud: stored, mode: 'union' }); } catch (err) { r = null; }
+  }
+  if (!r || !r.merged) return null;
+  const scoped = storageKey !== STORAGE_KEY;
+  const out = {
+    ...r.merged,
+    _sync: payload._sync,
+    _base: payload._base,
+    _replace: scoped && stored._replace === true ? true : undefined,
+  };
+  return { json: JSON.stringify(out), behind: !!r.localChanged };
+}
+
+// The merge holds another page's changes the model on screen lacks: the model becomes
+// the stored copy once nothing holds it (an open editor, edit mode, a gesture: the same
+// rule as a sync's merge). Until then every save merges again against the copy this
+// page last knew, so nothing of either page is lost meanwhile
+const REAPPLY_POLL_MS = 1500;
+let _reapplyKey = null;
+let _reapplyTimer = null;
+
+function laterTimer(fn, ms) {
+  const t = setTimeout(fn, ms);
+  if (t && typeof t.unref === 'function') t.unref();   // Node tests: never keeps the process alive
+  return t;
+}
+
+function scheduleReapply(key) {
+  _reapplyKey = key;
+  if (_reapplyTimer) return;
+  const tick = () => {
+    _reapplyTimer = null;
+    const key = _reapplyKey;
+    if (!key) return;
+    // Another dashboard is on screen now (a sign-in or sign-out): it was read whole
+    if (key !== (_modelStorageKey || getActiveStorageKey()) || key !== getActiveStorageKey()) { _reapplyKey = null; return; }
+    if (isApplyBlocked()) { _reapplyTimer = laterTimer(tick, REAPPLY_POLL_MS); return; }
+    _reapplyKey = null;
+    noteAdoptedCopy();
+    applyStoredCopy({ render: true });
+  };
+  _reapplyTimer = laterTimer(tick, 0);
+}
+
+// Another tab changed the copy while something held this page (its storage listener
+// skipped the reload, init.js): the page shows that copy once nothing holds it any more,
+// even when it never saves meanwhile (a save merges first, saveModel)
+export function applyStoredCopyWhenFree() {
+  scheduleReapply(_modelStorageKey || getActiveStorageKey());
+}
+
 // --- Save model to localStorage
-export function saveModel() {
+// opts.unchanged: { raw, stamp } (restoreModel): the copy as it was read and its
+// stamp. When the model saves to exactly that text again (its stamp kept), nothing
+// is written: a page that only read the copy (a load, another tab's write it
+// reloaded) never writes it back, so it can't put an older read over a newer write
+export function saveModel(opts = null) {
   // Clean up old backups before saving to prevent quota issues
   cleanupOldBackups();
 
   // Always save the main model, not the working copy
   const data = model;
+  const storageKey = _modelStorageKey || getActiveStorageKey();
+  const scoped = storageKey !== STORAGE_KEY;
 
   const payload = {
     schemaVersion: data.schemaVersion || 8,
@@ -526,8 +628,13 @@ export function saveModel() {
     projects: data.projects || [],
     subtaskTemplates: data.subtaskTemplates || [],
     // Which device saved this copy, and when (payload only: never in the
-    // model or an export). Lets a phone notice a newer save from elsewhere.
+    // model or an export)
     _sync: makeSyncStamp(),
+    // The version this copy descends from (sync.js cloudSync, sync-base.js) and a
+    // JSON import still waiting to replace the cloud copy. Payload only; an
+    // account's copy only (the signed-out dashboard never syncs)
+    _base: scoped ? (getStoredBase(storageKey) || undefined) : undefined,
+    _replace: scoped && isReplacePending(storageKey) && storedAsksReplace(storageKey) ? true : undefined,
   };
 
   // Add ALL sections - all are now unified format
@@ -537,8 +644,28 @@ export function saveModel() {
     }
   });
 
-  const storageKey = _modelStorageKey || getActiveStorageKey();
-  const json = JSON.stringify(payload);
+  if (opts && typeof opts.unchanged?.raw === 'string') {
+    // A write-back from a read is no new change of this device: it keeps the
+    // copy's stamp (a first merge after the update tells the newer copy by it).
+    // Same position for the stamp, so the text compares as a whole
+    payload._sync = opts.unchanged.stamp;
+    // The same text, or the same dashboard in another key order (a copy a sync
+    // wrote: profile-merge.js profileHash, this device's own layout fields aside)
+    if (JSON.stringify(payload) === opts.unchanged.raw || sameDashboard(payload, opts.unchanged.raw)) {
+      noteStoredCopy(storageKey, opts.unchanged.raw);
+      announceSave();
+      return true;
+    }
+  }
+
+  let json = null;
+  let behind = false;
+  const elsewhere = storedCopyIfChangedElsewhere(storageKey);
+  if (elsewhere && typeof elsewhere.now === 'string') {
+    const merged = mergeIntoStoredCopy(storageKey, payload, elsewhere);
+    if (merged) ({ json, behind } = merged);
+  }
+  if (json === null) json = JSON.stringify(payload);
   try {
     localStorage.setItem(storageKey, json);
   } catch (error) {
@@ -559,8 +686,11 @@ export function saveModel() {
       return false;
     }
   }
-  // What this page knows is stored (a page restored from the back/forward cache compares it)
-  noteStoredCopy(storageKey, json);
+  // What this page knows is stored (a page restored from the back/forward cache compares
+  // it). Behind (a merge brought in another page's changes): still the copy the model
+  // descends from, until the model is the stored copy again
+  if (behind) scheduleReapply(storageKey);
+  else noteStoredCopy(storageKey, json);
 
   // Mark cloud sync as needed (skip during initial load / restore)
   if (!window.isInitialLoad) {
@@ -596,13 +726,24 @@ function announceSave() {
 }
 
 // --- Restore model from localStorage
+// restoreModelNow() is the whole read, synchronous (a sync applies its merge with
+// it: storage.js applyStoredCopy); restoreModel() is the same, as a promise
 export async function restoreModel() {
+  restoreModelNow();
+}
+
+export function restoreModelNow() {
   try {
     const storageKey = getActiveStorageKey();
     _modelStorageKey = storageKey;
+    _reapplyKey = null;            // the model is the stored copy again
     let raw = localStorage.getItem(storageKey);
     noteStoredCopy(storageKey, raw);
     let saved = raw ? JSON.parse(raw) : null;
+    // Read from the copy itself, not this module (another tab may have written it)
+    noteStoredBase(storageKey, saved && storageKey !== STORAGE_KEY ? saved._base : null);
+    noteReplacePending(storageKey, !!(saved && storageKey !== STORAGE_KEY && saved._replace === true));
+    const readBack = raw && saved && typeof saved === 'object' ? { raw, stamp: saved._sync } : null;
 
     if (!saved && storageKey === STORAGE_KEY) {
       // Fallback: try legacy v1 key (the signed-out dashboard's ancestor: never an account's)
@@ -613,9 +754,6 @@ export async function restoreModel() {
     if (!saved) {
       return;
     }
-
-    // A copy saved by another device came from the cloud: this browser has seen it
-    noteRestoredStamp(saved._sync, storageKey);
 
     // Run migration for legacy card types (schemaVersion < 2)
     saved = migrateToUnifiedCards(saved);
@@ -811,13 +949,53 @@ export async function restoreModel() {
     window.skipUrlOverrides = true;
     window.localStorageRestored = true;
     window.isInitialLoad = true;
-    saveModel();
+    // Written back only when the read changed something (a migration, cleaned
+    // rich text, this device's layout): an unchanged copy is left as it is
+    saveModel({ unchanged: readBack });
     window.isInitialLoad = false;
 
   } catch (error) {
     console.error('Error in restoreModel:', error);
   }
 }
+
+// --- One re-render of everything the model shows (a sync applied a merge, a
+// sign-in or sign-out switched dashboards). stickyNotes: also this browser's
+// sticky notes (they belong to the dashboard, not the model). init.js sets the
+// full renderer (the matrix, the cards, an open calendar: tasks.js refreshTaskViews)
+let _renderDashboard = null;
+export function setDashboardRenderer(fn) {
+  _renderDashboard = typeof fn === 'function' ? fn : null;
+}
+
+export function rerenderDashboard({ stickyNotes = false } = {}) {
+  if (typeof window === 'undefined') return;
+  const call = (name, fn = window[name]) => {
+    if (typeof fn !== 'function') return;
+    try { fn(); } catch (err) { console.error('[render] failed:', name, err); }
+  };
+  call('renderHeaderAndTitles');
+  if (_renderDashboard) call('dashboard', _renderDashboard);
+  else call('renderAllSections');
+  call('applyDarkMode');
+  call('applyGlassMode');
+  call('applyGlassTheme');
+  call('applyCellSize');
+  call('ensureSectionPlusButtons');
+  call('refreshTimeTrackingUI');
+  if (stickyNotes) call('refreshStickyNotes');
+  // Stored images shown while signed out can load now
+  call('hydrateRichTextImages');
+  call('updateNotificationBadge');
+}
+
+// A sync's merge, written to the stored copy, becomes the model on screen
+function applyStoredCopy({ render = true } = {}) {
+  resetModel();
+  restoreModelNow();
+  if (render) rerenderDashboard();
+}
+setModelApplier(applyStoredCopy);
 
 // --- Export a timestamped backup of the model into localStorage
 export function exportBackupFile() {

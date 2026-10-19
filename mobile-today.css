@@ -57,6 +57,18 @@ html[data-shell="mobile"] .mx-today-busy :is(.busy-strip-list, .busy-strip-allda
 html[data-shell="mobile"] .mx-today-busy :is(.busy-strip-next, .busy-strip-note) { font-size: 13px; }
 html[data-shell="mobile"] .mx-today-busy .busy-strip-action { min-height: var(--mx-hit); padding: 0 16px; border-radius: 14px; font-size: 15px; font-weight: 600; }
 html[data-shell="mobile"] .mx-today-busy .busy-strip-link { min-height: var(--mx-hit); padding: 0 4px; }
+/* A hint instead of the bar (not connected / not enabled / no busy permission):
+   the note, then its action and a quiet Hide, both thumb-sized */
+html[data-shell="mobile"] .mx-today-busy.is-hint { gap: 6px; padding-bottom: 8px; }
+html[data-shell="mobile"] .mx-today-busy .busy-strip-hint { max-width: none; font-size: 14px; line-height: 1.45; color: var(--muted); }
+html[data-shell="mobile"] .mx-today-busy .busy-strip-actions { gap: 8px; }
+html[data-shell="mobile"] .mx-today-busy .busy-strip-dismiss { min-height: var(--mx-hit); padding: 0 14px; border-radius: 14px; font-size: 15px; font-weight: 600; }
+@media (prefers-reduced-transparency: reduce) {
+  html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-today-busy.busy-strip { background: var(--card); }
+}
+@media (forced-colors: active) {
+  html[data-shell="mobile"] .mx-today-busy.busy-strip { outline: 1px solid CanvasText; }
+}
 
 /* Panes: the desktop Today group (styles.css .today-color-group) at phone size.
    The pane carries the blur; rows on it don't */
@@ -484,6 +496,8 @@ html[data-shell="mobile"] .mx-more-row-chevron { display: inline-flex; color: va
 html[data-shell="mobile"] .mx-more-row.is-live .mx-more-row-value { color: rgb(var(--fx-live-deep, 6 122 66)); }
 html[data-shell="mobile"] .mx-more-row.is-live .mx-more-row-icon { color: rgb(var(--fx-live-deep, 6 122 66)); }
 html[data-shell="mobile"] .mx-more-backup { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
+/* Add back… (only what the dashboard lacks): its own row under Download / Restore… */
+html[data-shell="mobile"] .mx-more-addback-btn { grid-column: 1 / -1; }
 html[data-shell="mobile"] .mx-more-note { margin: 0; padding: 0 6px; font-size: 12.5px; line-height: 1.4; color: var(--muted); }
 html[data-shell="mobile"] .mx-more-signout { align-self: center; min-width: 160px; }
 html[data-shell="mobile"] .mx-more-nom { margin: 0; display: flex; flex-direction: column; gap: 4px; }

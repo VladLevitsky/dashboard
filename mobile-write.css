@@ -817,6 +817,12 @@ html[data-shell="mobile"] #meetings-modal .meeting-editor-top-row {
   gap: 10px;
 }
 html[data-shell="mobile"] #meetings-modal .meeting-editor-top-row > .meeting-editor-name-col { grid-column: 1 / -1; }
+/* The date: a typed date + calendar (date-field.js) next to the type: it takes the wider
+   side, at the type's height. No × here (no room at 360): an emptied box removes the date */
+html[data-shell="mobile"] #meetings-modal .meeting-editor-top-row:has(> .meeting-editor-date-col > .mx-df) { grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); }
+html[data-shell="mobile"] #meetings-modal .meeting-editor-date-col > .mx-df { column-gap: 6px; }
+html[data-shell="mobile"] #meetings-modal .meeting-editor-date-col .mx-df-text { height: 44px; min-height: 44px; padding: 0 6px; }
+html[data-shell="mobile"] #meetings-modal .meeting-editor-date-col .mx-df-clear { display: none; }
 html[data-shell="mobile"] #meetings-modal :is(.meeting-editor-field input, .meeting-editor-field select) { min-height: 44px; box-sizing: border-box; }
 html[data-shell="mobile"] #meetings-modal .meeting-editor-description {
   flex: 1 0 auto;
@@ -921,11 +927,13 @@ html[data-shell="mobile"] #task-editor-modal .task-editor-actions {
 }
 html[data-shell="mobile"] #task-editor-modal :is(.task-editor-delete-btn, .task-editor-complete-btn) { min-width: var(--mx-hit); min-height: var(--mx-hit); }
 html[data-shell="mobile"] #task-editor-cancel { min-height: var(--mx-hit); padding: 0 18px; border-radius: 14px; }
-/* The due row: the date full width, then Starts and (once there is a start) Ends,
-   each a typed time with AM | PM and a clock (time-picker.js, mobile.css §14); the ×
-   beside Starts clears both. The native time inputs and the "–" are hidden */
+/* The due row: the date full width (a typed date, a calendar, ×: date-field.js,
+   mobile.css §15), then Starts and (once there is a start) Ends, each a typed time with
+   AM | PM and a clock (time-picker.js, mobile.css §14); the × beside Starts clears both.
+   The native inputs and the "–" are hidden */
 html[data-shell="mobile"] #task-editor-modal .task-editor-due-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
-html[data-shell="mobile"] #task-editor-modal .task-editor-due-row > input[type="date"] { width: 100%; min-height: 48px; }
+html[data-shell="mobile"] #task-editor-modal .task-editor-due-row > input[type="date"]:not([data-mx-df]) { width: 100%; min-height: 48px; }
+html[data-shell="mobile"] #task-editor-modal .task-editor-due-row > .mx-df { width: 100%; }
 html[data-shell="mobile"] #task-editor-modal .task-editor-time-wrap {
   display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 10px 2px;
   max-width: none; min-width: 0;

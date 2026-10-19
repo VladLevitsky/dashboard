@@ -5,6 +5,7 @@ import { model, editState, currentData, currentSections } from '../state.js';
 import { $, deepClone, showToast, getColorForCurrentMode, setColorForCurrentMode, moveCursorAfterNode } from '../utils.js';
 import { saveModel } from '../core/storage.js';
 import { isDashboardLoading } from '../core/sync.js';
+import { addBackFromBackupFile } from '../core/import-export.js';
 import { attachImageUpload } from './rich-text-images.js';
 import { api as writingApi, attachWritingFeatures, attachWritingView } from './writing/editor.js';
 import { cleanEditorHtml, isEffectivelyEmpty, unwrapInline, replaceRangeHtml, trimRangeEnd, expandToWholeInlines } from './writing/dom.js';
@@ -697,12 +698,69 @@ export function wireAppearanceModalEvents() {
 
         window.isImporting = false;
         showToast('Profile restored from backup');
+        // The import replaces the cloud copy too (sync.js replace mode: the
+        // time log is the only thing merged); in edit mode Confirm syncs again
+        if (window.immediateCloudSave) window.immediateCloudSave({ quiet: true });
       } catch (err) {
         window.isImporting = false;
         showToast('Error importing backup file.');
       }
       importInput.value = '';
     });
+  }
+
+  // JSON File Backup - Add back: only what the file holds and this dashboard
+  // lacks comes in (import-export.js addBackFromBackupFile), never in edit mode.
+  // Settings opens in edit mode, so a session with nothing edited just ends
+  // first; one with edits asks for ✓ or × (Confirm would write the working copy
+  // over what came back). Phones (More → Backup) are never in edit mode
+  const addBackBtn = $('#settings-addback-btn');
+  const addBackInput = $('#settings-addback-input');
+  if (addBackInput) {
+    if (addBackBtn) {
+      addBackBtn.addEventListener('click', () => {
+        // The file picker needs this click's activation: no await before it
+        if (editState.enabled && editSessionHasEdits()) {
+          showToast('Save or cancel your card edits first (✓ or ×), then add back');
+          return;
+        }
+        addBackInput.click();
+      });
+    }
+    addBackInput.addEventListener('change', async () => {
+      const file = addBackInput.files && addBackInput.files[0];
+      addBackInput.value = '';
+      if (!file) return;
+      if (editState.enabled) {
+        if (editSessionHasEdits()) {
+          showToast('Save or cancel your card edits first (✓ or ×), then add back');
+          return;
+        }
+        if (!$('#appearance-modal')?.hidden) cancelAppearanceChanges();
+        toggleEditMode();
+        if (editState.enabled) return;   // couldn't leave edit mode
+      }
+      try {
+        await addBackFromBackupFile(file);
+      } catch (err) {
+        console.error('[Add back] failed:', err);
+        showToast('Couldn’t add back from that file.');
+      }
+    });
+  }
+}
+
+// The edit session changed something (the working copy differs from the model).
+// The settings written straight to the model outside edit mode's Confirm / Cancel
+// (deepMergeModel's exclusions) are left out
+const EDIT_COMPARE_SKIP = new Set(['timeTracking', 'taskCategories', 'subtaskTemplates']);
+function editSessionHasEdits() {
+  if (!editState.enabled || !editState.working) return false;
+  const skip = (root) => function (key, value) { return this === root && EDIT_COMPARE_SKIP.has(key) ? undefined : value; };
+  try {
+    return JSON.stringify(editState.working, skip(editState.working)) !== JSON.stringify(model, skip(model));
+  } catch (e) {
+    return true;
   }
 }
 

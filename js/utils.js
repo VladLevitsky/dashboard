@@ -27,14 +27,28 @@ export function deepClone(obj) {
 }
 
 // --- Key generation for new items
+// "<prefix>_<random>": two devices adding at once never make the same key, so a sync
+// never has to tell two different items apart (core/profile-merge.js). Nothing may
+// rely on keys being sequential (older data still holds "<prefix>_<n>" keys)
+function randomKeyPart(length = 6) {
+  let out = '';
+  try {
+    const c = globalThis.crypto;
+    if (c && typeof c.getRandomValues === 'function') {
+      c.getRandomValues(new Uint8Array(length)).forEach(b => { out += (b % 36).toString(36); });
+      return out;
+    }
+  } catch (e) { /* fall back to Math.random */ }
+  while (out.length < length) out += Math.random().toString(36).slice(2);
+  return out.slice(0, length);
+}
+
 export function generateKey(prefix, collection) {
-  let counter = 1;
-  const existingKeys = collection.map(item => item.key);
-  let newKey = `${prefix}_${counter}`;
-  while (existingKeys.includes(newKey)) {
-    counter++;
-    newKey = `${prefix}_${counter}`;
-  }
+  const existingKeys = new Set((Array.isArray(collection) ? collection : []).map(item => item && item.key));
+  let newKey;
+  do {
+    newKey = `${prefix}_${randomKeyPart()}`;
+  } while (existingKeys.has(newKey));
   return newKey;
 }
 
@@ -560,16 +574,14 @@ export function getSectionDataKey(sectionType) {
   return mapping[sectionType] || sectionType;
 }
 
-// --- Generate unique section ID
+// --- Generate unique section ID ("<prefix>-<random>", see generateKey)
 export function generateSectionId(prefix = 'new-card') {
   const data = window.currentData ? window.currentData() : { sections: [] };
-  const existingIds = data.sections.map(s => s.id);
-  let counter = 1;
-  let newId = `${prefix}-${counter}`;
-  while (existingIds.includes(newId)) {
-    counter++;
-    newId = `${prefix}-${counter}`;
-  }
+  const existingIds = new Set((Array.isArray(data.sections) ? data.sections : []).map(s => s && s.id));
+  let newId;
+  do {
+    newId = `${prefix}-${randomKeyPart()}`;
+  } while (existingIds.has(newId) || Object.prototype.hasOwnProperty.call(data, newId));
   return newId;
 }
 

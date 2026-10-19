@@ -22,7 +22,8 @@
    screens, conflict sheet · 8 reused-root column pinning + toast lane ·
    9 landscape · 10 dark · 11 sunset · 12 keyframes · 13 a11y guards ·
    14 time field + time picker (its own dark / a11y guards; the picker is a
-   child of <body> at z 10055)
+   child of <body> at z 10055) · 15 date field + date sheet (the same tier,
+   z 10055)
    ========================================================================== */
 
 /* --- 0. Hide the desktop chrome ------------------------------------------
@@ -1145,4 +1146,162 @@ html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme="dar
   html[data-shell="mobile"] .mx-tf-ampm.is-guessed { border: 2px dashed Highlight; }
   html[data-shell="mobile"] :is(.mx-tf-half, .mx-tp-half, .mx-tp-cell, .mx-tp-len, .mx-tp-nudge):disabled { color: GrayText; }
   html[data-shell="mobile"] .mx-tf-text[aria-invalid="true"] { border: 2px solid Mark; }
+}
+
+/* --- 15. Date field + date sheet (date-field.js) --------------------------------------
+   The field stands in for an <input type="date"> under the shell (the task frame's due
+   date, the meeting date, the item creator's reminder date): a typed date (the number
+   keyboard, day first), the date in words while not typing, a live reading under it while
+   typing, a calendar button and ×. The native input stays rendered (showPicker() needs it:
+   0 x 0 and see-through, no pointer) and the field is hidden everywhere else. The sheet
+   (subtask dates, the actions sheet's Pick…, the composer's meeting chip, the calendar
+   fallback) is the time picker's sheet at the same z (10055): quick chips + the typed box,
+   Clear · Cancel · Set; the chip of the date in effect is solid accent. */
+html:not([data-shell="mobile"]) .mx-df { display: none; }
+html[data-shell="mobile"] input[data-mx-df] {
+  position: absolute !important;
+  width: 0 !important; height: 0 !important; min-width: 0 !important; min-height: 0 !important;
+  margin: 0 !important; padding: 0 !important; border: 0 !important;
+  opacity: 0 !important; pointer-events: none !important;
+  box-shadow: none !important;
+}
+
+/* The field: [Date] [ Fri, Oct 23 ] (calendar) ×, a line under it (a reading, a hint, a typo).
+   The calendar and × line up with the time rows' clock and × under it */
+html[data-shell="mobile"] .mx-df {
+  display: flex; flex-wrap: wrap; align-items: center;
+  column-gap: 8px;
+  min-width: 0;
+}
+html[data-shell="mobile"] .mx-df-label {
+  flex: 0 0 50px;
+  font: 600 15px/1.2 'Inter', system-ui, sans-serif;
+  letter-spacing: 0; text-transform: none;
+  color: var(--muted);
+}
+html[data-shell="mobile"] .mx-df-text {
+  flex: 1 1 0;
+  box-sizing: border-box;
+  width: 100%; min-width: 0; height: 48px; min-height: 48px;
+  margin: 0; padding: 0 10px;
+  border: 1px solid var(--glass-divider); border-radius: 14px;
+  background: var(--glass-field); color: var(--text);
+  font: 600 max(16px, 1em)/1 'Inter', system-ui, sans-serif;
+  font-variant-numeric: tabular-nums; letter-spacing: 0;
+  text-align: center; text-overflow: ellipsis;
+}
+html[data-shell="mobile"] .mx-df-text::placeholder { color: var(--muted); font-weight: 500; opacity: 1; }
+html[data-shell="mobile"] .mx-df-cal {
+  position: relative;
+  flex: none;
+  display: grid; place-items: center;
+  box-sizing: border-box; width: 44px; height: 44px; margin: 0; padding: 0;
+  border: 1px solid var(--glass-divider); border-radius: 50%;
+  background: var(--glass-reflection), var(--glass-field); color: var(--text);
+  cursor: pointer; touch-action: manipulation;
+}
+html[data-shell="mobile"] .mx-df-cal:active { background-color: var(--glass-hover); }
+html[data-shell="mobile"] .mx-df-clear {
+  flex: none;
+  display: grid; place-items: center;
+  box-sizing: border-box; width: 40px; height: 48px; margin: 0 0 0 -6px; padding: 0;
+  border: 0; border-radius: 14px;
+  background: transparent; color: var(--muted);
+  cursor: pointer; touch-action: manipulation;
+}
+html[data-shell="mobile"] .mx-df-clear[hidden] { display: none; }
+html[data-shell="mobile"] .mx-df-clear:active { background: var(--glass-hover); color: var(--text); }
+html[data-shell="mobile"] :is(.mx-df-cal, .mx-df-clear):disabled { color: var(--muted); opacity: 0.45; cursor: default; }
+html[data-shell="mobile"] .mx-df-hint {
+  flex: 0 0 100%;
+  box-sizing: border-box;
+  padding-top: 6px;
+  font: 500 13px/1.35 'Inter', system-ui, sans-serif;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+html[data-shell="mobile"] .mx-df[data-label="on"] .mx-df-hint { padding-left: 58px; }
+html[data-shell="mobile"] .mx-df-hint:empty { display: none; }
+html[data-shell="mobile"] .mx-df-hint.is-reading { color: var(--muted); font-variant-numeric: tabular-nums; }
+html[data-shell="mobile"] .mx-df-hint.is-error::before {
+  content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 7px; vertical-align: 1px;
+  border-radius: 50%; background: var(--danger);
+}
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-df-text {
+  border-color: var(--glass-divider);
+  background: var(--glass-field);
+  box-shadow: inset 0 1px 3px rgb(40 46 56 / 5%), 0 1px 0 var(--glass-edge);
+}
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-df-text:focus {
+  outline: none;
+  border-color: var(--mx-tp-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--mx-tp-accent) 24%, transparent);
+}
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-df-text[aria-invalid="true"] {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 20%, transparent);
+}
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-df-cal { box-shadow: var(--fx-lift-pill), var(--glass-rim); }
+
+/* The sheet: the time picker's frame (.mx-tp-scrim / -sheet / -head / -foot) */
+html[data-shell="mobile"] #mx-date-picker {
+  position: fixed; inset: 0; z-index: var(--mx-z-time, 10055);
+  pointer-events: none;
+  color: var(--text);
+  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+html[data-shell="mobile"] .mx-dp-chips {
+  display: flex; gap: 8px;
+  margin: 2px -18px 12px; padding: 4px 18px 6px;
+  overflow-x: auto; overscroll-behavior-x: contain;
+  scroll-padding-inline: 18px;
+  scrollbar-width: none;
+}
+html[data-shell="mobile"] .mx-dp-chips::-webkit-scrollbar { display: none; }
+html[data-shell="mobile"] .mx-dp-chip {
+  flex: none;
+  display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  box-sizing: border-box; min-width: 62px; height: 54px; margin: 0; padding: 0 12px;
+  border: 1px solid var(--glass-divider); border-radius: 16px;
+  background: var(--glass-reflection), var(--glass-field); color: var(--text);
+  cursor: pointer; touch-action: manipulation;
+}
+html[data-shell="mobile"] .mx-dp-chip-label { font: 700 15px/1.1 'Inter', system-ui, sans-serif; white-space: nowrap; }
+html[data-shell="mobile"] .mx-dp-chip-sub { font: 500 12px/1.1 'Inter', system-ui, sans-serif; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+html[data-shell="mobile"] .mx-dp-chip:disabled { opacity: 0.4; cursor: default; }
+html[data-shell="mobile"] .mx-dp-chip:not(:disabled):active { background-color: var(--glass-hover); }
+html[data-shell="mobile"] .mx-dp-field { margin-bottom: 2px; }
+html[data-shell="mobile"] .mx-dp-field .mx-df-text { height: 52px; font-size: 18px; }
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-dp-chip { box-shadow: var(--fx-lift-pill), var(--glass-rim); }
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-dp-chip[aria-pressed="true"] {
+  color: var(--mx-tp-on-accent);
+  border-color: transparent;
+  background-color: transparent;
+  background-image: radial-gradient(ellipse 70% 50% at 70% 0%, rgb(255 255 255 / 24%), transparent 100%),
+    linear-gradient(var(--mx-tp-accent), var(--mx-tp-accent));
+  box-shadow: var(--fx-lift-pill), inset -1px 1px 1px rgb(255 255 255 / 28%);
+}
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme] .mx-dp-chip[aria-pressed="true"] .mx-dp-chip-sub { color: inherit; opacity: 0.9; }
+html[data-fx="v2"][data-shell="mobile"] body[data-style="glass"][data-theme="dark"] .mx-dp-chip[aria-pressed="true"] {
+  background-image: radial-gradient(ellipse 70% 50% at 70% 0%, rgb(255 255 255 / 30%), transparent 100%),
+    linear-gradient(var(--mx-tp-accent), var(--mx-tp-accent));
+  box-shadow: var(--fx-lift-pill), 0 0 14px -4px color-mix(in srgb, var(--mx-tp-accent) 60%, transparent);
+}
+/* Sunset: the glass and accent tokens carry the tint; nothing else changes */
+
+/* Landscape phones: lower chips and box (the sheet keeps the time picker's width) */
+@media (orientation: landscape) and (max-height: 500px) {
+  html[data-shell="mobile"] .mx-dp-chips { margin-bottom: 8px; }
+  html[data-shell="mobile"] .mx-dp-chip { height: 46px; }
+  html[data-shell="mobile"] .mx-dp-field .mx-df-text { height: 46px; }
+}
+@media (forced-colors: active) {
+  html[data-shell="mobile"] :is(.mx-df-text, .mx-df-cal, .mx-dp-chip) { border: 1px solid CanvasText; }
+  html[data-shell="mobile"] .mx-dp-chip[aria-pressed="true"] {
+    forced-color-adjust: none;
+    background: Highlight; color: HighlightText; border-color: Highlight;
+  }
+  html[data-shell="mobile"] .mx-dp-chip[aria-pressed="true"] .mx-dp-chip-sub { color: HighlightText; }
+  html[data-shell="mobile"] :is(.mx-df-cal, .mx-df-clear, .mx-dp-chip):disabled { color: GrayText; }
+  html[data-shell="mobile"] .mx-df-text[aria-invalid="true"] { border: 2px solid Mark; }
 }
