@@ -5,7 +5,7 @@ import { model, editState, currentData, currentSections } from '../state.js';
 import { $, $$, showToast, generateKey, escapeAttr } from '../utils.js';
 import { PLACEHOLDER_URL, ANIMATION_DELAY_MS, CARD_HIDE_DELAY_MS, AUTH_TOKEN_KEY, AUTH_USERNAME_KEY } from '../constants.js';
 import { saveModel, restoreModel, exportBackupFile, deepMergeModel, cleanupOldBackups } from './storage.js';
-import { setImageFromRef, getDisplaySrc, classifyImageRef, uploadFile, dataURLtoBlob, filenameFromDataUrl } from './file-service.js';
+import { setImageFromRef, classifyImageRef, uploadFile } from './file-service.js';
 import { isLoggedIn, readGoogleSigninReturn, getAuthToken, getUsername } from './auth.js';
 import { htmlToPlainText } from './markdown.js';
 import { isPhoneDevice } from './mobile-device.js';
@@ -981,6 +981,20 @@ export function setupCardCollapseExpand() {
 
 // ===== HEADER AND TITLES =====
 
+// The header photo / logo takes the image the image editor handed back (as
+// stored: an R2 reference, inline data, an asset path). A stored file it stops
+// using is queued for deletion, which waits for the profile to be saved and
+// keeps any file something else (the media library, the other header image)
+// still holds
+function replaceHeaderImage(header, field, src) {
+  const oldRef = classifyImageRef(header[field]);
+  const newRef = classifyImageRef(src);
+  if (oldRef.type === 'r2' && !(newRef.type === 'r2' && newRef.value === oldRef.value) && window.cleanupOrphanedR2Files) {
+    window.cleanupOrphanedR2Files([oldRef.value]);
+  }
+  header[field] = src;
+}
+
 export function renderHeaderAndTitles() {
   const data = currentData();
   const logoEl = $('.company-logo');
@@ -999,16 +1013,13 @@ export function renderHeaderAndTitles() {
     // User toggle: invert the logo in dark mode only (styles.css .invert-dark)
     logoEl.classList.toggle('invert-dark', data.header.companyLogoInvertDark === true);
 
-    // Always set onload handler first, then set/refresh src
+    // Always set onload handler first, then set/refresh src; once the source
+    // is in place, an image already loaded (the same address again: a new
+    // zoom / position on the same photo fires no load) is placed right away
     logoEl.onload = applyLogoTransformFn;
-    const logoRef = classifyImageRef(data.header.companyLogoSrc);
-    setImageFromRef(logoEl, data.header.companyLogoSrc, 'assets/icons/placeholder-logo.svg');
-
-    // If image is already complete (cached), manually trigger transform
-    // Skip for R2 refs — transform fires via onload when async fetch completes
-    if (logoRef.type !== 'r2' && logoEl.complete && logoEl.naturalWidth) {
-      applyLogoTransformFn();
-    }
+    setImageFromRef(logoEl, data.header.companyLogoSrc, 'assets/icons/placeholder-logo.svg').then((current) => {
+      if (current && logoEl.complete && logoEl.naturalWidth) applyLogoTransformFn();
+    });
   }
   const profileEl = $('.profile-photo');
   if (profileEl) {
@@ -1027,15 +1038,11 @@ export function renderHeaderAndTitles() {
 
     // Always set onload handler first, then set/refresh src
     // This ensures transform is applied whether image is cached or newly loaded
+    // (and, as for the logo, right away when the same image is already loaded)
     profileEl.onload = applyTransform;
-    const profileRef = classifyImageRef(data.header.profilePhotoSrc);
-    setImageFromRef(profileEl, data.header.profilePhotoSrc, 'assets/icons/placeholder-profile.svg');
-
-    // If image is already complete (cached), manually trigger transform
-    // Skip for R2 refs — transform fires via onload when async fetch completes
-    if (profileRef.type !== 'r2' && profileEl.complete && profileEl.naturalWidth) {
-      applyTransform();
-    }
+    setImageFromRef(profileEl, data.header.profilePhotoSrc, 'assets/icons/placeholder-profile.svg').then((current) => {
+      if (current && profileEl.complete && profileEl.naturalWidth) applyTransform();
+    });
   }
   const nameEl = $('.profile-name');
   if (nameEl) nameEl.textContent = data.header.profileName;
@@ -1299,42 +1306,26 @@ export function wireUI() {
         const xPixels = (data.header.companyLogoXPercent || 0) * editorFrameSize;
         const yPixels = (data.header.companyLogoYPercent || 0) * editorFrameSize;
 
-        // Resolve R2 ref to displayable src for the image editor
-        getDisplaySrc(data.header.companyLogoSrc, 'assets/icons/placeholder-logo.svg').then(editorSrc => {
-          window.openImageEditor(
-            editorSrc,
-            data.header.companyLogoZoom || 1,
-            xPixels,
-            yPixels,
-            async ({ src, zoom, xPercent, yPercent, invertDark }) => {
-              let newSrc = src;
-              // Upload to R2 if authenticated and src is a data URL
-              if (isLoggedIn() && typeof src === 'string' && src.startsWith('data:') && !src.startsWith('data:image/svg')) {
-                const blob = dataURLtoBlob(src);
-                const fileName = filenameFromDataUrl(src, 'company-logo');
-                const result = await uploadFile(blob, fileName);
-                if (result.ok && result.fileId) {
-                  // Queue old R2 file for cleanup (deleted after D1 save confirms)
-                  const oldRef = classifyImageRef(data.header.companyLogoSrc);
-                  if (oldRef.type === 'r2' && window.cleanupOrphanedR2Files) {
-                    window.cleanupOrphanedR2Files([oldRef.value]);
-                  }
-                  newSrc = { type: 'r2', fileId: result.fileId };
-                }
-              }
-              data.header.companyLogoSrc = newSrc;
-              data.header.companyLogoZoom = zoom;
-              data.header.companyLogoXPercent = xPercent;
-              data.header.companyLogoYPercent = yPercent;
-              // Explicit boolean: header objects are merged key-by-key on restore
-              data.header.companyLogoInvertDark = invertDark === true;
-              markDirtyAndSave();
-              renderHeaderAndTitles();
-            },
-            'logo',
-            data.header.companyLogoInvertDark === true
-          );
-        });
+        // The editor gets the stored image (it shows it itself) and hands back
+        // the image to store: never the page-only address it displayed
+        window.openImageEditor(
+          data.header.companyLogoSrc,
+          data.header.companyLogoZoom || 1,
+          xPixels,
+          yPixels,
+          ({ src, zoom, xPercent, yPercent, invertDark }) => {
+            replaceHeaderImage(data.header, 'companyLogoSrc', src);
+            data.header.companyLogoZoom = zoom;
+            data.header.companyLogoXPercent = xPercent;
+            data.header.companyLogoYPercent = yPercent;
+            // Explicit boolean: header objects are merged key-by-key on restore
+            data.header.companyLogoInvertDark = invertDark === true;
+            markDirtyAndSave();
+            renderHeaderAndTitles();
+          },
+          'logo',
+          data.header.companyLogoInvertDark === true
+        );
       }
     });
   }
@@ -1352,37 +1343,21 @@ export function wireUI() {
         const xPixels = (data.header.profilePhotoXPercent || 0) * editorFrameSize;
         const yPixels = (data.header.profilePhotoYPercent || 0) * editorFrameSize;
 
-        getDisplaySrc(data.header.profilePhotoSrc, 'assets/icons/placeholder-profile.svg').then(editorSrc => {
-          window.openImageEditor(
-            editorSrc,
-            data.header.profilePhotoZoom || 1,
-            xPixels,
-            yPixels,
-            async ({ src, zoom, xPercent, yPercent }) => {
-              let newSrc = src;
-              if (isLoggedIn() && typeof src === 'string' && src.startsWith('data:') && !src.startsWith('data:image/svg')) {
-                const blob = dataURLtoBlob(src);
-                const fileName = filenameFromDataUrl(src, 'profile-photo');
-                const result = await uploadFile(blob, fileName);
-                if (result.ok && result.fileId) {
-                  // Queue old R2 file for cleanup (deleted after D1 save confirms)
-                  const oldRef = classifyImageRef(data.header.profilePhotoSrc);
-                  if (oldRef.type === 'r2' && window.cleanupOrphanedR2Files) {
-                    window.cleanupOrphanedR2Files([oldRef.value]);
-                  }
-                  newSrc = { type: 'r2', fileId: result.fileId };
-                }
-              }
-              data.header.profilePhotoSrc = newSrc;
-              data.header.profilePhotoZoom = zoom;
-              data.header.profilePhotoXPercent = xPercent;
-              data.header.profilePhotoYPercent = yPercent;
-              markDirtyAndSave();
-              renderHeaderAndTitles();
-            },
-            'profile'
-          );
-        });
+        window.openImageEditor(
+          data.header.profilePhotoSrc,
+          data.header.profilePhotoZoom || 1,
+          xPixels,
+          yPixels,
+          ({ src, zoom, xPercent, yPercent }) => {
+            replaceHeaderImage(data.header, 'profilePhotoSrc', src);
+            data.header.profilePhotoZoom = zoom;
+            data.header.profilePhotoXPercent = xPercent;
+            data.header.profilePhotoYPercent = yPercent;
+            markDirtyAndSave();
+            renderHeaderAndTitles();
+          },
+          'profile'
+        );
       }
     });
   }

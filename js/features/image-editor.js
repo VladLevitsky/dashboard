@@ -2,13 +2,20 @@
 // Handles profile photo positioning and scaling
 
 import { $ } from '../utils.js';
-import { currentData } from '../state.js';
-import { markDirtyAndSave } from './edit-mode.js';
 import { openMediaLibrary, persistImageFromLibraryEntry } from './media-library.js';
+import { setImageFromRef, classifyImageRef } from '../core/file-service.js';
+
+const PLACEHOLDERS = {
+  profile: 'assets/icons/placeholder-profile.svg',
+  logo: 'assets/icons/placeholder-logo.svg'
+};
 
 // Editor state
 let editorState = {
-  imageSrc: '',
+  // The image as stored (an R2 reference, a data: URL, an asset path, a URL):
+  // what Save hands back. The preview shows a display copy of it (an R2 image
+  // arrives as a blob: address that only lives in this page, never saved)
+  imageRef: '',
   zoomFactor: 1,  // 1.0 = 100%, 1.5 = 150% (relative zoom, not raw scale)
   x: 0,           // Position offset in pixels (for editor's 180px frame)
   y: 0,
@@ -25,10 +32,17 @@ let editorState = {
   editorType: 'profile'  // 'profile' or 'logo'
 };
 
+// The stored image, or the placeholder when there is none (or it can't be
+// shown: e.g. a page-only blob: address an older build saved)
+function usableRef(ref, type) {
+  return classifyImageRef(ref).type === 'none' ? (PLACEHOLDERS[type] || PLACEHOLDERS.profile) : ref;
+}
+
 // --- Open image editor modal
+// currentRef: the image as stored (header.profilePhotoSrc / companyLogoSrc)
 // type: 'profile' (circle frame) or 'logo' (square frame)
 // invertDark: logo only, initial state of the "Invert colors in dark mode" toggle
-export function openImageEditor(currentSrc, currentZoom, currentX, currentY, onSave, type = 'profile', invertDark = false) {
+export function openImageEditor(currentRef, currentZoom, currentX, currentY, onSave, type = 'profile', invertDark = false) {
   const modal = $('#image-editor-modal');
   const img = $('#image-editor-img');
   const scaleSlider = $('#image-editor-scale');
@@ -37,7 +51,8 @@ export function openImageEditor(currentSrc, currentZoom, currentX, currentY, onS
   const titleEl = modal.querySelector('.image-editor-header h4');
 
   // Initialize state - x/y are pixel offsets within the editor frame
-  editorState.imageSrc = currentSrc || '';
+  editorState.imageRef = usableRef(currentRef, type);
+  editorState.imageNaturalWidth = 0;
   editorState.zoomFactor = currentZoom || 1;
   editorState.x = currentX || 0;  // Pixel offset
   editorState.y = currentY || 0;  // Pixel offset
@@ -97,10 +112,16 @@ export function openImageEditor(currentSrc, currentZoom, currentX, currentY, onS
     updateImageTransform();
   };
 
-  img.src = editorState.imageSrc;
+  showPreview(img, editorState.imageRef);
 
   // Set up event listeners
   setupEditorListeners();
+}
+
+// Shows a stored image in the preview (R2: fetched with the session)
+function showPreview(img, ref) {
+  img.removeAttribute('src');
+  setImageFromRef(img, ref, PLACEHOLDERS[editorState.editorType] || PLACEHOLDERS.profile);
 }
 
 // --- Close image editor
@@ -277,12 +298,13 @@ function handleChooseImage() {
     const scaleSlider = $('#image-editor-scale');
     const scaleValue = $('#image-editor-scale-value');
 
-    editorState.imageSrc = persistImageFromLibraryEntry(chosen);
+    editorState.imageRef = usableRef(persistImageFromLibraryEntry(chosen), editorState.editorType);
 
     // Reset position and zoom when choosing new image
     editorState.x = 0;
     editorState.y = 0;
     editorState.zoomFactor = 1;
+    editorState.imageNaturalWidth = 0;
 
     // Load new image and recalculate dimensions
     img.onload = () => {
@@ -314,7 +336,7 @@ function handleChooseImage() {
       updateImageTransform();
     };
 
-    img.src = editorState.imageSrc;
+    showPreview(img, editorState.imageRef);
   });
 }
 
@@ -324,7 +346,7 @@ function handleSave() {
     // Save x/y as percentage of frame size so it scales correctly to profile
     const invertInput = $('#image-editor-invert');
     editorState.onSave({
-      src: editorState.imageSrc,
+      src: editorState.imageRef,
       zoom: editorState.zoomFactor,
       xPercent: editorState.x / editorState.frameSize,
       yPercent: editorState.y / editorState.frameSize,

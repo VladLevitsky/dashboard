@@ -17,6 +17,8 @@ export const API_BASE = 'https://personal-dashboard-api.levitskyvladislav.worker
 export const TURNSTILE_SITE_KEY = '0x4AAAAAAEW_CVqSbx8-0wny';
 export const AUTH_TOKEN_KEY = 'pd_auth_token';
 export const AUTH_USERNAME_KEY = 'pd_auth_username';
+// The account whose session ended (a 401) without signing out: its dashboard stays on screen
+export const AUTH_LAPSED_KEY = 'pd_auth_lapsed';
 export const SCOPED_KEY_PREFIX = 'pd_user_';
 export const SYNC_INTERVAL_MS = 20 * 60 * 1000; // 20 minutes
 export const LINKS_FILE_PATH = 'data/user_links.json';

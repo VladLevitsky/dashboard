@@ -3693,6 +3693,7 @@ section.card[id^="new-card-"].card-size-full {
 .media-item img { width: 100%; height: 120px; object-fit: contain; background: white; }
 .media-item .name { padding: 6px 8px; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .upload-btn { display: inline-grid; align-items: center; border: 1px dashed #cbd5e1; padding: 6px 10px; border-radius: 8px; cursor: pointer; }
+.upload-btn[aria-busy="true"] { cursor: progress; opacity: 0.7; }
 /* Delete button states */
 /* Delete button: grey background when disabled/default item, red when user item */
 #media-delete { background: #9ca3af; border-color: #9ca3af; color: #f1f5f9; transition: background 0.15s, border-color 0.15s; }

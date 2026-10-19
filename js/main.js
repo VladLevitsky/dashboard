@@ -115,7 +115,8 @@ import {
   addFilesToMediaLibrary,
   persistImageFromLibraryEntry,
   loadManifestMedia,
-  openMediaLibrary
+  openMediaLibrary,
+  libraryFileIds
 } from './features/media-library.js';
 
 import {
@@ -328,6 +329,7 @@ import {
   initAuth,
   isLoggedIn,
   getUsername,
+  getDataOwner,
   login,
   register,
   logout
@@ -335,7 +337,7 @@ import {
 
 import {
   getActiveStorageKey,
-  migrateToScopedStorage,
+  prepareAccountCopy,
   markCloudDirty,
   cloudSave,
   cloudLoad,
@@ -496,6 +498,7 @@ window.addFilesToMediaLibrary = addFilesToMediaLibrary;
 window.persistImageFromLibraryEntry = persistImageFromLibraryEntry;
 window.loadManifestMedia = loadManifestMedia;
 window.openMediaLibrary = openMediaLibrary;
+window.mediaLibraryFileIds = libraryFileIds;
 
 // Import/Export
 window.extractUrlOverrides = extractUrlOverrides;
@@ -703,13 +706,14 @@ window.clearAllStickyNotes = clearAllStickyNotes;
 window.initAuth = initAuth;
 window.isLoggedIn = isLoggedIn;
 window.getUsername = getUsername;
+window.getDataOwner = getDataOwner;
 window.login = login;
 window.register = register;
 window.logout = logout;
 
 // Cloud Sync
 window.getActiveStorageKey = getActiveStorageKey;
-window.migrateToScopedStorage = migrateToScopedStorage;
+window.prepareAccountCopy = prepareAccountCopy;
 window.markCloudDirty = markCloudDirty;
 window.cloudSave = cloudSave;
 window.cloudLoad = cloudLoad;

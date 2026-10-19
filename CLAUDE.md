@@ -120,8 +120,8 @@ Images inside rich text (descriptions, projects, meetings, ideas, notes) are sto
 │   │   ├── init.js          # App bootstrap, wireUI, header rendering
 │   │   ├── storage.js       # localStorage, deepMergeModel, schema migrations
 │   │   ├── import-export.js # JSON export/import with migration
-│   │   ├── auth.js          # Authentication (login/register/logout/session, Google sign-in calls + the #google-signin return)
-│   │   ├── sync.js          # Cloud sync (D1 profiles, dirty tracking, 20-min interval, time-log merge)
+│   │   ├── auth.js          # Authentication (login/register/logout/session, the data owner incl. an expired session, Google sign-in calls + the #google-signin return)
+│   │   ├── sync.js          # Cloud sync (D1 profiles, per-account copies + first sign-in rules, dirty tracking, 20-min interval, time-log merge)
 │   │   ├── time-log.js      # Pure time-log rules: start/stop, totals, merge, import (no DOM, Node-testable)
 │   │   ├── rich-text-refs.js # Pure string rules for <img data-r2-file-id> in rich text (no DOM, Node-testable)
 │   │   ├── quick-capture-parse.js # Pure quick capture rules: dates, times, !commands, escapes, resolveDue, help list (no DOM, Node-testable)
@@ -155,7 +155,7 @@ Images inside rich text (descriptions, projects, meetings, ideas, notes) are sto
 │   │   ├── google-calendar.js # Google Calendar: status, connect / disconnect, task calendar sync after uploads, busy cache, the panel
 │   │   ├── busy-strip.js    # The busy-time strip (Today on both): one day of Google free/busy, 8 hours in view, scrolls
 │   │   ├── quick-access.js  # Quick Access data: long-press toggle, entry repair, reconciliation, quick links
-│   │   ├── media-library.js
+│   │   ├── media-library.js # The image picker: one library per account, uploads to R2, self-cleaning entries
 │   │   ├── image-editor.js  # Profile/logo positioning
 │   │   ├── reminders.js     # Calendar/interval popovers, breakdown modal
 │   │   ├── cards.js         # Card CRUD, type selector
@@ -216,7 +216,7 @@ Images inside rich text (descriptions, projects, meetings, ideas, notes) are sto
     ├── Backend/             # AI_BACKEND_CONTEXT.md; gcal-worker.js (the Worker's Google Calendar block), gcal-schema.sql, gcal-worker-test.mjs (node:sqlite + fake Google), gcal-integration.md; google-signin-worker.js (the Google sign-in block), google-signin-schema.sql, google-signin-setup.md; build-worker.mjs → api-worker.js, api-worker-test.mjs
     ├── writing/             # Writing engine build spec (SPEC.md), plan, code maps, research digests
     ├── mobile/              # Mobile shell build spec (SPEC.md), unit notes (notes/F0…F6, requests.md), shoot-f*.cjs screenshot tools, baseline/ (tablet + desktop before/after)
-    ├── wr/                  # Playwright harness (harness.cjs) + browser suites: smoke-e2e, qa-foundation-e2e, blocks-, input-rules-, menus-, links-, find-, focus-, export-, help-, notes-e2e, gcal-e2e, google-signin-e2e, login-challenge-e2e (mocked Worker, desktop + phone); mobile-lib.cjs + mobile-shell-, -tasks-, -create-, -write-, -today-, -links-, -integration-, -app-e2e (the installable app)
+    ├── wr/                  # Playwright harness (harness.cjs) + browser suites: smoke-e2e, qa-foundation-e2e, blocks-, input-rules-, menus-, links-, find-, focus-, export-, help-, notes-e2e, gcal-e2e, google-signin-e2e, login-challenge-e2e (mocked Worker, desktop + phone), account-safety-e2e (mocked Worker with several accounts + file storage: what goes into which account, expired sessions, the media library, photo / logo / icon pickers); mobile-lib.cjs + mobile-shell-, -tasks-, -create-, -write-, -today-, -links-, -integration-, -app-e2e (the installable app)
     ├── writing-commands-test.mjs / writing-rules-test.mjs / writing-templates-test.mjs / markdown-test.mjs # Node tests for the pure writing modules
     ├── pwa-test.mjs         # Node: manifest fields + URLs on the Pages URL, icon PNG sizes, the manifest link script per user agent, no service worker
     ├── mobile-device-test.mjs / mobile-sync-test.mjs / mobile-nav-test.mjs / mobile-common-test.mjs # Node: phone rule + boot-script parity + ?v= specifier check, sync decisions, history plan, shell helpers
@@ -232,7 +232,11 @@ Images inside rich text (descriptions, projects, meetings, ideas, notes) are sto
 ```
 
 ### Storage & Sync
-- **localStorage key**: `personal_dashboard_model_v2` (fast browser cache)
+- **localStorage key**: `personal_dashboard_model_v2` (fast browser cache) = the **signed-out dashboard**; each account has its own copy `pd_user_<username>_model_v2` (+ `…__dirty` = changes not uploaded yet)
+- **Whose copy (user decision 2026-10-18: nothing of one dashboard ever goes into another account)**: `getDataOwner()` (auth.js) = the signed-in account, or the account whose session ended (a 401) without a sign-out (`pd_auth_lapsed`); `getActiveStorageKey()` follows it. `saveModel()` writes to the copy `restoreModel()` read (`_modelStorageKey`, storage.js), so a save made while a sign-in / sign-out is still switching stays with the dashboard on screen; `markCloudDirty(key)` flags that copy
+  - **Expired session** (any 401 outside the Google routes): signed out, but that account's dashboard stays on screen and every change goes to ITS copy (flagged dirty, never the signed-out dashboard), also after a reload. The sign-in dialog then names it (`#auth-lapsed-note`: username prefilled, "Sign out instead"); signing in as it uploads the waiting changes (syncOnLogin rule 1); signing in as anyone else leaves them waiting in its copy
+  - **First sign-in on this browser** (`prepareAccountCopy`, sync.js, before the model is read): the account's copy already here → kept; else the cloud copy when it has one (any saved profile, however sparse); else empty. The signed-out dashboard goes into an account only when that account was created just now here (Create account / a new Google account), only once (`personal_dashboard_model_v2__carried`), and never on a browser where an account was used before this rule (older builds copied it into the first account). A cloud copy that can't be read → the sign-in stops (`abandonSignIn`, the dialog says why) instead of showing a dashboard that isn't the account's
+  - The session is saved only once the account's copy is ready (`persistSession`): a reload mid sign-in comes back as before. Sign in / sign out wait for edit mode to end (toast `Save or cancel your edits before signing in|out`): Confirm would merge the working copy into the other dashboard. Switching accounts resets the in-memory sync flag (`resetSyncState`) and the file cache (`resetFileCache`: one account's images are never shown to another); `cloudSave()` drops an upload whose account changed meanwhile
 - **D1**: Durable cloud profile via `PUT /profile` (2MB max)
 - **R2**: Private file/image storage via `POST /files` (5MB/file, 100MB/user)
 - **Sync model**: localStorage for immediate edits → cloud sync on confirm, every 20 min, and on import
@@ -474,12 +478,14 @@ Accessible via gear icon in edit mode. Contains:
 - Images (profile photo, logo, card icons) stored in R2 when authenticated
 - Legacy Base64 images auto-migrated to R2 on login (safe, idempotent)
 - Edit popover for icons/subtasks/reminders supports URL or File Upload via `allowFileLink` dropdown
+- **Media library** (`media-library.js`, the image picker for icons, photo, logo, item creator): one per account (`personal_dashboard_media_library_v1@<username>`; signed out: the original key). Uploads go to R2 when signed in (`Uploading…` on the button; the new image comes back picked); an inline (Base64) entry is uploaded once when picked while signed in, so whatever uses it gets an R2 reference and nothing uploads after the editor closed. The shared pre-split library (`…__split` stamp) is copied once into each account's; an R2 entry that answers 404 for the account (another account's file, a deleted one) drops out the first time it fails to load (`isFileMissing`). Files the library holds count as referenced (`window.mediaLibraryFileIds` in `getAllReferencedFileIds`): replacing an icon or photo never deletes a library image
+- **Photo / logo editor** (`image-editor.js`): gets and returns the image AS STORED (`openImageEditor(ref, …)`; the preview shows it through `setImageFromRef`), never the page-only `blob:` address it displays (an older build saved that address, so the photo vanished on Confirm). The header callbacks (`replaceHeaderImage`, init.js) write synchronously and queue a replaced R2 file for deferred cleanup. `setImageFromRef` returns false when a newer call for the same `<img>` took over (a late fetch never overwrites it); the header re-places an already-loaded image after a zoom / position change
 - Task editor has multi-link system: `+` button → choose URL or File → subtask-style input with confirm/edit/delete
 - Meeting editor has dedicated Files section for R2 attachments
 - File-linked items open via authenticated fetch (images/PDFs inline, HTML via isolated viewer)
 - Image refs use `classifyImageRef()` → `setImageFromRef()` for rendering
 - **Two limits**: the profile JSON (all dashboard data, one D1 row) is capped at 2 MB (`MAX_PROFILE_BYTES`, and D1's own 2 MB row limit); R2 file storage is 100 MB/user (5 MB/file) — what the File Manager bar shows. Anything image-sized belongs in R2
-- **File Manager**: Orphaned files (not referenced anywhere in the profile or the edit-mode working copy) on top with Delete All, then Images and Documents. Deleting a file also scrubs its references, including `<img data-r2-file-id>` in rich text
+- **File Manager**: Orphaned files (not referenced anywhere in the profile, the edit-mode working copy or this account's media library) on top with Delete All, then Images and Documents. Deleting a file also scrubs its references, including `<img data-r2-file-id>` in rich text
 
 ### Rich-Text Images (`js/features/rich-text-images.js` + `js/core/rich-text-refs.js`)
 - Pasting or dropping an image into any of the 6 rich-text editors uploads it to R2 (`attachImageUpload(editor, { label, getTitle })`, attached next to `attachImageResizeHandler`). Files are named after where they were pasted: `Task - <title> 2026-09-29 10.32.15.png` (dropped files keep their own name)
@@ -492,9 +498,9 @@ Accessible via gear icon in edit mode. Contains:
 
 ### Authentication & Cloud Sync
 - Username/password auth via Cloudflare Workers
-- Session token stored in localStorage (30-day expiry)
+- Session token stored in localStorage (30-day expiry), once the account's dashboard copy is ready (`persistSession`, see Storage & Sync)
 - Profile syncs to D1 on: confirm edits, import, every 20 min while dirty; phones also 2.5 s after every save, on hide and on resume (Mobile Shell → Sync on phones)
-- 401 invalidates session but preserves local dashboard data
+- 401 ends the session but keeps that account's dashboard (and its unsynced changes) in its own copy until it signs in again or someone signs out / in (Storage & Sync → Whose copy)
 - Sign-in security check: after many attempts on one account from different networks the Worker answers `403 { turnstile_required: true }`; the sign-in form then shows the Turnstile widget (same container as registration) and the next attempt sends `turnstileToken` (`login(username, password, turnstileToken)`). Too many from one network: `429` with a wait. Worker side: Reference/Backend (`api-worker.phase1.js`)
 - **Google sign-in** (user decisions 2026-10-17; Worker block `Reference/Backend/google-signin-worker.js`, setup `google-signin-setup.md`): "Continue with Google" (`#auth-google-btn`, Google's white / dark button with the four-colour G) above the form in both Sign In and Create Account. Google is asked for `openid email` only (same OAuth client as Calendar, no calendar access, nothing stored but Google's account id and email). Logins are matched by Google `sub`, never by email
   - Flow: `startGoogleSignin(mode)` makes a random secret, keeps it in sessionStorage `dashboard_google_signin` and sends only its SHA-256 (`proof`) to `POST /auth/google/start` → Google → the Worker's callback → back to `DASHBOARD_URL#google-signin=ok&code=…` (or `=error&reason=…`). The FRAGMENT never reaches a server and holds no session: `readGoogleSigninReturn()` (auth.js) reads and strips it first thing in `init()` (`history.replaceState(history.state, …)`, next to `readGcalReturn()`), and `resumeGoogleSignin(startupSync)` at the end of `init()` POSTs the code + this tab's secret to `/auth/google/finish`. A code without the secret (another tab, a link someone sent) is refused before the Worker
@@ -590,7 +596,8 @@ Accessible via gear icon in edit mode. Contains:
 - `classifyImageRef(ref)` - Detect r2/asset/url/base64/none
 - `migrateBase64ToR2()` - Auto-migrate legacy Base64 images (header, icons, and images embedded in rich text)
 - `cacheFileBlob(fileId, blob)` - Seed the blob cache with bytes already in hand (just-uploaded images)
-- `getAllReferencedFileIds()` - Every fileId the profile (and edit-mode working copy, for rich text) still uses
+- `resetFileCache()` - On an account switch: drops cached blob URLs, "not found" answers and late fetches; `isFileMissing(fileId)` - the file answered 404 for this account
+- `getAllReferencedFileIds()` - Every fileId the profile (and edit-mode working copy, for rich text, and this account's media library) still uses
 - `reconcileTaskHighlights(container)` - State-based highlight reconciliation
 
 ### Tasks
@@ -624,8 +631,9 @@ Accessible via gear icon in edit mode. Contains:
 - `attachHighlighterContextMenu(editor, options)` - Wire right-click menu
 
 ### Authentication
-- auth.js: `login(username, password, turnstileToken?)` / `register` / `logout` / `apiCall(method, path, body, { keepSession })` / `readGoogleSigninReturn()` / `takeGoogleSigninReturn()` / `startGoogleSignin('signin' | 'link')` → `{ ok, url }` / `finishGoogleSignin(code, secret)` → `{ kind: 'session' | 'signup' | 'link' }` / `registerWithGoogle(code, secret, username, turnstileToken)` / `getGoogleSigninStatus()` → `{ linked, email, hasPassword }` / `unlinkGoogleSignin()`
-- auth-ui.js: `resumeGoogleSignin(startupSync)` (end of `init()`) / `buildGoogleSigninPanel(host, { title, fallback })` / `completeSignIn(username)` (internal: the shared after-sign-in flow)
+- auth.js: `login(username, password, turnstileToken?)` / `register` / `logout` / `getDataOwner()` (signed-in or expired-session account, else null) / `getLapsedUsername()` / `persistSession()` / `abandonSignIn()` / `apiCall(method, path, body, { keepSession })` / `readGoogleSigninReturn()` / `takeGoogleSigninReturn()` / `startGoogleSignin('signin' | 'link')` → `{ ok, url }` / `finishGoogleSignin(code, secret)` → `{ kind: 'session' | 'signup' | 'link' }` / `registerWithGoogle(code, secret, username, turnstileToken)` / `getGoogleSigninStatus()` → `{ linked, email, hasPassword }` / `unlinkGoogleSignin()`
+- auth-ui.js: `resumeGoogleSignin(startupSync)` (end of `init()`) / `buildGoogleSigninPanel(host, { title, fallback })` / `completeSignIn(username, { created })` (internal: the shared after-sign-in flow: `prepareAccountCopy` → `persistSession` → the account's model)
+- sync.js: `getActiveStorageKey()` / `scopedStorageKey(username)` / `prepareAccountCopy(username, { created })` → `{ ok, source: 'local' | 'cloud' | 'carried' | 'empty', cloud }` / `syncOnLogin(prefetched?)` / `markCloudDirty(storageKey?)` / `resetSyncState()` / `cloudSave()` / `hasUnsyncedChanges()`
 
 ### Calendar, Badge & Today
 - `openCalendarView()` / `closeCalendarView()` / `refreshCalendarView()` (re-render if open)
@@ -757,7 +765,15 @@ On phones the modals holding these editors (and the note viewer) are the mobile 
 
 ## Version History
 
-### v5.8 (Current)
+### v5.9 (Current)
+- **Accounts never mix**: signing in no longer copies this browser's signed-out dashboard (or what an earlier account left in it) into an account. A new account created here still takes the signed-out dashboard, once; an existing account always shows its own copy (the cloud one, even a sparse one; empty when it has none); a cloud copy that can't be read stops the sign-in instead of guessing. Before, an empty or sparse account was overwritten with the signed-out dashboard, and signing in with edit mode open merged its edits into the account
+- **Expired sessions**: after a 401 the account's dashboard stays on screen and changes are kept in its own copy (never the signed-out dashboard); signing back in as that account uploads them, another account never sees them. The sign-in dialog names the account (username prefilled, "Sign out instead")
+- Sign in / sign out wait for edit mode to end; the session is saved only once the account's copy is ready (a reload mid sign-in comes back as before); a save made while switching stays with the dashboard on screen
+- **Media library per account**: each account sees its own uploads (another account's files no longer show up broken); "Uploading…" while it works, and the new image comes back selected; an inline image uploads once when used; a library image is never deleted because an icon or photo stopped using it
+- **Profile photo / logo**: the editor shows stored images (no more broken "Preview"), an adjust keeps the stored file (the photo no longer disappears on Confirm), and a zoom / position change shows right away
+- `MOBILE_BUILD` unchanged (no shell file changed)
+
+### v5.8
 - **Due times**: a task can have a time on its due date: the task editor's time field (× clears it), `3pm` / `3:30 pm` / `15:30` / `noon` in quick capture and the phone composer (a time alone = its next occurrence; `!notime` removes it), and the composer's date panel (`Time…`). Shown in Today, the calendar, phone rows and Coming up. Stored as `dueTime` + `dueTz` (the zone it was set in)
 - **Google Calendar at that time**: a flagged task with a time becomes a 30-minute event at that time instead of an all-day one (Worker update in `Reference/Backend/gcal-integration.md`; until it's pasted, timed tasks stay all-day; existing all-day events are untouched)
 - **Busy strip, zoomed in**: 8 hours at a time (from the hour before now), scroll / swipe / drag / ‹ › / Now for the rest of the day; every hour labelled, half-hour marks, blocks show their own times when they fit

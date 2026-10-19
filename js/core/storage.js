@@ -1,7 +1,7 @@
 // Personal Dashboard - Storage Module
 // Handles saving and restoring the model to/from localStorage
 
-import { PLACEHOLDER_URL, APP_VERSION } from '../constants.js';
+import { PLACEHOLDER_URL, APP_VERSION, STORAGE_KEY } from '../constants.js';
 import { model, currentData, normalizeTaskCategories } from '../state.js';
 import { showToast } from '../utils.js';
 import { getActiveStorageKey, markCloudDirty } from './sync.js';
@@ -468,6 +468,12 @@ export function sanitizeStoredRichText(data) {
   return changed;
 }
 
+// The saved copy the in-memory model was read from (restoreModel). Saves go
+// back to it even while a sign-in or sign-out is still switching accounts (the
+// session changes before the new dashboard is read), so the dashboard on
+// screen is never written into another account's copy
+let _modelStorageKey = null;
+
 // --- Save model to localStorage
 export function saveModel() {
   // Clean up old backups before saving to prevent quota issues
@@ -517,7 +523,7 @@ export function saveModel() {
     }
   });
 
-  const storageKey = getActiveStorageKey();
+  const storageKey = _modelStorageKey || getActiveStorageKey();
   try {
     localStorage.setItem(storageKey, JSON.stringify(payload));
   } catch (error) {
@@ -541,7 +547,7 @@ export function saveModel() {
 
   // Mark cloud sync as needed (skip during initial load / restore)
   if (!window.isInitialLoad) {
-    markCloudDirty();
+    markCloudDirty(storageKey);
   }
 
   announceSave();
@@ -569,11 +575,12 @@ function announceSave() {
 export async function restoreModel() {
   try {
     const storageKey = getActiveStorageKey();
+    _modelStorageKey = storageKey;
     let raw = localStorage.getItem(storageKey);
     let saved = raw ? JSON.parse(raw) : null;
 
-    if (!saved) {
-      // Fallback: try legacy v1 key
+    if (!saved && storageKey === STORAGE_KEY) {
+      // Fallback: try legacy v1 key (the signed-out dashboard's ancestor: never an account's)
       const rawV1 = localStorage.getItem('personal_dashboard_model_v1');
       if (rawV1) saved = JSON.parse(rawV1);
     }

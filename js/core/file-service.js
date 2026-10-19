@@ -11,6 +11,8 @@ import { collectRichTextFileIds, forEachString, findInlineImages, mapStringsDeep
 // ============================================================
 
 const _activeBlobUrls = new Map(); // fileId → blobUrl
+const _missingFiles = new Set();    // fileIds that answered 404 (not this account's, or deleted)
+let _cacheGeneration = 0;           // bumps when the account changes: late answers are dropped
 
 export function getBlobUrlForFile(fileId) {
   return _activeBlobUrls.get(fileId) || null;
@@ -26,6 +28,19 @@ function storeBlobUrl(fileId, blobUrl) {
 export function revokeAllBlobUrls() {
   _activeBlobUrls.forEach(url => URL.revokeObjectURL(url));
   _activeBlobUrls.clear();
+}
+
+// Signed in or out: one account's images are never shown from the cache to
+// another, and "missing" answers were the previous account's
+export function resetFileCache() {
+  _cacheGeneration++;
+  revokeAllBlobUrls();
+  _missingFiles.clear();
+}
+
+// The file answered "not found" for the signed-in account
+export function isFileMissing(fileId) {
+  return _missingFiles.has(fileId);
 }
 
 // Seed the cache with bytes we already have (e.g. an image just uploaded),
@@ -99,9 +114,12 @@ export function classifyLinkRef(item) {
  * @param {HTMLImageElement} img
  * @param {*} ref - Image reference (object or string)
  * @param {string} [placeholder] - Fallback src
+ * @returns {Promise<boolean>} false when a later call for the same <img> took
+ *   over while this one was fetching (its late answer is dropped)
  */
 export async function setImageFromRef(img, ref, placeholder) {
   const classified = classifyImageRef(ref);
+  const seq = (img._refSeq = (img._refSeq || 0) + 1);
 
   switch (classified.type) {
     case 'r2': {
@@ -109,19 +127,21 @@ export async function setImageFromRef(img, ref, placeholder) {
       const cached = getBlobUrlForFile(classified.value);
       if (cached) {
         img.src = cached;
-        return;
+        return true;
       }
       // Set placeholder while loading
       if (placeholder) img.src = placeholder;
       // Fetch authenticated
       try {
         const blobUrl = await fetchFileBlobUrl(classified.value);
+        if (img._refSeq !== seq) return false;
         if (blobUrl) {
           img.src = blobUrl;
         } else if (placeholder) {
           img.src = placeholder;
         }
       } catch {
+        if (img._refSeq !== seq) return false;
         if (placeholder) img.src = placeholder;
       }
       break;
@@ -136,6 +156,7 @@ export async function setImageFromRef(img, ref, placeholder) {
       if (placeholder) img.src = placeholder;
       break;
   }
+  return true;
 }
 
 /**
@@ -220,14 +241,20 @@ export async function fetchFileBlobUrl(fileId) {
   const cached = getBlobUrlForFile(fileId);
   if (cached) return cached;
 
+  const generation = _cacheGeneration;
   try {
     const res = await fetch(`${API_BASE}/files/${fileId}`, {
       headers: { 'Authorization': `Bearer ${getAuthToken()}` }
     });
 
-    if (!res.ok) return null;
+    if (generation !== _cacheGeneration) return null; // another account by now
+    if (!res.ok) {
+      if (res.status === 404) _missingFiles.add(fileId);
+      return null;
+    }
 
     const blob = await res.blob();
+    if (generation !== _cacheGeneration) return null;
     const blobUrl = URL.createObjectURL(blob);
     storeBlobUrl(fileId, blobUrl);
     return blobUrl;
@@ -537,6 +564,12 @@ export function getAllReferencedFileIds() {
   collectRichTextFileIds(model, ids);
   if (window.editState && window.editState.working) {
     collectRichTextFileIds(window.editState.working, ids);
+  }
+
+  // Images in this account's media library (media-library.js): an icon or
+  // photo that stops using one must not delete it from under the library
+  if (typeof window.mediaLibraryFileIds === 'function') {
+    try { window.mediaLibraryFileIds().forEach(id => ids.add(id)); } catch { /* library unreadable */ }
   }
 
   return ids;

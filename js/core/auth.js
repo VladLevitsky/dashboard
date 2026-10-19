@@ -2,18 +2,22 @@
 // Handles login, registration, logout, session persistence, and API communication.
 // Never stores passwords. Session token + username stored in localStorage.
 
-import { API_BASE, AUTH_TOKEN_KEY, AUTH_USERNAME_KEY } from '../constants.js';
+import { API_BASE, AUTH_TOKEN_KEY, AUTH_USERNAME_KEY, AUTH_LAPSED_KEY } from '../constants.js';
 
 // --- Internal auth state (mirrors localStorage for fast access)
 const _auth = {
   token: null,
-  username: null
+  username: null,
+  lapsed: null,     // the account whose session ended (401) without a sign-out
+  persisted: false  // the session is saved (a sign-in in progress is not yet)
 };
 
 // --- Initialize auth state from localStorage on app load
 export function initAuth() {
   _auth.token = localStorage.getItem(AUTH_TOKEN_KEY) || null;
   _auth.username = localStorage.getItem(AUTH_USERNAME_KEY) || null;
+  _auth.persisted = !!_auth.token;
+  _auth.lapsed = _auth.token ? null : (localStorage.getItem(AUTH_LAPSED_KEY) || null);
   return { isLoggedIn: isLoggedIn(), username: _auth.username };
 }
 
@@ -23,6 +27,19 @@ export function isLoggedIn() {
 
 export function getUsername() {
   return _auth.username;
+}
+
+// Whose dashboard this page holds: the signed-in account, or the one whose
+// session ended (a 401) without signing out. Its own saved copy stays in use,
+// and its changes wait to sync, until someone signs in or out; nothing of it
+// ever lands in the signed-out dashboard. Null = the signed-out dashboard
+export function getDataOwner() {
+  return _auth.username || (_auth.token ? null : _auth.lapsed) || null;
+}
+
+// The account whose session ended (shown by the sign-in dialog), else null
+export function getLapsedUsername() {
+  return _auth.token ? null : _auth.lapsed;
 }
 
 export function getAuthToken() {
@@ -47,9 +64,10 @@ export async function apiCall(method, path, body = null, { keepSession = false }
   try {
     const res = await fetch(`${API_BASE}${path}`, opts);
 
-    // Session expired / invalid token
+    // Session expired / invalid token: signed out, but the account's
+    // dashboard stays this page's (getDataOwner) until a sign-in or sign-out
     if (res.status === 401 && !keepSession) {
-      clearAuthState();
+      clearAuthState({ lapsed: true });
       return { ok: false, error: 'Session expired. Please sign in again.', status: 401 };
     }
 
@@ -77,19 +95,56 @@ export async function apiCall(method, path, body = null, { keepSession = false }
 }
 
 // --- Store auth credentials after successful login/register
+// In memory only until the account's dashboard copy is ready (persistSession,
+// auth-ui.js completeSignIn): a reload before that comes back as it was,
+// never signed in over a copy that isn't the account's
 function setAuthState(token, username) {
   _auth.token = token;
   _auth.username = username;
-  localStorage.setItem(AUTH_TOKEN_KEY, token);
-  localStorage.setItem(AUTH_USERNAME_KEY, username);
+  _auth.persisted = false;
+}
+
+// The sign-in is complete: the session is saved, and a session that had
+// ended before it is forgotten
+export function persistSession() {
+  if (!_auth.token || !_auth.username) return;
+  localStorage.setItem(AUTH_TOKEN_KEY, _auth.token);
+  localStorage.setItem(AUTH_USERNAME_KEY, _auth.username);
+  _auth.persisted = true;
+  _auth.lapsed = null;
+  try { localStorage.removeItem(AUTH_LAPSED_KEY); } catch (e) { /* ignore */ }
+}
+
+// A sign-in that could not finish (the account's dashboard couldn't be read):
+// the server session ends and everything is as before it (a session that had
+// ended stays the owner of what is on screen)
+export function abandonSignIn() {
+  if (_auth.token) apiCall('POST', '/logout').catch(() => {});
+  if (_auth.persisted) {
+    localStorage.removeItem(AUTH_TOKEN_KEY);
+    localStorage.removeItem(AUTH_USERNAME_KEY);
+  }
+  _auth.token = null;
+  _auth.username = null;
+  _auth.persisted = false;
 }
 
 // --- Clear auth state (logout or expired session)
-function clearAuthState() {
+// lapsed: an expired session (a 401), not a sign-out: the account is
+// remembered as the owner of what is on screen. A 401 to a sign-in still in
+// progress, or while signed out (a wrong password), keeps whatever was remembered
+function clearAuthState({ lapsed = false } = {}) {
+  const established = _auth.persisted ? _auth.username : null;
+  _auth.lapsed = lapsed ? (established || _auth.lapsed) : null;
   _auth.token = null;
   _auth.username = null;
+  _auth.persisted = false;
   localStorage.removeItem(AUTH_TOKEN_KEY);
   localStorage.removeItem(AUTH_USERNAME_KEY);
+  try {
+    if (_auth.lapsed) localStorage.setItem(AUTH_LAPSED_KEY, _auth.lapsed);
+    else localStorage.removeItem(AUTH_LAPSED_KEY);
+  } catch (e) { /* the in-memory owner still holds for this page */ }
 }
 
 // --- Register a new account

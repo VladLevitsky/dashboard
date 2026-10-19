@@ -6,9 +6,12 @@ import { $, showToast } from '../utils.js';
 import {
   isLoggedIn,
   getUsername,
+  getLapsedUsername,
   login,
   register,
   logout,
+  persistSession,
+  abandonSignIn,
   initAuth,
   startGoogleSignin,
   finishGoogleSignin,
@@ -18,7 +21,8 @@ import {
   takeGoogleSigninReturn
 } from '../core/auth.js';
 import {
-  migrateToScopedStorage,
+  prepareAccountCopy,
+  resetSyncState,
   syncOnLogin,
   startSyncTimer,
   stopSyncTimer,
@@ -26,6 +30,7 @@ import {
   isCloudDirty
 } from '../core/sync.js';
 import { restoreModel, saveModel } from '../core/storage.js';
+import { resetFileCache } from '../core/file-service.js';
 import { model, editState, resetModel } from '../state.js';
 import { buildGcalPanel, afterSignIn as gcalAfterSignIn, resetGcalState } from './google-calendar.js';
 
@@ -46,14 +51,25 @@ export function renderAuthUI() {
     btn.title = `Signed in as ${getUsername()}`;
   } else {
     btn.classList.remove('logged-in');
-    btn.title = 'Account';
+    const lapsed = getLapsedUsername();
+    btn.title = lapsed ? `Session ended: sign in as ${lapsed} to sync` : 'Account';
   }
+}
+
+// Signing in or out switches the whole dashboard: an edit session's working
+// copy belongs to the dashboard it was opened on (Confirm would merge it into
+// the other one), so it has to be saved or cancelled first
+function editsBlockAccountSwitch(verb) {
+  if (!editState.enabled) return false;
+  showToast(`Save or cancel your edits before signing ${verb}`);
+  return true;
 }
 
 // --- Open/close the auth modal ---
 function openAuthModal() {
   const modal = $('#auth-modal');
   if (!modal) return;
+  if (editsBlockAccountSwitch('in')) return;
 
   // Reset to login mode
   setAuthMode(false);
@@ -61,8 +77,62 @@ function openAuthModal() {
   $('#auth-username').value = '';
   $('#auth-password').value = '';
 
+  // A session that ended without a sign-out: its account is offered again
+  // (setAuthMode shows the note)
+  const lapsed = getLapsedUsername();
+  if (lapsed) $('#auth-username').value = lapsed;
+
   modal.hidden = false;
-  setTimeout(() => $('#auth-username').focus(), 100);
+  setTimeout(() => (lapsed ? $('#auth-password') : $('#auth-username')).focus(), 100);
+}
+
+// "Your session as … ended": the dashboard on screen is still that account's
+// (its changes wait to sync); signing in again uploads them, "Sign out" leaves
+// them waiting and shows the signed-out dashboard
+function showLapsedNote(user) {
+  const note = $('#auth-lapsed-note');
+  if (!note) return;
+  note.textContent = '';
+  if (!user) { note.hidden = true; return; }
+  const text = document.createElement('span');
+  text.append('Your session as ');
+  const who = document.createElement('strong');
+  who.textContent = user;
+  text.append(who, ' ended. Sign in again to sync the changes made on this device. ');
+  const out = document.createElement('button');
+  out.type = 'button';
+  out.className = 'auth-link-btn';
+  out.textContent = 'Sign out instead';
+  out.addEventListener('click', endLapsedSession);
+  note.append(text, out);
+  note.hidden = false;
+}
+
+async function endLapsedSession() {
+  if (_isSubmitting) return;
+  closeAuthModal();
+  await logout();
+  resetGcalState();
+  await showOwnerDashboard();
+  renderAuthUI();
+  showToast('Signed out');
+}
+
+// The dashboard of whoever owns this page now (signed in, a lapsed session,
+// or the signed-out dashboard), shown from its own saved copy
+async function showOwnerDashboard() {
+  resetSyncState();
+  resetFileCache();
+  resetModel();
+  await restoreModel();
+  if (window.renderHeaderAndTitles) window.renderHeaderAndTitles();
+  if (window.renderAllSections) window.renderAllSections();
+  if (window.applyDarkMode) window.applyDarkMode();
+  if (window.applyGlassMode) window.applyGlassMode();
+  if (window.applyGlassTheme) window.applyGlassTheme();
+  if (window.applyCellSize) window.applyCellSize();
+  if (window.ensureSectionPlusButtons) window.ensureSectionPlusButtons();
+  if (window.refreshTimeTrackingUI) window.refreshTimeTrackingUI();
 }
 
 function closeAuthModal() {
@@ -80,6 +150,7 @@ function setAuthMode(isRegister) {
   _loginChallenge = false;
   _googleSignup = null;
   showGoogleSignupLook(false);
+  showLapsedNote(isRegister ? null : getLapsedUsername());
   const title = $('#auth-modal-title');
   const submitBtn = $('#auth-submit');
   const footerText = $('#auth-footer-text');
@@ -187,6 +258,7 @@ function setSubmitEnabled(enabled) {
 async function handleAuthSubmit(e) {
   e.preventDefault();
   if (_isSubmitting) return;
+  if (editState.enabled) { showAuthError('Save or cancel your edits first.'); return; }
   if (_googleSignup) { await handleGoogleSignupSubmit(); return; }
 
   const username = $('#auth-username').value.trim();
@@ -250,28 +322,44 @@ async function handleAuthSubmit(e) {
     }
   }
 
-  await completeSignIn(result.username);
+  await completeSignIn(result.username, { created: _isRegisterMode });
 }
 
 // --- After any successful sign-in (password, Google, a new account) ---
-// Migrate localStorage, restore the account's model, sync with the cloud
-async function completeSignIn(username) {
+// Make this browser's copy the account's own (prepareAccountCopy), restore
+// the account's model, sync with the cloud. created: the account was made just
+// now on this browser (the only case the signed-out dashboard may go into it)
+async function completeSignIn(username, { created = false } = {}) {
   try {
-    migrateToScopedStorage(username);
+    const prep = await prepareAccountCopy(username, { created });
+    if (!prep.ok) {
+      // This browser has no copy of the account and the cloud copy couldn't be
+      // read: going on would show (and later upload) another dashboard
+      abandonSignIn();
+      renderAuthUI();
+      const msg = 'Signed in, but your dashboard couldn’t be loaded. Check your connection and try again.';
+      showAuthError(msg);
+      if ($('#auth-modal').hidden) showToast(msg);
+      return;
+    }
+    // The account's copy is ready: the session is saved from here on
+    persistSession();
 
-    // Reset model to prevent data leaking between accounts
+    // Reset the model (and this page's sync flag) so nothing leaks between
+    // accounts, then read the account's own copy
+    resetSyncState();
+    resetFileCache();
     resetModel();
-
-    // Reload model from the user-scoped localStorage key
     await restoreModel();
 
-    // Reconcile with cloud data
-    const syncResult = await syncOnLogin();
-
-    if (syncResult && syncResult.action === 'loaded_cloud') {
-      // Cloud data was loaded — need to re-restore model from updated localStorage
-      resetModel();
-      await restoreModel();
+    // Reconcile with cloud data (a copy just taken from the cloud needs nothing more)
+    if (prep.source !== 'cloud') {
+      const syncResult = await syncOnLogin(prep.cloud || null);
+      if (syncResult && syncResult.action === 'loaded_cloud') {
+        // Cloud data was loaded — need to re-restore model from updated localStorage
+        resetModel();
+        await restoreModel();
+      }
     }
 
     // Re-render the entire dashboard with the correct data
@@ -292,7 +380,9 @@ async function completeSignIn(username) {
 
     closeAuthModal();
     renderAuthUI();
-    showToast(`Signed in as ${username}`);
+    showToast(prep.source === 'carried'
+      ? `Signed in as ${username}. This dashboard was uploaded to your account.`
+      : `Signed in as ${username}`);
     gcalAfterSignIn();
   } catch (err) {
     console.error('[Auth] Post-login flow failed:', err);
@@ -308,6 +398,7 @@ async function completeSignIn(username) {
 // --- Handle logout ---
 async function handleLogout() {
   closeUserPopover();
+  if (editsBlockAccountSwitch('out')) return;
   stopSyncTimer();
 
   // If dirty, try one last save before logout
@@ -318,21 +409,9 @@ async function handleLogout() {
   await logout();
   resetGcalState();
 
-  // Reset model to prevent data leaking between accounts
-  resetModel();
-
-  // Reload model from legacy (anonymous) key
-  await restoreModel();
-
-  // Re-render dashboard with anonymous/legacy data
-  if (window.renderHeaderAndTitles) window.renderHeaderAndTitles();
-  if (window.renderAllSections) window.renderAllSections();
-  if (window.applyDarkMode) window.applyDarkMode();
-  if (window.applyGlassMode) window.applyGlassMode();
-  if (window.applyGlassTheme) window.applyGlassTheme();
-  if (window.applyCellSize) window.applyCellSize();
-  if (window.ensureSectionPlusButtons) window.ensureSectionPlusButtons();
-  if (window.refreshTimeTrackingUI) window.refreshTimeTrackingUI();
+  // The signed-out dashboard (legacy key), from its own copy: nothing of the
+  // account's model stays in memory
+  await showOwnerDashboard();
 
   renderAuthUI();
   showToast('Signed out');
@@ -423,7 +502,7 @@ async function handleGoogleSignupSubmit() {
     setSubmitEnabled(true);
     return;
   }
-  await completeSignIn(result.username);
+  await completeSignIn(result.username, { created: true });
 }
 
 // Called at the end of init(): finishes a sign-in / link that came back from
