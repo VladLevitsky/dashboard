@@ -17,12 +17,12 @@ import { saveModel } from '../../core/storage.js';
 import { isLoggedIn, getUsername } from '../../core/auth.js';
 import { setImageFromRef } from '../../core/file-service.js';
 import { relativeTime } from '../../core/mobile-common.js';
-import { setDarkMode, setGlassTheme } from '../edit-mode.js';
+import { setDarkMode, setGlassTheme, knownTheme } from '../edit-mode.js';
 import { openFileManager } from '../file-manager.js';
 import { buildGcalPanel, getGcalStatus, onGcalChange } from '../google-calendar.js';
 import { buildGoogleSigninPanel } from '../auth-ui.js';
 import { offlineCopySupported } from '../../core/offline-copy.js';
-import { openOfflineSheet, offlineRowValue } from './offline-sheet.js?v=2026-10-mobile-10';
+import { openOfflineSheet, offlineRowValue } from './offline-sheet.js?v=2026-10-mobile-11';
 
 const svg = (body, size = 20, width = 2) =>
   `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="${width}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${body}</svg>`;
@@ -188,14 +188,15 @@ export function createMoreSheet(api, { openTime } = {}) {
       value: document.body.dataset.theme === 'dark' ? 'dark' : 'light',
       onChange: (v) => setDarkMode(v === 'dark'),
     });
-    theme.classList.add('mx-more-seg');
+    theme.classList.add('mx-more-seg', 'mx-more-seg-wide');
     const glass = api.ui.segmented({
       label: 'Style',
-      options: [{ value: 'classic', label: 'Classic' }, { value: 'sunset', label: 'Sunset' }],
-      value: document.body.dataset.glassTheme === 'sunset' ? 'sunset' : 'classic',
+      options: [{ value: 'classic', label: 'Classic' }, { value: 'sunset', label: 'Sunset' }, { value: 'newspaper', label: 'Paper' }],
+      value: knownTheme(document.body.dataset.glassTheme),
       onChange: (v) => { setGlassTheme(v); saveModel(); },
     });
-    glass.classList.add('mx-more-seg');
+    // Three styles don't fit half a 390px row: both controls take the full width
+    glass.classList.add('mx-more-seg', 'mx-more-seg-wide');
     const wrap = el('div', 'mx-more-appearance');
     wrap.append(theme, glass);
     return group('Appearance', wrap);

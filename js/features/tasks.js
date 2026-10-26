@@ -2654,6 +2654,7 @@ function openTaskEditorModal(taskData, titleText) {
   const paintDue = () => {
     const nodate = !dateInput.value;
     const notime = !timeInput.value;
+    if (dateInput.classList.contains('is-empty') !== nodate) dateInput.classList.toggle('is-empty', nodate);
     const noend = !endInput.value;
     if (gcalLabel.classList.contains('is-nodate') !== nodate) gcalLabel.classList.toggle('is-nodate', nodate);
     if (timeInput.classList.contains('is-empty') !== notime) timeInput.classList.toggle('is-empty', notime);

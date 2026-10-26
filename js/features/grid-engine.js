@@ -808,6 +808,7 @@ export function migrateToDeviceLayouts(data) {
 
 let _resizeObserver = null;
 let _resizeDebounce = null;
+let _fontDebounce = null;
 
 export function initResizeObserver() {
   if (_resizeObserver) return;
@@ -827,6 +828,18 @@ export function initResizeObserver() {
   });
 
   _resizeObserver.observe(main);
+
+  // A web font that arrives after the render (the Newspaper theme's serif and
+  // sans load on first use) changes content heights without a resize: re-fit
+  // the shown layout once it has loaded, so no card clips
+  if (document.fonts && document.fonts.addEventListener) {
+    document.fonts.addEventListener('loadingdone', () => {
+      clearTimeout(_fontDebounce);
+      _fontDebounce = setTimeout(() => {
+        if (getActiveMode() !== 'mobile') applyShownLayout(currentSections());
+      }, 60);
+    });
+  }
 
   // Also observe the header: async-loading images can change its height,
   // which shifts the row origin (--grid-origin-y) for the entire grid.

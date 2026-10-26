@@ -33,8 +33,8 @@ import { toDateKey } from '../../core/quick-capture-parse.js';
 import { renderBusyStrip, ensureBusyDay } from '../busy-strip.js';
 import { formatTimeKey, formatTimeRange } from '../../core/due-time.js';
 import { gcalStateKey, onGcalChange } from '../google-calendar.js';
-import { createTimeSheet } from './time-sheet.js?v=2026-10-mobile-10';
-import { createMoreSheet } from './more-sheet.js?v=2026-10-mobile-10';
+import { createTimeSheet } from './time-sheet.js?v=2026-10-mobile-11';
+import { createMoreSheet } from './more-sheet.js?v=2026-10-mobile-11';
 
 const SHORT_LABELS = { red: 'Urgent & important', orange: 'Urgent', yellow: 'Important', blue: 'Later' };
 const COMING_DAYS = 7;
@@ -225,7 +225,7 @@ function compute(ctx) {
     writer: !!(svc('writer') && typeof svc('writer').meetingJumpIn === 'function'),
     items: !!(svc('items') && typeof svc('items').enhance === 'function'),
   };
-  return { today, coming, flags, theme: ctx.theme, todayKey: ctx.todayKey, categories: categoriesSig() };
+  return { today, coming, flags, theme: ctx.theme, glassTheme: ctx.glassTheme, todayKey: ctx.todayKey, categories: categoriesSig() };
 }
 
 // F1's row shows the title, colour, Primary, due date, subtask count,
@@ -263,7 +263,7 @@ function reminderSig(r, view) {
     }));
   } catch { inQA = false; }
   const color = model.subtitleColors && model.subtitleColors[`${r.sectionId}:${r.subtitle}`];
-  return [rem.title, rem.url || '', rem.linkType || '', rem.fileId || '', r.days, view.theme, view.todayKey,
+  return [rem.title, rem.url || '', rem.linkType || '', rem.fileId || '', r.days, view.theme, view.glassTheme, view.todayKey,
     view.flags.items ? 1 : 0, JSON.stringify(rem.schedule || null), (rem.links || []).length,
     inQA ? 1 : 0, color ? JSON.stringify(color) : ''].join('|');
 }

@@ -25,13 +25,16 @@ import { dueState } from '../../core/agenda.js';
 import {
   MOBILE_COLOR_ORDER, MOBILE_COLOR_LABELS, SEGMENT_LABELS, lensCounts, defaultLens, lensTasks, rowSignature, normColor,
 } from '../../core/mobile-tasks.js';
-import { createTaskRow, fullColorLabel } from './task-row.js?v=2026-10-mobile-10';
-import { attachGestures, closeAnyReveal } from './task-gestures.js?v=2026-10-mobile-10';
-import { createTaskActions } from './task-actions.js?v=2026-10-mobile-10';
-import { openMoveSheet } from './move-sheet.js?v=2026-10-mobile-10';
-import { openCompleted } from './completed-view.js?v=2026-10-mobile-10';
+import { createTaskRow, fullColorLabel } from './task-row.js?v=2026-10-mobile-11';
+import { attachGestures, closeAnyReveal } from './task-gestures.js?v=2026-10-mobile-11';
+import { createTaskActions } from './task-actions.js?v=2026-10-mobile-11';
+import { openMoveSheet } from './move-sheet.js?v=2026-10-mobile-11';
+import { openCompleted } from './completed-view.js?v=2026-10-mobile-11';
 
-const PRIORITY_RGB = { red: '249 76 100', orange: '255 133 35', yellow: '242 189 24', blue: '61 151 248' };
+// Inline --priority-rgb: the newspaper look's spot inks (newspaper.css 1 / 2), falling back
+// to the glass hues, so glass renders exactly as before (var() resolves on the element)
+const PRIORITY_RGB = { red: 'var(--np-red-rgb, 249 76 100)', orange: 'var(--np-orange-rgb, 255 133 35)',
+  yellow: 'var(--np-yellow-rgb, 242 189 24)', blue: 'var(--np-blue-rgb, 61 151 248)' };
 const CHECK_DONE = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="5 12.5 10 17 19 7.5"></polyline></svg>';
 const CHEVRON = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="9 6 15 12 9 18"></polyline></svg>';
 const GRIP = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true" focusable="false"><line x1="5" y1="8" x2="19" y2="8"></line><line x1="5" y1="12" x2="19" y2="12"></line><line x1="5" y1="16" x2="19" y2="16"></line></svg>';

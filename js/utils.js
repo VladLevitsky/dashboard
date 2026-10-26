@@ -544,9 +544,16 @@ export function colorToGlassRgba(color, opacity = 0.45) {
   return color;
 }
 
-// Check if glass mode is currently active
+// Check if glass mode is currently active: the glass looks (Classic, Sunset).
+// The Newspaper theme is paper: no translucent fills, no blur (edit-mode.js styleForTheme).
+// Reads the model, so a render that runs before the body attributes update is still right.
 export function isGlassModeActive() {
-  return window.model && window.model.glassMode === true;
+  return !!window.model && window.model.glassMode === true && window.model.glassTheme !== 'newspaper';
+}
+
+// The Newspaper theme (paper look) is active
+export function isPaperTheme() {
+  return !!window.model && window.model.glassTheme === 'newspaper';
 }
 
 // --- Section data key mapping

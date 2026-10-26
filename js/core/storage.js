@@ -974,12 +974,13 @@ export function rerenderDashboard({ stickyNotes = false } = {}) {
     if (typeof fn !== 'function') return;
     try { fn(); } catch (err) { console.error('[render] failed:', name, err); }
   };
-  call('renderHeaderAndTitles');
-  if (_renderDashboard) call('dashboard', _renderDashboard);
-  else call('renderAllSections');
+  // Theme attributes first: renders read them (the paper look, the shell's signatures)
   call('applyDarkMode');
   call('applyGlassMode');
   call('applyGlassTheme');
+  call('renderHeaderAndTitles');
+  if (_renderDashboard) call('dashboard', _renderDashboard);
+  else call('renderAllSections');
   call('applyCellSize');
   call('ensureSectionPlusButtons');
   call('refreshTimeTrackingUI');

@@ -2,8 +2,8 @@
 // Handles reminder and list item links modals and toggles
 
 import { currentData, model } from '../state.js';
-import { $, lightenColorBy20Percent, getColorForCurrentMode, setColorForCurrentMode, showToast } from '../utils.js';
-import { markDirtyAndSave } from './edit-mode.js';
+import { $, lightenColorBy20Percent, getColorForCurrentMode, setColorForCurrentMode, showToast, isPaperTheme } from '../utils.js';
+import { markDirtyAndSave, PAPER_SLIP_HEX } from './edit-mode.js';
 import { uploadFile, openFile } from '../core/file-service.js';
 import { isLoggedIn } from '../core/auth.js';
 
@@ -20,9 +20,39 @@ let linkDragState = {
   renderFn: null
 };
 
-// Default colors
+// Default bubble colours: glass's cool white by day, slate by night. Every new
+// link stores exactly these, whatever the theme, so the data never depends on
+// the look it was made in (a link made under Newspaper looks right in Classic)
 const defaultColorLight = '#f7fafc';
 const defaultColorDark = '#475569';
+// The default bubble colours [light, dark] to show in the current theme. Under
+// Newspaper that is the paper slip (edit-mode.js PAPER_SLIP_HEX): display only,
+// never stored. Hex, because it also feeds <input type=color>
+export function linkDefaults() {
+  return isPaperTheme() ? PAPER_SLIP_HEX : [defaultColorLight, defaultColorDark];
+}
+
+// A colour as shown: under paper the stored glass default of this mode reads as
+// the paper default (new links store it). Glass gets the value back untouched
+function shownHex(hex) {
+  if (!isPaperTheme() || typeof hex !== 'string') return hex;
+  const glass = model.darkMode ? defaultColorDark : defaultColorLight;
+  return hex.toLowerCase() === glass ? linkDefaults()[model.darkMode ? 1 : 0] : hex;
+}
+
+// The colour a link's bubble shows in the current mode (stored colour or default)
+export function shownLinkColor(color) {
+  return shownHex(getColorForCurrentMode(color, defaultColorLight, defaultColorDark));
+}
+
+// The bubble colour of a link without its own colour when there is no item to
+// derive one from. Paper always prints such a bubble on the paper default: the
+// item's colour lightened toward white loses the night edition's cream ink
+// (4.45:1 on a coloured reminder), and an rgba user colour loses its alpha there
+function fallbackLinkColor() {
+  const [light, dark] = linkDefaults();
+  return model.darkMode ? dark : light;
+}
 
 // Backdrop element for link popups
 let linksBackdrop = null;
@@ -302,8 +332,7 @@ function createLinkOrSectionRow(item, index, linksArray, renderFn) {
     const colorBtn = document.createElement('button');
     colorBtn.type = 'button';
     colorBtn.className = 'icon-link-color-btn';
-    const currentColor = getColorForCurrentMode(item.color, defaultColorLight, defaultColorDark);
-    colorBtn.style.background = currentColor;
+    colorBtn.style.background = shownLinkColor(item.color);
     colorBtn.title = 'Choose bubble color';
     colorBtn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -510,19 +539,15 @@ export function toggleReminderLinks(reminderKey, subtitle, sectionId, buttonEl) 
     closeAllListItemLinks();
     closeAllIconLinks();
 
-    // Default colors for fallback
-    const defaultColorLight = '#f7fafc';
-    const defaultColorDark = '#475569';
-
     // Support both legacy .reminder-item and unified .unified-reminder-item classes
     const reminderItem = buttonEl.closest('.reminder-item') || buttonEl.closest('.unified-reminder-item');
     let fallbackColor;
-    if (reminderItem) {
+    if (reminderItem && !isPaperTheme()) {
       const computedStyle = window.getComputedStyle(reminderItem);
       const parentBgColor = computedStyle.backgroundColor;
       fallbackColor = lightenColorBy20Percent(parentBgColor);
     } else {
-      fallbackColor = model.darkMode ? defaultColorDark : defaultColorLight;
+      fallbackColor = fallbackLinkColor();
     }
 
     linksContainer = document.createElement('div');
@@ -540,7 +565,7 @@ export function toggleReminderLinks(reminderKey, subtitle, sectionId, buttonEl) 
         // Each link can have its own color
         let bubbleColor;
         if (item.color) {
-          bubbleColor = getColorForCurrentMode(item.color, defaultColorLight, defaultColorDark);
+          bubbleColor = shownLinkColor(item.color);
         } else {
           bubbleColor = fallbackColor;
         }
@@ -853,19 +878,15 @@ export function toggleListItemLinks(item, sectionId, buttonEl) {
     closeAllListItemLinks();
     closeAllIconLinks();
 
-    // Default colors for fallback
-    const defaultColorLight = '#f7fafc';
-    const defaultColorDark = '#475569';
-
     // Support both legacy .list-item and unified .unified-subtask-item classes
     const listItem = buttonEl.closest('.list-item') || buttonEl.closest('.unified-subtask-item');
     let fallbackColor;
-    if (listItem) {
+    if (listItem && !isPaperTheme()) {
       const computedStyle = window.getComputedStyle(listItem);
       const parentBgColor = computedStyle.backgroundColor;
       fallbackColor = lightenColorBy20Percent(parentBgColor);
     } else {
-      fallbackColor = model.darkMode ? defaultColorDark : defaultColorLight;
+      fallbackColor = fallbackLinkColor();
     }
 
     linksContainer = document.createElement('div');
@@ -898,7 +919,7 @@ export function toggleListItemLinks(item, sectionId, buttonEl) {
         // Each link can have its own color
         let bubbleColor;
         if (linkItem.color) {
-          bubbleColor = getColorForCurrentMode(linkItem.color, defaultColorLight, defaultColorDark);
+          bubbleColor = shownLinkColor(linkItem.color);
         } else {
           bubbleColor = fallbackColor;
         }
@@ -1102,9 +1123,9 @@ function openLinkColorPicker(link, colorBtn) {
     existingPopover.remove();
   }
 
-  const defaultColorLight = '#f7fafc';
-  const defaultColorDark = '#475569';
-  const currentColor = getColorForCurrentMode(link.color, defaultColorLight, defaultColorDark);
+  // Shown, not stored: under paper the field starts on the paper default, and
+  // only a colour the user picks is written
+  const currentColor = shownLinkColor(link.color);
   const modeLabel = model.darkMode ? 'Dark' : 'Light';
 
   const popover = document.createElement('div');
@@ -1116,7 +1137,7 @@ function openLinkColorPicker(link, colorBtn) {
     <div class="link-color-popover-content">
       <input type="color" class="link-color-input" value="${currentColor}">
       <div class="link-color-presets">
-        <button type="button" class="color-preset-small" data-color="#f7fafc" style="background: #f7fafc;" title="Gray"></button>
+        <button type="button" class="color-preset-small" data-color="#f7fafc" style="background: ${shownHex('#f7fafc')};" title="Gray"></button>
         <button type="button" class="color-preset-small" data-color="#fff4e5" style="background: #fff4e5;" title="Yellow"></button>
         <button type="button" class="color-preset-small" data-color="#e6fff3" style="background: #e6fff3;" title="Green"></button>
         <button type="button" class="color-preset-small" data-color="#ffe6f0" style="background: #ffe6f0;" title="Pink"></button>
@@ -1157,7 +1178,7 @@ function openLinkColorPicker(link, colorBtn) {
   colorInput.addEventListener('input', (e) => {
     const newColor = e.target.value;
     link.color = setColorForCurrentMode(link.color, newColor);
-    colorBtn.style.background = newColor;
+    colorBtn.style.background = shownHex(newColor);
   });
 
   // Close popover helper
@@ -1173,7 +1194,7 @@ function openLinkColorPicker(link, colorBtn) {
       const newColor = btn.dataset.color;
       colorInput.value = newColor;
       link.color = setColorForCurrentMode(link.color, newColor);
-      colorBtn.style.background = newColor;
+      colorBtn.style.background = shownHex(newColor);
       closePopover();
     });
   });
@@ -1272,19 +1293,15 @@ export function toggleIconLinks(iconKey, subtitle, sectionId, indicatorEl) {
     closeAllListItemLinks();
     closeAllIconLinks();
 
-    // Default colors for fallback
-    const defaultColorLight = '#f7fafc';
-    const defaultColorDark = '#475569';
-
     // Compute fallback color from icon button background (used if link has no custom color)
     let fallbackColor;
     const iconBtn = indicatorEl.closest('.icon-button');
-    if (iconBtn) {
+    if (iconBtn && !isPaperTheme()) {
       const computedStyle = window.getComputedStyle(iconBtn);
       const parentBgColor = computedStyle.backgroundColor;
       fallbackColor = lightenColorBy20Percent(parentBgColor);
     } else {
-      fallbackColor = model.darkMode ? defaultColorDark : defaultColorLight;
+      fallbackColor = fallbackLinkColor();
     }
 
     linksContainer = document.createElement('div');
@@ -1302,7 +1319,7 @@ export function toggleIconLinks(iconKey, subtitle, sectionId, indicatorEl) {
         // Each link can have its own color
         let bubbleColor;
         if (linkItem.color) {
-          bubbleColor = getColorForCurrentMode(linkItem.color, defaultColorLight, defaultColorDark);
+          bubbleColor = shownLinkColor(linkItem.color);
         } else {
           bubbleColor = fallbackColor;
         }

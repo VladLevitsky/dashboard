@@ -468,6 +468,7 @@ html[data-shell="mobile"] .mx-more-heading {
 html[data-shell="mobile"] .mx-more-appearance { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
 html[data-shell="mobile"] .mx-more-seg { display: grid; width: 100%; }
 html[data-shell="mobile"] .mx-more-seg .mx-seg-opt { padding: 0 8px; }
+html[data-shell="mobile"] .mx-more-appearance > .mx-more-seg-wide { grid-column: 1 / -1; }
 html[data-shell="mobile"] .mx-more-list {
   display: flex; flex-direction: column;
   border-radius: 18px; overflow: hidden;

@@ -99,8 +99,12 @@ function updateControl(element) {
   };
 }
 
+// The Newspaper theme (body[data-style="paper"]) draws no glass, so nothing here
+// runs there; switching back re-samples (the observer below sees data-style).
+const paper = () => document.body.dataset.style === 'paper';
+
 function queue(root) {
-  if (!(root instanceof Element)) return;
+  if (!(root instanceof Element) || paper()) return;
   if (root.matches(controls)) pending.add(root);
   root.querySelectorAll(controls).forEach(element => pending.add(element));
   if (!pending.size || frame) return;
@@ -158,6 +162,7 @@ queue(document.body);
 
   function updateReflections() {
     lightFrame = 0;
+    if (paper()) return;
     const cards = [...document.querySelectorAll(receivers)];
     const elements = new Set(cards);
     const updates = [];
@@ -239,7 +244,7 @@ queue(document.body);
   };
   new MutationObserver(records => {
     if (records.some(movesLight)) scheduleLight();
-  }).observe(document.body, {subtree: true, childList: true, attributes: true, attributeOldValue: true, attributeFilter: ['class', 'style', 'hidden', 'data-theme', 'data-progress-state', 'data-glass-glow']});
+  }).observe(document.body, {subtree: true, childList: true, attributes: true, attributeOldValue: true, attributeFilter: ['class', 'style', 'hidden', 'data-theme', 'data-style', 'data-progress-state', 'data-glass-glow']});
   document.body.addEventListener('transitionend', event => {
     if (['transform', 'width', 'opacity', 'background-color'].includes(event.propertyName) &&
         (!filtering() || (event.target instanceof Element && reachesLight(event.target)))) scheduleLight();

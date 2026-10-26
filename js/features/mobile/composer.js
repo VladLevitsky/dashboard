@@ -42,14 +42,17 @@ import * as notesApi from '../edit-mode.js';
 import { getDataOwner } from '../../core/auth.js';
 import { isGcalTasksReady, getGcalDefault } from '../google-calendar.js';
 import { dueTimeOf, dueEndTimeOf, formatTimeKey, prefersHour12, timeKeyFromInput, shiftTimeKey } from '../../core/due-time.js';
-import { openTimePicker, closeTimePicker } from './time-picker.js?v=2026-10-mobile-10';
-import { openDatePicker, closeDatePicker } from './date-field.js?v=2026-10-mobile-10';
+import { openTimePicker, closeTimePicker } from './time-picker.js?v=2026-10-mobile-11';
+import { openDatePicker, closeDatePicker } from './date-field.js?v=2026-10-mobile-11';
 
 const CONFIRM_MS = 7000;
 const DRAFT_DEBOUNCE = 300;
 const OPEN_GUARD_MS = 350;        // presses this soon after open() are the opening tap's twin
 const COMMIT_GUARD_MS = 600;      // an empty Add this soon after a commit is a double tap, not "close"
-const PRIORITY_RGB = { red: '249 76 100', orange: '255 133 35', yellow: '242 189 24', blue: '61 151 248' };
+// Inline --priority-rgb: the newspaper look's spot inks (newspaper.css 1 / 2), falling back
+// to the glass hues, so glass renders exactly as before (var() resolves on the element)
+const PRIORITY_RGB = { red: 'var(--np-red-rgb, 249 76 100)', orange: 'var(--np-orange-rgb, 255 133 35)',
+  yellow: 'var(--np-yellow-rgb, 242 189 24)', blue: 'var(--np-blue-rgb, 61 151 248)' };
 const LOADING = 'Writing is still loading…';
 
 const svg = (body, size = 22) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${body}</svg>`;
