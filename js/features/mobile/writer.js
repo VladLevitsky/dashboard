@@ -42,8 +42,8 @@ import * as tasksApi from '../tasks.js';
 import * as projectsApi from '../projects.js';
 import * as meetingsApi from '../meetings.js';
 import * as notesApi from '../edit-mode.js';
-import { enhanceTimeInput, removeTimeField, closeTimePicker } from './time-picker.js?v=2026-10-mobile-10';
-import { enhanceDateInput, removeDateField, openDatePicker, closeDatePicker, setDateInputValue } from './date-field.js?v=2026-10-mobile-10';
+import { enhanceTimeInput, removeTimeField, closeTimePicker } from './time-picker.js?v=2026-10-mobile-11';
+import { enhanceDateInput, removeDateField, openDatePicker, closeDatePicker, setDateInputValue } from './date-field.js?v=2026-10-mobile-11';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 

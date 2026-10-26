@@ -51,7 +51,7 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📊</text></svg>">
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Caveat:wght@500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400..700;1,6..72,400..700&family=Caveat:wght@500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="styles.css?v=2026-10-19-sync">
   <link rel="stylesheet" href="glass.css?v=2026-10-07-perf">
   <!-- Glass FX v2 layer: every rule is scoped under html[data-fx="v2"] -->
@@ -59,21 +59,35 @@
   <!-- Writing power-up: toolbar additions, menus, block styles (one section per module) -->
   <link rel="stylesheet" href="writing.css?v=2026-10-04-writing2">
   <!-- Mobile shell: every rule is scoped under html[data-shell="mobile"] (one file per unit) -->
-  <link rel="stylesheet" href="mobile.css?v=2026-10-mobile-10">
-  <link rel="stylesheet" href="mobile-tasks.css?v=2026-10-mobile-10">
-  <link rel="stylesheet" href="mobile-compose.css?v=2026-10-mobile-10">
-  <link rel="stylesheet" href="mobile-write.css?v=2026-10-mobile-10">
-  <link rel="stylesheet" href="mobile-today.css?v=2026-10-mobile-10">
-  <link rel="stylesheet" href="mobile-links.css?v=2026-10-mobile-10">
+  <link rel="stylesheet" href="mobile.css?v=2026-10-mobile-11">
+  <link rel="stylesheet" href="mobile-tasks.css?v=2026-10-mobile-11">
+  <link rel="stylesheet" href="mobile-compose.css?v=2026-10-mobile-11">
+  <link rel="stylesheet" href="mobile-write.css?v=2026-10-mobile-11">
+  <link rel="stylesheet" href="mobile-today.css?v=2026-10-mobile-11">
+  <link rel="stylesheet" href="mobile-links.css?v=2026-10-mobile-11">
+  <!-- Newspaper theme (body[data-style="paper"]): last, so it styles over the base and the shell -->
+  <link rel="stylesheet" href="newspaper.css?v=2026-10-np-1">
   <link rel="apple-touch-icon" href="assets/icons/app-icon-180.png">
-  <script type="module" src="js/features/glass-glow.js?v=2026-10-07-perf"></script>
-  <script type="module" src="js/features/glass-fx.js?v=2026-10-08-static"></script>
+  <script type="module" src="js/features/glass-glow.js?v=2026-10-20-paper"></script>
+  <script type="module" src="js/features/glass-fx.js?v=2026-10-20-paper"></script>
   <!-- Emoji Picker Element - Web Component -->
   <script type="module" src="https://cdn.jsdelivr.net/npm/emoji-picker-element@^1/index.js"></script>
   <!-- Cloudflare Turnstile (explicit render mode for registration) -->
   <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>
 </head>
   <body>
+  <!-- First paint in the look this browser showed last (edit-mode.js rememberLook:
+       "<glassTheme> <light|dark>"), instead of the unstyled base until init()
+       applies the model's own theme a moment later. -->
+  <script data-look-boot>
+  (function () { try {
+    var v = (localStorage.getItem('dashboard_look') || '').split(' '), b = document.body;
+    if (!/^(classic|sunset|newspaper)$/.test(v[0]) || !/^(light|dark)$/.test(v[1])) return;
+    b.setAttribute('data-theme', v[1]);
+    b.setAttribute('data-style', v[0] === 'newspaper' ? 'paper' : 'glass');
+    b.setAttribute('data-glass-theme', v[0]);
+  } catch (e) {} })();
+  </script>
     <!-- "Invert colors in dark mode" (styles.css .invert-dark): each pixel keeps the
          brighter of itself and its hue-preserving inverse, so dark greys flip toward
          white in proportion, dark colours lift to their light tone, bright ones stay. -->
@@ -722,7 +736,7 @@
         </div>
         <div class="copy-text-body">
           <label class="copy-text-label">
-            Text to copy:
+            Text to copy
             <textarea id="copy-text-content" rows="6" placeholder="Enter the text you want to copy..."></textarea>
           </label>
         </div>
@@ -763,10 +777,11 @@
           </div>
           <!-- Theme Setting (glass theme) -->
           <div class="appearance-section" id="glass-theme-section">
-            <div class="appearance-label">Theme</div>
-            <select id="glass-theme-select" class="appearance-select">
+            <div class="appearance-label" id="glass-theme-label">Style</div>
+            <select id="glass-theme-select" class="appearance-select" aria-labelledby="glass-theme-label">
               <option value="classic">Classic (Grey)</option>
               <option value="sunset">Sunset</option>
+              <option value="newspaper">Newspaper</option>
             </select>
           </div>
           <!-- Task Settings -->
@@ -971,7 +986,7 @@
     </div>
 
     <!-- ES6 Modules - fully modularized, no app.js dependency -->
-    <script type="module" src="js/main.js?v=2026-10-mobile-10"></script>
+    <script type="module" src="js/main.js?v=2026-10-mobile-11"></script>
   </body>
   </html>
 

@@ -2,7 +2,7 @@
 // Handles all section rendering (icons, lists, reminders, copy-paste)
 
 import { editState, model, currentData, currentSections } from '../state.js';
-import { $, $$, openUrl, generateKey, getSectionDataKey, getColorForCurrentMode, darkenColor, lightenAndDesaturateColor, colorToGlassRgba, isGlassModeActive, isColorCode, getContrastTextColor, createAnimatedBorder, showToast } from '../utils.js';
+import { $, $$, openUrl, generateKey, getSectionDataKey, getColorForCurrentMode, darkenColor, lightenAndDesaturateColor, colorToGlassRgba, isGlassModeActive, isPaperTheme, isColorCode, getContrastTextColor, createAnimatedBorder, showToast } from '../utils.js';
 import { PLACEHOLDER_URL, icons, LINK_ICON_SVG, TASKS_ICON_SVG } from '../constants.js';
 import { markDirtyAndSave, openEditPopover, openSubtitleColorPicker, renameCardSection } from '../features/edit-mode.js';
 import { saveModel } from '../core/storage.js';
@@ -13,6 +13,7 @@ import { persistImageFromLibraryEntry } from '../features/media-library.js';
 import { setImageFromRef, classifyImageRef, uploadFile, dataURLtoBlob, filenameFromDataUrl, deleteR2File } from '../core/file-service.js';
 import { isLoggedIn } from '../core/auth.js';
 import { openItemCreator } from '../features/item-creator.js';
+import { shownLinkColor, linkDefaults } from '../features/links.js';
 
 // Helper: collect R2 fileId from an item for deferred cleanup after save
 function getItemR2FileId(item) {
@@ -1978,9 +1979,11 @@ function toggleIconIndicator(item, tasks, sectionId, subtitle, indicatorEl) {
         });
         container.appendChild(fileBubble);
       } else {
+        // Under Newspaper the default colours read as the paper slip (links.js);
+        // glass gets the stored colour, or its old pale grey, as before
         const bubbleColor = link.color
-          ? getColorForCurrentMode(link.color, '#f7fafc', '#475569')
-          : '#e2e8f0';
+          ? shownLinkColor(link.color)
+          : (isPaperTheme() ? linkDefaults()[model.darkMode ? 1 : 0] : '#e2e8f0');
         const bubble = document.createElement('a');
         bubble.className = 'reminder-link-bubble';
         bubble.href = link.url || '#';
@@ -2034,8 +2037,8 @@ function createUnifiedIconButton(item, sectionId, subtitle, subtitleColor) {
   const isInQuickAccess = !editState.enabled && window.isItemInQuickAccess && window.isItemInQuickAccess(iconQAData);
   if (isInQuickAccess) {
     btn.classList.add('icon-in-quick-access');
-    const svgBorder = createAnimatedBorder('#23a8ff', '#94ebff', 14);
-    btn.appendChild(svgBorder);
+    // The SVG rim light is glass only; newspaper.css marks Quick Access from the class
+    if (isGlassModeActive()) btn.appendChild(createAnimatedBorder('#23a8ff', '#94ebff', 14));
   }
 
   // Check if icon is emoji or image URL
@@ -2271,7 +2274,7 @@ function createUnifiedSeparator(item, sectionId, subtitle) {
 // Text pills carry the same quick-access pulse as icons, close to their rim.
 function addQuickAccessItemLight(element) {
   element.classList.add('quick-access-lit');
-  element.appendChild(createAnimatedBorder('#23a8ff', '#94ebff', 22, 2, 0.45, 1.15));
+  if (isGlassModeActive()) element.appendChild(createAnimatedBorder('#23a8ff', '#94ebff', 22, 2, 0.45, 1.15));
 }
 
 // --- Create subtask item for unified card
@@ -2311,17 +2314,19 @@ function createUnifiedSubtaskItem(item, sectionId, subtitle, subtitleColor) {
     : (isDarkMode ? defaultColorDark : defaultColorLight);
 
   // In dark mode, compensate color for glass overlay
-  if (isDarkMode && window.glassCompensateColor) {
+  if (isDarkMode && isGlassModeActive() && window.glassCompensateColor) {
     effectiveColor = window.glassCompensateColor(effectiveColor);
   }
 
-  // Apply glass mode transparency if active
+  // Apply glass mode transparency if active. Paper (Newspaper theme): a custom
+  // colour is laid over the paper at the same alpha, with no blur; the default
+  // fill is left to newspaper.css
   if (isGlassModeActive()) {
     div.style.background = colorToGlassRgba(effectiveColor, 0.55);
     div.style.backdropFilter = 'blur(8px)';
     div.style.webkitBackdropFilter = 'blur(8px)';
-  } else {
-    div.style.background = effectiveColor;
+  } else if (subtitleColor) {
+    div.style.background = colorToGlassRgba(effectiveColor, 0.55);
   }
 
   const a = document.createElement('a');
@@ -2577,17 +2582,19 @@ function createUnifiedReminderItem(rem, sectionId, subtitle, subtitleColor) {
   const isDarkMode = window.model && window.model.darkMode;
 
   // In dark mode, compensate color for glass overlay
-  if (isDarkMode && window.glassCompensateColor) {
+  if (isDarkMode && isGlassModeActive() && window.glassCompensateColor) {
     effectiveColor = window.glassCompensateColor(effectiveColor);
   }
 
-  // Apply glass mode transparency if active
+  // Apply glass mode transparency if active. Paper (Newspaper theme): a custom
+  // colour is laid over the paper at the same alpha, with no blur; the default
+  // fill is left to newspaper.css
   if (isGlassModeActive()) {
     div.style.background = colorToGlassRgba(effectiveColor, 0.55);
     div.style.backdropFilter = 'blur(8px)';
     div.style.webkitBackdropFilter = 'blur(8px)';
-  } else {
-    div.style.background = effectiveColor;
+  } else if (subtitleColor) {
+    div.style.background = colorToGlassRgba(effectiveColor, 0.55);
   }
   if (subtitleColor) {
     div.dataset.customColor = JSON.stringify(subtitleColor);
@@ -3000,7 +3007,7 @@ function createUnifiedCopyPasteItem(item, sectionId, subtitle, subtitleColor) {
     const isDarkMode = window.model && window.model.darkMode;
 
     // In dark mode, compensate color for glass overlay
-    if (isDarkMode && window.glassCompensateColor) {
+    if (isDarkMode && isGlassModeActive() && window.glassCompensateColor) {
       effectiveColor = window.glassCompensateColor(effectiveColor);
     }
 
@@ -3009,15 +3016,15 @@ function createUnifiedCopyPasteItem(item, sectionId, subtitle, subtitleColor) {
       ? getColorForCurrentMode(subtitleColor, defaultColorLight, defaultColorDark)
       : (isDarkMode ? defaultColorDark : defaultColorLight);
 
-    // Apply glass mode transparency if active
+    // Apply glass mode transparency if active (paper: see the subtask item)
     if (isGlassModeActive()) {
       div.style.background = colorToGlassRgba(effectiveColor, 0.55);
       div.style.backdropFilter = 'blur(8px)';
       div.style.webkitBackdropFilter = 'blur(8px)';
       div.style.borderColor = colorToGlassRgba(darkenColor(effectiveColor), 0.5);
-    } else {
-      div.style.background = effectiveColor;
-      div.style.borderColor = darkenColor(effectiveColor);
+    } else if (subtitleColor) {
+      div.style.background = colorToGlassRgba(effectiveColor, 0.55);
+      div.style.borderColor = colorToGlassRgba(darkenColor(effectiveColor), 0.5);
     }
   }
 

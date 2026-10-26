@@ -34,8 +34,19 @@ export function cleanEditorHtml(htmlOrElement) {
   root.querySelectorAll('img[data-r2-file-id][src]').forEach(img => img.removeAttribute('src'));
   // a toggle opened / closed by a reader in a view is not an edit
   root.querySelectorAll('[data-wr-open]').forEach(el => el.removeAttribute('data-wr-open'));
+  // Chrome copies the editor's computed type into <span style> (and onto marks
+  // and task pills) when Backspace / Delete merges a line into a heading or a
+  // quote. The editors have no font or size command, so these are always
+  // leaks, and the frozen px value would follow the note into another theme:
+  // drop them, and unwrap a span left with nothing on it
+  root.querySelectorAll('[style]').forEach(el => {
+    for (const prop of LEAKED_TYPE) el.style.removeProperty(prop);
+    if (!el.getAttribute('style').trim()) el.removeAttribute('style');
+    if (el.tagName === 'SPAN' && !el.attributes.length) el.replaceWith(...el.childNodes);
+  });
   return tpl.innerHTML;
 }
+const LEAKED_TYPE = ['font-size', 'line-height', 'font-family', 'letter-spacing', 'font-optical-sizing', 'text-wrap', 'text-wrap-mode', 'text-wrap-style'];
 
 // True when there is no visible text and no content node (image, divider,
 // table, code block, callout, toggle, chips, task pill)

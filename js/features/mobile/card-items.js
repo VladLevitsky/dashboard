@@ -23,7 +23,7 @@
 import { model } from '../../state.js';
 import { saveModel } from '../../core/storage.js';
 import { buildMoveTargets, moveCardItem, moveToastText } from '../../core/card-move.js';
-import { getColorForCurrentMode, colorToGlassRgba, glassCompensateColor, isColorCode } from '../../utils.js';
+import { getColorForCurrentMode, colorToGlassRgba, glassCompensateColor, isColorCode, isGlassModeActive } from '../../utils.js';
 import { PLACEHOLDER_URL } from '../../constants.js';
 import { setImageFromRef } from '../../core/file-service.js';
 import { createCardItemElement } from '../../components/sections.js';
@@ -353,8 +353,11 @@ export function buildQuickLinkPill(link) {
   pill.tabIndex = 0;
   pill.setAttribute('role', 'link');
   pill.title = link.url;
-  const base = model.darkMode ? glassCompensateColor('#334155') : '#f7fafc';
-  pill.style.background = colorToGlassRgba(base, 0.55);
+  // Glass looks only; paper (Newspaper) leaves the fill to CSS
+  if (isGlassModeActive()) {
+    const base = model.darkMode ? glassCompensateColor('#334155') : '#f7fafc';
+    pill.style.background = colorToGlassRgba(base, 0.55);
+  }
   const left = document.createElement('div');
   left.className = 'unified-subtask-left';
   const icon = document.createElement('span');
@@ -430,12 +433,15 @@ function itemLabel(type, item, sectionId) {
 
 function linkPill(link) {
   const color = getColorForCurrentMode(link.color || null, '#f7fafc', '#475569');
-  const tinted = model.darkMode && window.glassCompensateColor ? window.glassCompensateColor(color) : color;
+  const glass = isGlassModeActive();
+  const tinted = glass && model.darkMode && window.glassCompensateColor ? window.glassCompensateColor(color) : color;
+  // Paper (Newspaper): only a link's own colour is drawn inline, over the paper
+  const fill = glass || link.color ? colorToGlassRgba(tinted, 0.62) : '';
   if (link.type === 'file') {
     const b = document.createElement('button');
     b.type = 'button';
     b.className = 'reminder-link-bubble reminder-file-bubble mx-link-pill';
-    b.style.background = colorToGlassRgba(tinted, 0.62);
+    if (fill) b.style.background = fill;
     b.innerHTML = FILE_SVG;
     const t = document.createElement('span');
     t.className = 'mx-link-pill-text';
@@ -449,7 +455,7 @@ function linkPill(link) {
   a.href = link.url || '#';
   a.target = '_blank';
   a.rel = 'noopener noreferrer';
-  a.style.background = colorToGlassRgba(tinted, 0.62);
+  if (fill) a.style.background = fill;
   a.innerHTML = LINK_SVG;
   const t = document.createElement('span');
   t.className = 'mx-link-pill-text';
@@ -464,7 +470,10 @@ function fallbackTaskRow(task) {
   const b = document.createElement('button');
   b.type = 'button';
   b.className = 'mx-row mx-task-fallback';
-  b.style.setProperty('--priority-rgb', ({ red: '249 76 100', orange: '255 133 35', yellow: '242 189 24', blue: '61 151 248' })[task.color] || '61 151 248');
+  // the newspaper spot inks, falling back to the glass hues (as tasks-view.js PRIORITY_RGB)
+  const rgb = { red: 'var(--np-red-rgb, 249 76 100)', orange: 'var(--np-orange-rgb, 255 133 35)',
+    yellow: 'var(--np-yellow-rgb, 242 189 24)', blue: 'var(--np-blue-rgb, 61 151 248)' };
+  b.style.setProperty('--priority-rgb', rgb[task.color] || rgb.blue);
   const dot = document.createElement('span');
   dot.className = 'mx-row-dot';
   dot.setAttribute('aria-hidden', 'true');

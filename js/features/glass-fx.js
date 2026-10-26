@@ -86,6 +86,7 @@
   }
   function onMove(e) {
     if (!fine.matches || still.matches || html.dataset.fx !== 'v2' || e.pointerType === 'touch') return;
+    if (document.body.dataset.style === 'paper') return;   // Newspaper theme: no glass rims
     if (html.hasAttribute('data-fx-hush')) return;
     clientX = e.clientX; clientY = e.clientY;
     const target = e.target instanceof Element ? e.target : null;

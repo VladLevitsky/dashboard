@@ -19,7 +19,7 @@ import { searchAll, cardSummary, isColorCode, localDayKey, linkedRefsSig } from 
 import { rowSignature } from '../../core/mobile-tasks.js';
 import { relativeTime } from '../../core/mobile-common.js';
 import { createCardItemElement } from '../../components/sections.js';
-import { enhance, buildIconCell, taskRowFor } from './card-items.js?v=2026-10-mobile-10';
+import { enhance, buildIconCell, taskRowFor } from './card-items.js?v=2026-10-mobile-11';
 
 const PER_GROUP = 5;
 const DEBOUNCE_MS = 120;
@@ -36,7 +36,10 @@ const CLEAR_SVG = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" s
 const RESTORE_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>';
 const CHECK_SVG = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><polyline points="20 6 9 17 4 12"/></svg>';
 const CARD_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="4" width="18" height="16" rx="3"/><line x1="3" y1="9" x2="21" y2="9"/></svg>';
-const PRIORITY_RGB = { red: '249 76 100', orange: '255 133 35', yellow: '242 189 24', blue: '61 151 248' };
+// Inline --priority-rgb: the newspaper look's spot inks (newspaper.css 1 / 2), falling back
+// to the glass hues, so glass renders exactly as before (var() resolves on the element)
+const PRIORITY_RGB = { red: 'var(--np-red-rgb, 249 76 100)', orange: 'var(--np-orange-rgb, 255 133 35)',
+  yellow: 'var(--np-yellow-rgb, 242 189 24)', blue: 'var(--np-blue-rgb, 61 151 248)' };
 
 let api = null;
 let current = null;     // { screen, input, results, groups: Map, expanded: Set, query, timer, offSaved }

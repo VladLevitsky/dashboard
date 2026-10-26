@@ -11,7 +11,7 @@
 // and the notification badge).
 
 import { model, editState } from '../state.js';
-import { showToast, colorToGlassRgba, glassCompensateColor, isColorCode } from '../utils.js';
+import { showToast, colorToGlassRgba, glassCompensateColor, isColorCode, isGlassModeActive } from '../utils.js';
 import { TASK_COLOR_LABELS } from '../constants.js';
 import { TASK_COLOR_ORDER, countDueItems } from '../core/agenda.js';
 import { fromDateKey, toDateKey } from '../core/quick-capture-parse.js';
@@ -466,10 +466,13 @@ function createQuickLinkPill(link) {
   pill.tabIndex = 0;
   pill.setAttribute('role', 'link');
   pill.title = link.url;
-  const base = model.darkMode ? glassCompensateColor('#334155') : '#f7fafc';
-  pill.style.background = colorToGlassRgba(base, 0.55);
-  pill.style.backdropFilter = 'blur(8px)';
-  pill.style.webkitBackdropFilter = 'blur(8px)';
+  // Glass looks: the subtask pill's translucent fill; paper (Newspaper) leaves it to CSS
+  if (isGlassModeActive()) {
+    const base = model.darkMode ? glassCompensateColor('#334155') : '#f7fafc';
+    pill.style.background = colorToGlassRgba(base, 0.55);
+    pill.style.backdropFilter = 'blur(8px)';
+    pill.style.webkitBackdropFilter = 'blur(8px)';
+  }
 
   const left = document.createElement('div');
   left.className = 'unified-subtask-left';

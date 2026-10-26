@@ -751,7 +751,15 @@ function previewChip({ icon, label, text, kind = '', title = '', dotColor = null
   return chip;
 }
 
-const MATRIX_DOT = { red: '#ef4444', orange: '#f97316', yellow: '#eab308', blue: '#3b82f6' };
+// The colour chip's dot (style.background): the Newspaper look's spot inks
+// (--np-*-rgb, newspaper.css); under glass the variables don't exist and the
+// fallback is the old hex (#ef4444 #f97316 #eab308 #3b82f6)
+const MATRIX_DOT = {
+  red: 'rgb(var(--np-red-rgb, 239 68 68))',
+  orange: 'rgb(var(--np-orange-rgb, 249 115 22))',
+  yellow: 'rgb(var(--np-yellow-rgb, 234 179 8))',
+  blue: 'rgb(var(--np-blue-rgb, 59 130 246))'
+};
 
 // What the preview shows: 'hint', or the shape of its chips (everything but their text).
 // renderPreview must stay the only writer of #qc-preview

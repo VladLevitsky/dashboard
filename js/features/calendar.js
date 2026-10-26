@@ -12,9 +12,19 @@ import { toDateKey, fromDateKey } from '../core/quick-capture-parse.js';
 import { collectDueItems, countDueItems, meetingDatesBetween, addDays } from '../core/agenda.js';
 import { dueTimeOf, dueEndTimeOf, formatTimeRange } from '../core/due-time.js';
 
-const TASK_COLOR_HEX = { red: '#ef4444', orange: '#f97316', yellow: '#eab308', blue: '#3b82f6' };
-const MEETING_COLOR = '#8b5cf6';
-const REMINDER_COLOR = '#14b8a6';
+// Row dots (only ever written to style.backgroundColor). The Newspaper look
+// defines --np-*-rgb on its body (newspaper.css), so the dots print in its
+// spot inks; under glass the variables don't exist and the fallback is the
+// exact colour the dots always had (#ef4444 #f97316 #eab308 #3b82f6, meetings
+// #8b5cf6, reminders #14b8a6).
+const TASK_COLOR_HEX = {
+  red: 'rgb(var(--np-red-rgb, 239 68 68))',
+  orange: 'rgb(var(--np-orange-rgb, 249 115 22))',
+  yellow: 'rgb(var(--np-yellow-rgb, 234 179 8))',
+  blue: 'rgb(var(--np-blue-rgb, 59 130 246))'
+};
+const MEETING_COLOR = 'rgb(var(--np-plum-rgb, 139 92 246))';
+const REMINDER_COLOR = 'rgb(var(--np-teal-rgb, 20 184 166))';
 
 const CALENDAR_GLYPH = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="4.5" width="18" height="16.5" rx="3"></rect><line x1="16" y1="2.5" x2="16" y2="6.5"></line><line x1="8" y1="2.5" x2="8" y2="6.5"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>`;
 

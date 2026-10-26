@@ -39,11 +39,11 @@ import { getTaskById } from '../tasks.js';
 import { formatClock, renderTimeTrackingPanel } from '../time-tracking.js';
 import { showActionToast } from '../quick-capture.js';
 import { getActiveMode } from '../grid-engine.js';
-import { registerLayer, registerBuiltInLayers, syncHistory, startLayers, stopLayers, anyLayerOpen, openLayers, historyDepth } from './layers.js?v=2026-10-mobile-10';
-import { openSheet, pushScreen, closeAllSheets, refreshInert } from './sheet.js?v=2026-10-mobile-10';
-import * as ui from './ui.js?v=2026-10-mobile-10';
-import { startViewport, stopViewport } from './viewport.js?v=2026-10-mobile-10';
-import * as syncGuard from './sync-guard.js?v=2026-10-mobile-10';
+import { registerLayer, registerBuiltInLayers, syncHistory, startLayers, stopLayers, anyLayerOpen, openLayers, historyDepth } from './layers.js?v=2026-10-mobile-11';
+import { openSheet, pushScreen, closeAllSheets, refreshInert } from './sheet.js?v=2026-10-mobile-11';
+import * as ui from './ui.js?v=2026-10-mobile-11';
+import { startViewport, stopViewport } from './viewport.js?v=2026-10-mobile-11';
+import * as syncGuard from './sync-guard.js?v=2026-10-mobile-11';
 
 // Unit entry modules (stubs until each unit lands; a stub registers a
 // placeholder screen). 'compose' has no screen; it provides the composer.
@@ -66,6 +66,7 @@ const RESTORE_TAB_MS = 30 * 60 * 1000;
 const THEME_COLORS = {
   'classic-light': '#cfd0d2', 'classic-dark': '#181d25',
   'sunset-light': '#f9be82', 'sunset-dark': '#4a2d1c',
+  'newspaper-light': '#eeeae1', 'newspaper-dark': '#1c1a18',   // = the paper canvas (newspaper.css 3)
 };
 const CALENDAR_GLYPH = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="4.5" width="18" height="16.5" rx="3"></rect><line x1="16" y1="2.5" x2="16" y2="6.5"></line><line x1="8" y1="2.5" x2="8" y2="6.5"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>';
 
@@ -413,8 +414,7 @@ function renderAvatar() {
 function renderThemeColor() {
   if (!themeMeta) return;
   const theme = document.body.dataset.theme === 'dark' ? 'dark' : 'light';
-  const glass = document.body.dataset.glassTheme === 'sunset' ? 'sunset' : 'classic';
-  const color = THEME_COLORS[`${glass}-${theme}`];
+  const color = THEME_COLORS[`${document.body.dataset.glassTheme}-${theme}`] || THEME_COLORS[`classic-${theme}`];
   if (chrome.themeColor === color) return;
   chrome.themeColor = color;
   themeMeta.setAttribute('content', color);

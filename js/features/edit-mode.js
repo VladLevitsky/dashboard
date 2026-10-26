@@ -2,7 +2,7 @@
 // Handles edit state toggling, popovers, and edit-related UI
 
 import { model, editState, currentData, currentSections } from '../state.js';
-import { $, deepClone, showToast, getColorForCurrentMode, setColorForCurrentMode, moveCursorAfterNode } from '../utils.js';
+import { $, deepClone, showToast, getColorForCurrentMode, setColorForCurrentMode, moveCursorAfterNode, isPaperTheme } from '../utils.js';
 import { saveModel } from '../core/storage.js';
 import { isDashboardLoading } from '../core/sync.js';
 import { addBackFromBackupFile } from '../core/import-export.js';
@@ -79,7 +79,9 @@ export function toggleEditMode() {
     editState.dirty = false;
   } else {
     // Exiting edit mode - just discard working copy (a Confirm already cleared the note
-    // moves; after a Cancel the notes go back with their items)
+    // moves; after a Cancel the notes go back with their items). A theme preview
+    // still open in Settings was never accepted: put the saved look back first
+    if (!$('#appearance-modal')?.hidden) cancelAppearanceChanges();
     revertEditNoteMoves();
     editState.enabled = false;
     editState.working = null;
@@ -412,18 +414,62 @@ export function openEditPopover(targetEl, values, onDone, cursorPos) {
 export function applyDarkMode() {
   const isDark = model.darkMode;
   document.body.setAttribute('data-theme', isDark ? 'dark' : 'light');
+  rememberLook();
 }
 
-// --- Apply Glass Mode (always on)
+// The look last shown in this browser ("<glassTheme> <light|dark>"), so the boot
+// script in index.html (<script data-look-boot>) paints the first frame in it
+// instead of the unstyled base. Per browser, never synced; written only on change.
+// A Settings preview isn't saved yet, so it never writes the hint (a reload mid
+// preview would paint the previewed look first); Accept / Cancel write it.
+function rememberLook({ force = false } = {}) {
+  if (appearanceOriginalState && !force) return;
+  const value = `${knownTheme(model.glassTheme)} ${model.darkMode ? 'dark' : 'light'}`;
+  try { if (localStorage.getItem('dashboard_look') !== value) localStorage.setItem('dashboard_look', value); } catch {}
+}
+
+// --- Visual themes (model.glassTheme). Classic and Sunset are glass looks;
+// Newspaper is the paper look: body[data-style="paper"] switches every glass
+// rule off (glass.css, glass-fx.css, the glass layers of styles / writing /
+// mobile*.css) and newspaper.css paints instead. model.glassMode stays true,
+// so an older build that doesn't know Newspaper simply shows Classic.
+export const GLASS_THEMES = ['classic', 'sunset', 'newspaper'];
+export function styleForTheme(theme) {
+  return theme === 'newspaper' ? 'paper' : 'glass';
+}
+// A theme this build can show (an unknown value from a newer build reads as
+// Classic here, but is never written back over the model)
+export function knownTheme(theme) {
+  return GLASS_THEMES.includes(theme) ? theme : 'classic';
+}
+
+// --- Apply Glass Mode (always on; the style family follows the theme)
 export function applyGlassMode() {
   model.glassMode = true;
-  document.body.setAttribute('data-style', 'glass');
+  document.body.setAttribute('data-style', styleForTheme(model.glassTheme));
 }
 
-// --- Apply Glass Theme
+// --- Apply Glass Theme. Returns true when the style family (glass / paper) changed,
+// so callers re-render: item fills are written inline per family (sections.js).
 export function applyGlassTheme() {
   const theme = model.glassTheme || 'classic';
+  const style = styleForTheme(theme);
+  const changed = document.body.getAttribute('data-style') !== style;
   document.body.setAttribute('data-glass-theme', theme);
+  document.body.setAttribute('data-style', style);
+  rememberLook();
+  return changed;
+}
+
+// Re-render after the style family changed (glass <-> paper)
+function rerenderForStyleChange() {
+  if (window.renderAllSections) window.renderAllSections();
+  if (editState.enabled) {
+    if (window.addCardButtons) window.addCardButtons();
+    if (window.refreshEditingClasses) window.refreshEditingClasses();
+  }
+  // Today view quick links carry inline fills too
+  if (window.refreshTodayView) window.refreshTodayView();
 }
 
 // --- Set Dark Mode (used by appearance modal)
@@ -482,12 +528,12 @@ export function setGlassTheme(theme) {
   if (editState.working) {
     editState.working.glassTheme = model.glassTheme;
   }
-  applyGlassTheme();
+  if (applyGlassTheme()) rerenderForStyleChange();
 
   // Update the dropdown
   const select = $('#glass-theme-select');
   if (select) {
-    select.value = theme;
+    select.value = knownTheme(theme);
   }
 }
 
@@ -526,6 +572,7 @@ export function acceptAppearanceChanges() {
   // Changes are already applied to model, just save and close
   saveModel();
   closeAppearanceModal();
+  rememberLook();
   showToast('Appearance saved');
 }
 
@@ -552,6 +599,7 @@ export function cancelAppearanceChanges() {
     }
   }
   closeAppearanceModal();
+  rememberLook();
 }
 
 // --- Update appearance modal button states
@@ -569,7 +617,7 @@ function updateAppearanceModalButtons() {
   // Update glass theme dropdown value
   const glassThemeSelect = $('#glass-theme-select');
   if (glassThemeSelect) {
-    glassThemeSelect.value = model.glassTheme || 'classic';
+    glassThemeSelect.value = knownTheme(model.glassTheme);
   }
 }
 
@@ -634,7 +682,7 @@ export function wireAppearanceModalEvents() {
       if (editState.working) {
         editState.working.glassTheme = theme;
       }
-      applyGlassTheme();
+      if (applyGlassTheme()) rerenderForStyleChange();
     });
   }
 
@@ -689,7 +737,21 @@ export function wireAppearanceModalEvents() {
         }
 
         if (window.applyUrlOverrides) window.applyUrlOverrides(json);
+        // The backup's own look (light / dark, Classic / Sunset / Newspaper) is
+        // now the saved one: Settings' Cancel must not put the old look back
+        if (appearanceOriginalState) appearanceOriginalState = { darkMode: model.darkMode, glassTheme: model.glassTheme };
+        // Apply it before rendering: item fills are written per style family
+        applyDarkMode();
+        applyGlassMode();
+        applyGlassTheme();
+        rememberLook({ force: true });
+        updateAppearanceModalButtons();
         if (window.renderAllSections) window.renderAllSections();
+        if (editState.enabled) {
+          if (window.addCardButtons) window.addCardButtons();
+          if (window.refreshEditingClasses) window.refreshEditingClasses();
+        }
+        if (window.refreshTodayView) window.refreshTodayView();
         if (window.refreshTimeTrackingUI) window.refreshTimeTrackingUI();
 
         await new Promise(resolve => {
@@ -809,6 +871,8 @@ export function markDirtyAndSave() {
 // --- Confirm Global Edit (accept changes)
 export function confirmGlobalEdit() {
   if (!editState.working) return;
+  // A theme preview still open in Settings was never accepted: it isn't merged
+  if (!$('#appearance-modal')?.hidden) cancelAppearanceChanges();
 
   // Deep merge working copy back to model
   if (window.deepMergeModel) {
@@ -836,6 +900,28 @@ export function cancelGlobalEdit() {
   showToast('Changes discarded');
 }
 
+// The paper slip as hexes [day, night] (<input type=color> needs a hex): the colour
+// an item, note or link without its own colour shows under Newspaper. Display
+// only, never stored; links.js reads it too, so there is one copy
+export const PAPER_SLIP_HEX = Object.freeze(['#f1ede4', '#2b2824']);
+function paperSlipHex() {
+  return PAPER_SLIP_HEX[model.darkMode ? 1 : 0];
+}
+
+// Under Newspaper a colour field for items with no colour of their own starts on
+// the paper slip, which is what they show (glass shows its own default, as before).
+// Null when glass, or when a colour is stored: sections.js then paints the stored
+// colour (or the glass default for an empty mode) inline, so the field shows that
+function paperPickerDefault(stored) {
+  return isPaperTheme() && !stored ? paperSlipHex() : null;
+}
+
+// Applying that paper default untouched writes nothing: a theme default never
+// lands in the model, and the item keeps its unset (paper slip) look
+function keepsPaperDefault(paperDefault, selected) {
+  return !!paperDefault && String(selected).toLowerCase() === paperDefault;
+}
+
 // --- Open Color Picker for section bubbles
 export function openColorPicker(sectionId, sectionType) {
   const data = currentData();
@@ -855,7 +941,8 @@ export function openColorPicker(sectionId, sectionType) {
     defaultColorLight = '#f7fafc'; // Neutral grey (matches reminder items)
     defaultColorDark = '#334155';
   }
-  const currentColor = getColorForCurrentMode(data.sectionColors[sectionId], defaultColorLight, defaultColorDark);
+  const paperDefault = paperPickerDefault(data.sectionColors[sectionId]);
+  const currentColor = paperDefault || getColorForCurrentMode(data.sectionColors[sectionId], defaultColorLight, defaultColorDark);
   const modeLabel = model.darkMode ? 'Dark Mode' : 'Light Mode';
 
   // Create color picker modal
@@ -903,6 +990,7 @@ export function openColorPicker(sectionId, sectionType) {
   // Handle apply
   $('#color-picker-apply').addEventListener('click', () => {
     const selectedColor = $('#color-input').value;
+    if (keepsPaperDefault(paperDefault, selectedColor)) { document.body.removeChild(modal); return; }
 
     // Store color for current mode
     data.sectionColors[sectionId] = setColorForCurrentMode(
@@ -937,7 +1025,8 @@ export function openSubtitleColorPicker(sectionId, subtitle) {
   const colorKey = `${sectionId}:${subtitle}`;
   const defaultColorLight = '#f7fafc';
   const defaultColorDark = '#334155';
-  const currentColor = getColorForCurrentMode(data.subtitleColors[colorKey], defaultColorLight, defaultColorDark);
+  const paperDefault = paperPickerDefault(data.subtitleColors[colorKey]);
+  const currentColor = paperDefault || getColorForCurrentMode(data.subtitleColors[colorKey], defaultColorLight, defaultColorDark);
   const modeLabel = model.darkMode ? 'Dark Mode' : 'Light Mode';
 
   // Create color picker modal
@@ -986,6 +1075,7 @@ export function openSubtitleColorPicker(sectionId, subtitle) {
   // Handle apply
   $('#color-picker-apply').addEventListener('click', () => {
     const selectedColor = $('#color-input').value;
+    if (keepsPaperDefault(paperDefault, selectedColor)) { document.body.removeChild(modal); return; }
 
     // Store color for current mode
     data.subtitleColors[colorKey] = setColorForCurrentMode(
@@ -1682,7 +1772,7 @@ function renderSavedNotesList() {
   }
 
   listContainer.hidden = false;
-  const defaultBgColor = model.darkMode ? '#475569' : '#e6f3ff';
+  const defaultBgColor = defaultNoteColor();
   const now = Date.now();
   // Pinned first (pin glyph), then most recently edited; checklist progress
   // on the bubble, "Edited …" in its tooltip
@@ -1712,11 +1802,19 @@ function renderSavedNotesList() {
   });
 }
 
+// The bubble of a note without its own colour: glass's pale blue / slate, or
+// the paper slip under Newspaper (a token, so it follows the edition; the
+// colour input needs a hex)
+function defaultNoteColor(forInput = false) {
+  if (isPaperTheme()) return forInput ? paperSlipHex() : 'var(--np-slip)';
+  return model.darkMode ? '#475569' : '#e6f3ff';
+}
+
 // --- Update note color preview button
 function updateNoteColorPreview() {
   const colorBtn = $('#notepad-color-btn');
   if (!colorBtn) return;
-  const defaultColor = model.darkMode ? '#475569' : '#e6f3ff';
+  const defaultColor = defaultNoteColor();
   const color = currentNoteColor || defaultColor;
   colorBtn.style.background = color;
 }
@@ -1738,9 +1836,7 @@ export function openNoteColorPicker() {
     existingPicker.remove();
   }
 
-  const defaultColorLight = '#e6f3ff';
-  const defaultColorDark = '#475569';
-  const currentColor = currentNoteColor || (model.darkMode ? defaultColorDark : defaultColorLight);
+  const currentColor = currentNoteColor || defaultNoteColor(true);
   const modeLabel = model.darkMode ? 'Dark' : 'Light';
 
   const picker = document.createElement('div');
