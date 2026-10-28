@@ -10,7 +10,7 @@ import { HIGHLIGHT_COLORS, HIGHLIGHT_BORDER_COLORS, hyperlinkSelection, canHyper
 import { uploadFile, openFile } from '../core/file-service.js';
 import { attachImageUpload } from './rich-text-images.js';
 import { attachWritingFeatures, attachWritingView } from './writing/editor.js';
-import { cleanEditorHtml, restoreRange } from './writing/dom.js';
+import { cleanEditorHtml, restoreRange, toggleCheckInHtml } from './writing/dom.js';
 
 // Module state
 let meetingsEditingId = null;
@@ -321,7 +321,14 @@ function showMeetingsViewMode(meeting) {
       id: 'meetings',
       getTitle: () => meeting.title || 'Untitled meeting',
       getDocMeta: () => meetingDocMeta(meeting),
-      actionsHost: viewSection.querySelector('.meetings-view-actions')
+      actionsHost: viewSection.querySelector('.meetings-view-actions'),
+      // Checklist items ticked in the view are saved at once
+      onCheck: (index, checked) => {
+        const saved = getAllMeetings().find(m => m.id === meeting.id);
+        const description = saved ? toggleCheckInHtml(saved.description, index, checked) : null;
+        if (description == null) return false;
+        updateMeeting(saved.id, { description });
+      }
     });
   }
 

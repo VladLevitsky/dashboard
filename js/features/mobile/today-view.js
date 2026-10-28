@@ -33,8 +33,8 @@ import { toDateKey } from '../../core/quick-capture-parse.js';
 import { renderBusyStrip, ensureBusyDay } from '../busy-strip.js';
 import { formatTimeKey, formatTimeRange } from '../../core/due-time.js';
 import { gcalStateKey, onGcalChange } from '../google-calendar.js';
-import { createTimeSheet } from './time-sheet.js?v=2026-10-mobile-11';
-import { createMoreSheet } from './more-sheet.js?v=2026-10-mobile-11';
+import { createTimeSheet } from './time-sheet.js?v=2026-10-mobile-12';
+import { createMoreSheet } from './more-sheet.js?v=2026-10-mobile-12';
 
 const SHORT_LABELS = { red: 'Urgent & important', orange: 'Urgent', yellow: 'Important', blue: 'Later' };
 const COMING_DAYS = 7;

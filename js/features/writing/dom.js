@@ -34,6 +34,8 @@ export function cleanEditorHtml(htmlOrElement) {
   root.querySelectorAll('img[data-r2-file-id][src]').forEach(img => img.removeAttribute('src'));
   // a toggle opened / closed by a reader in a view is not an edit
   root.querySelectorAll('[data-wr-open]').forEach(el => el.removeAttribute('data-wr-open'));
+  // nor are a view's checkbox marks (attachWritingView's onCheck)
+  clearCheckMarks(root);
   // Chrome copies the editor's computed type into <span style> (and onto marks
   // and task pills) when Backspace / Delete merges a line into a heading or a
   // quote. The editors have no font or size command, so these are always
@@ -47,6 +49,12 @@ export function cleanEditorHtml(htmlOrElement) {
   return tpl.innerHTML;
 }
 const LEAKED_TYPE = ['font-size', 'line-height', 'font-family', 'letter-spacing', 'font-optical-sizing', 'text-wrap', 'text-wrap-mode', 'text-wrap-style'];
+const CHECK_MARKS = ['data-wr-check', 'role', 'tabindex', 'aria-checked'];
+
+// A view's checklist marks off (its HTML copied into an editor, or saved)
+export function clearCheckMarks(root) {
+  root.querySelectorAll('[data-wr-check]').forEach(el => CHECK_MARKS.forEach(a => el.removeAttribute(a)));
+}
 
 // True when there is no visible text and no content node (image, divider,
 // table, code block, callout, toggle, chips, task pill)
@@ -390,6 +398,75 @@ export function isInCode(node, editor) {
 export function isInChecklistItem(node, editor) {
   const li = listItemOf(node, editor);
   return !!(li && li.parentElement && li.parentElement.tagName === 'UL' && li.parentElement.classList.contains('checklist'));
+}
+
+// --- Checklist circles ------------------------------------------------------
+// The circle sits in the item's left padding, so a press anywhere in that
+// gutter is on it; so is one on the list's own padding just left of it
+// (fingers land a little wide). Editors and views.
+const CHECK_SLOP = 8;
+
+function isCheckItem(el) {
+  return el.tagName === 'LI' && !!el.parentElement && el.parentElement.tagName === 'UL' && el.parentElement.classList.contains('checklist');
+}
+
+export function checklistItemAt(e, root) {
+  let li = null;
+  for (let el = e.target; el && el !== root; el = el.parentElement) {
+    if (el.nodeType === 1 && isCheckItem(el)) { li = el; break; }
+  }
+  if (!li) {
+    const list = e.target;
+    if (!list || list.tagName !== 'UL' || !list.classList.contains('checklist') || !root.contains(list)) return null;
+    li = [...list.children].find(c => {
+      if (!isCheckItem(c)) return false;
+      const r = c.getBoundingClientRect();
+      return e.clientY >= r.top && e.clientY < r.bottom;
+    });
+    if (!li) return null;
+  }
+  const x = e.clientX - li.getBoundingClientRect().left;
+  const gutter = parseFloat(getComputedStyle(li).paddingLeft) || 24;
+  return x >= -CHECK_SLOP && x < gutter ? li : null;
+}
+
+// Caret at the end of a checklist item's own line (before a nested list,
+// never inside a chip)
+export function placeCaretInItem(li) {
+  const sel = window.getSelection();
+  if (!sel || !li) return;
+  const nested = [...li.children].find(c => c.tagName === 'UL' || c.tagName === 'OL') || null;
+  let text = null;
+  const walker = document.createTreeWalker(li, NodeFilter.SHOW_TEXT);
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+    if (nested && nested.contains(n)) break;
+    const locked = n.parentElement.closest('[contenteditable="false"]');
+    if (locked && li.contains(locked)) continue;
+    if (n.data.replace(EMPTY_TEXT, '')) text = n;
+  }
+  const range = document.createRange();
+  if (text) {
+    range.setStart(text, text.data.length);
+  } else {
+    let end = nested ? [...li.childNodes].indexOf(nested) : li.childNodes.length;
+    if (end > 0 && li.childNodes[end - 1].nodeName === 'BR') end--;
+    range.setStart(li, end);
+  }
+  range.collapse(true);
+  sel.removeAllRanges();
+  sel.addRange(range);
+}
+
+// Stored HTML with one checklist item checked / unchecked, found by its
+// position among all items (a rendered view holds the same items in the same
+// order); null when there is no such item
+export function toggleCheckInHtml(html, index, checked) {
+  const tpl = toTemplate(html || '');
+  const li = tpl.content.querySelectorAll('ul.checklist > li')[index];
+  if (!li) return null;
+  li.classList.toggle('checked', checked);
+  if (!li.classList.length) li.removeAttribute('class');
+  return tpl.innerHTML;
 }
 
 // Text of the current block before the caret (for typed triggers)

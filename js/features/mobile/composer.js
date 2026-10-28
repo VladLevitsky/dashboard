@@ -42,8 +42,8 @@ import * as notesApi from '../edit-mode.js';
 import { getDataOwner } from '../../core/auth.js';
 import { isGcalTasksReady, getGcalDefault } from '../google-calendar.js';
 import { dueTimeOf, dueEndTimeOf, formatTimeKey, prefersHour12, timeKeyFromInput, shiftTimeKey } from '../../core/due-time.js';
-import { openTimePicker, closeTimePicker } from './time-picker.js?v=2026-10-mobile-11';
-import { openDatePicker, closeDatePicker } from './date-field.js?v=2026-10-mobile-11';
+import { openTimePicker, closeTimePicker } from './time-picker.js?v=2026-10-mobile-12';
+import { openDatePicker, closeDatePicker } from './date-field.js?v=2026-10-mobile-12';
 
 const CONFIRM_MS = 7000;
 const DRAFT_DEBOUNCE = 300;

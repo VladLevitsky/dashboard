@@ -110,6 +110,41 @@ mark.text-highlight[data-highlight-color="purple"] { background-color: var(--wr-
   display: inline-flex;
   justify-content: center;
 }
+/* A tall menu (a phone with its keyboard up) scrolls inside the visible area */
+.highlight-context-menu {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+/* Cut / Copy / Paste / Select all: plain menu rows with a mouse... */
+.ctx-clip-row {
+  display: contents;
+}
+/* ...one row of four after a long-press, like the system's own text menu
+   (no shortcut hints on a touch screen) */
+.highlight-context-menu.is-touch .ctx-kbd {
+  display: none;
+}
+.highlight-context-menu.is-touch .ctx-clip-row {
+  display: flex;
+  gap: 2px;
+}
+.highlight-context-menu.is-touch .ctx-clip-row > .highlight-context-item {
+  flex: 1 1 0;
+  min-width: 64px;
+  min-height: 52px;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  padding: 8px 6px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.highlight-context-menu.is-touch .ctx-clip-row > .highlight-context-item > :first-child {
+  flex: 0 0 auto;
+}
+.highlight-context-menu.is-touch .highlight-context-item {
+  min-height: 40px;
+}
 
 /* Task description view: the Edit button's row (also hosts the export menu) */
 .task-desc-view-actions {
@@ -3956,21 +3991,22 @@ body[data-device="mobile"] .note-viewer-copy {
   margin-left: auto;
 }
 
-/* Viewer checklists can be checked in place (circle click, Space / Enter):
-   open circles a little firmer than the editors' so they read as clickable */
-.note-viewer-content ul.checklist > li:not(.checked)::before {
+/* View checklists can be checked in place (circle click / tap, Space / Enter:
+   the note viewer, task description, idea and meeting views): open circles a
+   little firmer than the editors' so they read as clickable */
+.wr-view ul.checklist > li[data-wr-check]:not(.checked)::before {
   border-color: rgb(100 116 139 / 55%);
 }
-.note-viewer-content ul.checklist > li:not(.checked):hover::before {
+.wr-view ul.checklist > li[data-wr-check]:not(.checked):hover::before {
   border-color: rgb(71 85 105 / 85%);
 }
-[data-theme="dark"] .note-viewer-content ul.checklist > li:not(.checked)::before {
+[data-theme="dark"] .wr-view ul.checklist > li[data-wr-check]:not(.checked)::before {
   border-color: rgb(148 163 184 / 50%);
 }
-[data-theme="dark"] .note-viewer-content ul.checklist > li:not(.checked):hover::before {
+[data-theme="dark"] .wr-view ul.checklist > li[data-wr-check]:not(.checked):hover::before {
   border-color: rgb(203 213 225 / 75%);
 }
-.note-viewer-content ul.checklist > li[role="checkbox"]:focus-visible {
+.wr-view ul.checklist > li[role="checkbox"]:focus-visible {
   outline: 2px solid var(--brand);
   outline-offset: 2px;
   border-radius: 6px;

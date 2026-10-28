@@ -42,8 +42,8 @@ import * as tasksApi from '../tasks.js';
 import * as projectsApi from '../projects.js';
 import * as meetingsApi from '../meetings.js';
 import * as notesApi from '../edit-mode.js';
-import { enhanceTimeInput, removeTimeField, closeTimePicker } from './time-picker.js?v=2026-10-mobile-11';
-import { enhanceDateInput, removeDateField, openDatePicker, closeDatePicker, setDateInputValue } from './date-field.js?v=2026-10-mobile-11';
+import { enhanceTimeInput, removeTimeField, closeTimePicker } from './time-picker.js?v=2026-10-mobile-12';
+import { enhanceDateInput, removeDateField, openDatePicker, closeDatePicker, setDateInputValue } from './date-field.js?v=2026-10-mobile-12';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 
@@ -265,7 +265,7 @@ function draftOf(s) {
   let title = s.title ? (($(s.title) || {}).value || '').trim() : '';
   if (s.key === 'task') {
     const wrap = $('#task-desc-editor-wrap');
-    if (wrap && wrap.hidden) html = normHtml(($('#task-desc-view-content') || {}).innerHTML || '');
+    if (wrap && wrap.hidden) html = editorHtml($('#task-desc-view-content'));
   }
   if (s.key === 'meetings') {
     const date = ($('#meetings-inline-date') || {}).value || '';
