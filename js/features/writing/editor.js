@@ -937,8 +937,58 @@ function onFocusIn(e) {
 }
 
 // --- Views -------------------------------------------------------------------
+// Checklists in a view whose owner saves them (opts.onCheck(index, checked, li),
+// false = refused): a press on an item's circle or Space / Enter on a focused
+// item checks it. The items are marked data-wr-check (plus checkbox semantics
+// when they hold no nested list); cleanEditorHtml strips the marks.
+function markChecks(viewEl) {
+  viewEl.querySelectorAll('ul.checklist > li').forEach(li => {
+    li.setAttribute('data-wr-check', '');
+    if (li.querySelector('ul, ol')) return; // a checkbox can't hold a nested list
+    li.tabIndex = 0;
+    li.setAttribute('role', 'checkbox');
+    li.setAttribute('aria-checked', String(li.classList.contains('checked')));
+  });
+}
+
+function setChecked(li, checked) {
+  li.classList.toggle('checked', checked);
+  if (!li.classList.length) li.removeAttribute('class');
+  if (li.hasAttribute('aria-checked')) li.setAttribute('aria-checked', String(checked));
+}
+
+function flipCheck(viewEl, li) {
+  const vs = viewStates.get(viewEl);
+  if (!vs || !vs.opts.onCheck || !li.hasAttribute('data-wr-check')) return false;
+  const index = [...viewEl.querySelectorAll('ul.checklist > li')].indexOf(li);
+  if (index < 0) return false;
+  const checked = !li.classList.contains('checked');
+  setChecked(li, checked);
+  if (safeCall(vs.opts.onCheck, index, checked, li) === false) setChecked(li, !checked);
+  return true;
+}
+
+function checkTarget(e) {
+  const vs = viewStates.get(e.currentTarget);
+  return vs && vs.opts.onCheck ? dom.checklistItemAt(e, e.currentTarget) : null;
+}
+
+// Pressing a circle neither selects text nor moves the focus
+function onViewMouseDown(e) {
+  if (e.button === 0 && checkTarget(e)) e.preventDefault();
+}
+
+function onViewKeydown(e) {
+  if ((e.key !== ' ' && e.key !== 'Enter') || e.ctrlKey || e.metaKey || e.altKey || e.isComposing) return;
+  const li = e.target;
+  if (!li || li.getAttribute?.('role') !== 'checkbox' || !e.currentTarget.contains(li)) return;
+  if (flipCheck(e.currentTarget, li)) e.preventDefault();
+}
+
 function onViewClick(e) {
   const viewEl = e.currentTarget;
+  const checkItem = checkTarget(e);
+  if (checkItem && flipCheck(viewEl, checkItem)) { consume(e); return; }
   const ctx = viewContext(viewEl);
   const link = e.target && e.target.closest ? e.target.closest('a[href]') : null;
   if (link && viewEl.contains(link)) {
@@ -955,7 +1005,7 @@ function onViewClick(e) {
 
 // Call after (re)rendering a read-only container. Listeners are added once per
 // element; onViewAttach functions run on every call (fn(viewEl, ctx, { first })).
-// opts: { id, getTitle(), getDocMeta(), actionsHost? }
+// opts: { id, getTitle(), getDocMeta(), actionsHost?, onCheck?(index, checked, li) }
 export function attachWritingView(viewEl, opts = {}) {
   if (!viewEl) return null;
   ensureInstalled();
@@ -966,10 +1016,13 @@ export function attachWritingView(viewEl, opts = {}) {
     viewStates.set(viewEl, vs);
     viewEl.classList.add('wr-doc', 'wr-view');
     viewEl.addEventListener('click', onViewClick, true);
+    viewEl.addEventListener('mousedown', onViewMouseDown, true);
+    viewEl.addEventListener('keydown', onViewKeydown);
     viewEl._wrView = vs;
   } else {
     vs.opts = opts;
   }
+  if (opts.onCheck) markChecks(viewEl);
   const ctx = viewContext(viewEl);
   viewAttachFns.forEach(fn => safeCall(fn, viewEl, ctx, { first }));
   return vs;

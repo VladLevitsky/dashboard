@@ -8,9 +8,9 @@ import { isDashboardLoading } from '../core/sync.js';
 import { addBackFromBackupFile } from '../core/import-export.js';
 import { attachImageUpload } from './rich-text-images.js';
 import { api as writingApi, attachWritingFeatures, attachWritingView } from './writing/editor.js';
-import { cleanEditorHtml, isEffectivelyEmpty, unwrapInline, replaceRangeHtml, trimRangeEnd, expandToWholeInlines } from './writing/dom.js';
-import { keyHint, isMacPlatform } from '../core/writing-commands.js';
-import { sanitizeRichHtml, htmlHasRiskyStartTag } from '../core/markdown.js';
+import { cleanEditorHtml, isEffectivelyEmpty, unwrapInline, replaceRangeHtml, trimRangeEnd, expandToWholeInlines, checklistItemAt, placeCaretInItem, toggleCheckInHtml } from './writing/dom.js';
+import { keyHint, formatKeysText, isMacPlatform } from '../core/writing-commands.js';
+import { sanitizeRichHtml, htmlHasRiskyStartTag, htmlToPlainText } from '../core/markdown.js';
 import { getActiveMode } from './grid-engine.js';
 import { buildMoveTargets, moveCardItem, relocateSectionRefs, renameSection, moveNotes, revertNoteMove, moveToastText } from '../core/card-move.js';
 
@@ -2530,15 +2530,14 @@ export function openNoteViewer(noteKey) {
     }
   });
 
-  // Checklist items can be checked right here (keyboard too: see markViewerChecklist)
-  markViewerChecklist(contentEl);
-
-  // Writing view: safe link clicks, block / chip clicks, export menu
+  // Writing view: safe link clicks, block / chip clicks, export menu; checklist
+  // items can be checked right here (the note is saved)
   attachWritingView(contentEl, {
     id: 'notes',
     getTitle: () => note.title || 'Untitled',
     getDocMeta: () => noteDocMeta(note.title || 'Untitled', note),
-    actionsHost: modal.querySelector('.note-viewer-actions')
+    actionsHost: modal.querySelector('.note-viewer-actions'),
+    onCheck: (index, checked, li) => checkViewerChecklistItem(index, checked, li)
   });
 
   // Pin state, "Edited …", checklist progress
@@ -2585,39 +2584,18 @@ function renderNoteViewerMeta(note) {
   meta.hidden = !meta.childElementCount;
 }
 
-// Checklist items without a nested list become keyboard checkboxes (Space /
-// Enter); every item's circle is clickable (wireNotepadEvents)
-function markViewerChecklist(contentEl) {
-  contentEl.querySelectorAll('ul.checklist > li').forEach(li => {
-    if (li.querySelector('ul, ol')) return; // a checkbox can't hold a nested list
-    li.tabIndex = 0;
-    li.setAttribute('role', 'checkbox');
-    li.setAttribute('aria-checked', String(li.classList.contains('checked')));
-  });
-}
-
-// Check / uncheck an item in the viewer and save the note. The STORED html is
-// changed (the rendered copy holds session-only image sources), by the item's
-// position among all checklist items.
-function toggleViewerChecklistItem(li) {
-  const contentEl = $('#note-viewer-content');
+// An item checked / unchecked in the viewer (the writing view already flipped
+// it on screen): the note is saved. The STORED html is changed (the rendered
+// copy holds session-only image sources), by the item's position.
+function checkViewerChecklistItem(index, checked, li) {
   const key = viewerNoteKey;
-  if (!contentEl || !key) return;
+  if (!key) return false;
   const notes = getNotesForSection(currentNotepadSectionId, currentNoteContextType, currentSubtaskNoteId);
   const note = notes.find(n => n.key === key);
-  if (!note) return;
-  const index = [...contentEl.querySelectorAll('ul.checklist > li')].indexOf(li);
-  if (index < 0) return;
-  const temp = document.createElement('template');
-  temp.innerHTML = note.content || '';
-  const stored = temp.content.querySelectorAll('ul.checklist > li')[index];
-  if (!stored) return;
-  const checked = !li.classList.contains('checked');
-  stored.classList.toggle('checked', checked);
-  if (!stored.classList.length) stored.removeAttribute('class');
-  li.classList.toggle('checked', checked);
-  if (li.hasAttribute('aria-checked')) li.setAttribute('aria-checked', String(checked));
-  note.content = temp.innerHTML;
+  if (!note) return false;
+  const content = toggleCheckInHtml(note.content, index, checked);
+  if (content == null) return false;
+  note.content = content;
   note.updatedAt = Date.now();
   storeNotes(notes);
 
@@ -3020,26 +2998,6 @@ export function wireNotepadEvents() {
     viewerDialog.setAttribute('aria-modal', 'true');
     viewerDialog.setAttribute('aria-labelledby', 'note-viewer-title');
     viewerDialog.setAttribute('tabindex', '-1');
-  }
-
-  // Viewer checklists: the circle (the editors' 24px gutter) or Space / Enter
-  // on a focused item checks it, and the note is saved
-  const viewerContent = $('#note-viewer-content');
-  if (viewerContent) {
-    viewerContent.addEventListener('click', (e) => {
-      const li = e.target.closest && e.target.closest('ul.checklist > li');
-      if (!li || !viewerContent.contains(li)) return;
-      if (e.clientX - li.getBoundingClientRect().left >= 24) return;
-      e.preventDefault();
-      toggleViewerChecklistItem(li);
-    });
-    viewerContent.addEventListener('keydown', (e) => {
-      if ((e.key !== ' ' && e.key !== 'Enter') || e.ctrlKey || e.metaKey || e.altKey) return;
-      const li = e.target;
-      if (!li || li.getAttribute?.('role') !== 'checkbox' || !viewerContent.contains(li)) return;
-      e.preventDefault();
-      toggleViewerChecklistItem(li);
-    });
   }
 }
 
@@ -3800,24 +3758,18 @@ export function isInChecklist() {
 // --- Attach click handler for checklist checkboxes in an editor
 export function attachChecklistHandler(editor) {
   editor.addEventListener('mousedown', (e) => {
-    // Walk up from target to find a checklist li
-    let node = e.target;
-    while (node && node !== editor) {
-      if (node.tagName === 'LI' && node.parentElement && node.parentElement.classList.contains('checklist')) {
-        const liRect = node.getBoundingClientRect();
-        const clickX = e.clientX - liRect.left;
-        // Click is in the checkbox area (the ::before circle in left padding)
-        if (clickX < 24) {
-          e.preventDefault();
-          e.stopPropagation();
-          node.classList.toggle('checked');
-          // No input event fires: tell the writing core (projects autosave, status bar...)
-          if (editor._wr) editor._wr.notifyChange();
-        }
-        return;
-      }
-      node = node.parentNode;
-    }
+    if (e.button !== 0) return;
+    // The circle: the ::before in the item's left padding
+    const li = checklistItemAt(e, editor);
+    if (!li) return;
+    e.preventDefault();
+    e.stopPropagation();
+    li.classList.toggle('checked');
+    // A focused editor's caret follows the tick: left where it was (the top,
+    // after Edit), a phone scrolls back up to it
+    if (editor.contains(document.activeElement)) placeCaretInItem(li);
+    // No input event fires: tell the writing core (projects autosave, status bar...)
+    if (editor._wr) editor._wr.notifyChange();
   });
 }
 
@@ -3857,6 +3809,25 @@ function getHighlightContextMenu() {
   highlightContextMenu.className = 'highlight-context-menu';
   highlightContextMenu.style.display = 'none';
   highlightContextMenu.innerHTML = `
+    <div class="ctx-clip-row" role="group" aria-label="Clipboard">
+      <button type="button" class="highlight-context-item ctx-cut-btn" data-ctx-keys="Mod+X">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg>
+        <span class="ctx-label">Cut</span>
+      </button>
+      <button type="button" class="highlight-context-item ctx-copy-btn" data-ctx-keys="Mod+C">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        <span class="ctx-label">Copy</span>
+      </button>
+      <button type="button" class="highlight-context-item ctx-paste-btn" data-ctx-keys="Mod+V">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>
+        <span class="ctx-label">Paste</span>
+      </button>
+      <button type="button" class="highlight-context-item ctx-select-all-btn" data-ctx-keys="Mod+A">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3H4a1 1 0 0 0-1 1v1M9 3h2M15 3h1M20 3a1 1 0 0 1 1 1v1M21 9v2M21 15v1M21 20a1 1 0 0 1-1 1h-1M15 21h-2M9 21H8M4 21a1 1 0 0 1-1-1v-1M3 15v-2M3 9V8"/><line x1="8" y1="9" x2="16" y2="9"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="8" y1="15" x2="13" y2="15"/></svg>
+        <span class="ctx-label">Select all</span>
+      </button>
+    </div>
+    <div class="highlight-context-divider ctx-clip-divider"></div>
     <button type="button" class="highlight-context-item ctx-bold-btn" data-wr-hint="bold">
       <strong>B</strong>
       Bold
@@ -3951,10 +3922,11 @@ function getHighlightContextMenu() {
       Remove link
     </button>
   `;
-  // Right-aligned shortcut hints from the writing command registry
+  // Right-aligned shortcut hints from the writing command registry (the
+  // clipboard's are the browser's own)
   const mac = isMacPlatform();
-  highlightContextMenu.querySelectorAll('[data-wr-hint]').forEach(btn => {
-    const hint = keyHint(btn.dataset.wrHint, mac);
+  highlightContextMenu.querySelectorAll('[data-wr-hint], [data-ctx-keys]').forEach(btn => {
+    const hint = btn.dataset.ctxKeys ? formatKeysText(btn.dataset.ctxKeys, mac) : keyHint(btn.dataset.wrHint, mac);
     if (!hint) return;
     const kbd = document.createElement('span');
     kbd.className = 'ctx-kbd';
@@ -4393,6 +4365,8 @@ export function attachHighlighterContextMenu(editor, options) {
     if (!editor.contains(range.commonAncestorContainer)) return;
 
     const hasSelection = !sel.isCollapsed && sel.toString().trim();
+    // A long-press (Chrome's contextmenu is a PointerEvent) or a touch screen
+    const touch = e.ctxTouch ?? (e.pointerType ? e.pointerType === 'touch' : matchMedia('(hover: none) and (pointer: coarse)').matches);
 
     e.preventDefault();
     hideTaskLinkPicker();
@@ -4410,13 +4384,61 @@ export function attachHighlighterContextMenu(editor, options) {
       return btn;
     }
 
-    // --- List buttons (always visible) — restore focus + selection so commands target the editor ---
+    // --- Restore focus + selection so commands target the editor: the live one
+    // when it is still in the editor (a phone's handles may have moved it), else
+    // the one the menu opened on
+    function liveRange() {
+      const s = window.getSelection();
+      const r = s && s.rangeCount ? s.getRangeAt(0) : null;
+      return r && editor.contains(r.commonAncestorContainer) ? r.cloneRange() : savedRange.cloneRange();
+    }
     function restoreEditorFocus() {
-      editor.focus();
+      const range = liveRange();
+      editor.focus({ preventScroll: true });
       const s = window.getSelection();
       s.removeAllRanges();
-      s.addRange(savedRange.cloneRange());
+      s.addRange(range);
+      return range;
     }
+
+    // --- Cut / Copy / Paste / Select all: a long-press on a phone opens this menu
+    // instead of the system's, so it has to offer them too ---
+    const cutBtn = rewire('.ctx-cut-btn', () => {
+      const range = restoreEditorFocus();
+      hideHighlightContextMenu();
+      copyRange(editor, range, { cut: true });
+    });
+    const copyBtn = rewire('.ctx-copy-btn', () => {
+      // A selection still in the editor is copied as it is: focusing would
+      // raise a phone's keyboard for nothing
+      const s = window.getSelection();
+      const live = s && s.rangeCount && !s.isCollapsed && editor.contains(s.getRangeAt(0).commonAncestorContainer);
+      const range = live ? s.getRangeAt(0).cloneRange() : restoreEditorFocus();
+      hideHighlightContextMenu();
+      copyRange(editor, range);
+    });
+    const pasteBtn = rewire('.ctx-paste-btn', () => {
+      const range = restoreEditorFocus();
+      hideHighlightContextMenu();
+      pasteFromClipboard(editor, range);
+    });
+    rewire('.ctx-select-all-btn', () => {
+      editor.focus({ preventScroll: true });
+      const all = document.createRange();
+      all.selectNodeContents(editor);
+      const s = window.getSelection();
+      s.removeAllRanges();
+      s.addRange(all);
+      // Open again on the same spot, now with Cut and Copy (once this click is
+      // done: re-opening replaces its button, and the outside-click close
+      // would take the detached target for a click elsewhere)
+      const again = new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: e.clientX, clientY: e.clientY });
+      again.ctxTouch = touch;
+      setTimeout(() => { if (editor.isConnected) editor.dispatchEvent(again); }, 0);
+    });
+    cutBtn.style.display = hasSelection ? '' : 'none';
+    copyBtn.style.display = hasSelection ? '' : 'none';
+    pasteBtn.style.display = canReadClipboard() ? '' : 'none';
 
     // --- Writing commands (formatting, lists, strike, code, link, turn into task) through the registry ---
     const writing = editor._wr || null;
@@ -4546,21 +4568,147 @@ export function attachHighlighterContextMenu(editor, options) {
       removeLinkBtn.style.display = 'none';
     }
 
-    // Show offscreen to measure, then clamp to viewport
+    // Show offscreen to measure, then clamp to what is visible (above a phone's
+    // keyboard: the visual viewport); a tall menu scrolls
+    const vv = window.visualViewport;
+    const view = vv
+      ? { left: vv.offsetLeft, top: vv.offsetTop, width: vv.width, height: vv.height }
+      : { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight };
+    menu.classList.toggle('is-touch', touch);
     menu.style.visibility = 'hidden';
     menu.style.display = '';
     menu.style.left = '0px';
     menu.style.top = '0px';
+    menu.style.maxHeight = `${Math.max(120, view.height - 16)}px`;
     const mw = menu.offsetWidth;
-    const mh = menu.offsetHeight;
+    let mh = menu.offsetHeight;
     menu.style.visibility = '';
 
-    const menuLeft = Math.max(8, Math.min(e.clientX, window.innerWidth - mw - 8));
-    const menuTop = Math.max(8, Math.min(e.clientY, window.innerHeight - mh - 8));
+    const minTop = view.top + 8;
+    const viewBottom = view.top + view.height - 8;
+    let menuTop = e.clientY;
+    const box = touch ? selectionBox(liveRange()) : null;
+    if (box) {
+      // Under the finger it would hide what was pressed: below the selection
+      // (clear of its handles), else above it; too tall for either, on the
+      // roomier side, scrolling (the clipboard row stays first)
+      const below = viewBottom - (box.bottom + 28);
+      const above = box.top - 12 - minTop;
+      if (mh <= below) menuTop = box.bottom + 28;
+      else if (mh <= above) menuTop = box.top - 12 - mh;
+      else if (Math.max(below, above) >= 160) {
+        mh = Math.max(below, above);
+        menu.style.maxHeight = `${mh}px`;
+        menuTop = below >= above ? box.bottom + 28 : box.top - 12 - mh;
+      }
+    }
+    const menuLeft = Math.max(view.left + 8, Math.min(e.clientX, view.left + view.width - mw - 8));
+    menuTop = Math.max(minTop, Math.min(menuTop, viewBottom - mh));
     menu.style.left = `${menuLeft}px`;
     menu.style.top = `${menuTop}px`;
     document.addEventListener('keydown', onContextMenuKeydown, true); // Esc / typing close it
   });
+}
+
+// The visible box of a selection (or caret), or null
+function selectionBox(range) {
+  if (!range) return null;
+  let rect = range.getBoundingClientRect();
+  if (!rect || (!rect.width && !rect.height)) {
+    const el = range.startContainer.nodeType === 1 ? range.startContainer : range.startContainer.parentElement;
+    rect = el ? el.getBoundingClientRect() : null;
+  }
+  return rect && (rect.width || rect.height) ? rect : null;
+}
+
+// --- Clipboard (the text menu's Cut / Copy / Paste) ---------------------------
+function canReadClipboard() {
+  return !!(navigator.clipboard && (navigator.clipboard.read || navigator.clipboard.readText));
+}
+
+function clipboardKeyHint(keys) {
+  return formatKeysText(keys, isMacPlatform());
+}
+
+// The browser's own copy keeps the formatting, and a cut is one undoable edit;
+// the async clipboard is the fallback
+async function copyRange(editor, range, { cut = false } = {}) {
+  let ok = false;
+  try { ok = document.execCommand(cut ? 'cut' : 'copy'); } catch { ok = false; }
+  if (!ok) {
+    const holder = document.createElement('div');
+    holder.appendChild(range.cloneContents());
+    const html = cleanEditorHtml(holder);
+    const text = htmlToPlainText(html);
+    try {
+      if (navigator.clipboard && navigator.clipboard.write && window.ClipboardItem) {
+        await navigator.clipboard.write([new ClipboardItem({
+          'text/html': new Blob([html], { type: 'text/html' }),
+          'text/plain': new Blob([text], { type: 'text/plain' })
+        })]);
+      } else {
+        await navigator.clipboard.writeText(text);
+      }
+      ok = true;
+    } catch { ok = false; }
+    if (ok && cut && editor.isConnected) {
+      editor.focus({ preventScroll: true });
+      const s = window.getSelection();
+      s.removeAllRanges();
+      s.addRange(range);
+      document.execCommand('delete');
+    }
+  }
+  if (!ok) showToast(`Couldn’t ${cut ? 'cut' : 'copy'}: try ${clipboardKeyHint(cut ? 'Mod+X' : 'Mod+C')}`);
+  else if (!cut) showToast('Copied');
+}
+
+// What the clipboard holds, as a paste event would carry it
+async function readClipboard() {
+  const data = new DataTransfer();
+  if (navigator.clipboard.read) {
+    try {
+      for (const item of await navigator.clipboard.read()) {
+        for (const type of item.types) {
+          const blob = await item.getType(type);
+          if (type === 'text/plain' || type === 'text/html') data.setData(type, await blob.text());
+          else if (type.startsWith('image/')) data.items.add(new File([blob], `Pasted image.${type.split('/')[1] || 'png'}`, { type }));
+        }
+      }
+      return data;
+    } catch (err) {
+      if (!navigator.clipboard.readText) throw err;
+    }
+  }
+  data.setData('text/plain', await navigator.clipboard.readText());
+  return data;
+}
+
+// Pasting from the menu goes through the editor's own paste handling (clean
+// HTML, Markdown, images to file storage): a paste event with what was read
+async function pasteFromClipboard(editor, range) {
+  let data;
+  try {
+    data = await readClipboard();
+  } catch {
+    const hint = matchMedia('(hover: none) and (pointer: coarse)').matches ? 'your keyboard’s clipboard' : clipboardKeyHint('Mod+V');
+    showToast(`Couldn’t read the clipboard: allow clipboard access for this site, or paste with ${hint}`);
+    return;
+  }
+  if (!editor.isConnected) return;
+  const text = data.getData('text/plain');
+  if (!text && !data.getData('text/html') && !data.files.length) {
+    showToast('The clipboard is empty');
+    return;
+  }
+  // Reading may have asked for permission: put the caret back first
+  editor.focus({ preventScroll: true });
+  const s = window.getSelection();
+  s.removeAllRanges();
+  s.addRange(range);
+  const paste = new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true });
+  editor.dispatchEvent(paste);
+  if (!paste.defaultPrevented && text) document.execCommand('insertText', false, text);
 }
 
 // ============================================================

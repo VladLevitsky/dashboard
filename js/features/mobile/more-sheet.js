@@ -22,7 +22,7 @@ import { openFileManager } from '../file-manager.js';
 import { buildGcalPanel, getGcalStatus, onGcalChange } from '../google-calendar.js';
 import { buildGoogleSigninPanel } from '../auth-ui.js';
 import { offlineCopySupported } from '../../core/offline-copy.js';
-import { openOfflineSheet, offlineRowValue } from './offline-sheet.js?v=2026-10-mobile-11';
+import { openOfflineSheet, offlineRowValue } from './offline-sheet.js?v=2026-10-mobile-12';
 
 const svg = (body, size = 20, width = 2) =>
   `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="${width}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${body}</svg>`;

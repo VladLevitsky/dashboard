@@ -25,11 +25,11 @@ import { dueState } from '../../core/agenda.js';
 import {
   MOBILE_COLOR_ORDER, MOBILE_COLOR_LABELS, SEGMENT_LABELS, lensCounts, defaultLens, lensTasks, rowSignature, normColor,
 } from '../../core/mobile-tasks.js';
-import { createTaskRow, fullColorLabel } from './task-row.js?v=2026-10-mobile-11';
-import { attachGestures, closeAnyReveal } from './task-gestures.js?v=2026-10-mobile-11';
-import { createTaskActions } from './task-actions.js?v=2026-10-mobile-11';
-import { openMoveSheet } from './move-sheet.js?v=2026-10-mobile-11';
-import { openCompleted } from './completed-view.js?v=2026-10-mobile-11';
+import { createTaskRow, fullColorLabel } from './task-row.js?v=2026-10-mobile-12';
+import { attachGestures, closeAnyReveal } from './task-gestures.js?v=2026-10-mobile-12';
+import { createTaskActions } from './task-actions.js?v=2026-10-mobile-12';
+import { openMoveSheet } from './move-sheet.js?v=2026-10-mobile-12';
+import { openCompleted } from './completed-view.js?v=2026-10-mobile-12';
 
 // Inline --priority-rgb: the newspaper look's spot inks (newspaper.css 1 / 2), falling back
 // to the glass hues, so glass renders exactly as before (var() resolves on the element)

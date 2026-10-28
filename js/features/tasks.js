@@ -13,6 +13,7 @@ import { createTaskTimerControl, isTaskTimerRunning, stopTimerForTask, syncTaskT
 import { getTaskCategories, categoryColor } from './task-categories.js';
 import { attachImageUpload } from './rich-text-images.js';
 import { attachWritingFeatures, attachWritingView } from './writing/editor.js';
+import { toggleCheckInHtml, clearCheckMarks } from './writing/dom.js';
 import { isGcalTasksReady, getGcalDefault, setGcalDefault } from './google-calendar.js';
 import { dueTimeOf, dueEndTimeOf, settleDueTime, localTimeZone, timeKeyFromInput, timeKeyMinutes, shiftTimeKey } from '../core/due-time.js';
 import { toDateKey } from '../core/quick-capture-parse.js';
@@ -3026,7 +3027,7 @@ function openTaskEditorModal(taskData, titleText) {
   const descEditorWrap = $('#task-desc-editor-wrap');
   const hasDescription = normalizeDescHtml(taskData.description || '');
   descViewContent.innerHTML = safeRichHtml(taskData.description);
-  attachWritingView(descViewContent, { id: 'task', getTitle: () => taskEditorTitle(), getDocMeta: () => taskDocMeta(), actionsHost: $('#task-desc-view-actions') });
+  attachTaskDescView(descViewContent);
   // Make links in description view clickable
   descViewContent.onclick = (e) => {
     const link = e.target.closest('a[href]');
@@ -3540,8 +3541,9 @@ function enterDescriptionEditMode() {
   const descEditBtn = $('#task-desc-edit-btn');
   const descEditorWrap = $('#task-desc-editor-wrap');
 
-  // Copy current content to editor
+  // Copy current content to editor (without the view's checkbox marks)
   editor.innerHTML = viewContent.innerHTML || '';
+  clearCheckMarks(editor);
   if (editor._wr) editor._wr.loaded();
   descView.hidden = true;
   descEditBtn.hidden = true;
@@ -3559,11 +3561,42 @@ function saveDescriptionFromEditor() {
 
   // Save editor content to view (normalize empty contenteditable output)
   viewContent.innerHTML = normalizeDescHtml(editor.innerHTML);
-  attachWritingView(viewContent, { id: 'task', getTitle: () => taskEditorTitle(), getDocMeta: () => taskDocMeta(), actionsHost: $('#task-desc-view-actions') });
+  attachTaskDescView(viewContent);
   descriptionEditing = false;
   descView.hidden = false;
   descEditBtn.hidden = false;
   descEditorWrap.hidden = true;
+}
+
+// The read-only description: links, blocks, export, and checklist items that
+// can be ticked right there
+function attachTaskDescView(viewContent) {
+  attachWritingView(viewContent, {
+    id: 'task',
+    getTitle: () => taskEditorTitle(),
+    getDocMeta: () => taskDocMeta(),
+    actionsHost: $('#task-desc-view-actions'),
+    onCheck: checkTaskDescItem
+  });
+}
+
+// An item ticked in the view (already flipped on screen) is part of the task
+// like any edit; when the view shows the saved description (no edited one
+// waiting for Save) it is stored at once, so a tick never needs Save
+function checkTaskDescItem(index, checked, li) {
+  if (!currentEditingTaskId || !taskEditorInitialState) return;
+  // What the view showed before this tick (an empty class attribute aside)
+  const cls = li.getAttribute('class');
+  li.classList.toggle('checked', !checked);
+  const before = currentTaskDescHtml();
+  if (cls == null) li.removeAttribute('class'); else li.setAttribute('class', cls);
+  const bare = (html) => html.replace(/ class=""/g, '');
+  if (bare(before) !== bare(taskEditorInitialState.description)) return;
+  const task = (currentData().tasks || []).find(t => t.id === currentEditingTaskId);
+  const description = task ? toggleCheckInHtml(task.description, index, checked) : null;
+  if (description == null) return;
+  updateTask(task.id, { description });
+  taskEditorInitialState.description = currentTaskDescHtml();
 }
 
 function exitDescriptionEditMode() {
@@ -4705,7 +4738,14 @@ function showIdeasViewMode(idea) {
     id: 'ideas',
     getTitle: () => idea.title || 'Untitled idea',
     getDocMeta: () => ({ kind: 'Idea', title: idea.title || 'Untitled idea' }),
-    actionsHost: $('#ideas-modal .ideas-view-actions')
+    actionsHost: $('#ideas-modal .ideas-view-actions'),
+    // Checklist items ticked in the view are saved at once
+    onCheck: (index, checked) => {
+      const saved = getAllIdeas().find(i => i.id === idea.id);
+      const description = saved ? toggleCheckInHtml(saved.description, index, checked) : null;
+      if (description == null) return false;
+      updateIdea(saved.id, { description });
+    }
   });
 }
 
